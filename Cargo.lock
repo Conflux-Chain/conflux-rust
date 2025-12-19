@@ -1230,7 +1230,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-config"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "cfx-addr",
  "cfx-executor",
@@ -1358,7 +1358,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-mallocator-utils"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "axum",
  "cfg-if 1.0.0",
@@ -1419,7 +1419,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-parity-trace-types"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
@@ -1437,7 +1437,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "alloy-rpc-types-trace",
  "async-trait",
@@ -1480,7 +1480,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-builder"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "alloy-primitives",
  "cfx-rpc",
@@ -1520,7 +1520,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-types"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "bls-signatures",
  "cfx-addr",
@@ -1547,7 +1547,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-common-impl"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "cfx-addr",
  "cfx-parity-trace-types",
@@ -1559,7 +1559,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-api"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "alloy-rpc-types-trace",
  "cfx-rpc-eth-types",
@@ -1570,7 +1570,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-types"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "alloy-rpc-types",
  "cfx-bytes",
@@ -1594,7 +1594,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-middlewares"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "anyhow",
  "cfx-rpc-utils",
@@ -1614,7 +1614,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-primitives"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "rustc-hex",
  "serde",
@@ -1624,7 +1624,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -1715,7 +1715,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-tasks"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -1741,7 +1741,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-util-macros"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 
 [[package]]
 name = "cfx-vm-interpreter"
@@ -1784,7 +1784,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -1915,14 +1915,14 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-errors"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "thiserror 2.0.11",
 ]
 
 [[package]]
 name = "cfxcore-pow"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "cfx-parameters",
  "cfx-types",
@@ -1937,7 +1937,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-types"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "cfx-bytes",
  "cfx-execute-helper",
@@ -2148,7 +2148,7 @@ checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
 name = "client"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "alloy-rpc-types-trace",
  "app_dirs",
@@ -2286,7 +2286,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "bcs",
  "bls-signatures",
@@ -2705,9 +2705,9 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.20.11"
+version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc7f46116c46ff9ab3eb1597a45688b6715c6e628b5c133e288e709a29bcb4ee"
+checksum = "9cdf337090841a411e2a7f3deb9187445851f91b309c0c0a29e05f74a00a48c0"
 dependencies = [
  "darling_core",
  "darling_macro",
@@ -2715,9 +2715,9 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.20.11"
+version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e"
+checksum = "1247195ecd7e3c85f83c8d2a366e4210d588e802133e1e355180a9870b517ea4"
 dependencies = [
  "fnv",
  "ident_case",
@@ -2729,9 +2729,9 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.20.11"
+version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
+checksum = "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81"
 dependencies = [
  "darling_core",
  "quote",
@@ -3353,7 +3353,7 @@ checksum = "bbbaaaf38131deb9ca518a274a45bfdb8771f139517b073b16c2d3d32ae5037b"
 
 [[package]]
 name = "eest_types"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "cfx-rpc-primitives",
  "cfx-types",
@@ -4013,7 +4013,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -4970,7 +4970,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8403,7 +8403,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "3.0.2-net8888"
+version = "3.0.3-beta-net8888"
 dependencies = [
  "alloy-primitives",
  "cfx-types",
@@ -8497,15 +8497,14 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.14.0"
+version = "3.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2c45cd61fefa9db6f254525d46e392b852e0e61d9a1fd36e5bd183450a556d5"
+checksum = "4fa237f2807440d238e0364a218270b98f767a00d3dada77b1c53ae88940e2e7"
 dependencies = [
  "base64 0.22.1",
  "chrono",
  "hex",
- "serde",
- "serde_derive",
+ "serde_core",
  "serde_json",
  "serde_with_macros",
  "time",
@@ -8513,9 +8512,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.14.0"
+version = "3.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de90945e6565ce0d9a25098082ed4ee4002e047cb59892c318d66821e14bb30f"
+checksum = "52a8e3ca0ca629121f70ab50f95249e5a6f925cc0f6ffe8256c45b728875706c"
 dependencies = [
  "darling",
  "proc-macro2",
