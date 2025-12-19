@@ -1,6 +1,5 @@
 target
 *.profraw
-**/Cargo.lock
 !tools/*/Cargo.lock
 **/target
 **/*.rs.bk

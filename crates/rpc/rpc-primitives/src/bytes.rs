@@ -20,6 +20,10 @@
 
 //! Serializable wrapper around vector of bytes
 
+use core::{
+    borrow::Borrow,
+    ops::{Deref, DerefMut},
+};
 use rustc_hex::{FromHex, ToHex};
 use serde::{
     de::{Error, Visitor},
@@ -47,6 +51,28 @@ impl From<Vec<u8>> for Bytes {
 
 impl Into<Vec<u8>> for Bytes {
     fn into(self) -> Vec<u8> { self.0 }
+}
+
+impl Deref for Bytes {
+    type Target = Vec<u8>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for Bytes {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
+impl AsRef<[u8]> for Bytes {
+    #[inline]
+    fn as_ref(&self) -> &[u8] { self.0.as_ref() }
+}
+
+impl Borrow<[u8]> for Bytes {
+    #[inline]
+    fn borrow(&self) -> &[u8] { self.as_ref() }
 }
 
 impl Serialize for Bytes {
