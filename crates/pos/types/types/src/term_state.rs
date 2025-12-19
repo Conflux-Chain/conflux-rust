@@ -765,12 +765,15 @@ impl PosState {
                 pivot_decision_tx.height, self.pivot_decision.height
             )));
         }
-        let senders = self
+        let senders: Vec<_> = self
             .epoch_state
             .verifier()
             .address_to_validator_info()
-            .keys();
+            .keys()
+            .cloned()
+            .collect();
         let public_keys: Vec<ConsensusPublicKey> = senders
+            .iter()
             .map(|sender| {
                 self.epoch_state.verifier().get_public_key(sender).unwrap()
             })
@@ -782,7 +785,17 @@ impl PosState {
                 e
             )));
         }
-        // TODO(linxi): check voting power
+        let signers = signature.get_signers(&senders)?;
+        if let Err(e) = self
+            .epoch_state()
+            .verifier()
+            .check_voting_power(signers.iter())
+        {
+            return Err(anyhow!(format!(
+                "Pivot Decision voting power check failed [{:?}]",
+                e
+            )));
+        }
         Ok(())
     }
 
