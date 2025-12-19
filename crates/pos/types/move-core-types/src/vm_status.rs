@@ -512,6 +512,8 @@ pub enum StatusCode {
     ELECTION_TERGET_TERM_NOT_OPEN = 31,
     ELECTION_WITHOUT_VOTES = 32,
     PIVOT_DECISION_HEIGHT_TOO_OLD=33,
+    // `expiration_timestamp_secs` is should be u64::MAX.
+    INVALID_EXPIRATION_TIME=34,
 
     // When a code module/script is published it is verified. These are the
     // possible errors that can arise from the verification process.

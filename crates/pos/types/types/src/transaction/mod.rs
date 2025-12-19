@@ -97,11 +97,7 @@ pub struct RawTransaction {
     /// The transaction payload, e.g., a script to execute.
     payload: TransactionPayload,
 
-    /// Expiration timestamp for this transaction, represented
-    /// as seconds from the Unix Epoch. If the current blockchain timestamp
-    /// is greater than or equal to this time, then the transaction has
-    /// expired and will be discarded. This can be set to a large value far
-    /// in the future to indicate that a transaction does not expire.
+    /// Always u64::MAX. Other values are regarded invalid.
     expiration_timestamp_secs: u64,
 
     /// Chain ID of the Diem network this transaction is intended for.
