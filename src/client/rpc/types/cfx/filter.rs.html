@@ -539,7 +539,8 @@
 <a href="#538" id="538">538</a>
 <a href="#539" id="539">539</a>
 <a href="#540" id="540">540</a>
-<a href="#541" id="541">541</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -1067,6 +1068,7 @@
             transaction_log_index: <span class="prelude-val">Some</span>(<span class="number">1</span>.into()),
             log_index: <span class="prelude-val">Some</span>(U256::from(<span class="number">1</span>)),
             space: <span class="prelude-val">None</span>,
+            block_timestamp: <span class="prelude-val">None</span>,
         };
 
         logs.push(CfxFilterLog::Log(log));
