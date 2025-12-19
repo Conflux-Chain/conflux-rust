@@ -57,6 +57,14 @@ impl TransactionValidator {
             ));
         }
 
+        if tx.expiration_timestamp_secs() != u64::MAX {
+            return Some(VMValidatorResult::new(
+                Some(DiscardedVMStatus::INVALID_EXPIRATION_TIME),
+                0,
+                GovernanceRole::Validator,
+            ))
+        }
+
         Some(VMValidatorResult::new(result, 0, GovernanceRole::Validator))
     }
 }
