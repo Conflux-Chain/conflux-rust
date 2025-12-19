@@ -166,7 +166,8 @@ impl MultiVersionMerklePatriciaTrie {
 
     pub fn start_commit(
         &self,
-    ) -> Result<AtomicCommitTransaction<Box<DeltaDbTransactionTraitObj>>> {
+    ) -> Result<AtomicCommitTransaction<'_, Box<DeltaDbTransactionTraitObj>>>
+    {
         Ok(AtomicCommitTransaction {
             info: self.commit_lock.lock(),
             transaction: self.get_arc_db()?.start_transaction_dyn(true)?,

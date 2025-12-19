@@ -72,7 +72,7 @@ impl EventStore {
 
     pub fn get_events_by_version_iter(
         &self, start_version: Version, num_versions: usize,
-    ) -> Result<EventsByVersionIter> {
+    ) -> Result<EventsByVersionIter<'_>> {
         let mut iter = self.db.iter::<EventSchema>(Default::default())?;
         iter.seek(&start_version)?;
 
