@@ -332,6 +332,38 @@ impl MultiBLSSignature {
         bytes.extend(&self.signature.as_bytes()[..]);
         bytes
     }
+
+    /// Get the actual signer set of the signature. `all_signers` is all
+    /// possible signers aligned with the internal bitmap.
+    pub fn get_signers<T: Clone>(
+        &self, all_signers: &Vec<T>,
+    ) -> Result<Vec<T>> {
+        let mut signers = Vec::with_capacity(all_signers.len());
+        if let Some(last_bit_index) = bitmap_last_set_bit(self.bitmap) {
+            if last_bit_index as usize >= all_signers.len() {
+                return Err(anyhow!(
+                    "{}",
+                    CryptoMaterialError::BitVecError(
+                        "Signature index is out of range".to_string()
+                    )
+                ));
+            }
+        }
+        if all_signers.len() > self.bitmap.len() * 8 {
+            return Err(anyhow!(
+                "{}",
+                CryptoMaterialError::BitVecError(
+                    "signer index is out of range".to_string()
+                )
+            ));
+        }
+        for i in 0..all_signers.len() {
+            if bitmap_get_bit(self.bitmap, i) {
+                signers.push(all_signers[i].clone());
+            }
+        }
+        Ok(signers)
+    }
 }
 
 //////////////////////
