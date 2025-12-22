@@ -5,10 +5,10 @@
 use crate::rpc::types::{Log, RpcAddress};
 use cfx_addr::Network;
 use cfx_types::{
-    address_util::AddressUtil, Bloom, Space, SpaceMap, H256, U256, U64,
+    address_util::AddressUtil, cal_contract_address, Bloom,
+    CreateContractAddressType, Space, SpaceMap, H256, U256, U64,
 };
 use cfx_util_macros::bail;
-use cfx_vm_types::{contract_address, CreateContractAddress};
 use primitives::{
     receipt::{
         Receipt as PrimitiveReceipt, StorageChange as PrimitiveStorageChange,
@@ -120,8 +120,8 @@ impl Receipt {
                 if Action::Create == unsigned.action()
                     && outcome_status == TransactionStatus::Success
                 {
-                    let (mut created_address, _) = contract_address(
-                        CreateContractAddress::FromSenderNonceAndCodeHash,
+                    let (mut created_address, _) = cal_contract_address(
+                        CreateContractAddressType::FromSenderNonceAndCodeHash,
                         block_number.into(),
                         &transaction.sender,
                         unsigned.nonce(),
@@ -142,8 +142,8 @@ impl Receipt {
                     if Action::Create == unsigned.action()
                         && outcome_status == TransactionStatus::Success
                     {
-                        let (created_address, _) = contract_address(
-                            CreateContractAddress::FromSenderNonce,
+                        let (created_address, _) = cal_contract_address(
+                            CreateContractAddressType::FromSenderNonce,
                             0,
                             &transaction.sender,
                             unsigned.nonce(),
