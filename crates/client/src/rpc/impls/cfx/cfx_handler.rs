@@ -915,7 +915,7 @@ impl RpcImpl {
             };
 
         let receipt =
-            self.construct_rpc_receipt(tx_index, &exec_info, false, false)?;
+            self.construct_rpc_receipt(tx_index, &exec_info, false, true)?;
         if let Some(r) = &receipt {
             // A skipped transaction is not available to clients if accessed by
             // its hash.
