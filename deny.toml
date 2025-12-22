@@ -120,6 +120,8 @@ allow = [
     "LicenseRef-rustls-webpki",
 
     "GPL-3.0",
+    "GPL-3.0-only",
+    "GPL-3.0-or-later",
     "MPL-2.0",
     "Unicode-DFS-2016",
 
