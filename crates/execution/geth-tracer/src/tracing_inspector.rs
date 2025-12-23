@@ -43,7 +43,8 @@ use cfx_types::{Space, H160};
 use alloy_primitives::{Address, Bytes, U256};
 
 use cfx_executor::machine::Machine;
-use revm_interpreter::{opcode, InstructionResult, InterpreterResult, OpCode};
+use revm_bytecode::{opcode, OpCode};
+use revm_interpreter::{InstructionResult, InterpreterResult};
 
 use cfx_vm_types::InterpreterInfo;
 
@@ -262,7 +263,7 @@ impl TracingInspector {
                 kind,
                 data: input_data,
                 value,
-                status: InstructionResult::Continue,
+                status: None,
                 caller,
                 maybe_precompile,
                 gas_limit,
@@ -301,8 +302,8 @@ impl TracingInspector {
             trace.gas_used = gas_spent;
         }
 
-        trace.status = result;
-        trace.success = trace.status.is_ok();
+        trace.status = Some(result);
+        trace.success = trace.status.is_some_and(|status| status.is_ok());
         trace.output = output.clone();
 
         self.last_call_return_data = Some(output);
@@ -401,7 +402,7 @@ impl TracingInspector {
             // fields will be populated end of call
             gas_cost: 0,
             storage_change,
-            status: InstructionResult::Continue,
+            status: None,
         });
     }
 
