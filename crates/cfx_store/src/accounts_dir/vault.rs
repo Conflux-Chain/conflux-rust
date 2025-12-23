@@ -20,7 +20,7 @@ use super::{
     KeyDirectory, SetKeyError, VaultKey, VaultKeyDirectory,
 };
 use crate::{json, Error, SafeAccount};
-use cfxkey::crypto::keccak::Keccak256;
+use cfx_crypto::crypto::keccak::Keccak256;
 use parking_lot::Mutex;
 use std::{
     fs, io,

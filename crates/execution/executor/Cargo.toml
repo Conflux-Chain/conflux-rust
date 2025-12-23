@@ -10,6 +10,7 @@ edition = "2021"
 substrate-bn = { workspace = true, default-features = false }
 byteorder = { workspace = true }
 cfxkey = { workspace = true }
+cfx-crypto = { path = "../../cfx_crypto" }
 cfx-bytes = { workspace = true }
 cfx-math = { workspace = true }
 cfx-internal-common = { workspace = true }

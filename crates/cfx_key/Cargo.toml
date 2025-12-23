@@ -8,6 +8,7 @@ license-file.workspace = true
 
 [dependencies]
 cfx-types = { workspace = true }
+cfx-crypto = { path = "../cfx_crypto" }
 edit-distance = { workspace = true }
 parity-secp256k1 = { workspace = true }
 lazy_static = { workspace = true }
@@ -21,14 +22,5 @@ zeroize = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 malloc_size_of = { workspace = true }
 thiserror = { workspace = true }
-aes = { workspace = true }
 hmac = { workspace = true }
-ctr = { workspace = true }
 sha2 = { workspace = true }
-subtle = { workspace = true }
-cbc = { workspace = true }
-scrypt = { workspace = true }
-pbkdf2 = { workspace = true }
-digest = { workspace = true }
-typenum = { workspace = true }
-ripemd = { workspace = true }

@@ -8,6 +8,7 @@ license-file.workspace = true
 cfx-addr = { workspace = true }
 cfx-bytes = { workspace = true }
 cfx-types = { workspace = true }
+cfx-crypto = { path = "../cfx_crypto" }
 cfxkey = { workspace = true }
 mio = { workspace = true, features = ["os-ext", "net", "os-poll"] }
 parking_lot = { workspace = true }

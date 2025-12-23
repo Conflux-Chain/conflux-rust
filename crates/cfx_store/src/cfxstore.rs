@@ -30,9 +30,10 @@ use crate::{
     Derivation, Error, OpaqueSecret, SecretStore, SecretVaultRef,
     SimpleSecretStore, StoreAccountRef,
 };
+use cfx_crypto::crypto::KEY_ITERATIONS;
 use cfxkey::{
-    self, crypto::KEY_ITERATIONS, Address, ExtendedKeyPair, KeyPair, Message,
-    Password, Public, Secret, Signature,
+    self, Address, ExtendedKeyPair, KeyPair, Message, Password, Public, Secret,
+    Signature,
 };
 
 /// Accounts store.

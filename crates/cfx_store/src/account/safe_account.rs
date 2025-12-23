@@ -20,10 +20,10 @@
 
 use super::crypto::Crypto;
 use crate::{account::Version, json, Error};
+use cfx_crypto::crypto::ecdh::agree;
 use cfx_types::address_util::AddressUtil;
 use cfxkey::{
-    self, crypto::ecdh::agree, sign, Address, KeyPair, Message, Password,
-    Public, Secret, Signature,
+    self, sign, Address, KeyPair, Message, Password, Public, Secret, Signature,
 };
 use log::warn;
 
@@ -195,7 +195,7 @@ impl SafeAccount {
         &self, password: &Password, shared_mac: &[u8], message: &[u8],
     ) -> Result<Vec<u8>, Error> {
         let secret = self.crypto.secret(password)?;
-        cfxkey::crypto::ecies::decrypt(&secret, shared_mac, message)
+        cfx_crypto::crypto::ecies::decrypt(&secret, shared_mac, message)
             .map_err(From::from)
     }
 

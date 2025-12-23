@@ -15,10 +15,8 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{json, Error};
-use cfxkey::{
-    crypto::{aes, keccak::Keccak256, pbkdf2},
-    Address, KeyPair, Password, Secret,
-};
+use cfx_crypto::crypto::{aes, keccak::Keccak256, pbkdf2};
+use cfxkey::{Address, KeyPair, Password, Secret};
 use std::{fs, num::NonZeroU32, path::Path};
 
 /// Pre-sale wallet.

@@ -1245,6 +1245,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-crypto"
+version = "0.3.0"
+dependencies = [
+ "aes 0.8.4",
+ "cbc",
+ "cfx-types",
+ "ctr 0.9.2",
+ "digest 0.10.7",
+ "hmac 0.12.1",
+ "lazy_static",
+ "parity-secp256k1",
+ "pbkdf2 0.12.2",
+ "ripemd",
+ "scrypt 0.11.0",
+ "sha2 0.10.9",
+ "subtle",
+ "thiserror 2.0.11",
+ "tiny-keccak 2.0.2",
+ "typenum",
+]
+
+[[package]]
 name = "cfx-db-errors"
 version = "2.0.2"
 dependencies = [
@@ -1285,6 +1307,7 @@ dependencies = [
  "byteorder",
  "c-kzg",
  "cfx-bytes",
+ "cfx-crypto",
  "cfx-internal-common",
  "cfx-math",
  "cfx-parameters",
@@ -1948,11 +1971,8 @@ dependencies = [
 name = "cfxkey"
 version = "0.3.0"
 dependencies = [
- "aes 0.8.4",
- "cbc",
+ "cfx-crypto",
  "cfx-types",
- "ctr 0.9.2",
- "digest 0.10.7",
  "edit-distance",
  "hmac 0.12.1",
  "lazy_static",
@@ -1961,17 +1981,12 @@ dependencies = [
  "malloc_size_of_derive",
  "parity-secp256k1",
  "parity-wordlist",
- "pbkdf2 0.12.2",
  "rand 0.7.3",
- "ripemd",
  "rustc-hex",
- "scrypt 0.11.0",
  "serde",
  "sha2 0.10.9",
- "subtle",
  "thiserror 2.0.11",
  "tiny-keccak 2.0.2",
- "typenum",
  "zeroize",
 ]
 
@@ -1979,6 +1994,7 @@ dependencies = [
 name = "cfxstore"
 version = "0.2.1"
 dependencies = [
+ "cfx-crypto",
  "cfx-types",
  "cfxkey",
  "dir",
@@ -5991,6 +6007,7 @@ dependencies = [
  "bytes 1.9.0",
  "cfx-addr",
  "cfx-bytes",
+ "cfx-crypto",
  "cfx-types",
  "cfx-util-macros",
  "cfxkey",

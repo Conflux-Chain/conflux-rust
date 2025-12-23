@@ -20,10 +20,10 @@ use crate::{
     random::Random,
     Error,
 };
-use cfxkey::{
-    crypto::{self, aes, keccak::Keccak256, pbkdf2, scrypt},
-    Password, Secret,
+use cfx_crypto::crypto::{
+    aes, derive_mac, is_equal, keccak::Keccak256, pbkdf2, scrypt, KEY_LENGTH,
 };
+use cfxkey::{Password, Secret};
 use smallvec::SmallVec;
 use std::str;
 
@@ -111,14 +111,13 @@ impl Crypto {
 
         // KECCAK(DK[16..31] ++ <ciphertext>), where DK[16..31] -
         // derived_right_bits
-        let mac =
-            crypto::derive_mac(&derived_right_bits, &*ciphertext).keccak256();
+        let mac = derive_mac(&derived_right_bits, &*ciphertext).keccak256();
 
         Ok(Crypto {
             cipher: Cipher::Aes128Ctr(Aes128Ctr { iv }),
             ciphertext: ciphertext.into_vec(),
             kdf: Kdf::Pbkdf2(Pbkdf2 {
-                dklen: crypto::KEY_LENGTH as u32,
+                dklen: KEY_LENGTH as u32,
                 salt: salt.to_vec(),
                 c: iterations,
                 prf: Prf::HmacSha256,
@@ -163,10 +162,9 @@ impl Crypto {
             .map_err(Error::EthCrypto)?,
         };
 
-        let mac = crypto::derive_mac(&derived_right_bits, &self.ciphertext)
-            .keccak256();
+        let mac = derive_mac(&derived_right_bits, &self.ciphertext).keccak256();
 
-        if !crypto::is_equal(&mac, &self.mac) {
+        if !is_equal(&mac, &self.mac) {
             return Err(Error::InvalidPassword);
         }
 

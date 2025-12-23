@@ -2,7 +2,7 @@
 
 use c_kzg::{Bytes32, Bytes48, KzgProof, KzgSettings};
 
-use cfxkey::crypto::digest;
+use cfx_crypto::crypto::digest;
 use hex_literal::hex;
 use std::convert::TryInto;
 

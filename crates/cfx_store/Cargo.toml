@@ -12,6 +12,7 @@ rand = { workspace = true }
 log = { workspace = true }
 cfx-types = { workspace = true }
 cfxkey = { workspace = true }
+cfx-crypto = { path = "../cfx_crypto" }
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["std"] }
 serde_derive = { workspace = true }

@@ -205,7 +205,8 @@ impl ExtendedKeyPair {
 // https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 mod derivation {
     use super::{Derivation, Label};
-    use crate::{crypto::keccak::Keccak256, math::curve_order, SECP256K1};
+    use crate::{math::curve_order, SECP256K1};
+    use cfx_crypto::crypto::keccak::Keccak256;
     use cfx_types::{BigEndianHash, H256, H512, U256, U512};
     use hmac::{Hmac, Mac};
     use secp256k1::key::{PublicKey, SecretKey};

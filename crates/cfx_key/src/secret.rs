@@ -15,6 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Error, SECP256K1};
+use cfx_crypto::{crypto::Error as CryptoError, SecretKey as CryptoSecretKey};
 use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use secp256k1::{constants::SECRET_KEY_SIZE as SECP256K1_SECRET_KEY_SIZE, key};
@@ -254,6 +255,26 @@ impl Deref for Secret {
     type Target = H256;
 
     fn deref(&self) -> &Self::Target { &self.inner }
+}
+
+impl AsRef<[u8]> for Secret {
+    fn as_ref(&self) -> &[u8] { self.inner.as_ref() }
+}
+
+impl CryptoSecretKey for Secret {
+    fn from_unsafe_slice(bytes: &[u8]) -> Result<Self, CryptoError> {
+        // Call the existing method but convert the error type
+        match Self::from_unsafe_slice(bytes) {
+            Ok(secret) => Ok(secret),
+            Err(e) => Err(match e {
+                Error::InvalidSecret => {
+                    CryptoError::Secp(secp256k1::Error::InvalidSecretKey)
+                }
+                Error::Io(e) => CryptoError::Io(e),
+                _ => CryptoError::Secp(secp256k1::Error::InvalidSecretKey),
+            }),
+        }
+    }
 }
 
 #[cfg(test)]

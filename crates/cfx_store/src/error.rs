@@ -46,8 +46,8 @@ pub enum Error {
     CreationFailed,
     /// `EthKey` error
     EthKey(EthKeyError),
-    /// `cfxkey::crypto::Error`
-    EthKeyCrypto(cfxkey::crypto::Error),
+    /// `cfx_crypto::crypto::Error`
+    EthKeyCrypto(cfx_crypto::crypto::Error),
     /// `EthCrypto` error
     EthCrypto(String),
     /// Derivation error
@@ -98,8 +98,8 @@ impl From<EthKeyError> for Error {
     fn from(err: EthKeyError) -> Self { Error::EthKey(err) }
 }
 
-impl From<cfxkey::crypto::Error> for Error {
-    fn from(err: cfxkey::crypto::Error) -> Self { Error::EthKeyCrypto(err) }
+impl From<cfx_crypto::crypto::Error> for Error {
+    fn from(err: cfx_crypto::crypto::Error) -> Self { Error::EthKeyCrypto(err) }
 }
 
 impl From<DerivationError> for Error {
