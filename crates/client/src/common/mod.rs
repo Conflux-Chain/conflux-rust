@@ -164,6 +164,25 @@ pub fn initialize_common_modules(
     // TODO(lpl): Keep it properly and allow not running pos.
     let (self_pos_private_key, self_vrf_private_key) = {
         let key_path = Path::new(&conf.raw_conf.pos_private_key_path);
+
+        let read_pos_password = |prompt: &str| -> Result<Vec<u8>, String> {
+            match rpassword::read_password_from_tty(Some(prompt)) {
+                Ok(password) => Ok(password.into_bytes()),
+                Err(e) => {
+                    let mut msg = format!("{:?}", e);
+                    // On macOS, attempting to open `/dev/tty` without a
+                    // controlling TTY can return ENXIO
+                    // ("Device not configured"). This commonly happens when
+                    // running under a debugger/IDE that doesn't allocate a real
+                    // terminal.
+                    if e.raw_os_error() == Some(6) {
+                        msg.push_str(" Hint: maybe no controlling TTY detected (macOS ENXIO: \"Device not configured\"). If you are running under VS Code debugger or with redirected stdio, set `CFX_POS_KEY_ENCRYPTION_PASSWORD` env var to avoid interactive prompting.");
+                    }
+                    Err(msg)
+                }
+            }
+        };
+
         let default_passwd = if conf.is_test_or_dev_mode() {
             Some(vec![])
         } else {
@@ -178,7 +197,9 @@ pub fn initialize_common_modules(
         if key_path.exists() {
             let passwd = match default_passwd {
                 Some(p) => p,
-                None => rpassword::read_password_from_tty(Some("PoS key detected, please input your encryption password.\nPassword:")).map_err(|e| format!("{:?}", e))?.into_bytes()
+                None => read_pos_password(
+                    "PoS key detected, please input your encryption password.\nPassword:",
+                )?,
             };
             match load_pri_key(key_path, &passwd) {
                 Ok((sk, vrf_sk)) => {
@@ -193,12 +214,8 @@ pub fn initialize_common_modules(
             let passwd = match default_passwd {
                 Some(p) => p,
                 None => {
-                    let p = rpassword::read_password_from_tty(Some("PoS key is not detected and will be generated instead, please input your encryption password. This password is needed when you restart the node\nPassword:")).map_err(|e| format!("{:?}", e))?.into_bytes();
-                    let p2 = rpassword::read_password_from_tty(Some(
-                        "Repeat Password:",
-                    ))
-                    .map_err(|e| format!("{:?}", e))?
-                    .into_bytes();
+                    let p = read_pos_password("PoS key is not detected and will be generated instead, please input your encryption password. This password is needed when you restart the node\nPassword:")?;
+                    let p2 = read_pos_password("Repeat Password:")?;
                     if p != p2 {
                         bail!("Passwords do not match!");
                     }

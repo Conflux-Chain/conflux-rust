@@ -1,5 +1,9 @@
 # JSON-RPC CHANGELOG
 
+## v3.0.3
+
+1. Core Space `log` object add `blockTimestamp` field for method `cfx_getLogs` and `cfx_getFilterLogs`.
+
 ## v3.0.2
 
 1. eSpace `log` object add `blockTimestamp` field.

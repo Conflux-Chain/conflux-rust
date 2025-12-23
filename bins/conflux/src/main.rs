@@ -191,8 +191,8 @@ fn setup_logger(conf: &Configuration) -> Result<(), String> {
         Some(ref log_conf) => {
             log4rs::init_file(log_conf, Default::default()).map_err(|e| {
                 format!(
-                    "failed to initialize log with log config file: {:?}",
-                    e
+                    "failed to initialize log with log config file '{}': {:?}; maybe you want 'run/log.yaml'?",
+                    log_conf, e
                 )
             })?;
         }
