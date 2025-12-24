@@ -1,4 +1,5 @@
 mod access_list;
+mod alloy_utils;
 mod authorization;
 mod block;
 mod block_number;
@@ -10,7 +11,6 @@ mod fee_history;
 mod filter;
 mod log;
 mod receipt;
-mod simulate;
 mod state;
 mod state_dump;
 mod sync;
@@ -21,7 +21,7 @@ mod transaction_request;
 mod tx_pool;
 
 pub use access_list::*;
-pub use authorization::{Authorization, SignedAuthorization};
+pub use authorization::*;
 pub use block::{Block, BlockOverrides, Header};
 pub use block_number::BlockId;
 pub use block_properties::BlockProperties;
@@ -33,7 +33,6 @@ pub use fee_history::FeeHistory;
 pub use filter::*;
 pub use log::*;
 pub use receipt::Receipt;
-pub use simulate::*;
 pub use state::{
     AccountOverride, AccountStateOverrideMode, EvmOverrides,
     RpcAccountOverride, RpcStateOverride, StateOverride,

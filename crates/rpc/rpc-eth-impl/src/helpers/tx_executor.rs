@@ -1,3 +1,4 @@
+use alloy_primitives_wrapper::WAddress;
 use cfx_execute_helper::estimation::{EstimateExt, EstimateRequest};
 use cfx_executor::executive::{
     Executed, ExecutionError, ExecutionOutcome, ToRepackError, TxDropError,
@@ -109,7 +110,10 @@ impl TxExecutor {
                                     Default::default(),
                                 )
                             })?;
-                    state_overrides.insert(address, account_override);
+                    state_overrides.insert(
+                        WAddress::from(address).into(),
+                        account_override,
+                    );
                 }
                 Some(state_overrides)
             }

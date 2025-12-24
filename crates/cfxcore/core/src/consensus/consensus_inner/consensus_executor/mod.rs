@@ -37,8 +37,10 @@ use cfx_types::{
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{
-    compute_block_number, receipt::BlockReceipts, Block, BlockHeader,
-    BlockHeaderBuilder, SignedTransaction, MERKLE_NULL_NODE,
+    compute_block_number,
+    receipt::{BlockReceipts, BlockReturnDatas},
+    Block, BlockHeader, BlockHeaderBuilder, SignedTransaction,
+    MERKLE_NULL_NODE,
 };
 
 use crate::{
@@ -650,6 +652,17 @@ impl ConsensusExecutor {
             epoch_size,
             request,
             evm_overrides,
+        )
+    }
+
+    pub fn collect_blocks_exec_result(
+        &self, state: &mut State, blocks: &Vec<Arc<Block>>,
+        start_block_number: u64,
+    ) -> CoreResult<(Vec<Arc<BlockReceipts>>, Vec<BlockReturnDatas>)> {
+        self.handler.collect_blocks_exec_result(
+            state,
+            blocks,
+            start_block_number,
         )
     }
 
@@ -1681,6 +1694,26 @@ impl ConsensusExecutionHandler {
         let r = ex.transact_virtual(tx.clone(), request);
         trace!("Execution result {:?}", r);
         Ok(r?)
+    }
+
+    pub fn collect_blocks_exec_result(
+        &self, state: &mut State, blocks: &Vec<Arc<Block>>,
+        start_block_number: u64,
+    ) -> CoreResult<(Vec<Arc<BlockReceipts>>, Vec<BlockReturnDatas>)> {
+        let mut answer = vec![];
+        let virtual_call = VirtualCall::GethTrace(GethTask {
+            tx_hash: None,
+            opts: GethDebugTracingOptions::default(),
+            answer: &mut answer,
+        });
+        let res = self.process_epoch_transactions_inner(
+            state,
+            blocks,
+            start_block_number,
+            false,
+            Some(virtual_call),
+        )?;
+        Ok(res)
     }
 
     /// Execute transactions in the blocks to collect traces.

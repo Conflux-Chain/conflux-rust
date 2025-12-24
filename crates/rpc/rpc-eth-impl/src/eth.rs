@@ -1,8 +1,13 @@
 use crate::helpers::{
     FeeHistoryCache, TxExecutor, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
 };
+use alloy_primitives_wrapper::WAddress;
+use alloy_rpc_types_eth::simulate::{
+    SimBlock, SimCallResult, SimulateError, SimulatePayload, SimulatedBlock,
+};
 use async_trait::async_trait;
-use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
+use cfx_executor::state::State;
+use cfx_parameters::rpc::{GAS_PRICE_DEFAULT_VALUE, MAX_SIMULATE_BLOCKS};
 use cfx_rpc_cfx_types::{
     traits::BlockProvider, PhantomBlock, RpcImplConfiguration,
 };
@@ -10,8 +15,8 @@ use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
     AccessListResult, AccountPendingTransactions, Block, BlockId,
     BlockOverrides, Bundle, EthCallResponse, EthRpcLogFilter,
-    EthRpcLogFilter as Filter, FeeHistory, Header, Log, LogData, Receipt,
-    RpcStateOverride, SimulatePayload, SimulatedBlock, StateContext, SyncInfo,
+    EthRpcLogFilter as Filter, EvmOverrides, FeeHistory, Header, Log, LogData,
+    Receipt, RpcStateOverride, StateContext, StateOverride, SyncInfo,
     SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
@@ -25,7 +30,8 @@ use cfx_rpc_utils::{
 use cfx_statedb::StateDbExt;
 use cfx_tasks::{TaskExecutor, TaskSpawner};
 use cfx_types::{
-    Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, H64, U256, U64,
+    Address, AddressSpaceUtil, BigEndianHash, Bloom, Space, SpaceMap, H160,
+    H256, H64, U256, U64,
 };
 use cfx_util_macros::bail;
 use cfxcore::{
@@ -37,10 +43,13 @@ use cfxcore_errors::ProviderBlockError;
 use jsonrpc_core::Error as RpcError;
 use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
 use primitives::{
-    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action, EpochNumber,
-    StorageKey, StorageValue, TransactionStatus, TransactionWithSignature,
+    filter::LogFilter,
+    log_entry::LocalizedLogEntry,
+    receipt::{BlockReturnDatas, EVM_SPACE_SUCCESS},
+    Action, BlockHeaderBuilder, BlockReceipts, EpochNumber, StorageKey,
+    StorageValue, TransactionStatus, TransactionWithSignature,
 };
-use std::future::Future;
+use std::{collections::HashMap, future::Future, sync::Arc};
 
 type BlockNumber = BlockId;
 type BlockNumberOrTag = BlockId;
@@ -116,6 +125,50 @@ impl EthApi {
     ) -> Result<EpochNumber, String> {
         self.tx_executor
             .convert_block_number_to_epoch_number(block_number)
+    }
+
+    pub fn get_block_epoch_height(
+        &self, block: BlockId,
+    ) -> Result<u64, String> {
+        let num = match block {
+            BlockId::Num(block_number) => block_number,
+            BlockId::Latest | BlockId::Safe | BlockId::Finalized => {
+                let epoch_num = block.try_into().expect("should success");
+                self.consensus_graph()
+                    .get_height_from_epoch_number(epoch_num)?
+            }
+            BlockId::Hash {
+                hash,
+                require_canonical,
+            } => self
+                .consensus_graph()
+                .get_block_epoch_number_with_pivot_check(
+                    &hash,
+                    require_canonical.unwrap_or_default(),
+                )
+                .map_err(|err| err.to_string())?,
+            _ => return Err("not supported".to_string()),
+        };
+        Ok(num)
+    }
+
+    fn get_epoch_blocks(
+        &self, epoch_num: EpochNumber,
+    ) -> Result<Vec<Arc<primitives::Block>>, String> {
+        let epoch_block_hashes = self
+            .consensus_graph()
+            .get_block_hashes_by_epoch(epoch_num)?;
+
+        let epoch_blocks = self
+            .consensus_graph()
+            .data_man
+            .blocks_by_hash_list(
+                &epoch_block_hashes,
+                true, /* update_cache */
+            )
+            .ok_or("blocks should exist".to_string())?;
+
+        Ok(epoch_blocks)
     }
 
     pub fn send_transaction_with_signature(
@@ -898,6 +951,310 @@ impl EthApi {
             pending_count: pending_count.into(),
         })
     }
+
+    pub fn simulate_v1(
+        &self, payload: SimulatePayload, block_id: Option<BlockId>,
+    ) -> CoreResult<Vec<SimulatedBlock<Block>>> {
+        let SimulatePayload {
+            block_state_calls,
+            trace_transfers, // not implemented for v1
+            validation: _,   // ignored for v1
+            return_full_transactions,
+        } = payload;
+
+        if block_state_calls.is_empty() {
+            return Err(RpcError::invalid_params(String::from(
+                "calls are empty.",
+            ))
+            .into());
+        }
+
+        if block_state_calls.len() > MAX_SIMULATE_BLOCKS as usize {
+            return Err(RpcError::invalid_params(
+                "too many blocks.".to_string(),
+            )
+            .into());
+        }
+
+        let chain_id = self.consensus.best_chain_id();
+
+        let block_number = block_id.unwrap_or_default();
+
+        let epoch_blocks = self.get_epoch_blocks(
+            self.convert_block_number_to_epoch_number(block_number)?,
+        )?;
+        let epoch_block = epoch_blocks.last().expect("exist");
+
+        let epoch_hash = epoch_block.hash();
+        let epoch_height = epoch_block.block_header.height();
+
+        let mut start_block_number = self
+            .consensus_graph()
+            .data_man
+            .get_epoch_execution_context(&epoch_hash)
+            .map(|v| v.start_block_number)
+            .expect("should exist");
+
+        let state_db = self.consensus_graph().get_state_db_by_epoch_number(
+            EpochNumber::Number(epoch_height),
+            "num",
+        )?;
+        let mut state = State::new(state_db)?;
+
+        let mut prev_block = epoch_block.clone();
+
+        let mut res = vec![];
+
+        let mut next_nonces: HashMap<Address, U256> = HashMap::new();
+
+        for block_call in block_state_calls {
+            let SimBlock {
+                block_overrides,
+                state_overrides,
+                calls,
+            } = block_call;
+
+            // check state_overrides validity
+            if let Some(state_overrides_ref) = &state_overrides {
+                let both_state_present =
+                    state_overrides_ref.iter().any(|(_a, account_override)| {
+                        account_override.state.is_some()
+                            && account_override.state_diff.is_some()
+                    });
+                if both_state_present {
+                    return Err(RpcError::invalid_params(String::from(
+                        "Both 'state' and 'stateDiff' are present in account override",
+                    ))
+                    .into());
+                }
+            }
+
+            // apply block overrides
+            let evm_overrides = EvmOverrides::new(
+                state_overrides.map(|v| {
+                    v.into_iter()
+                        .map(|(k, v)| {
+                            (
+                                WAddress::from(k).into(),
+                                v.try_into().expect("success"),
+                            )
+                        })
+                        .collect::<StateOverride>()
+                }),
+                block_overrides.map(|v| Box::new(v.into())),
+            );
+
+            // TODO: state overrides application
+
+            let mut header_builder = BlockHeaderBuilder::new();
+            header_builder
+                .with_parent_hash(prev_block.hash())
+                .with_height(prev_block.block_header.height() + 1)
+                .with_timestamp(prev_block.block_header.timestamp() + 1) // one block one second
+                .with_gas_limit(*prev_block.block_header.gas_limit())
+                .with_base_price(prev_block.block_header.base_price());
+
+            // apply block overrides
+            if let Some(block_overrides_ref) = &evm_overrides.block {
+                if let Some(_number) = block_overrides_ref.number {
+                    // need override the start_block_number
+                }
+
+                if let Some(difficulty) = block_overrides_ref.difficulty {
+                    header_builder.with_difficulty(difficulty);
+                }
+
+                if let Some(time) = block_overrides_ref.time {
+                    header_builder.with_timestamp(time);
+                }
+
+                if let Some(gas_limit) = block_overrides_ref.gas_limit {
+                    header_builder.with_gas_limit(gas_limit.into());
+                }
+
+                if let Some(coinbase) = block_overrides_ref.coinbase {
+                    header_builder.with_author(coinbase);
+                }
+
+                if let Some(_random) = block_overrides_ref.random {
+                    // conflux does not support random(prevRandao)
+                }
+
+                if let Some(base_fee) = block_overrides_ref.base_fee {
+                    let space_base_fee = SpaceMap::new(base_fee, base_fee);
+                    header_builder.with_base_price(Some(space_base_fee));
+                }
+
+                if let Some(_block_hash) = &block_overrides_ref.block_hash {
+                    // not supported
+                }
+            }
+
+            let mut local_calls: Vec<TransactionRequest> = calls
+                .into_iter()
+                .map(|c| TransactionRequest::from(c))
+                .collect();
+
+            // normalize transactions: check & auto fill nonce
+            for tx in &mut local_calls {
+                let sender = tx.from.unwrap_or_default();
+                if !next_nonces.contains_key(&sender) {
+                    let nonce = state.nonce(&sender.with_evm_space())?;
+                    next_nonces.insert(sender, nonce);
+                }
+                let expected_nonce =
+                    next_nonces.get_mut(&sender).expect("should exist");
+                if let Some(nonce) = tx.nonce {
+                    if nonce != *expected_nonce {
+                        return Err(RpcError::invalid_params(format!(
+                            "Invalid nonce for address {:?}: expected {}, got {}",
+                            sender, expected_nonce, nonce
+                        ))
+                        .into());
+                    }
+                } else {
+                    tx.nonce = Some(*expected_nonce);
+                }
+                *expected_nonce += U256::one();
+            }
+
+            let signed_txs = local_calls
+                .into_iter()
+                .map(|tx| {
+                    Arc::new(
+                        tx.sign_call(
+                            chain_id.in_evm_space(),
+                            self.config.max_estimation_gas_limit,
+                        )
+                        .expect("should success"),
+                    )
+                })
+                .collect();
+
+            let block = Arc::new(primitives::Block::new(
+                header_builder.build(),
+                signed_txs,
+            ));
+            let epoch_blocks: Vec<Arc<primitives::Block>> = vec![block.clone()];
+
+            let (block_receipts, block_return_datas) =
+                self.consensus_graph().collect_blocks_exec_result(
+                    &mut state,
+                    &epoch_blocks,
+                    trace_transfers,
+                    start_block_number,
+                )?;
+
+            if block_receipts.len() != 1 {
+                return Err(internal_error(
+                    "Inconsistent state: block_receipts and blocks length mismatch",
+                )
+                .into());
+            }
+            if block_receipts.len() != block_return_datas.len() {
+                return Err(internal_error(
+                    "Inconsistent state: block_receipts and return_datas length mismatch",
+                )
+                .into());
+            }
+
+            let simulated_block = Self::construct_simulated_block(
+                &block,
+                &block_receipts,
+                &block_return_datas,
+                return_full_transactions,
+            );
+            res.push(simulated_block);
+
+            start_block_number += 1;
+            prev_block = block;
+        }
+
+        Ok(res)
+    }
+
+    fn construct_simulated_block(
+        block: &primitives::Block, block_receipts: &Vec<Arc<BlockReceipts>>,
+        block_return_datas: &Vec<BlockReturnDatas>, full_transactions: bool,
+    ) -> SimulatedBlock<Block> {
+        let mut calls: Vec<SimCallResult> = vec![];
+        let mut prev_gas_used: u64 = 0;
+        let mut log_index: usize = 0;
+        let mut bloom: Bloom = Default::default();
+        for (idx, receipt) in block_receipts[0].receipts.iter().enumerate() {
+            let return_data = block_return_datas[0].return_datas[idx].clone();
+            let err_msg =
+                block_receipts[0].tx_execution_error_messages[idx].clone();
+            let error = if err_msg.is_empty() {
+                None
+            } else {
+                Some(SimulateError {
+                    code: -3200, /* -3200: Execution reverted  -32015: VM
+                                  * execution error */
+                    message: err_msg,
+                })
+            };
+
+            let status = match receipt.outcome_status {
+                TransactionStatus::Success => true,
+                _ => false,
+            };
+            let gas_used =
+                receipt.accumulated_gas_used.as_u64() - prev_gas_used;
+            prev_gas_used = receipt.accumulated_gas_used.as_u64();
+
+            bloom.accrue_bloom(&receipt.log_bloom);
+
+            let mut logs = vec![];
+
+            for (index, log) in receipt.logs.iter().enumerate() {
+                if log.space == Space::Ethereum {
+                    log_index += 1;
+                    logs.push(
+                        Log::from_localized(
+                            LocalizedLogEntry {
+                                entry: log.clone(),
+                                block_hash: block.hash(),
+                                epoch_number: block.block_header.height(),
+                                block_timestamp: Some(
+                                    block.block_header.timestamp(),
+                                ),
+                                transaction_hash: block.transactions[idx]
+                                    .hash(),
+                                transaction_index: idx,
+                                log_index,
+                                transaction_log_index: index,
+                            },
+                            block.hash(),
+                            false,
+                        )
+                        .into(),
+                    );
+                }
+            }
+            calls.push(SimCallResult {
+                return_data: return_data.into(),
+                logs,
+                gas_used,
+                status,
+                error,
+            });
+        }
+
+        let phantom_block = PhantomBlock {
+            pivot_header: block.block_header.clone(),
+            transactions: block.transactions.clone(),
+            receipts: block_receipts[0].receipts.clone(),
+            errors: block_receipts[0].tx_execution_error_messages.clone(),
+            bloom,
+            traces: Default::default(),
+            total_gas_limit: block.block_header.gas_limit().clone(),
+        };
+        SimulatedBlock {
+            inner: Block::from_phantom(&phantom_block, full_transactions),
+            calls,
+        }
+    }
 }
 
 impl SpawnBlocking for EthApi {
@@ -951,7 +1308,7 @@ impl EthApiServer for EthApi {
 
     /// Returns the number of most recent block.
     fn block_number(&self) -> RpcResult<U256> {
-        self.latest_block_number().map_err(|err| err.into())
+        self.latest_block_number().map_err(Into::into)
     }
 
     /// Returns the chain ID of the current network.
@@ -963,14 +1320,14 @@ impl EthApiServer for EthApi {
     async fn block_by_hash(
         &self, hash: H256, full: bool,
     ) -> RpcResult<Option<Block>> {
-        self.block_by_hash(hash, full).map_err(|err| err.into())
+        self.block_by_hash(hash, full).map_err(Into::into)
     }
 
     /// Returns information about a block by number.
     async fn block_by_number(
         &self, number: BlockNumberOrTag, full: bool,
     ) -> RpcResult<Option<Block>> {
-        self.block_by_number(number, full).map_err(|err| err.into())
+        self.block_by_number(number, full).map_err(Into::into)
     }
 
     /// Returns the number of transactions in a block from a block matching the
@@ -979,7 +1336,7 @@ impl EthApiServer for EthApi {
         &self, hash: H256,
     ) -> RpcResult<Option<U256>> {
         self.block_transaction_count_by_hash(hash)
-            .map_err(|err| err.into())
+            .map_err(Into::into)
     }
 
     /// Returns the number of transactions in a block matching the given block
@@ -988,7 +1345,7 @@ impl EthApiServer for EthApi {
         &self, number: BlockNumberOrTag,
     ) -> RpcResult<Option<U256>> {
         self.block_transaction_count_by_number(number)
-            .map_err(|err| err.into())
+            .map_err(Into::into)
     }
 
     /// Returns the number of uncles in a block from a block matching the given
@@ -996,8 +1353,7 @@ impl EthApiServer for EthApi {
     async fn block_uncles_count_by_hash(
         &self, hash: H256,
     ) -> RpcResult<Option<U256>> {
-        self.block_uncles_count_by_hash(hash)
-            .map_err(|err| err.into())
+        self.block_uncles_count_by_hash(hash).map_err(Into::into)
     }
 
     /// Returns the number of uncles in a block with given block number.
@@ -1005,7 +1361,7 @@ impl EthApiServer for EthApi {
         &self, number: BlockNumberOrTag,
     ) -> RpcResult<Option<U256>> {
         self.block_uncles_count_by_number(number)
-            .map_err(|err| err.into())
+            .map_err(Into::into)
     }
 
     /// Returns all transaction receipts for a given block.
@@ -1014,7 +1370,7 @@ impl EthApiServer for EthApi {
     ) -> RpcResult<Option<Vec<Receipt>>> {
         self.get_block_receipts(block_id)
             .map(|val| Some(val))
-            .map_err(|e| e.into())
+            .map_err(Into::into)
     }
 
     /// Returns an uncle block of the given block and index.
@@ -1102,15 +1458,14 @@ impl EthApiServer for EthApi {
     async fn transaction_receipt(
         &self, hash: H256,
     ) -> RpcResult<Option<Receipt>> {
-        self.transaction_receipt(hash).map_err(|err| err.into())
+        self.transaction_receipt(hash).map_err(Into::into)
     }
 
     /// Returns the balance of the account of given address.
     async fn balance(
         &self, address: Address, block_number: Option<BlockId>,
     ) -> RpcResult<U256> {
-        self.user_balance(address, block_number)
-            .map_err(|err| err.into())
+        self.user_balance(address, block_number).map_err(Into::into)
     }
 
     /// Returns the value from a storage position at a given address
@@ -1119,7 +1474,7 @@ impl EthApiServer for EthApi {
         block_number: Option<BlockId>,
     ) -> RpcResult<H256> {
         self.storage_at(address, index, block_number)
-            .map_err(|err| err.into())
+            .map_err(Into::into)
     }
 
     /// Returns the number of transactions sent from an address at given block
@@ -1127,16 +1482,14 @@ impl EthApiServer for EthApi {
     async fn transaction_count(
         &self, address: Address, block_number: Option<BlockId>,
     ) -> RpcResult<U256> {
-        self.next_nonce(address, block_number)
-            .map_err(|err| err.into())
+        self.next_nonce(address, block_number).map_err(Into::into)
     }
 
     /// Returns code at a given address at given block number.
     async fn get_code(
         &self, address: Address, block_number: Option<BlockId>,
     ) -> RpcResult<Bytes> {
-        self.code_at(address, block_number)
-            .map_err(|err| err.into())
+        self.code_at(address, block_number).map_err(Into::into)
     }
 
     /// Returns the block's header at given number.
@@ -1157,11 +1510,9 @@ impl EthApiServer for EthApi {
     /// the requested state. The transactions are packed into individual
     /// blocks. Overrides can be provided.
     async fn simulate_v1(
-        &self, opts: SimulatePayload, block_number: Option<BlockId>,
-    ) -> RpcResult<Vec<SimulatedBlock>> {
-        let _ = block_number;
-        let _ = opts;
-        Err(jsonrpsee_internal_error("Not implemented"))
+        &self, payload: SimulatePayload, block_id: Option<BlockId>,
+    ) -> RpcResult<Vec<SimulatedBlock<Block>>> {
+        self.simulate_v1(payload, block_id).map_err(Into::into)
     }
 
     /// Executes a new message call immediately without creating a transaction
@@ -1247,7 +1598,7 @@ impl EthApiServer for EthApi {
     /// Introduced in EIP-1559, returns suggestion for the priority for dynamic
     /// fee transactions.
     async fn max_priority_fee_per_gas(&self) -> RpcResult<U256> {
-        self.max_priority_fee_per_gas().map_err(|err| err.into())
+        self.max_priority_fee_per_gas().map_err(Into::into)
     }
 
     /// Introduced in EIP-4844, returns the current blob base fee in wei.
@@ -1271,7 +1622,7 @@ impl EthApiServer for EthApi {
             newest_block,
             reward_percentiles,
         )
-        .map_err(|err| err.into())
+        .map_err(Into::into)
     }
 
     /// Returns whether the client is actively mining new blocks.
@@ -1372,6 +1723,6 @@ impl EthApiServer for EthApi {
             maybe_start_nonce,
             maybe_limit,
         )
-        .map_err(|err| err.into())
+        .map_err(Into::into)
     }
 }

@@ -19,6 +19,9 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Bytes, Error};
+use alloy_primitives::Log as AlloyLogData;
+use alloy_primitives_wrapper::{WAddress, WB256};
+use alloy_rpc_types_eth::Log as AlloyLog;
 use cfx_rpc_cfx_types::traits::BlockProvider;
 use cfx_types::{H160, H256, U256, U64};
 use primitives::{
@@ -97,19 +100,29 @@ impl Log {
         })
     }
 
+    pub fn from_localized(
+        e: LocalizedLogEntry, epoch_hash: H256, removed: bool,
+    ) -> Log {
+        Log {
+            inner: LogData {
+                address: e.entry.address,
+                topics: e.entry.topics.into_iter().map(Into::into).collect(),
+                data: e.entry.data.into(),
+            },
+            block_hash: epoch_hash,
+            // note: blocks in EVM space RPCs correspond to epochs
+            block_number: e.epoch_number.into(),
+            block_timestamp: e.block_timestamp.map(Into::into),
+            transaction_hash: e.transaction_hash.into(),
+            transaction_index: e.transaction_index.into(),
+            log_index: Some(e.log_index.into()),
+            transaction_log_index: Some(e.transaction_log_index.into()),
+            removed,
+        }
+    }
+
     pub fn try_from(_e: LogEntry) -> Result<Log, String> {
         unimplemented!();
-        // Ok(Log {
-        //     address: RpcAddress::try_from_h160(e.address, network)?,
-        //     topics: e.topics.into_iter().map(Into::into).collect(),
-        //     data: e.data.into(),
-        //     block_hash: None,
-        //     epoch_number: None,
-        //     transaction_hash: None,
-        //     transaction_index: None,
-        //     log_index: None,
-        //     transaction_log_index: None,
-        // })
     }
 }
 
@@ -118,4 +131,31 @@ pub struct LogData {
     pub address: H160,
     pub topics: Vec<H256>,
     pub data: Bytes,
+}
+
+impl From<Log> for AlloyLog {
+    fn from(log: Log) -> Self {
+        let inner = AlloyLogData {
+            address: WAddress::from(log.inner.address).into(),
+            data: alloy_primitives::LogData::new(
+                log.inner
+                    .topics
+                    .into_iter()
+                    .map(|h| WB256::from(h).into())
+                    .collect(),
+                log.inner.data.0.into(),
+            )
+            .expect("Log data is always valid"),
+        };
+        AlloyLog {
+            inner,
+            block_hash: Some(WB256::from(log.block_hash).into()),
+            block_number: Some(log.block_number.as_u64()),
+            block_timestamp: log.block_timestamp.map(|v| v.as_u64()),
+            transaction_hash: Some(WB256::from(log.transaction_hash).into()),
+            transaction_index: Some(log.transaction_index.as_u64()),
+            log_index: log.log_index.map(|v| v.as_u64()),
+            removed: log.removed,
+        }
+    }
 }

@@ -28,7 +28,7 @@ pub trait PowInterface: Send + Sync {
     fn is_normal_phase(&self) -> bool;
 }
 
-#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize, Clone)]
 pub enum StakingEvent {
     /// (address, bls_public_key, vrf_public_key)
     Register(H256, Vec<u8>, Vec<u8>),

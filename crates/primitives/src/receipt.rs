@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::log_entry::LogEntry;
+use crate::{bytes::Bytes, log_entry::LogEntry};
 use cfx_types::{Address, Bloom, Space, U256, U64};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -222,6 +222,12 @@ impl MallocSizeOf for BlockReceipts {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.receipts.size_of(ops)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockReturnDatas {
+    /// This is the return data of transaction execution result
+    pub return_datas: Vec<Bytes>,
 }
 
 #[test]

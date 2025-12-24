@@ -1,5 +1,6 @@
 use super::executed::Executed;
 use crate::unwrap_or_return;
+use cfx_bytes::Bytes;
 use cfx_types::{Address, H256, U256, U512};
 use cfx_vm_types as vm;
 use primitives::{
@@ -243,6 +244,17 @@ impl ExecutionOutcome {
                 }
             }
             Finished(_) => "".into(),
+        }
+    }
+
+    #[inline]
+    pub fn output(&self) -> Option<Bytes> {
+        match self {
+            NotExecutedDrop(_) | NotExecutedToReconsiderPacking(_) => None,
+            ExecutionErrorBumpNonce(_, executed) => {
+                Some(executed.output.clone())
+            }
+            Finished(executed) => Some(executed.output.clone()),
         }
     }
 

@@ -5,14 +5,18 @@ use crate::{
     errors::Result as CoreResult,
 };
 use cfx_execute_helper::estimation::{EstimateExt, EstimateRequest};
-use cfx_executor::executive::ExecutionOutcome;
+use cfx_executor::{executive::ExecutionOutcome, state::State};
 use cfx_parameters::rpc::{
     GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_DEFAULT_VALUE,
     GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
 };
 use cfx_rpc_eth_types::EvmOverrides;
 use cfx_types::{Space, H256, U256};
-use primitives::{EpochNumber, SignedTransaction};
+use primitives::{
+    receipt::{BlockReceipts, BlockReturnDatas},
+    Block, EpochNumber, SignedTransaction,
+};
+use std::sync::Arc;
 
 impl ConsensusGraph {
     /// Get the average gas price of the last GAS_PRICE_TRANSACTION_SAMPLE_SIZE
@@ -145,6 +149,19 @@ impl ConsensusGraph {
             epoch_size,
             request,
             evm_overrides,
+        )
+    }
+
+    // virtual execution results for epoch blocks
+    pub fn collect_blocks_exec_result(
+        &self, state: &mut State, blocks: &Vec<Arc<Block>>,
+        trace_cfx_transfers: bool, start_block_number: u64,
+    ) -> CoreResult<(Vec<Arc<BlockReceipts>>, Vec<BlockReturnDatas>)> {
+        let _ = trace_cfx_transfers;
+        self.executor.collect_blocks_exec_result(
+            state,
+            blocks,
+            start_block_number,
         )
     }
 }

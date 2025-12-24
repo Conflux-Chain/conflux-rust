@@ -138,6 +138,8 @@ pub mod rpc {
     pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW: usize = 100;
     pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM: usize = 600;
     pub const GAS_PRICE_DEFAULT_VALUE: usize = 1_000_000_000;
+    /// The default limit for blocks count in `eth_simulateV1`.
+    pub const MAX_SIMULATE_BLOCKS: u64 = 256;
 }
 
 pub mod sync {

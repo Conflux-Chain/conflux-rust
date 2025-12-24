@@ -1,75 +1,44 @@
-use cfx_types::{Address, U256, U64};
+use alloy_eips::eip7702::{
+    Authorization as EthAuthorization,
+    SignedAuthorization as EthSignedAuthorization,
+};
+use alloy_primitives_wrapper::{WAddress, WU256};
 use primitives::transaction::AuthorizationListItem;
 
-#[derive(
-    Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize, Clone,
-)]
+#[derive(Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct Authorization {
-    /// The chain ID of the authorization.
-    pub chain_id: U256,
-    /// The address of the authorization.
-    pub address: Address,
-    /// The nonce for the authorization.
-    pub nonce: U64,
-}
-
-#[derive(
-    Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize, Clone,
-)]
-#[serde(rename_all = "camelCase")]
-pub struct SignedAuthorization {
-    /// Inner authorization.
-    #[serde(flatten)]
-    inner: Authorization,
-    /// Signature parity value. We allow any [`U64`] here, however, the only
-    /// valid values are `0` and `1` and anything else will result in error
-    /// during recovery.
-    pub y_parity: U64,
-    /// Signature `r` value.
-    pub r: U256,
-    /// Signature `s` value.
-    pub s: U256,
-}
-
-impl SignedAuthorization {
-    /// Returns the inner authorization.
-    pub const fn inner(&self) -> &Authorization { &self.inner }
-
-    /// Returns the signature parity value.
-    pub fn y_parity(&self) -> u8 { self.y_parity.as_u32() as u8 }
-
-    /// Returns the signature `r` value.
-    pub const fn r(&self) -> U256 { self.r }
-
-    /// Returns the signature `s` value.
-    pub const fn s(&self) -> U256 { self.s }
-}
+pub struct SignedAuthorization(pub EthSignedAuthorization);
 
 impl From<AuthorizationListItem> for SignedAuthorization {
     fn from(item: AuthorizationListItem) -> Self {
-        Self {
-            inner: Authorization {
-                chain_id: item.chain_id.into(),
-                address: item.address.into(),
-                nonce: item.nonce.into(),
-            },
-            y_parity: item.y_parity.into(),
-            r: item.r,
-            s: item.s,
-        }
+        let auth = EthAuthorization {
+            chain_id: WU256::from(item.chain_id).into(),
+            address: WAddress::from(item.address).into(),
+            nonce: item.nonce,
+        };
+        Self(EthSignedAuthorization::new_unchecked(
+            auth,
+            item.y_parity,
+            WU256::from(item.r).into(),
+            WU256::from(item.s).into(),
+        ))
     }
 }
 
 impl Into<AuthorizationListItem> for SignedAuthorization {
     fn into(self) -> AuthorizationListItem {
+        let inner = self.0.inner();
         AuthorizationListItem {
-            chain_id: self.inner.chain_id,
-            address: self.inner.address,
-            nonce: self.inner.nonce.as_u64(),
-            y_parity: self.y_parity(),
-            r: self.r,
-            s: self.s,
+            chain_id: WU256::from(inner.chain_id).into(),
+            address: WAddress::from(inner.address).into(),
+            nonce: inner.nonce,
+            y_parity: self.0.y_parity(),
+            r: WU256::from(self.0.r()).into(),
+            s: WU256::from(self.0.s()).into(),
         }
     }
+}
+
+impl Into<EthSignedAuthorization> for SignedAuthorization {
+    fn into(self) -> EthSignedAuthorization { self.0 }
 }

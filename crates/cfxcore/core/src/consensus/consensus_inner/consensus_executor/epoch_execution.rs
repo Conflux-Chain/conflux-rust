@@ -6,11 +6,13 @@ use cfx_parameters::genesis::GENESIS_ACCOUNT_ADDRESS;
 use geth_tracer::{GethTraceWithHash, GethTracer, TxExecContext};
 use pow_types::StakingEvent;
 
+use cfx_bytes::Bytes;
 use cfx_statedb::{Error as DbErrorKind, Result as DbResult};
 use cfx_types::{AddressSpaceUtil, Space, SpaceMap, H256, U256};
 use primitives::{
-    receipt::BlockReceipts, AccessListItem, Action, Block, BlockNumber,
-    Receipt, SignedTransaction, TransactionIndex,
+    receipt::{BlockReceipts, BlockReturnDatas},
+    AccessListItem, Action, Block, BlockNumber, Receipt, SignedTransaction,
+    TransactionIndex,
 };
 
 use crate::{
@@ -50,7 +52,26 @@ impl ConsensusExecutionHandler {
         start_block_number: u64, on_local_pivot: bool,
         virtual_call: Option<VirtualCall<'a>>,
     ) -> DbResult<Vec<Arc<BlockReceipts>>> {
-        self.prefetch_storage_for_execution(state, epoch_blocks);
+        let epoch_recorder = self.process_epoch_transactions_inner(
+            state,
+            epoch_blocks,
+            start_block_number,
+            on_local_pivot,
+            virtual_call,
+        )?;
+        Ok(epoch_recorder.0)
+    }
+
+    pub(super) fn process_epoch_transactions_inner<'a>(
+        &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
+        start_block_number: u64, on_local_pivot: bool,
+        virtual_call: Option<VirtualCall<'a>>,
+    ) -> DbResult<(Vec<Arc<BlockReceipts>>, Vec<BlockReturnDatas>)> {
+        // An assertion in prefetch_storage fails when simulating multiple
+        // blocks, so it is skipped
+        if virtual_call.is_none() {
+            self.prefetch_storage_for_execution(state, epoch_blocks);
+        }
 
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
 
@@ -123,7 +144,7 @@ impl ConsensusExecutionHandler {
         }
 
         debug!("Finish processing tx for epoch");
-        Ok(epoch_recorder.receipts)
+        Ok((epoch_recorder.receipts, epoch_recorder.return_datas))
     }
 
     fn prefetch_storage_for_execution(
@@ -529,6 +550,8 @@ impl<'a, 'b> BlockProcessContext<'a, 'b> {
 #[derive(Default)]
 struct EpochProcessRecorder {
     receipts: Vec<Arc<BlockReceipts>>,
+    // tx execution results
+    return_datas: Vec<BlockReturnDatas>,
     staking_events: Vec<StakingEvent>,
     repack_tx: Vec<Arc<SignedTransaction>>,
     geth_traces: Vec<GethTraceWithHash>,
@@ -542,6 +565,7 @@ impl EpochProcessRecorder {
 
 struct BlockProcessRecorder {
     receipt: Vec<Receipt>,
+    return_datas: Vec<Bytes>,
     tx_error_msg: Vec<String>,
     traces: Vec<TransactionExecTraces>,
     geth_traces: Vec<GethTraceWithHash>,
@@ -557,6 +581,7 @@ impl BlockProcessRecorder {
         tx_idx[Space::Ethereum] = evm_tx_idx;
         Self {
             receipt: vec![],
+            return_datas: vec![],
             tx_error_msg: vec![],
             traces: vec![],
             geth_traces: vec![],
@@ -587,6 +612,7 @@ impl BlockProcessRecorder {
         }
 
         self.receipt.push(r.receipt);
+        self.return_datas.push(r.output.unwrap_or_default());
         self.tx_error_msg.push(r.tx_exec_error_msg);
         self.staking_events.extend(r.tx_staking_events);
 
@@ -637,7 +663,12 @@ impl BlockProcessRecorder {
             tx_execution_error_messages: self.tx_error_msg,
         });
 
+        let block_return_datas = BlockReturnDatas {
+            return_datas: self.return_datas,
+        };
+
         epoch_recorder.receipts.push(block_receipts.clone());
+        epoch_recorder.return_datas.push(block_return_datas);
         epoch_recorder.staking_events.extend(self.staking_events);
         epoch_recorder.repack_tx.extend(self.repack_tx);
         epoch_recorder.geth_traces.extend(self.geth_traces);

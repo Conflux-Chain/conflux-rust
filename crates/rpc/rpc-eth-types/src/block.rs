@@ -19,6 +19,8 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Bytes, Transaction};
+use alloy_primitives_wrapper::{WAddress, WB256, WU256};
+use alloy_rpc_types_eth::BlockOverrides as EthBlockOverrides;
 use cfx_rpc_cfx_types::PhantomBlock;
 use cfx_types::{
     hexstr_to_h256, Address, Bloom as H2048, Space, H160, H256, H64, U256,
@@ -43,6 +45,10 @@ pub enum BlockTransactions {
     Full(Vec<Transaction>),
 }
 
+impl Default for BlockTransactions {
+    fn default() -> Self { BlockTransactions::Hashes(vec![]) }
+}
+
 impl Serialize for BlockTransactions {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
@@ -56,7 +62,7 @@ impl Serialize for BlockTransactions {
 }
 
 /// Block representation
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
     /// Hash of the block
@@ -279,41 +285,9 @@ impl Header {
                 .into(),
         }
     }
-
-    //     pub fn new(h: &EthHeader, eip1559_transition: BlockNumber) -> Self {
-    //         let eip1559_enabled = h.number() >= eip1559_transition;
-    //         Header {
-    //             hash: Some(h.hash()),
-    // 			size: Some(h.rlp().as_raw().len().into()),
-    // 			parent_hash: h.parent_hash(),
-    // 			uncles_hash: h.uncles_hash(),
-    // 			author: h.author(),
-    // 			miner: h.author(),
-    // 			state_root: h.state_root(),
-    // 			transactions_root: h.transactions_root(),
-    // 			receipts_root: h.receipts_root(),
-    // 			number: Some(h.number().into()),
-    // 			gas_used: h.gas_used(),
-    // 			gas_limit: h.gas_limit(),
-    // 			logs_bloom: h.log_bloom(),
-    // 			timestamp: h.timestamp().into(),
-    // 			difficulty: h.difficulty(),
-    // 			extra_data: h.extra_data().into(),
-    // 			seal_fields: h.view().decode_seal(eip1559_enabled)
-    // 				.expect("Client/Miner returns only valid headers. We only serialize
-    // headers from Client/Miner; qed")
-    // .into_iter().map(Into::into).collect(), 			base_fee_per_gas: {
-    // 				if eip1559_enabled {
-    // 					Some(h.base_fee())
-    // 				} else {
-    // 					None
-    // 				}
-    // 			},
-    // 		}
-    //     }
 }
 
-/// BlockOverrides is a set of header fields to override.
+// /// BlockOverrides is a set of header fields to override.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct BlockOverrides {
@@ -373,6 +347,25 @@ pub struct BlockOverrides {
     /// queried from the EVM opcode BLOCKHASH.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub block_hash: Option<BTreeMap<u64, H256>>,
+}
+
+impl From<EthBlockOverrides> for BlockOverrides {
+    fn from(e: EthBlockOverrides) -> Self {
+        BlockOverrides {
+            number: e.number.map(|n| WU256::from(n).into()),
+            difficulty: e.difficulty.map(|n| WU256::from(n).into()),
+            time: e.time,
+            gas_limit: e.gas_limit,
+            coinbase: e.coinbase.map(|a| WAddress::from(a).into()),
+            random: e.random.map(|b| WB256::from(b).into()),
+            base_fee: e.base_fee.map(|n| WU256::from(n).into()),
+            block_hash: e.block_hash.map(|b| {
+                b.into_iter()
+                    .map(|(k, v)| (k, WB256::from(v).into()))
+                    .collect()
+            }),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -1682,6 +1682,7 @@ name = "cfx-execute-helper"
 version = "2.0.2"
 dependencies = [
  "alloy-rpc-types-trace",
+ "cfx-bytes",
  "cfx-executor",
  "cfx-parameters",
  "cfx-parity-trace-types",
@@ -1847,6 +1848,8 @@ name = "cfx-rpc"
 version = "3.0.0"
 dependencies = [
  "alloy-primitives",
+ "alloy-primitives-wrapper",
+ "alloy-rpc-types-eth",
  "alloy-rpc-types-trace",
  "async-trait",
  "cfx-addr",
@@ -1970,6 +1973,7 @@ name = "cfx-rpc-eth-api"
 version = "3.0.0"
 dependencies = [
  "alloy-primitives",
+ "alloy-rpc-types-eth",
  "alloy-rpc-types-trace",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
@@ -1981,7 +1985,11 @@ dependencies = [
 name = "cfx-rpc-eth-types"
 version = "3.0.0"
 dependencies = [
+ "alloy-eips",
+ "alloy-primitives",
+ "alloy-primitives-wrapper",
  "alloy-rpc-types",
+ "alloy-rpc-types-eth",
  "alloy-rpc-types-trace",
  "cfx-bytes",
  "cfx-parameters",

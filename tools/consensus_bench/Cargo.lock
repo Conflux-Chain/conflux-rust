@@ -1575,7 +1575,11 @@ dependencies = [
 name = "cfx-rpc-eth-types"
 version = "3.0.0"
 dependencies = [
+ "alloy-eips",
+ "alloy-primitives",
+ "alloy-primitives-wrapper",
  "alloy-rpc-types",
+ "alloy-rpc-types-eth",
  "alloy-rpc-types-trace",
  "cfx-bytes",
  "cfx-parameters",

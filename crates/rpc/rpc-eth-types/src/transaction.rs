@@ -19,6 +19,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Bytes, SignedAuthorization};
+use alloy_eips::eip7702::SignedAuthorization as EthSignedAuthorization;
 use cfx_types::{
     cal_contract_address, CreateContractAddressType, H160, H256, H512, U256,
     U64,
@@ -94,7 +95,7 @@ pub struct Transaction {
      * pub condition: Option<TransactionCondition>, */
     /// eip7702 authorization list
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub authorization_list: Option<Vec<SignedAuthorization>>,
+    pub authorization_list: Option<Vec<EthSignedAuthorization>>,
 }
 
 impl Transaction {
@@ -167,7 +168,7 @@ impl Transaction {
             transaction_type: Some(U64::from(t.type_id())),
             authorization_list: t.authorization_list().map(|list| {
                 list.iter()
-                    .map(|item| SignedAuthorization::from(item.clone()))
+                    .map(|item| SignedAuthorization::from(item.clone()).into())
                     .collect()
             }),
         }

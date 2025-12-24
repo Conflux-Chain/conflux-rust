@@ -18,4 +18,5 @@ jsonrpsee = { workspace = true, features = ["server", "macros"] }
 cfx-types = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 alloy-rpc-types-trace = { workspace = true }
+alloy-rpc-types-eth = { workspace = true }
 alloy-primitives = { workspace = true }

@@ -26,48 +26,14 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
-use crate::BlockOverrides;
+use crate::{alloy_utils::convert_state, BlockOverrides};
+use alloy_primitives_wrapper::{WAddress, WU256};
+pub use alloy_rpc_types_eth::state::{
+    AccountOverride as RpcAccountOverride, StateOverride as RpcStateOverride,
+};
 use cfx_bytes::Bytes;
-use cfx_rpc_primitives::Bytes as RpcBytes;
 use cfx_types::{Address, H256, U256, U64};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-/// A set of account overrides
-pub type RpcStateOverride = HashMap<Address, RpcAccountOverride>;
-
-/// Custom account override used in rpc call
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
-pub struct RpcAccountOverride {
-    /// Fake balance to set for the account before executing the call.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub balance: Option<U256>,
-    /// Fake nonce to set for the account before executing the call.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub nonce: Option<U64>,
-    /// Fake EVM bytecode to inject into the account before executing the call.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub code: Option<RpcBytes>,
-    /// Fake key-value mapping to override all slots in the account storage
-    /// before executing the call.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub state: Option<HashMap<H256, H256>>,
-    /// Fake key-value mapping to override individual slots in the account
-    /// storage before executing the call.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub state_diff: Option<HashMap<H256, H256>>,
-    /// Moves addresses precompile into the specified address. This move is
-    /// done before the 'code' override is set. When the specified address
-    /// is not a precompile, the behaviour is undefined and different
-    /// clients might behave differently.
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        rename = "movePrecompileToAddress"
-    )]
-    pub move_precompile_to: Option<Address>,
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AccountStateOverrideMode {
@@ -90,16 +56,22 @@ impl TryFrom<RpcAccountOverride> for AccountOverride {
 
     fn try_from(value: RpcAccountOverride) -> Result<Self, Self::Error> {
         Ok(Self {
-            balance: value.balance,
-            nonce: value.nonce,
+            balance: value.balance.map(|v| WU256::from(v).into()),
+            nonce: value.nonce.map(|v| v.into()),
             code: value.code.map(|v| v.into()),
             state: match (value.state, value.state_diff) {
-                (Some(state), None) => AccountStateOverrideMode::State(state),
-                (None, Some(diff)) => AccountStateOverrideMode::Diff(diff),
+                (Some(state), None) => {
+                    AccountStateOverrideMode::State(convert_state(state))
+                }
+                (None, Some(diff)) => {
+                    AccountStateOverrideMode::Diff(convert_state(diff))
+                }
                 (None, None) => AccountStateOverrideMode::None,
                 _ => return Err("state and stateDiff are mutually exclusive"),
             },
-            move_precompile_to: value.move_precompile_to,
+            move_precompile_to: value
+                .move_precompile_to
+                .map(|v| WAddress::from(v).into()),
         })
     }
 }
@@ -164,6 +136,7 @@ impl EvmOverrides {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_primitives::address;
     #[cfg(feature = "serde")]
     use cfx_types::address_util::hex_to_address;
     use similar_asserts::assert_eq;
@@ -204,13 +177,10 @@ mod tests {
         let state_override: RpcStateOverride =
             serde_json::from_str(large_values_json).unwrap();
         let acc = state_override
-            .get(
-                &hex_to_address("1234567890123456789012345678901234567890")
-                    .unwrap(),
-            )
+            .get(&address!("1234567890123456789012345678901234567890"))
             .unwrap();
-        assert_eq!(acc.balance, Some(U256::MAX));
-        assert_eq!(acc.nonce, Some(U64::from(u64::MAX)));
+        assert_eq!(acc.balance, Some(alloy_primitives::U256::MAX));
+        assert_eq!(acc.nonce, Some(u64::MAX));
     }
 
     #[test]
@@ -223,10 +193,7 @@ mod tests {
         }"#;
         let state_override: RpcStateOverride = serde_json::from_str(s).unwrap();
         let acc = state_override
-            .get(
-                &hex_to_address("0000000000000000000000000000000000000124")
-                    .unwrap(),
-            )
+            .get(&address!("0000000000000000000000000000000000000124"))
             .unwrap();
         assert!(acc.code.is_some());
     }
@@ -247,10 +214,7 @@ mod tests {
             }"#;
         let state_override: RpcStateOverride = serde_json::from_str(s).unwrap();
         let acc = state_override
-            .get(
-                &hex_to_address("1b5212AF6b76113afD94cD2B5a78a73B7d7A8222")
-                    .unwrap(),
-            )
+            .get(&address!("1b5212AF6b76113afD94cD2B5a78a73B7d7A8222"))
             .unwrap();
         assert!(acc.state_diff.is_some());
     }

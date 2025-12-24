@@ -18,8 +18,14 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{Error, SignedAuthorization};
+use crate::{
+    alloy_utils::{convert_access_list, convert_option_tx_kind},
+    Error, SignedAuthorization,
+};
+use alloy_eips::eip7702::SignedAuthorization as EthSignedAuthorization;
+use alloy_primitives_wrapper::{WAddress, WU256};
 use alloy_rpc_types::TransactionInput;
+use alloy_rpc_types_eth as alloy_types;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_types::{Address, AddressSpaceUtil, H160, U256, U64};
 use primitives::{
@@ -65,7 +71,7 @@ pub struct TransactionRequest {
     ///
     pub chain_id: Option<U256>,
     /// eip7702 authorization list
-    pub authorization_list: Option<Vec<SignedAuthorization>>,
+    pub authorization_list: Option<Vec<EthSignedAuthorization>>,
 }
 
 impl TransactionRequest {
@@ -192,7 +198,7 @@ impl TransactionRequest {
                         .authorization_list
                         .unwrap_or_default()
                         .into_iter()
-                        .map(|a| a.into())
+                        .map(|item| SignedAuthorization(item).into())
                         .collect(),
                 })
             }
@@ -207,5 +213,27 @@ impl TransactionRequest {
         let from = request.from.unwrap_or(Address::zero());
 
         Ok(transaction.fake_sign_rpc(from.with_evm_space()))
+    }
+}
+
+impl From<alloy_types::TransactionRequest> for TransactionRequest {
+    fn from(req: alloy_types::TransactionRequest) -> TransactionRequest {
+        TransactionRequest {
+            from: req.from.map(|addr| WAddress::from(addr).into()),
+            to: convert_option_tx_kind(req.to),
+            gas_price: req.gas_price.map(|v| U256::from(v)),
+            max_fee_per_gas: req.max_fee_per_gas.map(|v| U256::from(v)),
+            max_priority_fee_per_gas: req
+                .max_priority_fee_per_gas
+                .map(|v| U256::from(v)),
+            gas: req.gas.map(|v| U256::from(v)),
+            value: req.value.map(|v| WU256::from(v).into()),
+            input: req.input,
+            nonce: req.nonce.map(|v| U256::from(v)),
+            access_list: req.access_list.map(|al| convert_access_list(al)),
+            transaction_type: req.transaction_type.map(|v| U64::from(v)),
+            chain_id: req.chain_id.map(|v| U256::from(v)),
+            authorization_list: req.authorization_list,
+        }
     }
 }

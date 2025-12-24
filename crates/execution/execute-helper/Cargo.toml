@@ -11,6 +11,7 @@ cfx-parameters = { workspace = true }
 cfx-statedb = { workspace = true }
 cfx-vm-tracer-derive = { workspace = true }
 cfx-types = { workspace = true }
+cfx-bytes = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfx-executor = { workspace = true }
 log = { workspace = true }

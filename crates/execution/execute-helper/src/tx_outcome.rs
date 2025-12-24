@@ -1,3 +1,4 @@
+use cfx_bytes::Bytes;
 use cfx_executor::{
     executive::ExecutionOutcome, internal_contract::make_staking_events,
 };
@@ -22,6 +23,7 @@ pub struct ProcessTxOutcome {
     pub tx_exec_error_msg: String,
     pub consider_repacked: bool,
     pub geth_trace: Option<GethTrace>,
+    pub output: Option<Bytes>,
 }
 
 pub fn parity_traces(outcome: &ExecutionOutcome) -> Vec<ExecTrace> {
@@ -43,6 +45,7 @@ pub fn make_process_tx_outcome(
 ) -> ProcessTxOutcome {
     let tx_traces = parity_traces(&outcome);
     let geth_trace = geth_traces(&outcome);
+    let output = outcome.output();
     let tx_exec_error_msg = outcome.error_message();
     let consider_repacked = outcome.consider_repacked();
     let receipt = outcome.make_receipt(accumulated_gas_used, spec);
@@ -59,5 +62,6 @@ pub fn make_process_tx_outcome(
         tx_exec_error_msg,
         consider_repacked,
         geth_trace,
+        output,
     }
 }

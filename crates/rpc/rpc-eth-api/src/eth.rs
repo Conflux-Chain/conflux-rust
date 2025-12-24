@@ -1,8 +1,9 @@
+use alloy_rpc_types_eth::simulate::{SimulatePayload, SimulatedBlock};
 use cfx_rpc_eth_types::{
     AccessListResult, AccountPendingTransactions, Block, BlockId,
     BlockOverrides, Bundle, EthCallResponse, EthRpcLogFilter as Filter,
-    FeeHistory, Header, Log, Receipt, RpcStateOverride, SimulatePayload,
-    SimulatedBlock, StateContext, SyncStatus, Transaction, TransactionRequest,
+    FeeHistory, Header, Log, Receipt, RpcStateOverride, StateContext,
+    SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index};
 use cfx_types::{Address, H256, H64, U256, U64};
@@ -193,7 +194,7 @@ pub trait EthApi {
     #[method(name = "simulateV1")]
     async fn simulate_v1(
         &self, opts: SimulatePayload, block_number: Option<BlockId>,
-    ) -> RpcResult<Vec<SimulatedBlock>>;
+    ) -> RpcResult<Vec<SimulatedBlock<Block>>>;
 
     /// Executes a new message call immediately without creating a transaction
     /// on the block chain.
