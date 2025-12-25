@@ -18,7 +18,7 @@ pub struct MaybeExecutedTxExtraInfo {
 }
 
 impl ConsensusGraph {
-    pub fn get_transaction_info_by_hash(
+    pub fn get_signed_tx_and_tx_info(
         &self, hash: &H256,
     ) -> Option<(SignedTransaction, TransactionInfo)> {
         // We need to hold the inner lock to ensure that tx_index and receipts
