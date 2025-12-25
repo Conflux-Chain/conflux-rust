@@ -115,14 +115,14 @@ RUSTFLAGS="-L $(brew --prefix bzip2)/lib -l bz2" cargo build
 ```
 
 
-This produces an executable called **conflux** in the **./target/release** subdirectory. The **conflux** binary it a client software that we can use to run a node.
+This produces an executable called **conflux** in the **./target/release** subdirectory. The **conflux** binary is client software that we can use to run a node.
 
-Note, when compiling a crate and you receive errors, it's in most cases your outdated version of Rust, or some of your crates have to be recompiled. Cleaning the repository will most likely solve the issue if you are on the latest stable version of Rust, try:
+Note: when compiling a crate and you receive errors, it is in most cases due to an outdated Rust toolchain, or some of your crates needing a rebuild. If you are on the latest stable version of Rust, cleaning the repository will most likely solve the issue:
 
 ```shell
 cargo clean && cargo update
 ```
-When you compiling on Linux system，By default cc is linked to gcc, you need to export the cc environment variable to point to clang
+When compiling on Linux, by default `cc` is linked to `gcc`. You may need to export the `CC` environment variable to point to `clang`:
 
 ```shell
 CC=clang CXX=clang++ cargo build --release
