@@ -113,7 +113,7 @@ jobs:
           mkdir -p packaging_temp dist
 
           cp "${BIN_PATH}" packaging_temp/conflux.exe
-          cp -R run packaging_temp/run
+          cp -R run/. packaging_temp/
 
           if ! command -v 7z >/dev/null 2>&1; then
             echo "7z not found; cannot create zip archive on Windows runner."

@@ -157,7 +157,7 @@ jobs:
           mkdir -p packaging_temp dist
 
           cp "${BIN_PATH}" packaging_temp/conflux
-          cp -R run packaging_temp/run
+          cp -R run/. packaging_temp/
 
           tar -C packaging_temp -czf "dist/${ARCHIVE_NAME}" .
 
