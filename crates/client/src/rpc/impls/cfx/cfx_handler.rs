@@ -708,7 +708,7 @@ impl RpcImpl {
                 tx_index,
                 maybe_executed_extra_info,
             },
-        )) = self.consensus.get_transaction_info_by_hash(&hash)
+        )) = self.consensus.get_signed_tx_and_tx_info(&hash)
         {
             if tx.space() == Space::Ethereum || tx_index.is_phantom {
                 return Ok(None);
@@ -1732,7 +1732,7 @@ impl RpcImpl {
         &self, tx_hash: H256,
     ) -> JsonRpcResult<Option<EpochReceiptProof>> {
         let (block_hash, tx_index_in_block) =
-            match self.consensus.get_transaction_info_by_hash(&tx_hash) {
+            match self.consensus.get_signed_tx_and_tx_info(&tx_hash) {
                 None => {
                     bail!(invalid_params(
                         "transactions hash",
