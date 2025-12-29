@@ -16,7 +16,7 @@
         value: &amp;U256,
         code: &amp;[<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>],
         address: <a class="enum" href="enum.CreateContractAddress.html" title="enum cfx_vm_types::CreateContractAddress">CreateContractAddress</a>,
-    ) -&gt; DbResult&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.ContractCreateResult.html" title="enum cfx_vm_types::ContractCreateResult">ContractCreateResult</a>, <a class="enum" href="enum.TrapKind.html" title="enum cfx_vm_types::TrapKind">TrapKind</a>&gt;&gt;;
+    ) -&gt; <a class="type" href="../cfx_db_errors/statedb/type.Result.html" title="type cfx_db_errors::statedb::Result">DbResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.ContractCreateResult.html" title="enum cfx_vm_types::ContractCreateResult">ContractCreateResult</a>, <a class="enum" href="enum.TrapKind.html" title="enum cfx_vm_types::TrapKind">TrapKind</a>&gt;&gt;;
 <span class="item-spacer"></span>    fn <a href="#tymethod.call" class="fn">call</a>(
         &amp;mut self,
         gas: &amp;U256,
@@ -26,7 +26,7 @@
         data: &amp;[<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>],
         code_address: &amp;Address,
         call_type: <a class="enum" href="enum.CallType.html" title="enum cfx_vm_types::CallType">CallType</a>,
-    ) -&gt; DbResult&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.MessageCallResult.html" title="enum cfx_vm_types::MessageCallResult">MessageCallResult</a>, <a class="enum" href="enum.TrapKind.html" title="enum cfx_vm_types::TrapKind">TrapKind</a>&gt;&gt;;
+    ) -&gt; <a class="type" href="../cfx_db_errors/statedb/type.Result.html" title="type cfx_db_errors::statedb::Result">DbResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.MessageCallResult.html" title="enum cfx_vm_types::MessageCallResult">MessageCallResult</a>, <a class="enum" href="enum.TrapKind.html" title="enum cfx_vm_types::TrapKind">TrapKind</a>&gt;&gt;;
 <span class="item-spacer"></span>    fn <a href="#tymethod.extcode" class="fn">extcode</a>(&amp;self, address: &amp;Address) -&gt; <a class="type" href="type.Result.html" title="type cfx_vm_types::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;Bytes&gt;&gt;&gt;;
 <span class="item-spacer"></span>    fn <a href="#tymethod.extcodehash" class="fn">extcodehash</a>(&amp;self, address: &amp;Address) -&gt; <a class="type" href="type.Result.html" title="type cfx_vm_types::Result">Result</a>&lt;H256&gt;;
 <span class="item-spacer"></span>    fn <a href="#tymethod.extcodesize" class="fn">extcodesize</a>(&amp;self, address: &amp;Address) -&gt; <a class="type" href="type.Result.html" title="type cfx_vm_types::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.usize.html">usize</a>&gt;;
@@ -72,7 +72,7 @@ balance/nonce, no code).</p>
     value: &amp;U256,
     code: &amp;[<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>],
     address: <a class="enum" href="enum.CreateContractAddress.html" title="enum cfx_vm_types::CreateContractAddress">CreateContractAddress</a>,
-) -&gt; DbResult&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.ContractCreateResult.html" title="enum cfx_vm_types::ContractCreateResult">ContractCreateResult</a>, <a class="enum" href="enum.TrapKind.html" title="enum cfx_vm_types::TrapKind">TrapKind</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Creates new contract.</p>
+) -&gt; <a class="type" href="../cfx_db_errors/statedb/type.Result.html" title="type cfx_db_errors::statedb::Result">DbResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.ContractCreateResult.html" title="enum cfx_vm_types::ContractCreateResult">ContractCreateResult</a>, <a class="enum" href="enum.TrapKind.html" title="enum cfx_vm_types::TrapKind">TrapKind</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Creates new contract.</p>
 <p>Returns gas_left and contract address if contract creation was
 succesfull.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="tymethod.call" class="method"><a class="src rightside" href="../src/cfx_vm_types/context.rs.html#124-128">Source</a><h4 class="code-header">fn <a href="#tymethod.call" class="fn">call</a>(
@@ -84,7 +84,7 @@ succesfull.</p>
     data: &amp;[<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>],
     code_address: &amp;Address,
     call_type: <a class="enum" href="enum.CallType.html" title="enum cfx_vm_types::CallType">CallType</a>,
-) -&gt; DbResult&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.MessageCallResult.html" title="enum cfx_vm_types::MessageCallResult">MessageCallResult</a>, <a class="enum" href="enum.TrapKind.html" title="enum cfx_vm_types::TrapKind">TrapKind</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Message call.</p>
+) -&gt; <a class="type" href="../cfx_db_errors/statedb/type.Result.html" title="type cfx_db_errors::statedb::Result">DbResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="enum" href="enum.MessageCallResult.html" title="enum cfx_vm_types::MessageCallResult">MessageCallResult</a>, <a class="enum" href="enum.TrapKind.html" title="enum cfx_vm_types::TrapKind">TrapKind</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Message call.</p>
 <p>Returns Err, if we run out of gas.
 Otherwise returns call_result which contains gas left
 and true if subcall was successful.</p>

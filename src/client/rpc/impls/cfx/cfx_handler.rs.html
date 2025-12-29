@@ -3349,7 +3349,7 @@
             };
 
         <span class="kw">let </span>receipt =
-            <span class="self">self</span>.construct_rpc_receipt(tx_index, <span class="kw-2">&amp;</span>exec_info, <span class="bool-val">false</span>, <span class="bool-val">false</span>)<span class="question-mark">?</span>;
+            <span class="self">self</span>.construct_rpc_receipt(tx_index, <span class="kw-2">&amp;</span>exec_info, <span class="bool-val">false</span>, <span class="bool-val">true</span>)<span class="question-mark">?</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(r) = <span class="kw-2">&amp;</span>receipt {
             <span class="comment">// A skipped transaction is not available to clients if accessed by
             // its hash.
