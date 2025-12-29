@@ -1,4 +1,4 @@
-name: Build Conflux (Linux)
+name: Build Conflux (macOS)
 
 on:
   workflow_dispatch:
@@ -18,50 +18,16 @@ concurrency:
 
 jobs:
   build:
-    name: ${{ matrix.id }}
-    runs-on: ubuntu-24.04
+    name: macos-aarch64
+    runs-on: macos-14
     timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - id: linux-x86_64
-            arch: x86_64
-            target: x86_64-unknown-linux-gnu
-            dockerfile: .github/docker/linux/x86_64.Dockerfile
-            compatibility_mode: "false"
-            cpu_march: haswell
-            rust_target_cpu: haswell
-          - id: linux-x86_64-compatible
-            arch: x86_64
-            target: x86_64-unknown-linux-gnu
-            dockerfile: .github/docker/linux/x86_64.Dockerfile
-            compatibility_mode: "true"
-            cpu_march: nehalem
-            rust_target_cpu: nehalem
-          - id: linux-aarch64
-            arch: aarch64
-            target: aarch64-unknown-linux-gnu
-            dockerfile: .github/docker/linux/aarch64.Dockerfile
-            compatibility_mode: "false"
 
     steps:
-      # Checkout target ref to build
-      - name: Checkout source code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.ref != '' && github.event.inputs.ref || github.event.repository.default_branch) || github.ref }}
           fetch-depth: 0
           fetch-tags: true
-
-      # Checkout default branch to get Dockerfiles and build scripts.
-      # Some tags may not include the required Dockerfiles.
-      - name: Checkout workflow files
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          fetch-depth: 1
-          path: workflow
 
       - name: Compute artifact label
         id: label
@@ -93,44 +59,32 @@ jobs:
 
           echo "label=${LABEL}" >> "$GITHUB_OUTPUT"
 
-      - name: Build Docker image
+      - name: Install Rust toolchain
         shell: bash
         run: |
           set -euo pipefail
+          rustup target add aarch64-apple-darwin
 
-          BUILD_ARGS=()
-
-          if [[ "${{ matrix.arch }}" == "x86_64" ]]; then
-            BUILD_ARGS+=(
-              "--build-arg" "CPU_MARCH=${{ matrix.cpu_march }}"
-              "--build-arg" "RUST_TARGET_CPU=${{ matrix.rust_target_cpu }}"
-            )
-          fi
-
-          docker build \
-            "${BUILD_ARGS[@]}" \
-            -t "conflux-linux:${{ matrix.id }}" \
-            -f "workflow/${{ matrix.dockerfile }}" \
-            workflow
-
-      - name: Build in container
+      - name: Install dependencies
         shell: bash
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          set -euo pipefail
+          brew install bzip2
+
+      - name: Build
+        shell: bash
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: 3.5
         run: |
           set -euo pipefail
 
-          # Disable RocksDB adding -march=native
           FEATURES="rocksdb/portable"
-          if [[ "${{ matrix.compatibility_mode }}" == "true" ]]; then
-            FEATURES="rocksdb/portable,blst-portable"
-          fi
 
-          FULL_COMMAND="rustup show && rustup target add '${{ matrix.target }}' && cargo build --release --target '${{ matrix.target }}' --features \"${FEATURES}\""
-
-          docker run --rm \
-            -v "${{ github.workspace }}:/workspace" \
-            -w /workspace \
-            "conflux-linux:${{ matrix.id }}" \
-            bash -lc "${FULL_COMMAND}"
+          RUSTFLAGS="-L $(brew --prefix bzip2)/lib -l bz2" \
+            cargo build --release --target aarch64-apple-darwin --features "${FEATURES}"
 
       - name: Package artifact
         id: package
@@ -138,7 +92,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          BUILD_PATH="target/${{ matrix.target }}/release"
+          BUILD_PATH="target/aarch64-apple-darwin/release"
           BIN_PATH="${BUILD_PATH}/conflux"
           if [[ ! -f "${BIN_PATH}" ]]; then
             echo "Expected binary not found: ${BIN_PATH}"
@@ -146,12 +100,7 @@ jobs:
             exit 1
           fi
 
-          SUFFIX=""
-          if [[ "${{ matrix.compatibility_mode }}" == "true" ]]; then
-            SUFFIX="-compatible"
-          fi
-
-          ARCHIVE_NAME="conflux-${{ steps.label.outputs.label }}-linux-${{ matrix.arch }}-glibc2.27${SUFFIX}.tar.gz"
+          ARCHIVE_NAME="conflux-${{ steps.label.outputs.label }}-macos-aarch64.tar.gz"
 
           rm -rf packaging_temp dist
           mkdir -p packaging_temp dist
