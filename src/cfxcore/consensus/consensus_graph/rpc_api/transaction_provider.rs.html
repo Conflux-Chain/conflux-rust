@@ -109,7 +109,7 @@
 }
 
 <span class="kw">impl </span>ConsensusGraph {
-    <span class="kw">pub fn </span>get_transaction_info_by_hash(
+    <span class="kw">pub fn </span>get_signed_tx_and_tx_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>H256,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;(SignedTransaction, TransactionInfo)&gt; {
         <span class="comment">// We need to hold the inner lock to ensure that tx_index and receipts

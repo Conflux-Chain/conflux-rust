@@ -3142,7 +3142,7 @@
                 tx_index,
                 maybe_executed_extra_info,
             },
-        )) = <span class="self">self</span>.consensus.get_transaction_info_by_hash(<span class="kw-2">&amp;</span>hash)
+        )) = <span class="self">self</span>.consensus.get_signed_tx_and_tx_info(<span class="kw-2">&amp;</span>hash)
         {
             <span class="kw">if </span>tx.space() == Space::Ethereum || tx_index.is_phantom {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
@@ -4166,7 +4166,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>, tx_hash: H256,
     ) -&gt; JsonRpcResult&lt;<span class="prelude-ty">Option</span>&lt;EpochReceiptProof&gt;&gt; {
         <span class="kw">let </span>(block_hash, tx_index_in_block) =
-            <span class="kw">match </span><span class="self">self</span>.consensus.get_transaction_info_by_hash(<span class="kw-2">&amp;</span>tx_hash) {
+            <span class="kw">match </span><span class="self">self</span>.consensus.get_signed_tx_and_tx_info(<span class="kw-2">&amp;</span>tx_hash) {
                 <span class="prelude-val">None </span>=&gt; {
                     <span class="macro">bail!</span>(invalid_params(
                         <span class="string">"transactions hash"</span>,

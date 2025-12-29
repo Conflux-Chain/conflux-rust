@@ -1308,7 +1308,7 @@
 
     <span class="attr">#[inline]
     </span><span class="kw">fn </span>tx_by_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: H256) -&gt; <span class="prelude-ty">Option</span>&lt;SignedTransaction&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(info) = <span class="self">self</span>.consensus.get_transaction_info_by_hash(<span class="kw-2">&amp;</span>hash) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(info) = <span class="self">self</span>.consensus.get_signed_tx_and_tx_info(<span class="kw-2">&amp;</span>hash) {
             <span class="kw">return </span><span class="prelude-val">Some</span>(info.<span class="number">0</span>);
         };
 
@@ -1322,7 +1322,7 @@
     <span class="attr">#[inline]
     </span><span class="kw">fn </span>tx_info_by_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: H256) -&gt; <span class="prelude-ty">Result</span>&lt;TxInfo&gt; {
         <span class="kw">let </span>(tx, tx_index, receipt) =
-            <span class="kw">match </span><span class="self">self</span>.consensus.get_transaction_info_by_hash(<span class="kw-2">&amp;</span>hash) {
+            <span class="kw">match </span><span class="self">self</span>.consensus.get_signed_tx_and_tx_info(<span class="kw-2">&amp;</span>hash) {
                 <span class="prelude-val">None </span>=&gt; {
                     <span class="macro">bail!</span>(Error::UnableToProduceTxInfo {
                         reason: <span class="macro">format!</span>(<span class="string">"Unable to get tx info for {:?}"</span>, hash)
