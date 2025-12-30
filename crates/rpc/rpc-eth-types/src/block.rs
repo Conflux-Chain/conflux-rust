@@ -60,7 +60,7 @@ impl Serialize for BlockTransactions {
 #[serde(rename_all = "camelCase")]
 pub struct Block<H = Header> {
     /// Header of the block.
-    #[cfg_attr(feature = "serde", serde(flatten))]
+    #[serde(flatten)]
     pub header: H,
     /// Transactions
     pub transactions: BlockTransactions,
