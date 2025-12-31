@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: ""
+      upload_to_release:
+        description: "If checked, upload built artifacts to an existing GitHub Release for the given tag (only for workflow_dispatch)."
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - "v*"
@@ -170,3 +175,14 @@ jobs:
           name: ${{ steps.package.outputs.archive_name }}
           path: ${{ steps.package.outputs.archive }}
           retention-days: 30
+
+  upload_release:
+    name: Upload to GitHub Release
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_to_release }}
+    uses: ./.github/workflows/_upload-to-existing-release.yml
+    with:
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: write
+      actions: read
