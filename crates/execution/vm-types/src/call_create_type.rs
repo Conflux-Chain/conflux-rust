@@ -25,10 +25,11 @@ use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::Serialize;
 
 /// The type of the call-like instruction.
-#[derive(Debug, PartialEq, Clone, Copy, Serialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum CallType {
     /// Not a CALL.
+    #[default]
     None,
     /// CALL.
     Call,
@@ -73,10 +74,11 @@ impl Decodable for CallType {
 }
 
 /// The type of the create-like instruction.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum CreateType {
     /// Not a create
+    #[default]
     None,
     /// CREATE
     CREATE,
