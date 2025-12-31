@@ -1468,6 +1468,7 @@ impl RpcImpl {
             has_gas_price: request.has_gas_price(),
             has_nonce: request.nonce.is_some(),
             has_storage_limit: request.storage_limit.is_some(),
+            collect_access_list: false,
         };
 
         let epoch_height = consensus_graph
