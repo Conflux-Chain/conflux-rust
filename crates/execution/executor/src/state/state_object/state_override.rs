@@ -15,7 +15,7 @@ impl State {
         Ok(state)
     }
 
-    fn apply_override(
+    pub fn apply_override(
         &mut self, state_override: &StateOverride, space: Space,
     ) -> DbResult<()> {
         assert!(self.checkpoints.read().is_empty());

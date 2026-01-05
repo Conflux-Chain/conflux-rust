@@ -1044,7 +1044,9 @@ impl EthApi {
                 block_overrides.map(|v| Box::new(v.into())),
             );
 
-            // TODO: state overrides application
+            if let Some(state_overrides_ref) = &evm_overrides.state {
+                state.apply_override(state_overrides_ref, Space::Ethereum)?;
+            }
 
             let mut header_builder = BlockHeaderBuilder::new();
             header_builder
