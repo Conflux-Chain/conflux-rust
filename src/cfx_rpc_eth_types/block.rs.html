@@ -362,61 +362,7 @@
 <a href="#361" id="361">361</a>
 <a href="#362" id="362">362</a>
 <a href="#363" id="363">363</a>
-<a href="#364" id="364">364</a>
-<a href="#365" id="365">365</a>
-<a href="#366" id="366">366</a>
-<a href="#367" id="367">367</a>
-<a href="#368" id="368">368</a>
-<a href="#369" id="369">369</a>
-<a href="#370" id="370">370</a>
-<a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
-<a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2021 Conflux Foundation. All rights reserved.
+<a href="#364" id="364">364</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -476,7 +422,20 @@
 <span class="doccomment">/// Block representation
 </span><span class="attr">#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
-</span><span class="kw">pub struct </span>Block {
+</span><span class="kw">pub struct </span>Block&lt;H = Header&gt; {
+    <span class="doccomment">/// Header of the block.
+    </span><span class="attr">#[serde(flatten)]
+    </span><span class="kw">pub </span>header: H,
+    <span class="doccomment">/// Transactions
+    </span><span class="kw">pub </span>transactions: BlockTransactions,
+    <span class="doccomment">/// Uncles' hashes
+    </span><span class="kw">pub </span>uncles: Vec&lt;H256&gt;,
+}
+
+<span class="doccomment">/// Block header representation.
+</span><span class="attr">#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = <span class="string">"camelCase"</span>)]
+</span><span class="kw">pub struct </span>Header {
     <span class="doccomment">/// Hash of the block
     </span><span class="kw">pub </span>hash: H256,
     <span class="doccomment">/// Hash of the parent
@@ -516,58 +475,12 @@
     <span class="doccomment">/// Base fee
     </span><span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]
     </span><span class="kw">pub </span>base_fee_per_gas: <span class="prelude-ty">Option</span>&lt;U256&gt;,
-    <span class="doccomment">/// Uncles' hashes
-    </span><span class="kw">pub </span>uncles: Vec&lt;H256&gt;,
-    <span class="doccomment">/// Transactions
-    </span><span class="kw">pub </span>transactions: BlockTransactions,
     <span class="doccomment">/// Size in bytes
     </span><span class="kw">pub </span>size: U256,
     <span class="doccomment">/// Nonce
     </span><span class="kw">pub </span>nonce: H64,
     <span class="doccomment">/// Mix hash
     </span><span class="kw">pub </span>mix_hash: H256,
-}
-
-<span class="doccomment">/// Block header representation.
-</span><span class="attr">#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-#[serde(rename_all = <span class="string">"camelCase"</span>)]
-</span><span class="kw">pub struct </span>Header {
-    <span class="doccomment">/// Hash of the block
-    </span><span class="kw">pub </span>hash: H256,
-    <span class="doccomment">/// Hash of the parent
-    </span><span class="kw">pub </span>parent_hash: H256,
-    <span class="doccomment">/// Hash of the uncles
-    </span><span class="attr">#[serde(rename = <span class="string">"sha3Uncles"</span>)]
-    </span><span class="kw">pub </span>uncles_hash: H256,
-    <span class="doccomment">/// Authors address
-    </span><span class="kw">pub </span>author: H160,
-    <span class="doccomment">/// Alias of `author`
-    </span><span class="kw">pub </span>miner: H160,
-    <span class="doccomment">/// State root hash
-    </span><span class="kw">pub </span>state_root: H256,
-    <span class="doccomment">/// Transactions root hash
-    </span><span class="kw">pub </span>transactions_root: H256,
-    <span class="doccomment">/// Transactions receipts root hash
-    </span><span class="kw">pub </span>receipts_root: H256,
-    <span class="doccomment">/// Block number
-    </span><span class="kw">pub </span>number: U256,
-    <span class="doccomment">/// Gas Used
-    </span><span class="kw">pub </span>gas_used: U256,
-    <span class="doccomment">/// Gas Limit
-    </span><span class="kw">pub </span>gas_limit: U256,
-    <span class="doccomment">/// Extra data
-    </span><span class="kw">pub </span>extra_data: Bytes,
-    <span class="doccomment">/// Logs bloom
-    </span><span class="kw">pub </span>logs_bloom: H2048,
-    <span class="doccomment">/// Timestamp
-    </span><span class="kw">pub </span>timestamp: U256,
-    <span class="doccomment">/// Difficulty
-    </span><span class="kw">pub </span>difficulty: U256,
-    <span class="doccomment">/// Base fee
-    </span><span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]
-    </span><span class="kw">pub </span>base_fee_per_gas: <span class="prelude-ty">Option</span>&lt;U256&gt;,
-    <span class="doccomment">/// Size in bytes
-    </span><span class="kw">pub </span>size: U256,
 }
 
 <span class="kw">impl </span>Block {
@@ -608,6 +521,18 @@
             )
         };
 
+        <span class="kw">let </span>header = Header::from_phantom(pb);
+
+        Block {
+            header,
+            uncles: <span class="macro">vec!</span>[],
+            transactions,
+        }
+    }
+}
+
+<span class="kw">impl </span>Header {
+    <span class="kw">pub fn </span>from_phantom(pb: <span class="kw-2">&amp;</span>PhantomBlock) -&gt; <span class="self">Self </span>{
         <span class="comment">// If there are no transactions, we use the empty hash for txRoot and
         // receiptRoot. Another way to calculate transactions_root and
         // receipts_root from transactions.
@@ -622,8 +547,7 @@
                 hexstr_to_h256(SHA3_HASH_OF_EMPTY),
             )
         };
-
-        Block {
+        Header {
             hash: pb.pivot_header.hash(),
             parent_hash: pb.pivot_header.parent_hash().clone(),
             uncles_hash: hexstr_to_h256(SHA3_HASH_OF_EMPTY_UNCLE),
@@ -651,45 +575,11 @@
                 .pivot_header
                 .base_price()
                 .map(|x| x[Space::Ethereum]),
-            uncles: <span class="macro">vec!</span>[],
             <span class="comment">// Note: we allow U256 nonce in Stratum and in the block.
             // However, most mining clients use U64. Here we truncate
             // to U64 to maintain compatibility with eth.
             </span>nonce: pb.pivot_header.nonce().low_u64().to_be_bytes().into(),
             mix_hash: H256::default(),
-            transactions,
-            size: pb
-                .transactions
-                .iter()
-                .fold(<span class="number">0</span>, |acc, tx| acc + tx.rlp_size())
-                .into(),
-        }
-    }
-}
-
-<span class="kw">impl </span>Header {
-    <span class="kw">pub fn </span>from_phantom(pb: <span class="kw-2">&amp;</span>PhantomBlock) -&gt; <span class="self">Self </span>{
-        Header {
-            hash: pb.pivot_header.hash(),
-            parent_hash: pb.pivot_header.parent_hash().clone(),
-            uncles_hash: hexstr_to_h256(SHA3_HASH_OF_EMPTY_UNCLE),
-            author: pb.pivot_header.author().clone(),
-            miner: pb.pivot_header.author().clone(),
-            state_root: pb.pivot_header.deferred_state_root().clone(),
-            transactions_root: pb.pivot_header.transactions_root().clone(),
-            receipts_root: pb.pivot_header.deferred_receipts_root().clone(),
-            number: pb.pivot_header.height().into(),
-            gas_used: pb
-                .receipts
-                .last()
-                .map(|r| r.accumulated_gas_used)
-                .unwrap_or_default(),
-            gas_limit: pb.pivot_header.gas_limit().into(),
-            extra_data: Default::default(),
-            logs_bloom: pb.bloom,
-            timestamp: pb.pivot_header.timestamp().into(),
-            difficulty: pb.pivot_header.difficulty().into(),
-            base_fee_per_gas: <span class="prelude-val">None</span>,
             size: pb
                 .transactions
                 .iter()
@@ -795,42 +685,44 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use super</span>::{Block, BlockTransactions};
+    <span class="kw">use super</span>::{Block, BlockTransactions, Header};
     <span class="kw">use </span><span class="kw">crate</span>::Bytes;
     <span class="kw">use </span>cfx_types::{Bloom <span class="kw">as </span>H2048, H160, H256, H64, U256};
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_serialize_block() {
         <span class="kw">let </span>block = Block {
-            hash: H256::default(),
-            parent_hash: H256::default(),
-            uncles_hash: H256::default(),
-            author: H160::default(),
-            miner: H160::default(),
-            state_root: H256::default(),
-            transactions_root: H256::default(),
-            receipts_root: H256::default(),
-            number: U256::default(),
-            gas_used: U256::default(),
-            gas_limit: U256::default(),
-            espace_gas_limit: U256::default(),
-            extra_data: Bytes::default(),
-            logs_bloom: H2048::default(),
-            timestamp: U256::default(),
-            difficulty: U256::default(),
-            total_difficulty: <span class="number">0</span>.into(),
-            base_fee_per_gas: <span class="prelude-val">None</span>,
+            header: Header {
+                hash: H256::default(),
+                parent_hash: H256::default(),
+                uncles_hash: H256::default(),
+                author: H160::default(),
+                miner: H160::default(),
+                state_root: H256::default(),
+                transactions_root: H256::default(),
+                receipts_root: H256::default(),
+                number: U256::default(),
+                gas_used: U256::default(),
+                gas_limit: U256::default(),
+                espace_gas_limit: U256::default(),
+                extra_data: Bytes::default(),
+                logs_bloom: H2048::default(),
+                timestamp: U256::default(),
+                difficulty: U256::default(),
+                total_difficulty: <span class="number">0</span>.into(),
+                base_fee_per_gas: <span class="prelude-val">None</span>,
+                size: <span class="number">69</span>.into(),
+                nonce: H64::default(),
+                mix_hash: H256::default(),
+            },
             uncles: <span class="macro">vec!</span>[],
             transactions: BlockTransactions::Hashes(<span class="macro">vec!</span>[].into()),
-            size: <span class="number">69</span>.into(),
-            nonce: H64::default(),
-            mix_hash: H256::default(),
         };
         <span class="kw">let </span>serialized_block = serde_json::to_string(<span class="kw-2">&amp;</span>block).unwrap();
 
         <span class="macro">assert_eq!</span>(
             serialized_block,
-            <span class="string">r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","sha3Uncles":"0x0000000000000000000000000000000000000000000000000000000000000000","author":"0x0000000000000000000000000000000000000000","miner":"0x0000000000000000000000000000000000000000","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","number":"0x0","gasUsed":"0x0","gasLimit":"0x0","espaceGasLimit":"0x0","extraData":"0x","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","timestamp":"0x0","difficulty":"0x0","totalDifficulty":"0x0","uncles":[],"transactions":[],"size":"0x45","nonce":"0x0000000000000000","mixHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}"#
+            <span class="string">r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","sha3Uncles":"0x0000000000000000000000000000000000000000000000000000000000000000","author":"0x0000000000000000000000000000000000000000","miner":"0x0000000000000000000000000000000000000000","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","number":"0x0","gasUsed":"0x0","gasLimit":"0x0","espaceGasLimit":"0x0","extraData":"0x","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","timestamp":"0x0","difficulty":"0x0","totalDifficulty":"0x0","size":"0x45","nonce":"0x0000000000000000","mixHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactions":[],"uncles":[]}"#
         </span>);
     }
 }
