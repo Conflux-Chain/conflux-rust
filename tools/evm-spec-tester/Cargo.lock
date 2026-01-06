@@ -1260,6 +1260,7 @@ dependencies = [
  "cfx-types",
  "cfx-util-macros",
  "cfxcore",
+ "cfxcore-errors",
  "jsonrpc-core",
  "log",
  "primitives",

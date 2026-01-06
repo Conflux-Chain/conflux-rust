@@ -1,5 +1,9 @@
 # JSON-RPC CHANGELOG
 
+## v3.0.4
+
+1. Core Space `trace_epoch` method return `null` when the epoch is bigger than the latest epoch, other than return error message.
+
 ## v3.0.3
 
 1. Core Space `log` object add `blockTimestamp` field for method `cfx_getLogs` and `cfx_getFilterLogs`.

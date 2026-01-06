@@ -10,6 +10,7 @@ use cfxcore::{
     block_data_manager::DataVersionTuple, errors::Result as CoreResult,
     BlockDataManager, ConsensusGraph, SharedConsensusGraph,
 };
+use cfxcore_errors::ProviderBlockError;
 use jsonrpc_core::Error as JsonRpcError;
 use log::warn;
 use primitives::EpochNumber;
@@ -172,12 +173,19 @@ impl TraceHandler {
 
     pub fn epoch_trace_impl(
         &self, epoch_number: EpochNumber,
-    ) -> CoreResult<EpochTrace> {
+    ) -> CoreResult<Option<EpochTrace>> {
         // Make sure we use the same epoch_hash in two spaces. Using
         // epoch_number cannot guarantee the atomicity.
-        let epoch_hash = self
+        let epoch_hash = match self
             .consensus
-            .get_hash_from_epoch_number(epoch_number.clone())?;
+            .get_hash_from_epoch_number(epoch_number.clone())
+        {
+            Ok(hash) => hash,
+            Err(ProviderBlockError::EpochNumberTooLarge) => {
+                return Ok(None);
+            }
+            Err(ProviderBlockError::Common(msg)) => return Err(msg.into()),
+        };
 
         let cfx_traces = self
             .space_epoch_traces(Space::Native, epoch_hash)?
@@ -197,7 +205,7 @@ impl TraceHandler {
                     JsonRpcError::internal_error()
                 })?;
 
-        Ok(EpochTrace::new(cfx_traces, eth_traces))
+        Ok(Some(EpochTrace::new(cfx_traces, eth_traces)))
     }
 
     fn space_epoch_traces(
