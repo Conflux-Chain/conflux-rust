@@ -202,7 +202,7 @@ build_config! {
         // For test only
         (align_evm_transition_height, (u64), u64::MAX)
         // V3.1
-        (eip7939_transition_height, (Option<u64>), None)
+        (cip166_transition_height, (Option<u64>), None)
 
 
         // Mining section.
@@ -1553,7 +1553,7 @@ impl Configuration {
 
         // hardfork (V3.1)
         params.transition_heights.eip7939 =
-            self.raw_conf.eip7939_transition_height.unwrap_or(u64::MAX); // Disabled by default
+            self.raw_conf.cip166_transition_height.unwrap_or(u64::MAX); // Disabled by default
     }
 }
 
