@@ -18,7 +18,7 @@ use std::sync::Arc;
 use cfx_parity_trace_types::LocalizedTrace as PrimitiveLocalizedTrace;
 use cfx_rpc_cfx_types::trace::{
     Action as RpcAction, LocalizedBlockTrace,
-    LocalizedTrace as RpcLocalizedTrace,
+    LocalizedTrace as RpcLocalizedTrace, Trace,
 };
 use cfx_rpc_common_impl::trace::primitive_traces_to_eth_localized_traces;
 use cfx_rpc_eth_types::EpochTrace;
@@ -154,16 +154,19 @@ impl TraceHandler {
         let answer = traces
             .into_iter()
             .map(|trace| RpcLocalizedTrace {
-                action: RpcAction::try_from(trace.action, self.network)
-                    .expect("local address convert error"),
-                valid: trace.valid,
-                epoch_hash: Some(pivot_hash),
-                epoch_number: Some(epoch_number.into()),
-                block_hash: Some(tx_index.block_hash),
-                transaction_position: Some(
-                    tx_index.rpc_index.unwrap_or(tx_index.real_index).into(),
-                ),
-                transaction_hash: Some(*tx_hash),
+                trace: Trace {
+                    action: RpcAction::try_from(trace.action, self.network)
+                        .expect("local address convert error"),
+                    valid: trace.valid,
+                },
+                epoch_hash: pivot_hash,
+                epoch_number: epoch_number.into(),
+                block_hash: tx_index.block_hash,
+                transaction_position: tx_index
+                    .rpc_index
+                    .unwrap_or(tx_index.real_index)
+                    .into(),
+                transaction_hash: *tx_hash,
             })
             .collect();
 
