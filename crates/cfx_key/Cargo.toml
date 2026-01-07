@@ -8,7 +8,7 @@ license-file.workspace = true
 
 [dependencies]
 cfx-types = { workspace = true }
-cfx-crypto = { path = "../cfx_crypto" }
+cfx-crypto = { workspace = true }
 edit-distance = { workspace = true }
 parity-secp256k1 = { workspace = true }
 lazy_static = { workspace = true }
