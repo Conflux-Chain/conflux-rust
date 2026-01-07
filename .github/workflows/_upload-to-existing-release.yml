@@ -1,0 +1,90 @@
+name: Upload Artifacts to Existing Release
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref input from the caller workflow. Only existing tags will be uploaded."
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  upload:
+    name: Upload to GitHub Release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - name: Resolve tag input
+        id: tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          REF="${{ inputs.ref }}"
+          if [[ -z "${REF}" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "reason=inputs.ref is empty; skipping release upload." >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          TAG="${REF#refs/tags/}"
+
+          if gh api -H "Accept: application/vnd.github+json" "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "reason=inputs.ref is not an existing tag: ${TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip release upload
+        if: ${{ steps.tag.outputs.skip == 'true' }}
+        run: echo "${{ steps.tag.outputs.reason }}"
+
+      - name: Download artifacts from this run
+        if: ${{ steps.tag.outputs.skip != 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Verify GitHub Release exists
+        if: ${{ steps.tag.outputs.skip != 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+
+          if ! gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "GitHub Release for tag '${TAG}' not found."
+            echo "Create the release first, then re-run this failed job to upload assets."
+            exit 1
+          fi
+
+      - name: Upload assets to GitHub Release
+        if: ${{ steps.tag.outputs.skip != 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+
+          shopt -s nullglob
+          FILES=(dist/*)
+          if (( ${#FILES[@]} == 0 )); then
+            echo "No artifacts found under dist/; nothing to upload."
+            exit 1
+          fi
+
+          echo "Uploading ${#FILES[@]} file(s) to release ${TAG}..."
+          gh release upload "${TAG}" "${FILES[@]}" --repo "${GITHUB_REPOSITORY}" --clobber
+          echo "Upload completed successfully."

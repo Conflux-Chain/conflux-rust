@@ -213,7 +213,7 @@ impl Provider {
 
     #[inline]
     fn tx_by_hash(&self, hash: H256) -> Option<SignedTransaction> {
-        if let Some(info) = self.consensus.get_transaction_info_by_hash(&hash) {
+        if let Some(info) = self.consensus.get_signed_tx_and_tx_info(&hash) {
             return Some(info.0);
         };
 
@@ -227,7 +227,7 @@ impl Provider {
     #[inline]
     fn tx_info_by_hash(&self, hash: H256) -> Result<TxInfo> {
         let (tx, tx_index, receipt) =
-            match self.consensus.get_transaction_info_by_hash(&hash) {
+            match self.consensus.get_signed_tx_and_tx_info(&hash) {
                 None => {
                     bail!(Error::UnableToProduceTxInfo {
                         reason: format!("Unable to get tx info for {:?}", hash)
