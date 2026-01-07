@@ -1,11 +1,100 @@
 //! Util functions for revm related ops
+use crate::config::TraceStyle;
 use alloy_primitives::{hex, B256};
 use alloy_sol_types::{ContractError, GenericRevertReason};
 use cfx_types::{Address, H160, H256, U256};
 use cfx_vm_interpreter::instructions::{
     INSTRUCTIONS, INSTRUCTIONS_CANCUN, INSTRUCTIONS_CIP645,
 };
+use revm::interpreter::InstructionResult;
 use revm_primitives::{Address as RAddress, U256 as RU256};
+
+/// Converts a non successful [`InstructionResult`] to an error message.
+///
+/// Returns `None` if [`InstructionResult::is_ok`].
+///
+/// See also <https://github.com/ethereum/go-ethereum/blob/34d507215951fb3f4a5983b65e127577989a6db8/eth/tracers/native/call_flat.go#L39-L55>
+pub(crate) fn fmt_error_msg(
+    res: InstructionResult, kind: TraceStyle,
+) -> Option<String> {
+    if res.is_ok() {
+        return None;
+    }
+    let msg = match res {
+        InstructionResult::Revert => if kind.is_parity() {
+            "Reverted"
+        } else {
+            "execution reverted"
+        }
+        .to_string(),
+        InstructionResult::OutOfGas | InstructionResult::PrecompileOOG => {
+            if kind.is_parity() {
+                "Out of gas"
+            } else {
+                "out of gas"
+            }
+            .to_string()
+        }
+        InstructionResult::OutOfFunds => if kind.is_parity() {
+            "Insufficient balance for transfer"
+        } else {
+            "insufficient balance for transfer"
+        }
+        .to_string(),
+        InstructionResult::MemoryOOG => if kind.is_parity() {
+            "Out of gas"
+        } else {
+            "out of gas: out of memory"
+        }
+        .to_string(),
+        InstructionResult::MemoryLimitOOG => if kind.is_parity() {
+            "Out of gas"
+        } else {
+            "out of gas: reach memory limit"
+        }
+        .to_string(),
+        InstructionResult::InvalidOperandOOG => if kind.is_parity() {
+            "Out of gas"
+        } else {
+            "out of gas: invalid operand"
+        }
+        .to_string(),
+        InstructionResult::OpcodeNotFound => if kind.is_parity() {
+            "Bad instruction"
+        } else {
+            "invalid opcode"
+        }
+        .to_string(),
+        InstructionResult::StackOverflow => "Out of stack".to_string(),
+        InstructionResult::InvalidJump => if kind.is_parity() {
+            "Bad jump destination"
+        } else {
+            "invalid jump destination"
+        }
+        .to_string(),
+        InstructionResult::PrecompileError => if kind.is_parity() {
+            "Built-in failed"
+        } else {
+            "precompiled failed"
+        }
+        .to_string(),
+        InstructionResult::InvalidFEOpcode => if kind.is_parity() {
+            "Bad instruction"
+        } else {
+            "invalid opcode: INVALID"
+        }
+        .to_string(),
+        InstructionResult::ReentrancySentryOOG => if kind.is_parity() {
+            "Out of gas"
+        } else {
+            "out of gas: not enough gas for reentrancy sentry"
+        }
+        .to_string(),
+        status => format!("{status:?}"),
+    };
+
+    Some(msg)
+}
 
 /// creates the memory data in 32byte chunks
 /// see <https://github.com/ethereum/go-ethereum/blob/366d2169fbc0e0f803b68c042b77b6b480836dbc/eth/tracers/logger/logger.go#L450-L452>
