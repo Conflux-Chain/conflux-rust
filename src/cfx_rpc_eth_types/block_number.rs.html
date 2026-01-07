@@ -596,8 +596,8 @@
             BlockId::Num(num) =&gt; <span class="prelude-val">Ok</span>(EpochNumber::Number(num)),
             BlockId::Latest =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestState),
             BlockId::Earliest =&gt; <span class="prelude-val">Ok</span>(EpochNumber::Earliest),
-            BlockId::Pending =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestState), <span class="comment">/* TODO: LatestMined maybe is better or add a new Pending variant for EpochNumber */
-            </span>BlockId::Safe =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestConfirmed),
+            BlockId::Pending =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestMined),
+            BlockId::Safe =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestConfirmed),
             BlockId::Finalized =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestFinalized),
             BlockId::Hash { .. } =&gt; <span class="prelude-val">Err</span>(Error::InvalidParams(
                 <span class="string">"block_num"</span>.into(),
@@ -620,7 +620,7 @@
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::Earliest)
             }
             BlockId::Pending =&gt; {
-                BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
+                BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestMined)
             }
             BlockId::Safe =&gt; BlockHashOrEpochNumber::EpochNumber(
                 EpochNumber::LatestConfirmed,
