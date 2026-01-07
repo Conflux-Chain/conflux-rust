@@ -439,7 +439,7 @@ impl EpochTrace {
     ) -> Self {
         let mut mirror_address_map = HashMap::new();
         for t in &cfx_traces {
-            if let CfxRpcAction::Call(action) = &t.action {
+            if let CfxRpcAction::Call(action) = &t.trace.action {
                 if action.to.hex_address == CROSS_SPACE_CONTRACT_ADDRESS {
                     mirror_address_map.insert(
                         action.from.hex_address.evm_map().address,
