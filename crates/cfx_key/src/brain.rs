@@ -15,7 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::{KeyPair, KeyPairGenerator, Secret};
-use crate::keccak::Keccak256;
+use cfx_crypto::crypto::keccak::Keccak256;
 use log::trace;
 use parity_wordlist;
 

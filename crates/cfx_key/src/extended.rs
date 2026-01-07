@@ -205,11 +205,15 @@ impl ExtendedKeyPair {
 // https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 mod derivation {
     use super::{Derivation, Label};
-    use crate::{keccak, math::curve_order, SECP256K1};
+    use crate::{math::curve_order, SECP256K1};
+    use cfx_crypto::crypto::keccak::Keccak256;
     use cfx_types::{BigEndianHash, H256, H512, U256, U512};
-    use parity_crypto::hmac;
+    use hmac::{Hmac, Mac};
     use secp256k1::key::{PublicKey, SecretKey};
+    use sha2::Sha512;
     use std::convert::TryInto;
+
+    type HmacSha512 = Hmac<Sha512>;
 
     #[derive(Debug)]
     pub enum Error {
@@ -246,8 +250,10 @@ mod derivation {
         let private: U256 = private_key.into_uint();
 
         // produces 512-bit derived hmac (I)
-        let skey = hmac::SigKey::sha512(chain_code.as_bytes());
-        let i_512 = hmac::sign(&skey, &data[..]);
+        let mut skey = HmacSha512::new_from_slice(chain_code.as_bytes())
+            .expect("HmacSha512 failed");
+        skey.update(data);
+        let i_512 = skey.finalize().into_bytes().to_vec();
 
         // left most 256 bits are later added to original private key
         let hmac_key: U256 = H256::from_slice(&i_512[0..32]).into_uint();
@@ -337,8 +343,10 @@ mod derivation {
         index.store(&mut data[33..(33 + T::len())]);
 
         // HMAC512SHA produces [derived private(256); new chain code(256)]
-        let skey = hmac::SigKey::sha512(chain_code.as_bytes());
-        let i_512 = hmac::sign(&skey, &data[..]);
+        let mut skey = HmacSha512::new_from_slice(chain_code.as_bytes())
+            .expect("HmacSha512 failed");
+        skey.update(data.as_slice());
+        let i_512 = skey.finalize().into_bytes().to_vec();
 
         let new_private = H256::from_slice(&i_512[0..32]);
         let new_chain_code = H256::from_slice(&i_512[32..64]);
@@ -364,7 +372,7 @@ mod derivation {
         Ok((H512::from_slice(&serialized[1..65]), new_chain_code))
     }
 
-    fn sha3(slc: &[u8]) -> H256 { keccak::Keccak256::keccak256(slc).into() }
+    fn sha3(slc: &[u8]) -> H256 { slc.keccak256().into() }
 
     pub fn chain_code(secret: H256) -> H256 {
         // 10,000 rounds of sha3
@@ -385,8 +393,10 @@ mod derivation {
     }
 
     pub fn seed_pair(seed: &[u8]) -> (H256, H256) {
-        let skey = hmac::SigKey::sha512(b"Bitcoin seed");
-        let i_512 = hmac::sign(&skey, seed);
+        let mut skey = HmacSha512::new_from_slice(b"Bitcoin seed")
+            .expect("HmacSha512 failed");
+        skey.update(seed);
+        let i_512 = skey.finalize().into_bytes().to_vec();
 
         let master_key = H256::from_slice(&i_512[0..32]);
         let chain_code = H256::from_slice(&i_512[32..64]);
