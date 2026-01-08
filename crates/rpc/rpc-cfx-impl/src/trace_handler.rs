@@ -10,6 +10,7 @@ use cfxcore::{
     block_data_manager::DataVersionTuple, errors::Result as CoreResult,
     BlockDataManager, ConsensusGraph, SharedConsensusGraph,
 };
+use cfxcore_errors::ProviderBlockError;
 use jsonrpc_core::Error as JsonRpcError;
 use log::warn;
 use primitives::EpochNumber;
@@ -18,7 +19,7 @@ use std::sync::Arc;
 use cfx_parity_trace_types::LocalizedTrace as PrimitiveLocalizedTrace;
 use cfx_rpc_cfx_types::trace::{
     Action as RpcAction, LocalizedBlockTrace,
-    LocalizedTrace as RpcLocalizedTrace,
+    LocalizedTrace as RpcLocalizedTrace, Trace,
 };
 use cfx_rpc_common_impl::trace::primitive_traces_to_eth_localized_traces;
 use cfx_rpc_eth_types::EpochTrace;
@@ -154,16 +155,19 @@ impl TraceHandler {
         let answer = traces
             .into_iter()
             .map(|trace| RpcLocalizedTrace {
-                action: RpcAction::try_from(trace.action, self.network)
-                    .expect("local address convert error"),
-                valid: trace.valid,
-                epoch_hash: Some(pivot_hash),
-                epoch_number: Some(epoch_number.into()),
-                block_hash: Some(tx_index.block_hash),
-                transaction_position: Some(
-                    tx_index.rpc_index.unwrap_or(tx_index.real_index).into(),
-                ),
-                transaction_hash: Some(*tx_hash),
+                trace: Trace {
+                    action: RpcAction::try_from(trace.action, self.network)
+                        .expect("local address convert error"),
+                    valid: trace.valid,
+                },
+                epoch_hash: pivot_hash,
+                epoch_number: epoch_number.into(),
+                block_hash: tx_index.block_hash,
+                transaction_position: tx_index
+                    .rpc_index
+                    .unwrap_or(tx_index.real_index)
+                    .into(),
+                transaction_hash: *tx_hash,
             })
             .collect();
 
@@ -172,12 +176,19 @@ impl TraceHandler {
 
     pub fn epoch_trace_impl(
         &self, epoch_number: EpochNumber,
-    ) -> CoreResult<EpochTrace> {
+    ) -> CoreResult<Option<EpochTrace>> {
         // Make sure we use the same epoch_hash in two spaces. Using
         // epoch_number cannot guarantee the atomicity.
-        let epoch_hash = self
+        let epoch_hash = match self
             .consensus
-            .get_hash_from_epoch_number(epoch_number.clone())?;
+            .get_hash_from_epoch_number(epoch_number.clone())
+        {
+            Ok(hash) => hash,
+            Err(ProviderBlockError::EpochNumberTooLarge) => {
+                return Ok(None);
+            }
+            Err(ProviderBlockError::Common(msg)) => return Err(msg.into()),
+        };
 
         let cfx_traces = self
             .space_epoch_traces(Space::Native, epoch_hash)?
@@ -197,7 +208,7 @@ impl TraceHandler {
                     JsonRpcError::internal_error()
                 })?;
 
-        Ok(EpochTrace::new(cfx_traces, eth_traces))
+        Ok(Some(EpochTrace::new(cfx_traces, eth_traces)))
     }
 
     fn space_epoch_traces(
