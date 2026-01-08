@@ -36,7 +36,6 @@ fn genesis_contract_address_impl(idx: usize, code: &Bytes) -> AddressWithSpace {
     let genesis_account_address = GENESIS_ACCOUNT_ADDRESS;
     let (mut address, _) = cal_contract_address(
         CreateContractAddressType::FromSenderNonceAndCodeHash,
-        0,
         &genesis_account_address,
         &U256::from(idx),
         code,
