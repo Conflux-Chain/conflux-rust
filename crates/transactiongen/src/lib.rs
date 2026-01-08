@@ -304,7 +304,6 @@ impl DirectTransactionGenerator {
             CreateContractAddressType::FromSenderNonceAndCodeHash,
             // A fake block_number. There field is unnecessary in Ethereum
             // replay test.
-            0,
             &contract_creator,
             &0.into(),
             // A fake code. There field is unnecessary in Ethereum replay test.

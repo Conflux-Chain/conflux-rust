@@ -1147,7 +1147,6 @@ impl SignedTransaction {
             let code = self.data().as_slice();
             let (created_address, _) = cal_contract_address_with_space(
                 create_type,
-                0,
                 &from,
                 &nonce,
                 code,

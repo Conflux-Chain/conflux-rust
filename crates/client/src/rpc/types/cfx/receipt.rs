@@ -96,8 +96,7 @@ impl Receipt {
     pub fn new(
         transaction: PrimitiveTransaction, receipt: PrimitiveReceipt,
         transaction_index: TransactionIndex, prior_gas_used: U256,
-        epoch_number: Option<u64>, block_number: u64,
-        maybe_base_price: Option<SpaceMap<U256>>,
+        epoch_number: Option<u64>, maybe_base_price: Option<SpaceMap<U256>>,
         maybe_state_root: Option<H256>, tx_exec_error_msg: Option<String>,
         network: Network, include_eth_receipt: bool,
         include_accumulated_gas_used: bool,
@@ -122,7 +121,6 @@ impl Receipt {
                 {
                     let (mut created_address, _) = cal_contract_address(
                         CreateContractAddressType::FromSenderNonceAndCodeHash,
-                        block_number.into(),
                         &transaction.sender,
                         unsigned.nonce(),
                         unsigned.data(),
@@ -144,7 +142,6 @@ impl Receipt {
                     {
                         let (created_address, _) = cal_contract_address(
                             CreateContractAddressType::FromSenderNonce,
-                            0,
                             &transaction.sender,
                             unsigned.nonce(),
                             unsigned.data(),

@@ -359,7 +359,6 @@ pub fn create_to_evmcore(
     };
     let (address_with_space, code_hash) = cal_contract_address_with_space(
         address_scheme,
-        context.env.number.into(),
         &mapped_sender,
         &context.state.nonce(&mapped_sender)?,
         &init,

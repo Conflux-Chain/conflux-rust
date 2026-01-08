@@ -162,7 +162,6 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     fn make_action_params(&self) -> DbResult<ActionParams> {
         let tx = self.tx;
         let cost = &self.cost;
-        let env = self.context.env;
         let state = &*self.context.state;
         let sender = tx.sender();
         let nonce = tx.nonce();
@@ -181,7 +180,6 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 };
                 let (new_address, code_hash) = cal_contract_address_with_space(
                     address_scheme,
-                    env.number.into(),
                     &sender,
                     &nonce,
                     &tx.data(),
@@ -702,9 +700,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 chain_id,
                 address,
                 nonce,
-                y_parity: _,
-                r: _,
-                s: _,
+                ..
             } = auth_item;
             let mut set_auth_action = SetAuth {
                 space: self.tx.space(),

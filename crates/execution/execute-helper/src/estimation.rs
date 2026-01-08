@@ -9,8 +9,10 @@ use cfx_executor::{
 use solidity_abi::string_revert_reason_decode;
 
 use super::observer::{
-    access_list::AccessListKey, exec_tracer::ErrorUnwind,
-    gasman::GasLimitEstimationKey, Observer,
+    access_list::{AccessListInspector, AccessListKey},
+    exec_tracer::ErrorUnwind,
+    gasman::GasLimitEstimationKey,
+    Observer,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
 use cfx_statedb::Result as DbResult;
@@ -145,13 +147,7 @@ impl<'a> EstimationContext<'a> {
 
         self.process_estimate_request(&mut tx, &request)?;
 
-        let access_list = if request.collect_access_list {
-            self.collect_access_list(tx.clone(), request)?
-        } else {
-            AccessList::new()
-        };
-
-        let (executed, overwrite_storage_limit) = match self
+        let (executed, overwrite_storage_limit, access_list) = match self
             .two_pass_estimation(&tx, request)?
         {
             Ok(x) => x,
@@ -167,7 +163,7 @@ impl<'a> EstimationContext<'a> {
                                 executed, &tx,
                             ),
                             estimated_storage_limit: storage_limit(executed),
-                            access_list,
+                            access_list: AccessList::new(),
                         }
                     }
                     ExecutionOutcome::Finished(_) => unreachable!(),
@@ -185,9 +181,12 @@ impl<'a> EstimationContext<'a> {
         )
     }
 
-    pub fn collect_access_list(
-        &mut self, tx: SignedTransaction, request: EstimateRequest,
-    ) -> DbResult<AccessList> {
+    pub fn prepare_access_list_inspector(
+        &mut self, tx: &SignedTransaction, request: &EstimateRequest,
+    ) -> Option<AccessListInspector> {
+        if !request.collect_access_list {
+            return None;
+        }
         // prepare the excludes: add from, to, precompiles, 7702 authorities to
         // excludes
         let mut excludes = HashSet::new();
@@ -216,25 +215,7 @@ impl<'a> EstimationContext<'a> {
             .map(|val| val.to_vec())
             .unwrap_or(AccessList::new());
 
-        // execute the transaction to collect access list
-        let res = self.as_executive().transact(
-            &tx,
-            request.access_list_options(access_list, excludes),
-        )?;
-        let executed = match res {
-            ExecutionOutcome::Finished(executed) => executed,
-            ExecutionOutcome::ExecutionErrorBumpNonce(_exec_err, executed) => {
-                executed
-            }
-            ExecutionOutcome::NotExecutedDrop(_)
-            | ExecutionOutcome::NotExecutedToReconsiderPacking(_) => {
-                return Ok(AccessList::new());
-            }
-        };
-        let access_list = executed.ext_result.get::<AccessListKey>().expect(
-            "AccessListKey should be set by AccessListInspector observer",
-        );
-        Ok(access_list.to_vec())
+        Some(AccessListInspector::new(access_list, excludes))
     }
 
     fn check_cip130(
@@ -270,12 +251,15 @@ impl<'a> EstimationContext<'a> {
     // the storage limit.
     fn two_pass_estimation(
         &mut self, tx: &SignedTransaction, request: EstimateRequest,
-    ) -> DbResult<Result<(Executed, Option<u64>), ExecutionOutcome>> {
+    ) -> DbResult<Result<(Executed, Option<u64>, AccessList), ExecutionOutcome>>
+    {
+        let access_list_inspector =
+            self.prepare_access_list_inspector(tx, &request);
         // First pass
         let saved = self.state.save();
         let sender_pay_executed = match self
             .as_executive()
-            .transact(&tx, request.first_pass_options())?
+            .transact(&tx, request.first_pass_options(access_list_inspector))?
         {
             ExecutionOutcome::Finished(executed) => executed,
             res => {
@@ -288,6 +272,12 @@ impl<'a> EstimationContext<'a> {
         );
         self.state.update_state_post_tx_execution(false);
         self.state.restore(saved);
+
+        let access_list = sender_pay_executed
+            .ext_result
+            .get::<AccessListKey>()
+            .map(|a| a.to_vec())
+            .unwrap_or(AccessList::new());
 
         // Second pass
         let contract_pay_executed: Option<Executed>;
@@ -319,7 +309,7 @@ impl<'a> EstimationContext<'a> {
                 );
                 contract_pay_executed
             } else {
-                return Ok(Ok((sender_pay_executed, None)));
+                return Ok(Ok((sender_pay_executed, None, access_list)));
             };
 
         let contract_address =
@@ -340,19 +330,20 @@ impl<'a> EstimationContext<'a> {
             storage_limit(&sender_pay_executed),
             max_sponsor_storage_limit + 64,
         );
-        Ok(Ok(
-            if let Some(contract_pay_executed) = contract_pay_executed {
-                if max_sponsor_storage_limit
-                    >= storage_limit(&contract_pay_executed)
-                {
-                    (contract_pay_executed, None)
-                } else {
-                    (sender_pay_executed, Some(overwrite_storage_limit))
-                }
-            } else {
-                (sender_pay_executed, Some(overwrite_storage_limit))
-            },
-        ))
+
+        if let Some(contract_pay_executed) = contract_pay_executed {
+            if max_sponsor_storage_limit
+                >= storage_limit(&contract_pay_executed)
+            {
+                return Ok(Ok((contract_pay_executed, None, access_list)));
+            }
+        };
+
+        Ok(Ok((
+            sender_pay_executed,
+            Some(overwrite_storage_limit),
+            access_list,
+        )))
     }
 
     fn enact_executed_by_estimation_request(
@@ -552,26 +543,19 @@ impl EstimateRequest {
         }
     }
 
-    fn first_pass_options(self) -> TransactOptions<Observer> {
+    fn first_pass_options(
+        self, access_list_inspector: Option<AccessListInspector>,
+    ) -> TransactOptions<Observer> {
         TransactOptions {
-            observer: Observer::virtual_call(),
+            observer: Observer::virtual_call(access_list_inspector),
             settings: self.transact_settings(ChargeCollateral::EstimateSender),
         }
     }
 
     pub fn second_pass_options(self) -> TransactOptions<Observer> {
         TransactOptions {
-            observer: Observer::virtual_call(),
+            observer: Observer::virtual_call(None),
             settings: self.transact_settings(ChargeCollateral::EstimateSponsor),
-        }
-    }
-
-    pub fn access_list_options(
-        self, access_list: AccessList, excludes: HashSet<Address>,
-    ) -> TransactOptions<Observer> {
-        TransactOptions {
-            observer: Observer::access_list_inspector(access_list, excludes),
-            settings: self.transact_settings(ChargeCollateral::EstimateSender),
         }
     }
 }

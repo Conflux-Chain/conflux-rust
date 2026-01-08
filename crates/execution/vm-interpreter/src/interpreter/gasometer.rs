@@ -628,7 +628,7 @@ fn calc_call_gas<Gas: CostType>(
 
     let maybe_code = context.extcode(&address)?;
     let Some(delegated_address) =
-        maybe_code.map(|code| extract_7702_payload(&code)).flatten()
+        maybe_code.and_then(|code| extract_7702_payload(&code))
     else {
         return Ok(call_gas);
     };

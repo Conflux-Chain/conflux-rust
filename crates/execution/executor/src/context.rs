@@ -276,7 +276,6 @@ impl<'a> ContextTrait for Context<'a> {
         // create new contract address
         let (address_with_space, code_hash) = cal_contract_address_with_space(
             address_scheme,
-            self.env.number.into(),
             &caller,
             &self.state.nonce(&caller)?,
             &code,

@@ -324,7 +324,6 @@ pub fn genesis_block(
 
             let (contract_address, _) = cal_contract_address_with_space(
                 CreateContractAddressType::FromSenderNonceAndCodeHash,
-                0,
                 &genesis_account_address,
                 &(i - 1).into(),
                 genesis_transactions[i].as_ref().data(),

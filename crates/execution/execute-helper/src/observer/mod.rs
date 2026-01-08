@@ -47,12 +47,14 @@ impl Observer {
         }
     }
 
-    pub fn virtual_call() -> Self {
+    pub fn virtual_call(
+        access_list_inspector: Option<AccessListInspector>,
+    ) -> Self {
         Observer {
             tracer: Some(ExecTracer::default()),
             gas_man: Some(GasMan::default()),
             geth_tracer: None,
-            access_list_inspector: None,
+            access_list_inspector,
         }
     }
 
@@ -69,7 +71,7 @@ impl Observer {
     }
 
     pub fn access_list_inspector(
-        access_list: AccessList, excluded: HashSet<Address>,
+        access_list: AccessList, excludes: HashSet<Address>,
     ) -> Self {
         Observer {
             tracer: None,
@@ -77,7 +79,7 @@ impl Observer {
             geth_tracer: None,
             access_list_inspector: Some(AccessListInspector::new(
                 access_list,
-                excluded,
+                excludes,
             )),
         }
     }
