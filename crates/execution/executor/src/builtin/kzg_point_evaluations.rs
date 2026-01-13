@@ -1,12 +1,12 @@
 // Based on source code from the revm project (https://github.com/bluealloy/revm) under the MIT License.
 
-use c_kzg::{Bytes32, Bytes48, KzgProof, KzgSettings};
+use c_kzg::{ethereum_kzg_settings, Bytes32, Bytes48, KzgSettings};
 
 use hex_literal::hex;
 use parity_crypto::digest;
 use std::convert::TryInto;
 
-use super::{ethereum_trusted_setup_points::default_kzg_settings, Error};
+use super::Error;
 
 pub const VERSIONED_HASH_VERSION_KZG: u8 = 0x01;
 
@@ -42,7 +42,7 @@ pub fn run(input: &[u8]) -> Result<(), Error> {
     let z = as_bytes32(&input[32..64]);
     let y = as_bytes32(&input[64..96]);
     let proof = as_bytes48(&input[144..192]);
-    if !verify_kzg_proof(commitment, z, y, proof, default_kzg_settings()) {
+    if !verify_kzg_proof(commitment, z, y, proof, ethereum_kzg_settings(8)) {
         return Err("Blob verify kzg proof failed".into());
     }
     Ok(())
@@ -62,7 +62,8 @@ pub fn verify_kzg_proof(
     commitment: &Bytes48, z: &Bytes32, y: &Bytes32, proof: &Bytes48,
     kzg_settings: &KzgSettings,
 ) -> bool {
-    KzgProof::verify_kzg_proof(commitment, z, y, proof, kzg_settings)
+    kzg_settings
+        .verify_kzg_proof(commitment, z, y, proof)
         .unwrap_or(false)
 }
 

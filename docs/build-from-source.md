@@ -2,7 +2,7 @@
 
 ## Install Build Dependencies
 
-Conflux requires **Rust 1.86**, ```clang```, and ```sqlite``` to build.
+Conflux requires **Rust 1.90**, ```clang```, and ```sqlite``` to build.
 
 We recommend installing Rust through [rustup](https://rustup.rs/). If you don't already have ```rustup``` or ```clang```, you can install them like this:
 
@@ -13,7 +13,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # you might need to run 
 # source "$HOME/.cargo/env"
 # to configure your shell
-rustup install 1.86
+rustup install 1.90
 ```
 
 Other dependencies including ```clang```, ```cmake (version >= 3.12 and < 4.0)``` and ```sqlite (version >= 3.8.3 and < 4.0)``` can be installed with:
@@ -57,7 +57,7 @@ curl https://sh.rustup.rs -sSf | sh
 # you might need to run 
 # source "$HOME/.cargo/env"
 # to configure your shell
-rustup install 1.86
+rustup install 1.90
 ```
 
 You might need to install ```brew``` if you need to use it to install ```clang```:
@@ -115,14 +115,14 @@ RUSTFLAGS="-L $(brew --prefix bzip2)/lib -l bz2" cargo build
 ```
 
 
-This produces an executable called **conflux** in the **./target/release** subdirectory. The **conflux** binary it a client software that we can use to run a node.
+This produces an executable called **conflux** in the **./target/release** subdirectory. The **conflux** binary is client software that we can use to run a node.
 
-Note, when compiling a crate and you receive errors, it's in most cases your outdated version of Rust, or some of your crates have to be recompiled. Cleaning the repository will most likely solve the issue if you are on the latest stable version of Rust, try:
+Note: when compiling a crate and you receive errors, it is in most cases due to an outdated Rust toolchain, or some of your crates needing a rebuild. If you are on the latest stable version of Rust, cleaning the repository will most likely solve the issue:
 
 ```shell
 cargo clean && cargo update
 ```
-When you compiling on Linux system，By default cc is linked to gcc, you need to export the cc environment variable to point to clang
+When compiling on Linux, by default `cc` is linked to `gcc`. You may need to export the `CC` environment variable to point to `clang`:
 
 ```shell
 CC=clang CXX=clang++ cargo build --release

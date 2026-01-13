@@ -9,3 +9,6 @@ edition = "2021"
 [dependencies]
 malloc_size_of = { workspace = true }
 lru-cache = { workspace = true }
+
+[dev-dependencies]
+cfx-mallocator-utils = { workspace = true }

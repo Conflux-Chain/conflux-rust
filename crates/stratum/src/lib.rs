@@ -226,8 +226,11 @@ impl StratumImpl {
                         debug!(target: "stratum", "Worker no longer connected: {} addr {}", &worker_id, &addr);
                         hup_peers.insert(**addr);
                     }
-                    Err(e) => {
+                    Err(PushMessageError::Send(e)) => {
                         warn!(target: "stratum", "Unexpected transport error: {:?}", e);
+                        if e.is_disconnected() {
+                            hup_peers.insert(**addr);
+                        }
                     }
                     Ok(_) => {}
                 }

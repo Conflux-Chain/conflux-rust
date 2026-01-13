@@ -1,0 +1,188 @@
+name: Build Conflux (Linux)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Optional git ref to build (tag/commit/branch, e.g. v3.0.2). If empty, builds latest default branch."
+        required: false
+        type: string
+        default: ""
+      upload_to_release:
+        description: "If checked, upload built artifacts to an existing GitHub Release for the given tag (only for workflow_dispatch)."
+        required: false
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.ref != '' && github.event.inputs.ref || github.event.repository.default_branch) || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.id }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: linux-x86_64
+            arch: x86_64
+            target: x86_64-unknown-linux-gnu
+            dockerfile: .github/docker/linux/x86_64.Dockerfile
+            compatibility_mode: "false"
+            cpu_march: haswell
+            rust_target_cpu: haswell
+          - id: linux-x86_64-compatible
+            arch: x86_64
+            target: x86_64-unknown-linux-gnu
+            dockerfile: .github/docker/linux/x86_64.Dockerfile
+            compatibility_mode: "true"
+            cpu_march: nehalem
+            rust_target_cpu: nehalem
+          - id: linux-aarch64
+            arch: aarch64
+            target: aarch64-unknown-linux-gnu
+            dockerfile: .github/docker/linux/aarch64.Dockerfile
+            compatibility_mode: "false"
+
+    steps:
+      # Checkout target ref to build
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.ref != '' && github.event.inputs.ref || github.event.repository.default_branch) || github.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Checkout default branch to get Dockerfiles and build scripts.
+      # Some tags may not include the required Dockerfiles.
+      - name: Checkout workflow files
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          path: workflow
+
+      - name: Compute artifact label
+        id: label
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REF_INPUT="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ -n "${REF_INPUT}" ]]; then
+              LABEL="${REF_INPUT}"
+            else
+              LABEL="$(git rev-parse --short=7 HEAD)"
+            fi
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            LABEL="${{ github.ref_name }}"
+          else
+            LABEL="$(git rev-parse --short=7 HEAD)"
+          fi
+
+          LABEL="$(echo "${LABEL}" | sed -E 's#[^A-Za-z0-9._-]+#-#g')"
+          LABEL="${LABEL#-}"
+          LABEL="${LABEL%-}"
+
+          if [[ -z "${LABEL}" ]]; then
+            LABEL="$(git rev-parse --short=7 HEAD)"
+          fi
+
+          echo "label=${LABEL}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BUILD_ARGS=()
+
+          if [[ "${{ matrix.arch }}" == "x86_64" ]]; then
+            BUILD_ARGS+=(
+              "--build-arg" "CPU_MARCH=${{ matrix.cpu_march }}"
+              "--build-arg" "RUST_TARGET_CPU=${{ matrix.rust_target_cpu }}"
+            )
+          fi
+
+          docker build \
+            "${BUILD_ARGS[@]}" \
+            -t "conflux-linux:${{ matrix.id }}" \
+            -f "workflow/${{ matrix.dockerfile }}" \
+            workflow
+
+      - name: Build in container
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Disable RocksDB adding -march=native
+          FEATURES="rocksdb/portable"
+          if [[ "${{ matrix.compatibility_mode }}" == "true" ]]; then
+            FEATURES="rocksdb/portable,blst-portable"
+          fi
+
+          FULL_COMMAND="rustup show && rustup target add '${{ matrix.target }}' && cargo build --release --target '${{ matrix.target }}' --features \"${FEATURES}\""
+
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            "conflux-linux:${{ matrix.id }}" \
+            bash -lc "${FULL_COMMAND}"
+
+      - name: Package artifact
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BUILD_PATH="target/${{ matrix.target }}/release"
+          BIN_PATH="${BUILD_PATH}/conflux"
+          if [[ ! -f "${BIN_PATH}" ]]; then
+            echo "Expected binary not found: ${BIN_PATH}"
+            ls -la "${BUILD_PATH}" || true
+            exit 1
+          fi
+
+          SUFFIX=""
+          if [[ "${{ matrix.compatibility_mode }}" == "true" ]]; then
+            SUFFIX="-compatible"
+          fi
+
+          ARCHIVE_NAME="conflux-${{ steps.label.outputs.label }}-linux-${{ matrix.arch }}-glibc2.27${SUFFIX}.tar.gz"
+
+          rm -rf packaging_temp dist
+          mkdir -p packaging_temp dist
+
+          cp "${BIN_PATH}" packaging_temp/conflux
+          cp -R run/. packaging_temp/
+
+          tar -C packaging_temp -czf "dist/${ARCHIVE_NAME}" .
+
+          echo "archive=dist/${ARCHIVE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "archive_name=${ARCHIVE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.archive_name }}
+          path: ${{ steps.package.outputs.archive }}
+          retention-days: 30
+
+  upload_release:
+    name: Upload to GitHub Release
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_to_release }}
+    uses: ./.github/workflows/_upload-to-existing-release.yml
+    with:
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: write
+      actions: read

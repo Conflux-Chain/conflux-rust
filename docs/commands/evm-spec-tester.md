@@ -1,6 +1,6 @@
 # evm
 
-The `evm-spec-tester` command is primarily used to run tests related to the Ethereum Virtual Machine (EVM), in order to verify the compatibility of the Conflux eSpace VM.
+The `evm-spec-tester` command is primarily used to run tests related to the Ethereum Virtual Machine (EVM), in order to verify the compatibility of the Conflux eSpace VM. The source codes for it are located in `tools/evm-spec-tester`.
 
 Currently, it supports: 
 
@@ -59,7 +59,7 @@ evm-spec-tester statetest /data/test-fixtures/develop/state_tests/prague
 
 #### run single test
 
-If you only want to run a single test file, you can use the --match parameter to specify the name of the test file:
+If you only want to run a single test file, you can use the `--matches` parameter to specify the name of the test file:
 
 ```bash
 evm-spec-tester statetest /data/test-fixtures/develop/state_tests/prague --matches the-test-file-name.json
@@ -75,11 +75,11 @@ evm-spec-tester statetest /data/test-fixtures/develop/state_tests/prague --match
 
 #### configuration
 
-The `evm-config.toml` file is a configuration file used to control the behavior of the Conflux node, such as which CIPs (Conflux Improvement Proposals) are enabled. 
+The `evm-config.toml` file is a Conflux client configuration file used to control EVM execution behavior in tests (for example, activation heights for features controlled by CIPs).
 
 Below is a sample configuration file, where all CIPs are activated at block height 1:
 
-```yaml
+```toml
 mode="dev"
 default_transition_time=1
 pos_reference_enable_height=1
@@ -95,11 +95,11 @@ evm_chain_id=1
 evm-spec-tester statetest --config evm-config.toml /data/test-fixtures/develop/state_tests/prague
 ```
 
-If no configuration file is specified, all cips will be enabled.
+If no configuration file is specified, `evm-spec-tester` uses a built-in default configuration (dev mode with common transition heights set to 1).
 
-### Skiped tests
+### Skipped tests
 
-Some tests are skipped due to conflux does not support some features of the EVM. The skipped tests are listed below:
+Some tests are skipped because Conflux does not support some EVM features. The skipped tests are listed below:
 
 - EIP-4844 tests
 - EOF tests

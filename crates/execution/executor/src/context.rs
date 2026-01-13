@@ -607,7 +607,7 @@ impl<'a> ContextTrait for Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    pub fn internal_ref(&mut self) -> InternalRefContext {
+    pub fn internal_ref(&mut self) -> InternalRefContext<'_> {
         InternalRefContext {
             env: self.env,
             spec: self.spec,

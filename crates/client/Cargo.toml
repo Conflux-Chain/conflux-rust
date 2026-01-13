@@ -79,6 +79,8 @@ cfx-parity-trace-types = { workspace = true }
 cfx-tasks = { workspace = true }
 cfx-config = { workspace = true }
 cfxcore-types = { workspace = true }
+fallible-iterator = { workspace = true }
+chrono = { workspace = true }
 cfx-mallocator-utils = { workspace = true }
 
 [dev-dependencies]
@@ -92,6 +94,7 @@ cfx-executor = { workspace = true, features = ["testonly_code"] }
 # https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
 testonly_code = []
 u64_mpt_db_key = ["cfx-storage/u64_mpt_db_key"]
+jemalloc-prof = ["cfx-mallocator-utils/jemalloc", "cfx-mallocator-utils/jemalloc-prof"]
 
 [[bench]]
 name = "benchmark"
