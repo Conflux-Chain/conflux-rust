@@ -7,28 +7,36 @@ use super::{
     error::{TestError, TestErrorKind},
     utils::extract_155_chain_id_from_raw_tx,
 };
+use crate::util::set_cips_according_to_spec;
+use cfx_config::Configuration;
 use cfx_executor::{
     executive::{ExecutionOutcome, ExecutiveContext, TransactOptions},
-    machine::Machine,
+    machine::{Machine, VmFactory},
     state::State,
 };
 use cfx_vm_types::Env;
 use cfxcore::verification::VerificationConfig;
 use eest_types::{SpecId, SpecName, StateTest, StateTestUnit};
 use primitives::SignedTransaction;
+use std::sync::Arc;
 
 pub struct UnitTester {
     path: String,
     name: String,
     unit: StateTestUnit,
+    config: Arc<Configuration>,
 }
 
 impl UnitTester {
-    pub fn new(path: &String, name: String, unit: StateTestUnit) -> Self {
+    pub fn new(
+        path: &String, name: String, unit: StateTestUnit,
+        config: Arc<Configuration>,
+    ) -> Self {
         UnitTester {
             path: path.clone(),
             name,
             unit,
+            config,
         }
     }
 
@@ -40,10 +48,7 @@ impl UnitTester {
         }
     }
 
-    pub fn run(
-        &self, machine: &Machine, verification: &VerificationConfig,
-        matches: Option<&str>,
-    ) -> Result<usize, TestError> {
+    pub fn run(&self, matches: Option<&str>) -> Result<usize, TestError> {
         if !matches.map_or(true, |pat| {
             format!("{}::{}", &self.path, &self.name).contains(pat)
         }) {
@@ -60,6 +65,17 @@ impl UnitTester {
             return Ok(0);
         };
 
+        let config =
+            set_cips_according_to_spec(self.config.as_ref().clone(), spec);
+        let machine = {
+            let vm_factory = VmFactory::new(1024 * 32);
+            Arc::new(Machine::new_with_builtin(
+                config.common_params(),
+                vm_factory,
+            ))
+        };
+        let verification = self.config.verification_config(machine.clone());
+
         let mut transact_cnt = 0;
         // running each test
         for single_test in tests.iter() {
@@ -69,7 +85,7 @@ impl UnitTester {
             if matches.is_some() {
                 info!("Running item with spec {:?}", spec);
             }
-            self.execute_single_test(single_test, machine, verification)?;
+            self.execute_single_test(single_test, &machine, &verification)?;
             transact_cnt += 1;
         }
 
@@ -168,7 +184,7 @@ fn pick_spec<'a, T>(
     specs
         .filter_map(|spec| {
             let spec_id = spec.0.to_spec_id();
-            if spec_id <= SpecId::PRAGUE {
+            if spec_id <= SpecId::OSAKA {
                 Some((spec, spec_id))
             } else {
                 None

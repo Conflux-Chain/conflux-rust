@@ -1,4 +1,5 @@
 use cfx_config::{Configuration, RawConfiguration};
+use eest_types::SpecName;
 use primitives::block_header::CIP112_TRANSITION_HEIGHT;
 use std::{
     path::{Path, PathBuf},
@@ -56,4 +57,18 @@ pub(crate) fn default_raw_configuration() -> RawConfiguration {
     config.chain_id = Some(2);
     config.evm_chain_id = Some(1);
     config
+}
+
+pub(crate) fn set_cips_according_to_spec(
+    conf: Configuration, spec: &SpecName,
+) -> Configuration {
+    let mut conf = conf;
+    // set osaka opcode transition height according to spec
+    if spec >= &SpecName::Osaka {
+        conf.raw_conf.osaka_opcode_transition_height = Some(1);
+    } else {
+        conf.raw_conf.osaka_opcode_transition_height = Some(u64::MAX);
+    }
+
+    conf
 }
