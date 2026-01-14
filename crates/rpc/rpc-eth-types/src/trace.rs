@@ -73,6 +73,16 @@ pub enum Action {
     /* TODO: Support Reward */
 }
 
+impl Action {
+    pub fn gas(&self) -> Option<U256> {
+        match self {
+            Action::Call(ref call) => Some(call.gas),
+            Action::Create(ref create) => Some(create.gas),
+            Action::SelfDestruct(_) => None,
+        }
+    }
+}
+
 impl TryFrom<VmAction> for Action {
     type Error = String;
 
@@ -136,10 +146,6 @@ pub enum ActionResult {
     Call(CallResult),
     /// Create
     Create(CreateResult),
-    /// Call failure
-    FailedCall(TraceError),
-    /// Creation failure
-    FailedCreate(TraceError),
     /// None
     None,
 }
@@ -151,6 +157,8 @@ pub struct LocalizedTrace {
     pub action: Action,
     /// Result
     pub result: ActionResult,
+    /// The error message if the transaction failed.
+    pub error: Option<String>,
     /// Trace address
     pub trace_address: Vec<usize>,
     /// Subtraces
@@ -193,15 +201,13 @@ impl Serialize for LocalizedTrace {
             ActionResult::Create(ref create) => {
                 struc.serialize_field("result", create)?
             }
-            ActionResult::FailedCall(ref error) => {
-                struc.serialize_field("error", &error.to_string())?
-            }
-            ActionResult::FailedCreate(ref error) => {
-                struc.serialize_field("error", &error.to_string())?
-            }
             ActionResult::None => {
                 struc.serialize_field("result", &None as &Option<u8>)?
             }
+        }
+
+        if let Some(error) = &self.error {
+            struc.serialize_field("error", error)?;
         }
 
         struc.serialize_field("traceAddress", &self.trace_address)?;
@@ -238,48 +244,50 @@ impl LocalizedTrace {
                 if !matches!(self.action, Action::Call(_)) {
                     bail!(JsonRpcError::internal_error());
                 }
+                let gas =
+                    self.action.gas().expect("call action should have gas");
+                let gas_used = gas - call_result.gas_left;
+                self.result = ActionResult::Call(CallResult {
+                    gas_used,
+                    output: call_result.return_data.clone().into(),
+                });
                 match call_result.outcome {
-                    Outcome::Success => {
-                        // FIXME(lpl): Convert gas_left to gas_used.
-                        self.result = ActionResult::Call(CallResult {
-                            gas_used: call_result.gas_left,
-                            output: call_result.return_data.into(),
-                        })
-                    }
                     Outcome::Reverted => {
-                        self.result =
-                            ActionResult::FailedCall(TraceError::Reverted);
+                        self.error = Some(TraceError::Reverted.to_string());
                     }
                     Outcome::Fail => {
-                        self.result = ActionResult::FailedCall(
-                            TraceError::Error(call_result.return_data.into()),
+                        self.error = Some(
+                            TraceError::Error(call_result.return_data.into())
+                                .to_string(),
                         );
                     }
+                    _ => {}
                 }
             }
             VmAction::CreateResult(create_result) => {
                 if !matches!(self.action, Action::Create(_)) {
                     bail!(JsonRpcError::internal_error());
                 }
+                // FIXME(lpl): Check if `return_data` is `code`.
+                let gas =
+                    self.action.gas().expect("call action should have gas");
+                let gas_used = gas - create_result.gas_left;
+                self.result = ActionResult::Create(CreateResult {
+                    gas_used,
+                    code: create_result.return_data.clone().into(),
+                    address: create_result.addr,
+                });
                 match create_result.outcome {
-                    Outcome::Success => {
-                        // FIXME(lpl): Convert gas_left to gas_used.
-                        // FIXME(lpl): Check if `return_data` is `code`.
-                        self.result = ActionResult::Create(CreateResult {
-                            gas_used: create_result.gas_left,
-                            code: create_result.return_data.into(),
-                            address: create_result.addr,
-                        })
-                    }
                     Outcome::Reverted => {
-                        self.result =
-                            ActionResult::FailedCreate(TraceError::Reverted);
+                        self.error = Some(TraceError::Reverted.to_string());
                     }
                     Outcome::Fail => {
-                        self.result = ActionResult::FailedCreate(
-                            TraceError::Error(create_result.return_data.into()),
+                        self.error = Some(
+                            TraceError::Error(create_result.return_data.into())
+                                .to_string(),
                         );
                     }
+                    _ => {}
                 }
             }
             _ => bail!(JsonRpcError::internal_error()),
@@ -299,6 +307,8 @@ pub struct Trace {
     action: Action,
     /// Result
     result: ActionResult,
+    /// Error
+    error: Option<String>,
 }
 
 impl Serialize for Trace {
@@ -327,15 +337,13 @@ impl Serialize for Trace {
             ActionResult::Create(ref create) => {
                 struc.serialize_field("result", create)?
             }
-            ActionResult::FailedCall(ref error) => {
-                struc.serialize_field("error", &error.to_string())?
-            }
-            ActionResult::FailedCreate(ref error) => {
-                struc.serialize_field("error", &error.to_string())?
-            }
             ActionResult::None => {
                 struc.serialize_field("result", &None as &Option<u8>)?
             }
+        }
+
+        if let Some(error) = &self.error {
+            struc.serialize_field("error", error)?;
         }
 
         struc.serialize_field("traceAddress", &self.trace_address)?;
@@ -431,7 +439,7 @@ impl EpochTrace {
     ) -> Self {
         let mut mirror_address_map = HashMap::new();
         for t in &cfx_traces {
-            if let CfxRpcAction::Call(action) = &t.action {
+            if let CfxRpcAction::Call(action) = &t.trace.action {
                 if action.to.hex_address == CROSS_SPACE_CONTRACT_ADDRESS {
                     mirror_address_map.insert(
                         action.from.hex_address.evm_map().address,

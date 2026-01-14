@@ -12,7 +12,7 @@ def test_trace_simple_cfx_transfer(ew3, evm_accounts):
     tx_trace = ew3.manager.request_blocking('debug_traceTransaction', [tx_hash])
     assert tx_trace['failed'] == False
     assert tx_trace['gas'] == 21000
-    assert tx_trace['returnValue'] == ''
+    assert tx_trace['returnValue'] == '0x'
     assert len(tx_trace['structLogs']) == 0
 
 def test_trace_deploy_contract(ew3, erc20_contract):

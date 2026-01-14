@@ -2,6 +2,17 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
+#[global_allocator]
+static ALLOC: cfx_mallocator_utils::allocator::Allocator =
+    cfx_mallocator_utils::allocator::new_allocator();
+// jemalloc profiling config
+#[allow(non_upper_case_globals)]
+#[export_name = "malloc_conf"]
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-prof"))]
+pub static malloc_conf: &[u8] =
+    b"prof:true,prof_active:true,lg_prof_sample:19\0"; // 512kb
+
 #[cfg(test)]
 mod test;
 
@@ -19,7 +30,10 @@ use client::{
     full::FullClient,
     light::LightClient,
 };
-use command::account::{AccountCmd, ImportAccounts, ListAccounts, NewAccount};
+use command::{
+    account::{AccountCmd, ImportAccounts, ListAccounts, NewAccount},
+    dump::DumpCommand,
+};
 use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
@@ -144,6 +158,16 @@ fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
         return Ok(Some(execute_output));
     }
 
+    // dump sub-commands
+    if let Some(("dump", dump_matches)) = matches.subcommand() {
+        let dump_cmd = DumpCommand::parse(dump_matches).map_err(|e| {
+            format!("Failed to parse dump command arguments: {}", e)
+        })?;
+        let mut conf = Configuration::parse(&matches)?;
+        let execute_output = dump_cmd.execute(&mut conf)?;
+        return Ok(Some(execute_output));
+    }
+
     // general RPC commands
     let mut subcmd_matches = matches;
     while let Some(m) = subcmd_matches.subcommand() {
@@ -167,8 +191,8 @@ fn setup_logger(conf: &Configuration) -> Result<(), String> {
         Some(ref log_conf) => {
             log4rs::init_file(log_conf, Default::default()).map_err(|e| {
                 format!(
-                    "failed to initialize log with log config file: {:?}",
-                    e
+                    "failed to initialize log with log config file '{}': {:?}; maybe you want 'run/log.yaml'?",
+                    log_conf, e
                 )
             })?;
         }

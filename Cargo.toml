@@ -1,5 +1,5 @@
-# Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
+resolver = "2"
 exclude = ["tools"]
 members = [
     # bins
@@ -111,10 +111,9 @@ members = [
     "crates/config",
     "crates/cfxcore/types",
     "crates/cfxcore/pow",
-    "crates/cfxcore/errors",
+    "crates/cfxcore/errors", 
+    "crates/util/mallocator",
 ]
-
-resolver = "2"
 
 [workspace.package]
 version = "3.0.0"
@@ -252,6 +251,7 @@ diem-network-address-encryption = { path = "./crates/pos/config/management/netwo
 cfx-tasks = { path = "./crates/tasks" }
 # eest_types = { path = "./crates/eest_types" }
 cfx-config = { path = "./crates/config" }
+cfx-mallocator-utils = { path = "./crates/util/mallocator" }
 
 # basics
 bytes = "1.9"
@@ -272,6 +272,7 @@ serde = { version = "1.0", features = [
 ], default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_derive = { version = "1.0", default-features = false }
+serde_with = { version = "3", default-features = false, features = ["macros"] }
 hex = "0.4"
 rustc-hex = "2.1"
 hex-literal = "1.0"
@@ -309,28 +310,36 @@ jsonrpc-pubsub = "18.0.0"
 jsonrpc-ws-server = "18.0.0"
 
 # jsonrpc framework(new)
-jsonrpsee = "0.24"
-jsonrpsee-core = "0.24"
-jsonrpsee-types = "0.24"
+jsonrpsee = "0.26"
+jsonrpsee-core = "0.26"
+jsonrpsee-types = "0.26"
 
 # async
-tokio = "1.44"
+tokio = "1.48"
 tokio-stream = "0.1"
 tokio-test = "0.4"
 futures = "0.3"
 futures-util = "0.3"
-hyper = "1.3"
+hyper = "1.8"
 hyper-util = "0.1"
 async-trait = "0.1"
-tower = "0.4"
-pin-project = "1.0"
+pin-project = "1.1"
 mio = { version = "1.0.4", features = ["os-ext", "net", "os-poll"] }
 mio-timer = { git = "https://github.com/Conflux-Chain/mio-timer", rev = "91a02cc" }
 mio-misc = { git = "https://github.com/Conflux-Chain/mio-misc", rev = "27ad80f" }
-reqwest = "0.12"
+reqwest = "0.12.24"
+axum = "0.8"
+mockito = "1.5.0"
 
-# jemallocator
-tikv-jemallocator = "0.6"
+# mallocator
+tikv-jemallocator = { version = "0.6", features = ["profiling", "unprefixed_malloc_on_supported_platforms"] }
+# tikv-jemalloc-ctl = { version = "0.6", features = ["use_std", "stats"] }
+# tikv-jemalloc-sys = { version = "0.6", features = ["profiling"] }
+jemalloc_pprof = { version = "0.8", features = ["symbolize", "flamegraph"] }
+# CPU profiling
+pprof = { version = "0.15", features = ["flamegraph", "protobuf-codec"] }
+tracy-client = "0.18.0"
+snmalloc-rs = { version = "0.3.7", features = ["build_cc"] }
 
 # crypto & hash
 #fixed-hash = "0.5"
@@ -387,7 +396,7 @@ igd = "0.10"
 ipnetwork = "0.12.6"
 edit-distance = "2"
 zeroize = "1"
-vergen = "8.3.2"
+vergen-git2 = "1.0.7"
 target_info = "0.1"
 bit-set = "0.4"
 typenum = "1.17.0"

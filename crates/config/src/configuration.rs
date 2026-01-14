@@ -18,7 +18,9 @@ use cfx_internal_common::{
 use cfx_parameters::{
     block::DEFAULT_TARGET_BLOCK_GAS_LIMIT, tx_pool::TXPOOL_DEFAULT_NONCE_BITS,
 };
-use cfx_rpc_cfx_types::{apis::ApiSet, RpcImplConfiguration};
+use cfx_rpc_cfx_types::{
+    address::USE_SIMPLE_RPC_ADDRESS, apis::ApiSet, RpcImplConfiguration,
+};
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
@@ -50,11 +52,10 @@ use diem_types::term_state::{
     pos_state_config::PosStateConfig, IN_QUEUE_LOCKED_VIEWS,
     OUT_QUEUE_LOCKED_VIEWS, ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE,
 };
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::ServerConfigBuilder;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use primitives::block_header::CIP112_TRANSITION_HEIGHT;
-use tower::layer::util::Identity;
 use txgen::TransactionGeneratorConfig;
 
 use crate::{HttpConfiguration, TcpConfiguration, WsConfiguration};
@@ -134,6 +135,7 @@ build_config! {
         (metrics_output_file, (Option<String>), None)
         (metrics_report_interval_ms, (u64), 3_000)
         (metrics_prometheus_listen_addr, (Option<String>), None)
+        (profiling_listen_addr, (Option<String>), None)
         (rocksdb_disable_wal, (bool), false)
         (txgen_account_count, (usize), 10)
 
@@ -240,6 +242,7 @@ build_config! {
         (public_address, (Option<String>), None)
         (udp_port, (Option<u16>), Some(32323))
         (max_estimation_gas_limit, (Option<u64>), None)
+        (rpc_address_simple_mode, (bool), false)
 
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 20_000)
@@ -479,6 +482,10 @@ impl Configuration {
 
         CIP112_TRANSITION_HEIGHT
             .set(config.raw_conf.cip112_transition_height.unwrap_or(u64::MAX))
+            .expect("called once");
+
+        USE_SIMPLE_RPC_ADDRESS
+            .set(config.raw_conf.rpc_address_simple_mode)
             .expect("called once");
 
         Ok(config)
@@ -1185,10 +1192,8 @@ impl Configuration {
         TcpConfiguration::new(None, self.raw_conf.jsonrpc_tcp_port)
     }
 
-    pub fn jsonrpsee_server_builder(
-        &self,
-    ) -> ServerBuilder<Identity, Identity> {
-        let builder = ServerBuilder::default()
+    pub fn jsonrpsee_server_builder(&self) -> ServerConfigBuilder {
+        let builder = ServerConfigBuilder::default()
             .max_request_body_size(self.raw_conf.jsonrpc_max_request_body_size)
             .max_response_body_size(
                 self.raw_conf.jsonrpc_max_response_body_size,
