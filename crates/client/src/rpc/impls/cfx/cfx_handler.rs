@@ -708,7 +708,7 @@ impl RpcImpl {
                 tx_index,
                 maybe_executed_extra_info,
             },
-        )) = self.consensus.get_transaction_info_by_hash(&hash)
+        )) = self.consensus.get_signed_tx_and_tx_info(&hash)
         {
             if tx.space() == Space::Ethereum || tx_index.is_phantom {
                 return Ok(None);
@@ -915,7 +915,7 @@ impl RpcImpl {
             };
 
         let receipt =
-            self.construct_rpc_receipt(tx_index, &exec_info, false, false)?;
+            self.construct_rpc_receipt(tx_index, &exec_info, false, true)?;
         if let Some(r) = &receipt {
             // A skipped transaction is not available to clients if accessed by
             // its hash.
@@ -1701,44 +1701,9 @@ impl RpcImpl {
     ) -> CoreResult<Option<Vec<Vec<RpcReceipt>>>> {
         info!("RPC Request: cfx_getEpochReceipts({:?})", epoch);
 
-        let hashes = match epoch {
-            BlockHashOrEpochNumber::EpochNumber(e) => {
-                self.consensus.get_block_hashes_by_epoch(e.into())?
-            }
-            BlockHashOrEpochNumber::BlockHashWithOption {
-                hash: h,
-                require_pivot,
-            } => {
-                if self
-                    .consensus
-                    .data_manager()
-                    .block_header_by_hash(&h)
-                    .is_none()
-                {
-                    bail!(invalid_params("block_hash", "block not found"));
-                }
-
-                let e = match self.get_block_epoch_number(&h) {
-                    Some(e) => e,
-                    None => return Ok(None), // not executed
-                };
-
-                let hashes = self.consensus.get_block_hashes_by_epoch(
-                    primitives::EpochNumber::Number(e),
-                )?;
-
-                // if the provided hash is not the pivot hash,
-                // and require_pivot is true or None(default to true)
-                // abort
-                let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
-
-                if require_pivot.unwrap_or(true) && (h != pivot_hash) {
-                    bail!(pivot_assumption_failed(h, pivot_hash));
-                }
-
-                hashes
-            }
-        };
+        let hashes = self
+            .consensus
+            .get_block_hashes_by_epoch_or_block_hash(epoch.into())?;
 
         let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
         let mut epoch_receipts = vec![];
@@ -1767,7 +1732,7 @@ impl RpcImpl {
         &self, tx_hash: H256,
     ) -> JsonRpcResult<Option<EpochReceiptProof>> {
         let (block_hash, tx_index_in_block) =
-            match self.consensus.get_transaction_info_by_hash(&tx_hash) {
+            match self.consensus.get_signed_tx_and_tx_info(&tx_hash) {
                 None => {
                     bail!(invalid_params(
                         "transactions hash",

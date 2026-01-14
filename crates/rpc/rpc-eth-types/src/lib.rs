@@ -2,6 +2,7 @@ mod access_list;
 mod authorization;
 mod block;
 mod block_number;
+mod block_properties;
 mod call;
 mod errors;
 pub mod eth_pubsub;
@@ -11,6 +12,7 @@ mod log;
 mod receipt;
 mod simulate;
 mod state;
+mod state_dump;
 mod sync;
 pub mod trace;
 pub mod trace_filter;
@@ -22,19 +24,21 @@ pub use access_list::*;
 pub use authorization::{Authorization, SignedAuthorization};
 pub use block::{Block, BlockOverrides, Header};
 pub use block_number::BlockId;
+pub use block_properties::BlockProperties;
 pub use call::*;
 pub use cfx_rpc_primitives::{Bytes, Index, U64};
 pub use errors::Error;
 pub use eth_pubsub::*;
 pub use fee_history::FeeHistory;
 pub use filter::*;
-pub use log::Log;
+pub use log::*;
 pub use receipt::Receipt;
 pub use simulate::*;
 pub use state::{
     AccountOverride, AccountStateOverrideMode, EvmOverrides,
     RpcAccountOverride, RpcStateOverride, StateOverride,
 };
+pub use state_dump::*;
 pub use sync::{SyncInfo, SyncStatus};
 pub use trace::*;
 pub use trace_filter::TraceFilter;

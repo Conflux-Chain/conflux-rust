@@ -47,6 +47,10 @@ pub struct Log {
     /// Log space
     #[serde(skip_serializing_if = "Option::is_none")]
     pub space: Option<Space>,
+
+    /// Log timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_timestamp: Option<U256>,
 }
 
 impl Log {
@@ -64,6 +68,7 @@ impl Log {
             log_index: Some(e.log_index.into()),
             transaction_log_index: Some(e.transaction_log_index.into()),
             space: None,
+            block_timestamp: e.block_timestamp.map(U256::from),
         })
     }
 
@@ -81,6 +86,7 @@ impl Log {
             log_index: None,
             transaction_log_index: None,
             space: if include_space { Some(e.space) } else { None },
+            block_timestamp: None,
         })
     }
 }
@@ -111,6 +117,7 @@ mod tests {
             transaction_log_index: Some(1.into()),
             log_index: Some(U256::from(1)),
             space: Some(Space::Ethereum),
+            block_timestamp: None,
         };
 
         let serialized = serde_json::to_string(&log).unwrap();

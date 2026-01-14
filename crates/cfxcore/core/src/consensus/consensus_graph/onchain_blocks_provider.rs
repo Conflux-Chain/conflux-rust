@@ -7,7 +7,7 @@ use cfx_parameters::consensus::*;
 
 use cfx_types::H256;
 
-use primitives::{compute_block_number, EpochNumber};
+use primitives::{compute_block_number, BlockHashOrEpochNumber, EpochNumber};
 use std::cmp::min;
 
 impl ConsensusGraph {
@@ -69,6 +69,46 @@ impl ConsensusGraph {
             })
     }
 
+    pub fn get_block_hashes_by_epoch_or_block_hash(
+        &self, block_hash_or_epoch: BlockHashOrEpochNumber,
+    ) -> Result<Vec<H256>, ProviderBlockError> {
+        let hashes = match block_hash_or_epoch {
+            BlockHashOrEpochNumber::EpochNumber(e) => {
+                self.get_block_hashes_by_epoch(e)?
+            }
+            BlockHashOrEpochNumber::BlockHashWithOption {
+                hash: h,
+                require_pivot,
+            } => {
+                // verify the block header exists
+                let _ = self
+                    .data_manager()
+                    .block_header_by_hash(&h)
+                    .ok_or("block not found")?;
+
+                let e =
+                    self.get_block_epoch_number(&h).ok_or("block not found")?;
+
+                let hashes = self.get_block_hashes_by_epoch(e.into())?;
+
+                // if the provided hash is not the pivot hash,
+                // and require_pivot is true or None(default to true)
+                // abort
+                let pivot_hash = *hashes.last().ok_or("inconsistent state")?;
+
+                if require_pivot.unwrap_or(true) && (h != pivot_hash) {
+                    bail!(ProviderBlockError::Common(
+                        "require_pivot check failed".into()
+                    ));
+                }
+
+                hashes
+            }
+        };
+        Ok(hashes)
+    }
+
+    /// Get the pivot block hash of the specified epoch number
     pub fn get_hash_from_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> Result<H256, ProviderBlockError> {

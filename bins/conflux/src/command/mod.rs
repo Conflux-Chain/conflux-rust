@@ -3,5 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 pub mod account;
+pub mod dump;
 pub mod helpers;
 pub mod rpc;

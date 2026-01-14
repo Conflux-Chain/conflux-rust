@@ -37,4 +37,3 @@ kvdb-rocksdb = { workspace = true }
 toml = { workspace = true }
 jsonrpc-http-server = { workspace = true }
 jsonrpsee = { workspace = true }
-tower = { workspace = true }

@@ -519,6 +519,7 @@ impl ChainDataProvider {
                     entry,
                     block_hash: pivot,
                     epoch_number,
+                    block_timestamp: Some(pb.pivot_header.timestamp()),
                     transaction_hash: tx.hash,
                     transaction_index: txid,
                     log_index,
@@ -585,7 +586,7 @@ where
                         break  Ok(())
                     },
                 };
-                let msg = SubscriptionMessage::from_json(&item).map_err(SubscriptionSerializeError::new)?;
+                let msg = SubscriptionMessage::new(sink.method_name(), sink.subscription_id(), &item).map_err(SubscriptionSerializeError::new)?;
                 if sink.send(msg).await.is_err() {
                     break Ok(());
                 }

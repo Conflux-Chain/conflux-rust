@@ -213,6 +213,7 @@ pub use self::{
         storage_db::{
             kvdb_rocksdb::KvdbRocksdb,
             kvdb_sqlite::{KvdbSqlite, KvdbSqliteStatements},
+            kvdb_sqlite_sharded::KvdbSqliteSharded,
             snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
             sqlite::SqliteConnection,
         },
@@ -226,7 +227,7 @@ pub use self::{
         StateIndex, StateManager as StorageManager,
         StateManagerTrait as StorageManagerTrait,
     },
-    storage_db::KeyValueDbTrait,
+    storage_db::{KeyValueDbIterableTrait, KeyValueDbTrait},
 };
 
 #[cfg(any(test, feature = "testonly_code"))]

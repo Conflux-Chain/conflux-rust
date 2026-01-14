@@ -1,12 +1,12 @@
 # Project Layout
 
-This repository contains several Rust crates that implement the different building blocks of an Conflux node. The high-level structure of the repository is as follows:
+This repository contains several Rust crates that implement the different building blocks of a Conflux node. The high-level structure of the repository is as follows:
 
 - [bins](../../bins): All binary crates located in this folder
-- [crates](../../crates): All crates library
+- [crates](../../crates): All library crates
 - [tools](../../tools/): Tools for benchmark, testing (These crates are stand-alone and not included in the whole workspace)
 - [internal_contract](../../internal_contract): Internal contracts's abi and interface
-- [integration_tests] and [tests](../../tests): The python integration tests
+- [integration_tests](../../integration_tests) and [tests](../../tests): The python integration tests
 - [run](../../run): Node run misc, include default config file and start scripts
 - [dev-support](../../dev-support): Dev support scripts
 - [docs](../../docs): Documentation
@@ -86,7 +86,7 @@ The [client](../../crates/client) crate contains the client startup logic and th
 
 Conflux provides a standard JSON-RPC 2.0 interface to allow external ecosystems (SDKs, wallets, etc.) to interact with the blockchain. Conflux includes two spaces: Core Space and eSpace, each with its own RPC.
 
-The RPC implementation for eSpace is mainly located in the [crates/rpc](crates/rpc) directory and is developed using the [jsonrpsee](https://github.com/paritytech/jsonrpsee) RPC framework. It includes multiple crates:
+The RPC implementation for eSpace is mainly located in the [crates/rpc](../../crates/rpc) directory and is developed using the [jsonrpsee](https://github.com/paritytech/jsonrpsee) RPC framework. It includes multiple crates:
 
 - [rpc-primitives](../../crates/rpc/rpc-primitives/): Definitions of the raw types for RPC.
 - [rpc-cfx-types](../../crates/rpc/rpc-cfx-types/): RPC type definitions for Core Space.

@@ -4,13 +4,16 @@ use cfx_rpc_utils::error::{
 };
 use cfx_util_macros::bail;
 use futures::FutureExt;
-use futures_util::future::BoxFuture;
 use jsonrpsee::{
     core::RpcResult,
-    server::{middleware::rpc::RpcServiceT, MethodResponse},
+    server::{
+        middleware::rpc::{Batch, Notification, RpcServiceT},
+        MethodResponse,
+    },
 };
 use jsonrpsee_types::Request;
 use log::debug;
+use std::future::Future;
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
 #[derive(Clone)]
@@ -61,15 +64,22 @@ impl<S> Throttle<S> {
     }
 }
 
-impl<'a, S> RpcServiceT<'a> for Throttle<S>
-where S: RpcServiceT<'a> + Send + Sync + Clone + 'static
+impl<S> RpcServiceT for Throttle<S>
+where S: RpcServiceT<MethodResponse = MethodResponse>
+        + Send
+        + Sync
+        + Clone
+        + 'static
 {
-    type Future = BoxFuture<'a, MethodResponse>;
+    type BatchResponse = S::BatchResponse;
+    type MethodResponse = S::MethodResponse;
+    type NotificationResponse = S::NotificationResponse;
 
-    fn call(&self, req: Request<'a>) -> Self::Future {
+    fn call<'a>(
+        &self, req: Request<'a>,
+    ) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
         let service = self.service.clone();
         let throlltle_result = self.before(&req.method_name().to_string());
-        // Box::pin(async move { service.call(req).await })
         match throlltle_result {
             Ok(_) => {
                 debug!("throttle interceptor: method `{}` success", req.method);
@@ -81,5 +91,19 @@ where S: RpcServiceT<'a> + Send + Sync + Clone + 'static
                     .boxed()
             }
         }
+    }
+
+    fn batch<'a>(
+        &self, batch: Batch<'a>,
+    ) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
+        // batch are not throtted
+        self.service.batch(batch)
+    }
+
+    fn notification<'a>(
+        &self, n: Notification<'a>,
+    ) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
+        // notifications are not throtted
+        self.service.notification(n)
     }
 }

@@ -2,7 +2,7 @@ use crate::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 use async_trait::async_trait;
 use cfx_execute_helper::estimation::EstimateRequest;
 use cfx_executor::executive::{
-    Executed, ExecutionError, ExecutionOutcome, TxDropError,
+    Executed, ExecutionError, ExecutionOutcome, ToRepackError, TxDropError,
 };
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_rpc_cfx_types::{
@@ -12,9 +12,9 @@ use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
     AccessListResult, AccountOverride, AccountPendingTransactions, Block,
     BlockId, BlockOverrides, Bundle, Error, EthCallResponse, EthRpcLogFilter,
-    EthRpcLogFilter as Filter, EvmOverrides, FeeHistory, Header, Log, Receipt,
-    RpcStateOverride, SimulatePayload, SimulatedBlock, StateContext, SyncInfo,
-    SyncStatus, Transaction, TransactionRequest,
+    EthRpcLogFilter as Filter, EvmOverrides, FeeHistory, Header, Log, LogData,
+    Receipt, RpcStateOverride, SimulatePayload, SimulatedBlock, StateContext,
+    SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::{
@@ -234,6 +234,13 @@ impl EthApi {
             )) => bail!(invalid_input_rpc_err(
                 format! {"tx sender has contract code: {:?}", address}
             )),
+            ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::SenderDoesNotExist,
+            ) => {
+                bail!(RpcError::from(
+                    RpcInvalidTransactionError::InsufficientFunds
+                ))
+            }
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
             }
@@ -355,13 +362,16 @@ impl EthApi {
             .cloned()
             .enumerate()
             .map(|(idx, log)| Log {
-                address: log.address,
-                topics: log.topics,
-                data: Bytes(log.data),
+                inner: LogData {
+                    address: log.address,
+                    topics: log.topics,
+                    data: log.data.into(),
+                },
                 block_hash,
                 block_number: block_height,
                 transaction_hash,
                 transaction_index,
+                block_timestamp: Some(b.pivot_header.timestamp().into()),
                 log_index: Some((*prior_log_index + idx).into()),
                 transaction_log_index: Some(idx.into()),
                 removed: false,

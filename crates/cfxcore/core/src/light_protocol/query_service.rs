@@ -684,9 +684,9 @@ impl QueryService {
     /// NOTE: `log.transaction_hash` is not known at this point,
     /// so this field has to be filled later on.
     fn filter_receipt_logs(
-        epoch: u64, block_hash: H256, transaction_index: usize,
-        num_logs_remaining: &mut usize, mut logs: Vec<LogEntry>,
-        filter: LogFilter,
+        epoch: u64, block_hash: H256, block_timestamp: Option<u64>,
+        transaction_index: usize, num_logs_remaining: &mut usize,
+        mut logs: Vec<LogEntry>, filter: LogFilter,
     ) -> impl Iterator<Item = LocalizedLogEntry> {
         let num_logs = logs.len();
 
@@ -702,6 +702,7 @@ impl QueryService {
             .map(move |(ii, entry)| LocalizedLogEntry {
                 block_hash,
                 epoch_number: epoch,
+                block_timestamp,
                 entry,
                 log_index: log_base_index - ii - 1,
                 transaction_hash: KECCAK_EMPTY_BLOOM, // will fill in later
@@ -712,8 +713,8 @@ impl QueryService {
 
     /// Apply filter to all receipts within a block.
     fn filter_block_receipts(
-        epoch: u64, hash: H256, block_receipts: BlockReceipts,
-        filter: LogFilter,
+        epoch: u64, hash: H256, block_timestamp: Option<u64>,
+        block_receipts: BlockReceipts, filter: LogFilter,
     ) -> impl Iterator<Item = LocalizedLogEntry> {
         let mut receipts = block_receipts.receipts;
         // number of receipts in this block
@@ -731,6 +732,7 @@ impl QueryService {
                 Self::filter_receipt_logs(
                     epoch,
                     hash,
+                    block_timestamp,
                     num_receipts - ii - 1,
                     &mut remaining,
                     logs,
@@ -750,16 +752,30 @@ impl QueryService {
             .block_hashes_in(epoch)
             .map_err(|e| format!("{}", e))?;
 
-        // process epoch receipts in reverse order
         receipts.reverse();
         hashes.reverse();
 
-        let matching = receipts.into_iter().zip(hashes).flat_map(
-            move |(receipts, hash)| {
+        let timestamps = hashes
+            .iter()
+            .map(|h| self.ledger.header(*h))
+            .filter(|s| s.is_ok())
+            .map(|h| h.unwrap().timestamp())
+            .collect::<Vec<_>>();
+
+        if timestamps.len() != hashes.len() {
+            return Err(format!(
+                "Unable to retrieve all block headers in epoch {:?} for log filtering",
+                epoch
+            ));
+        }
+
+        let matching = itertools::izip!(receipts, hashes, timestamps).flat_map(
+            move |(receipts, hash, timestamp)| {
                 trace!("block_hash {:?} receipts = {:?}", hash, receipts);
                 Self::filter_block_receipts(
                     epoch,
                     hash,
+                    Some(timestamp),
                     receipts,
                     filter.clone(),
                 )

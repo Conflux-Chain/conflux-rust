@@ -80,19 +80,22 @@ impl CpuMiner {
 
         let bg = &self.bg;
         let bg_pow = PowComputer::new(bg.pow_config.use_octopus());
+        let mut maybe_problem = None;
 
         while bg.is_running() {
-            let problem = match self.try_fetch_latest_problem() {
+            match self.try_fetch_latest_problem() {
                 Err(Disconnected) => return,
                 Err(Empty) => {
-                    thread::sleep(FETCH_PROBLEM_INTERVAL);
-                    continue;
+                    if maybe_problem.is_none() {
+                        thread::sleep(FETCH_PROBLEM_INTERVAL);
+                        continue;
+                    }
                 }
-                Ok(new_problem) => new_problem,
+                Ok(new_problem) => maybe_problem = Some(new_problem),
             };
 
             // If there is a problem to be solved
-
+            let problem = maybe_problem.expect("already set");
             trace!("problem is {:?}", problem);
             let boundary = problem.boundary;
             let block_hash = problem.block_hash;
@@ -117,6 +120,8 @@ impl CpuMiner {
                     self.solution_tx.send(ProofOfWorkSolution { nonce });
                 if let Err(e) = send_res {
                     warn!("Proof of work send error {}", e);
+                } else {
+                    maybe_problem = None;
                 }
             }
         }

@@ -39,14 +39,16 @@
 //! may be handy in some scenarios such CORS but if you want to access
 //! to the actual JSON-RPC details this is the middleware to use.
 
-use std::net::SocketAddr;
+use std::{future::Future, net::SocketAddr};
 
 use cfx_rpc_middlewares::{Metrics, Throttle};
 use jsonrpsee::{
     core::client::ClientT,
     rpc_params,
     server::{
-        middleware::rpc::{RpcServiceBuilder, RpcServiceT},
+        middleware::rpc::{
+            Batch, Notification, RpcServiceBuilder, RpcServiceT,
+        },
         RpcModule, Server,
     },
     types::Request,
@@ -57,14 +59,30 @@ use log::debug;
 #[derive(Clone)]
 pub struct Logger<S>(S);
 
-impl<'a, S> RpcServiceT<'a> for Logger<S>
-where S: RpcServiceT<'a> + Send + Sync
+impl<S> RpcServiceT for Logger<S>
+where S: RpcServiceT + Send + Sync
 {
-    type Future = S::Future;
+    type BatchResponse = S::BatchResponse;
+    type MethodResponse = S::MethodResponse;
+    type NotificationResponse = S::NotificationResponse;
 
-    fn call(&self, req: Request<'a>) -> Self::Future {
+    fn call<'a>(
+        &self, req: Request<'a>,
+    ) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
         println!("logger middleware: method `{}`", req.method);
         self.0.call(req)
+    }
+
+    fn batch<'a>(
+        &self, batch: Batch<'a>,
+    ) -> impl Future<Output = Self::BatchResponse> + Send + 'a {
+        self.0.batch(batch)
+    }
+
+    fn notification<'a>(
+        &self, n: Notification<'a>,
+    ) -> impl Future<Output = Self::NotificationResponse> + Send + 'a {
+        self.0.notification(n)
     }
 }
 

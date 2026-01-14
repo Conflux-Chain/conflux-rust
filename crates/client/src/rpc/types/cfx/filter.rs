@@ -526,6 +526,7 @@ mod tests {
             transaction_log_index: Some(1.into()),
             log_index: Some(U256::from(1)),
             space: None,
+            block_timestamp: None,
         };
 
         logs.push(CfxFilterLog::Log(log));

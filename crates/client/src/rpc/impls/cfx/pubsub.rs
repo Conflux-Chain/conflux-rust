@@ -489,6 +489,7 @@ impl ChainNotificationHandler {
                         entry,
                         block_hash,
                         epoch_number,
+                        block_timestamp: Some(block.block_header.timestamp()),
                         transaction_hash: tx.hash,
                         transaction_index: txid,
                         log_index,

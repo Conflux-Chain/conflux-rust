@@ -275,6 +275,13 @@ impl TransactionPoolInner {
                 .remove_lowest_nonce(&victim_address)
                 .unwrap();
             let to_remove_tx = tx_with_ready_info.get_arc_tx().clone();
+            debug!(
+                "txpool::collect_garbage removed tx {:?} sender={:?} nonce={:?} new_tx={:?}",
+                to_remove_tx.hash(),
+                victim_address,
+                to_remove_tx.nonce(),
+                new_tx.hash()
+            );
 
             // We have to garbage collect an unexecuted transaction.
             // TODO: Implement more heuristic strategies
@@ -593,6 +600,12 @@ impl TransactionPoolInner {
         let (nonce, balance) =
             self.get_and_update_nonce_and_balance_from_storage(addr, state)?;
         self.recalculate_readiness(addr, nonce, balance);
+        debug!(
+            "txpool::recalculate_readiness_with_state addr={:?} nonce={:?} balance={:?}",
+            addr,
+            nonce,
+            balance
+        );
         Ok(())
     }
 
@@ -603,6 +616,22 @@ impl TransactionPoolInner {
         let ret = self
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
+        match &ret {
+            Some(tx) => debug!(
+                "txpool::recalculate_readiness addr={:?} state_nonce={:?} ready_nonce={:?} ready_hash={:?} balance={:?}",
+                addr,
+                nonce,
+                tx.nonce(),
+                tx.hash(),
+                balance
+            ),
+            None => debug!(
+                "txpool::recalculate_readiness addr={:?} state_nonce={:?} no_ready_tx balance={:?}",
+                addr,
+                nonce,
+                balance
+            ),
+        }
         // If addr is not in `deferred_pool`, it should have also been removed
         // from garbage_collector
         if let Some(tx) = self.deferred_pool.get_lowest_nonce_tx(addr) {
@@ -651,6 +680,15 @@ impl TransactionPoolInner {
         if num_txs == 0 {
             return packed_transactions;
         }
+        debug!(
+            "txpool::pack_transactions start best_epoch={} best_block={} block_gas_limit={} evm_gas_limit={} block_size_limit={} limit={}",
+            best_epoch_height,
+            best_block_number,
+            block_gas_limit,
+            evm_gas_limit,
+            block_size_limit,
+            num_txs
+        );
 
         let spec = machine.spec(best_block_number, best_epoch_height);
         let transitions = &machine.params().transition_heights;
@@ -673,6 +711,12 @@ impl TransactionPoolInner {
                 U256::zero(),
                 validity,
             );
+        debug!(
+            "txpool::pack_transactions espace selected={} gas_used={} size_used={}",
+            sampled_tx.len(),
+            used_gas,
+            used_size
+        );
         packed_transactions.extend_from_slice(&sampled_tx);
 
         let (sampled_tx, _, _) = self.deferred_pool.packing_sampler(
@@ -682,6 +726,11 @@ impl TransactionPoolInner {
             num_txs - sampled_tx.len(),
             U256::zero(),
             validity,
+        );
+        debug!(
+            "txpool::pack_transactions native selected={} total={}",
+            sampled_tx.len(),
+            packed_transactions.len() + sampled_tx.len()
         );
         packed_transactions.extend_from_slice(&sampled_tx);
 

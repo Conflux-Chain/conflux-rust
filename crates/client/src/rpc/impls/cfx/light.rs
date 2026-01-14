@@ -719,7 +719,7 @@ impl RpcImpl {
                 None,
                 *light.get_network_type(),
                 false,
-                false,
+                true,
             )?;
 
             Ok(Some(receipt))
