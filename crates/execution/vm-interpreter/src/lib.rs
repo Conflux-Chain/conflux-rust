@@ -4,6 +4,8 @@
 
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate lazy_static;
 
 mod evm;
 #[macro_use]
@@ -11,8 +13,6 @@ pub mod factory;
 pub mod instructions;
 mod interpreter;
 mod vmtype;
-#[macro_use]
-extern crate lazy_static;
 
 #[cfg(test)]
 mod tests;

@@ -202,8 +202,12 @@ build_config! {
         (cip145_fix_transition_height, (Option<u64>), None)
         // For test only
         (align_evm_transition_height, (u64), u64::MAX)
-        // TODO rename to cipXXX
+        
+        // V3.1
         (secp256r1_transition_height, (Option<u64>), None)
+        (cip166_transition_height, (Option<u64>), None)
+        (osaka_opcode_transition_height, (Option<u64>), None)
+
 
 
         // Mining section.
@@ -456,7 +460,7 @@ build_config! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Configuration {
     pub raw_conf: RawConfiguration,
 }
@@ -1537,7 +1541,7 @@ impl Configuration {
             .unwrap_or(default_transition_time);
 
         //
-        // 7702 hardfork (V2.6)
+        // 7702 hardfork (V3.0)
         //
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
@@ -1555,11 +1559,17 @@ impl Configuration {
         params.transition_heights.align_evm =
             self.raw_conf.align_evm_transition_height;
 
-        // Secp256r1 precompile
-        params.transition_heights.secp256r1 = self
-            .raw_conf
-            .secp256r1_transition_height
-            .unwrap_or(default_transition_time);
+        // hardfork (V3.1)
+        set_conf!(
+            self.raw_conf.osaka_opcode_transition_height.unwrap_or(default_transition_time);
+            params.transition_heights => { cip166, secp256r1 }
+        );
+        if let Some(x) = self.raw_conf.cip166_transition_height {
+            params.transition_heights.cip166 = x;
+        }
+        if let Some(x) = self.raw_conf.secp256r1_transition_height {
+            params.transition_heights.secp256r1 = x;
+        }
     }
 }
 

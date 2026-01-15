@@ -25,3 +25,5 @@ venv
 .venv
 **/node_modules/**
 testdata/evm-spec-test/
+testdata/config.toml
+testdata/evm-spec-test.tar

@@ -249,12 +249,6 @@ impl Context for MockContext {
     // reentrancy check.
     fn is_static_or_reentrancy(&self) -> bool { self.is_static }
 
-    // fn trace_next_instruction(
-    //     &mut self, _pc: usize, _instruction: u8, _gas: U256,
-    // ) -> bool {
-    //     self.tracing
-    // }
-
     fn space(&self) -> Space { Space::Native }
 
     fn blockhash_source(&self) -> BlockHashSource { BlockHashSource::Env }
