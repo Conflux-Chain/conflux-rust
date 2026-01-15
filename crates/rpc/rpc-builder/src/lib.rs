@@ -185,6 +185,7 @@ impl RpcRegistryInner {
         TraceApi::new(
             self.consensus.clone(),
             self.sync.network.get_network_type().clone(),
+            self.config.max_estimation_gas_limit,
         )
     }
 
@@ -267,6 +268,7 @@ impl RpcRegistryInner {
                     EthRpcModule::Trace => TraceApi::new(
                         self.consensus.clone(),
                         self.sync.network.get_network_type().clone(),
+                        self.config.max_estimation_gas_limit,
                     )
                     .into_rpc()
                     .into(),
