@@ -7,11 +7,10 @@ use super::{
     error::{TestError, TestErrorKind},
     utils::extract_155_chain_id_from_raw_tx,
 };
-use crate::util::set_cips_according_to_spec;
 use cfx_config::Configuration;
 use cfx_executor::{
     executive::{ExecutionOutcome, ExecutiveContext, TransactOptions},
-    machine::{Machine, VmFactory},
+    machine::Machine,
     state::State,
 };
 use cfx_vm_types::Env;
@@ -65,16 +64,8 @@ impl UnitTester {
             return Ok(0);
         };
 
-        let config =
-            set_cips_according_to_spec(self.config.as_ref().clone(), spec);
-        let machine = {
-            let vm_factory = VmFactory::new(1024 * 32);
-            Arc::new(Machine::new_with_builtin(
-                config.common_params(),
-                vm_factory,
-            ))
-        };
-        let verification = self.config.verification_config(machine.clone());
+        let (machine, verification) =
+            pre_transact::make_machine_verify_conf(self.config.clone(), spec);
 
         let mut transact_cnt = 0;
         // running each test

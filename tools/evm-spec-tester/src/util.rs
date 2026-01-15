@@ -60,15 +60,12 @@ pub(crate) fn default_raw_configuration() -> RawConfiguration {
 }
 
 pub(crate) fn set_cips_according_to_spec(
-    conf: Configuration, spec: &SpecName,
-) -> Configuration {
-    let mut conf = conf;
+    conf: &mut Configuration, spec: &SpecName,
+) {
     // set osaka opcode transition height according to spec
     if spec >= &SpecName::Osaka {
         conf.raw_conf.osaka_opcode_transition_height = Some(1);
     } else {
         conf.raw_conf.osaka_opcode_transition_height = Some(u64::MAX);
     }
-
-    conf
 }
