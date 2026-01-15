@@ -4,7 +4,6 @@
 
 // Transaction execution environment.
 use crate::{
-    executive::contract_address,
     executive_observer::TracerTrait,
     internal_contract::{
         block_hash_slot, epoch_hash_slot, suicide as suicide_impl,
@@ -21,13 +20,14 @@ use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 use cfx_types::{
-    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H256,
+    cal_contract_address_with_space, Address, AddressSpaceUtil,
+    AddressWithSpace, BigEndianHash, CreateContractAddressType, Space, H256,
     U256,
 };
 use cfx_vm_types::{
     self as vm, ActionParams, ActionValue, CallType, Context as ContextTrait,
-    ContractCreateResult, CreateContractAddress, CreateType, Env, Error,
-    MessageCallResult, ReturnData, Spec, TrapKind,
+    ContractCreateResult, CreateType, Env, Error, MessageCallResult,
+    ReturnData, Spec, TrapKind,
 };
 use std::sync::Arc;
 use vm::BlockHashSource;
@@ -264,10 +264,9 @@ impl<'a> ContextTrait for Context<'a> {
 
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
-        address_scheme: CreateContractAddress,
-    ) -> cfx_statedb::Result<
-        ::std::result::Result<ContractCreateResult, TrapKind>,
-    > {
+        address_scheme: CreateContractAddressType,
+    ) -> cfx_statedb::Result<std::result::Result<ContractCreateResult, TrapKind>>
+    {
         let caller = AddressWithSpace {
             address: self.origin.address,
             space: self.space,
@@ -275,9 +274,8 @@ impl<'a> ContextTrait for Context<'a> {
 
         let create_type = CreateType::from_address_scheme(&address_scheme);
         // create new contract address
-        let (address_with_space, code_hash) = self::contract_address(
+        let (address_with_space, code_hash) = cal_contract_address_with_space(
             address_scheme,
-            self.env.number.into(),
             &caller,
             &self.state.nonce(&caller)?,
             &code,
@@ -339,7 +337,7 @@ impl<'a> ContextTrait for Context<'a> {
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
         code_address: &Address, call_type: CallType,
-    ) -> cfx_statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>
+    ) -> cfx_statedb::Result<std::result::Result<MessageCallResult, TrapKind>>
     {
         trace!(target: "context", "call");
 
