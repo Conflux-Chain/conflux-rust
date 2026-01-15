@@ -3374,8 +3374,10 @@ dependencies = [
 name = "evm-spec-tester"
 version = "0.1.0"
 dependencies = [
+ "alloy-rpc-types-trace",
  "cfx-bytes",
  "cfx-config",
+ "cfx-execute-helper",
  "cfx-executor",
  "cfx-rpc-eth-types",
  "cfx-statedb",
@@ -3387,6 +3389,7 @@ dependencies = [
  "clap-verbosity-flag",
  "eest_types",
  "env_logger",
+ "geth-tracer",
  "hex",
  "hex-literal 0.4.1",
  "itertools 0.14.0",

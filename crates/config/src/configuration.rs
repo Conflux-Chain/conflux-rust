@@ -202,7 +202,7 @@ build_config! {
         (cip145_fix_transition_height, (Option<u64>), None)
         // For test only
         (align_evm_transition_height, (u64), u64::MAX)
-        
+
         // V3.1
         (secp256r1_transition_height, (Option<u64>), None)
         (cip166_transition_height, (Option<u64>), None)

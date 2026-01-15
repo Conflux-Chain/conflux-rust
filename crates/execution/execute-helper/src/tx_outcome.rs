@@ -31,7 +31,7 @@ fn parity_traces(outcome: &ExecutionOutcome) -> Vec<ExecTrace> {
         .unwrap_or_default()
 }
 
-fn geth_traces(outcome: &ExecutionOutcome) -> Option<GethTrace> {
+pub fn geth_traces(outcome: &ExecutionOutcome) -> Option<GethTrace> {
     outcome
         .try_as_executed()
         .and_then(|executed| executed.ext_result.get::<GethTraceKey>().cloned())

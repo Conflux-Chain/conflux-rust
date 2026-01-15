@@ -126,7 +126,7 @@ fn new_builtin_map(
     btree.insert(
         Address::from(H256::from_low_u64_be(1)),
         Builtin::new(
-            Box::new(StaticPlan(Linear::new(3000, 0))),
+            Box::new(StaticPlan(ConstPricer::new(3000))),
             match space {
                 Space::Native => builtin_factory("ecrecover"),
                 Space::Ethereum => builtin_factory("ecrecover_evm"),

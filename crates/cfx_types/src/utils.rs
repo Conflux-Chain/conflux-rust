@@ -42,3 +42,15 @@ pub fn u256_to_h256_be(value: U256) -> H256 {
 pub fn h256_to_u256_be(value: H256) -> U256 {
     U256::from_big_endian(value.as_bytes())
 }
+
+// ethereum precompiled contracts: https://www.evm.codes/precompiled
+pub fn is_precompiled_address(address: &Address) -> bool {
+    let maybe_builtin = &address[..18] == &[0u8; 18];
+    maybe_builtin
+}
+
+pub fn is_internal_address(address: &Address) -> bool {
+    let maybe_internal =
+        &address[..2] == b"\x08\x88" && &address[2..19] == &[0u8; 17];
+    maybe_internal
+}
