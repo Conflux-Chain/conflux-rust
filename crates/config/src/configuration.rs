@@ -1562,13 +1562,17 @@ impl Configuration {
         // hardfork (V3.1)
         set_conf!(
             self.raw_conf.osaka_opcode_transition_height.unwrap_or(default_transition_time);
-            params.transition_heights => { cip166, secp256r1 }
+            params.transition_heights => { cip166 }
+        );
+        set_conf!(
+            self.raw_conf.osaka_opcode_transition_height.unwrap_or(default_transition_time);
+            params.transition_numbers => { secp256r1 }
         );
         if let Some(x) = self.raw_conf.cip166_transition_height {
             params.transition_heights.cip166 = x;
         }
         if let Some(x) = self.raw_conf.secp256r1_transition_height {
-            params.transition_heights.secp256r1 = x;
+            params.transition_numbers.secp256r1 = x;
         }
     }
 }

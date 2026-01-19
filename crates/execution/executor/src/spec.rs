@@ -115,6 +115,8 @@ pub struct TransitionsBlockNumber {
     pub cip144: BlockNumber,
     /// CIP-145: Fix Receipts upon `NotEnoughBalance` Error
     pub cip145: BlockNumber,
+    // precompile secp256r1 activation height
+    pub secp256r1: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -158,8 +160,6 @@ pub struct TransitionsEpochHeight {
     pub eip7623: BlockHeight,
     pub cip_c2_fix: BlockHeight,
     pub cip145_fix: BlockHeight,
-    // precompile secp256r1 activation height
-    pub secp256r1: BlockHeight,
     /// EIP-7939: Count Leading Zeros Instruction
     pub cip166: BlockHeight,
 }

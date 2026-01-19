@@ -252,7 +252,7 @@ fn new_builtin_map(
                 P256VERIFY_BASE_GAS_FEE_OSAKA,
             ))),
             builtin_factory("secp256r1"),
-            params.transition_heights.secp256r1,
+            params.transition_numbers.secp256r1,
         ),
     );
 
