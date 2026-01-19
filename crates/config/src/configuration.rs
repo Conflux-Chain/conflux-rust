@@ -204,11 +204,10 @@ build_config! {
         (align_evm_transition_height, (u64), u64::MAX)
 
         // V3.1
-        (secp256r1_transition_height, (Option<u64>), None)
-        (cip166_transition_height, (Option<u64>), None)
         (osaka_opcode_transition_height, (Option<u64>), None)
-
-
+        (osaka_opcode_transition_number, (Option<u64>), None)
+        (secp256r1_transition_number, (Option<u64>), None)
+        (cip166_transition_height, (Option<u64>), None)
 
         // Mining section.
         (mining_author, (Option<String>), None)
@@ -1565,13 +1564,13 @@ impl Configuration {
             params.transition_heights => { cip166 }
         );
         set_conf!(
-            self.raw_conf.osaka_opcode_transition_height.unwrap_or(default_transition_time);
+            self.raw_conf.osaka_opcode_transition_number.unwrap_or(default_transition_time);
             params.transition_numbers => { secp256r1 }
         );
         if let Some(x) = self.raw_conf.cip166_transition_height {
             params.transition_heights.cip166 = x;
         }
-        if let Some(x) = self.raw_conf.secp256r1_transition_height {
+        if let Some(x) = self.raw_conf.secp256r1_transition_number {
             params.transition_numbers.secp256r1 = x;
         }
     }
