@@ -20,7 +20,6 @@ mod brain;
 mod brain_prefix;
 mod error;
 mod extended;
-mod keccak;
 mod keypair;
 mod password;
 mod prefix;
@@ -31,6 +30,11 @@ mod signature;
 pub mod brain_recover;
 pub mod crypto;
 pub mod math;
+
+use cfx_crypto::{
+    KeyPair as CryptoKeyPair,
+    RandomKeyPairGenerator as CryptoRandomKeyPairGenerator,
+};
 
 use lazy_static::lazy_static;
 pub use parity_wordlist::Error as WordlistError;
@@ -73,4 +77,27 @@ pub trait KeyPairGenerator {
 
     /// Should be called to generate new keypair.
     fn generate(&mut self) -> Result<KeyPair, Self::Error>;
+}
+
+// Implement crypto traits for our types
+// Note: CryptoSecretKey is implemented in secret.rs to avoid conflicts
+// Note: We can't implement CryptoPublicKey for Public directly due to orphan
+// rules, so we'll use a wrapper approach in the crypto compatibility layer
+
+impl CryptoKeyPair for KeyPair {
+    type Public = Public;
+    type Secret = Secret;
+
+    fn secret(&self) -> &Self::Secret { self.secret() }
+
+    fn public(&self) -> &Self::Public { self.public() }
+}
+
+impl CryptoRandomKeyPairGenerator for Random {
+    type Error = std::io::Error;
+    type KeyPair = KeyPair;
+
+    fn generate(&mut self) -> Result<Self::KeyPair, Self::Error> {
+        KeyPairGenerator::generate(self)
+    }
 }
