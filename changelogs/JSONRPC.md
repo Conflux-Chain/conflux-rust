@@ -1,8 +1,13 @@
 # JSON-RPC CHANGELOG
 
+## v3.0.4
+
+1. Core Space `trace_epoch` method return `null` when the epoch is bigger than the latest epoch, other than return error message.
+
 ## v3.0.3
 
 1. Core Space `log` object add `blockTimestamp` field for method `cfx_getLogs` and `cfx_getFilterLogs`.
+2. eSpace `eth_getBlockByNumber` now support `pending` tag to get the pending block, which is actually the Conflux latest mined block.
 
 ## v3.0.2
 
