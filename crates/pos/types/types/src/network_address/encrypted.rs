@@ -10,8 +10,8 @@ use crate::{
     network_address::{NetworkAddress, ParseError},
 };
 use aes_gcm::{
-    aead::{generic_array::GenericArray, AeadInPlace, NewAead},
-    Aes256Gcm,
+    aead::{generic_array::GenericArray, AeadInPlace},
+    Aes256Gcm, KeyInit,
 };
 use diem_crypto::{compat::Sha3_256, hkdf::Hkdf};
 #[cfg(any(test, feature = "fuzzing"))]

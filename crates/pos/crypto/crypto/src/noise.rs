@@ -64,8 +64,8 @@
 
 use crate::{hash::HashValue, hkdf::Hkdf, traits::Uniform as _, x25519};
 use aes_gcm::{
-    aead::{generic_array::GenericArray, Aead, AeadInPlace, NewAead, Payload},
-    Aes256Gcm,
+    aead::{generic_array::GenericArray, Aead, AeadInPlace, Payload},
+    Aes256Gcm, KeyInit,
 };
 use sha2::Digest;
 use std::{
