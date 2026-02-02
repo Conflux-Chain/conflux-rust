@@ -30,7 +30,7 @@ static_assertions = "1.1.0"
 thiserror = "1.0.24"
 tiny-keccak = { workspace = true, features = ["sha3"] }
 x25519-dalek = { version = "0.1.0", package = "x25519-dalek-fiat", default-features = false, features = ["std"] }
-aes-gcm = "0.8.0"
+aes-gcm = { workspace = true }
 diem-crypto-derive = { workspace = true }
 bcs = "0.1.2"
 cfx-types = { workspace = true }
