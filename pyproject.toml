@@ -16,6 +16,7 @@ dependencies = [
     "requests",
     "asyncio",
     "websockets>=15.0.1",
+    "solc-select==1.2.0",
     "pyyaml",
     "numpy",
     "pytest",
@@ -26,5 +27,4 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-ethereum-spec-evm-resolver = { git = "https://github.com/petertdavies/ethereum-spec-evm-resolver.git", rev = "0e5609737ce4f86dc98cca1a5cf0eb64b8cddef2" }
-ethereum-execution-spec-tests = { git = "https://github.com/ethereum/execution-spec-tests.git", rev = "971214c0832f656b7250eb71cf0b7bcba96c3f49" }
+ethereum-execution-spec-tests = { git = "https://github.com/ethereum/execution-spec-tests.git", rev = "fb4348d6707c6290e42042944e1d6d5637e91c9f" }
