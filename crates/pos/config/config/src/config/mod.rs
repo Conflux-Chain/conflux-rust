@@ -392,9 +392,14 @@ pub trait PersistableConfig: Serialize + DeserializeOwned {
     }
 
     fn save_config<P: AsRef<Path>>(&self, output_file: P) -> Result<(), Error> {
-        let contents = yaml_serde::to_string(&self).map_err(|e| {
-            Error::Yaml(output_file.as_ref().to_str().unwrap().to_string(), e)
-        })?.into_bytes();
+        let contents = yaml_serde::to_string(&self)
+            .map_err(|e| {
+                Error::Yaml(
+                    output_file.as_ref().to_str().unwrap().to_string(),
+                    e,
+                )
+            })?
+            .into_bytes();
         let mut file = File::create(output_file.as_ref()).map_err(|e| {
             Error::IO(output_file.as_ref().to_str().unwrap().to_string(), e)
         })?;
