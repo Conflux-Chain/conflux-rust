@@ -299,7 +299,7 @@ mod test {
             peer_id,
         );
         let expected = format!(
-            "---\nrole: {}\nnetwork_id: {}\npeer_id: {:x}\n",
+            "role: {}\nnetwork_id: {}\npeer_id: {:x}\n",
             RoleType::Validator,
             VFN_NETWORK,
             peer_id
