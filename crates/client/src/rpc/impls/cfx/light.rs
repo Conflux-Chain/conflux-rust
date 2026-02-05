@@ -712,7 +712,6 @@ impl RpcImpl {
                 tx_index,
                 prior_gas_used,
                 maybe_epoch,
-                maybe_block_number.unwrap(),
                 maybe_base_price,
                 maybe_state_root,
                 // Can not offer error_message from light node.
