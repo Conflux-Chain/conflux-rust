@@ -85,6 +85,7 @@ ignore = [
     "RUSTSEC-2021-0139", # ansi_term unmaintained
     "RUSTSEC-2025-0056", # adler is unmaintained, use adler2 instead
     "RUSTSEC-2025-0137", # https://github.com/rustsec/advisory-db/pull/2538#issuecomment-3684201405
+    "RUSTSEC-2026-0007", # Integer overflow in `BytesMut::reserve`
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
