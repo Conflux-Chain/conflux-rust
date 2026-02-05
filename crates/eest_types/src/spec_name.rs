@@ -28,7 +28,7 @@ pub enum SpecName {
     Shanghai,
     Cancun,
     Prague,
-    Osaka, // SKIPPED
+    Osaka,
     #[serde(other)]
     Unknown,
 }
