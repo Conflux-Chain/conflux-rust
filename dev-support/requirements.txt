@@ -271,7 +271,7 @@ setuptools==80.9.0
     # via conflux-rust-tests (pyproject.toml)
 smmap==5.0.2
     # via gitdb
-solc-select==1.1.0
+solc-select==1.2.0
     # via ethereum-execution-spec-tests
 sortedcontainers==2.4.0
     # via trie
