@@ -94,6 +94,7 @@ pub struct NodeConfig {
 pub struct BaseConfig {
     data_dir: PathBuf,
     pub role: RoleType,
+    #[serde(with = "yaml_serde::with::singleton_map")]
     pub waypoint: WaypointConfig,
 }
 
