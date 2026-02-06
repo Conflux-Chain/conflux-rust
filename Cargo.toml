@@ -105,7 +105,6 @@ members = [
     "crates/pos/types/move-core-types",
     "crates/pos/types/pow-types",
     "crates/pos/types/types",
-    "crates/pos/config/management/network-address-encryption",
     "crates/rpc/rpc-middlewares",
     "crates/tasks",
     "crates/eest_types",
@@ -249,7 +248,6 @@ executor-types = { path = "./crates/pos/types/executor-types" }
 move-core-types = { path = "./crates/pos/types/move-core-types" }
 pow-types = { path = "./crates/pos/types/pow-types" }
 diem-types = { path = "./crates/pos/types/types" }
-diem-network-address-encryption = { path = "./crates/pos/config/management/network-address-encryption" }
 cfx-tasks = { path = "./crates/tasks" }
 # eest_types = { path = "./crates/eest_types" }
 cfx-config = { path = "./crates/config" }

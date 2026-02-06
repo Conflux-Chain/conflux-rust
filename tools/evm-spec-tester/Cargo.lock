@@ -2771,16 +2771,15 @@ dependencies = [
  "diem-crypto",
  "diem-global-constants",
  "diem-logger",
- "diem-network-address-encryption",
  "diem-secure-storage",
  "diem-temppath",
  "diem-types",
  "if-addrs",
  "rand 0.8.5",
  "serde",
- "serde_yaml 0.8.26",
  "short-hex-str",
  "thiserror 1.0.63",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -2914,21 +2913,6 @@ name = "diem-metrics-core"
 version = "0.1.0"
 dependencies = [
  "prometheus",
-]
-
-[[package]]
-name = "diem-network-address-encryption"
-version = "0.1.0"
-dependencies = [
- "base64 0.13.1",
- "bcs",
- "diem-global-constants",
- "diem-infallible",
- "diem-logger",
- "diem-secure-storage",
- "diem-types",
- "serde",
- "thiserror 1.0.63",
 ]
 
 [[package]]
@@ -5128,7 +5112,7 @@ dependencies = [
  "serde",
  "serde-value",
  "serde_json",
- "serde_yaml 0.9.29",
+ "serde_yaml",
  "thiserror 1.0.63",
  "thread-id",
  "typemap-ors",
@@ -7531,18 +7515,6 @@ dependencies = [
 
 [[package]]
 name = "serde_yaml"
-version = "0.8.26"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "578a7433b776b56a35785ed5ce9a7e777ac0598aac5a6dd1b4b18a307c7fc71b"
-dependencies = [
- "indexmap 1.9.2",
- "ryu",
- "serde",
- "yaml-rust",
-]
-
-[[package]]
-name = "serde_yaml"
 version = "0.9.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a15e0ef66bf939a7c890a0bf6d5a733c70202225f9888a89ed5c62298b019129"
@@ -9357,12 +9329,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "yaml-rust"
-version = "0.4.5"
+name = "yaml_serde"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
+checksum = "4a7f5270edc6fab0529a772a772b3e505dfd883a8de5cc5b464e35fabe586411"
 dependencies = [
- "linked-hash-map",
+ "indexmap 2.8.0",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml",
 ]
 
 [[package]]
