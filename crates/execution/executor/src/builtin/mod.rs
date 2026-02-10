@@ -22,7 +22,6 @@
 
 mod blake2f;
 mod bls12_381;
-mod ethereum_trusted_setup_points;
 mod executable;
 mod kzg_point_evaluations;
 mod price_plan;
@@ -42,9 +41,11 @@ use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use cfx_bytes::BytesRef;
 use cfx_types::{Space, H256, U256};
 use cfx_vm_types::Spec;
-use cfxkey::{public_to_address, recover as ec_recover, Address, Signature};
+use cfxkey::{
+    crypto::digest, public_to_address, recover as ec_recover, Address,
+    Signature,
+};
 use num::{BigUint, One, Zero};
-use parity_crypto::digest;
 
 use blake2f::compress;
 

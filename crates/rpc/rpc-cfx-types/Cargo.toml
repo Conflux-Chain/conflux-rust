@@ -33,5 +33,6 @@ diem-crypto = { workspace = true }
 diem-types = { workspace = true }
 rustc-hex = { workspace = true }
 bls-signatures = { workspace = true }
+once_cell = { workspace = true }
 
 [dev-dependencies]

@@ -23,7 +23,12 @@ dependencies = [
     "setuptools", # setuptools is required as uv pip sync will remove packages not listed in the requirements.txt
     "ethereum-spec-evm-resolver",
     "ethereum-execution-spec-tests",
+    "solc-select==1.2.0",
 ]
+
+[tool.uv]
+# Force hive-py to a git rev where the package name was still "hive-py" (repo was later renamed to ethereum-hive)
+override-dependencies = ["hive-py @ git+https://github.com/marioevz/hive.py@582703e2f94b4d5e61ae495d90d684852c87a580"]
 
 [tool.uv.sources]
 ethereum-spec-evm-resolver = { git = "https://github.com/petertdavies/ethereum-spec-evm-resolver.git", rev = "0e5609737ce4f86dc98cca1a5cf0eb64b8cddef2" }

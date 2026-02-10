@@ -354,7 +354,7 @@ impl DB {
 
     fn iter_with_direction<S: Schema>(
         &self, opts: ReadOptions, direction: ScanDirection,
-    ) -> Result<SchemaIterator<S>> {
+    ) -> Result<SchemaIterator<'_, S>> {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
         Ok(SchemaIterator::new(
             self.inner.iter_cf_opt(cf_handle, opts),
@@ -365,14 +365,14 @@ impl DB {
     /// Returns a forward [`SchemaIterator`] on a certain schema.
     pub fn iter<S: Schema>(
         &self, opts: ReadOptions,
-    ) -> Result<SchemaIterator<S>> {
+    ) -> Result<SchemaIterator<'_, S>> {
         self.iter_with_direction::<S>(opts, ScanDirection::Forward)
     }
 
     /// Returns a backward [`SchemaIterator`] on a certain schema.
     pub fn rev_iter<S: Schema>(
         &self, opts: ReadOptions,
-    ) -> Result<SchemaIterator<S>> {
+    ) -> Result<SchemaIterator<'_, S>> {
         self.iter_with_direction::<S>(opts, ScanDirection::Backward)
     }
 

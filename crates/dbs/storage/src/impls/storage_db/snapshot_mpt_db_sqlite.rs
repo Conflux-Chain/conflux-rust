@@ -213,6 +213,7 @@ impl SnapshotDbTrait for SnapshotMptDbSqlite {
         &self,
     ) -> Result<
         Wrap<
+            '_,
             Self::SnapshotKvdbIterType,
             dyn KeyValueDbIterableTrait<
                 MptKeyValue,
@@ -307,6 +308,7 @@ impl SnapshotMptDbSqlite {
         &self,
     ) -> Result<
         Wrap<
+            '_,
             KvdbSqliteSharded<<Self as KeyValueDbTypes>::ValueType>,
             dyn KeyValueDbIterableTrait<
                 MptKeyValue,

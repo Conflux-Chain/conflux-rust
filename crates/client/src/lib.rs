@@ -13,3 +13,4 @@ mod node_types;
 pub mod rpc;
 pub use cfx_config as configuration;
 pub use node_types::{archive, full, light};
+pub mod state_dump;

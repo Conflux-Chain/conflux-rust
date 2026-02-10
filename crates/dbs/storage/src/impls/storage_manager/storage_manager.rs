@@ -322,7 +322,9 @@ impl StorageManager {
         &self, snapshot_epoch_id: &EpochId, try_open: bool,
         open_mpt_snapshot: bool,
     ) -> Result<
-        Option<GuardedValue<RwLockReadGuard<Vec<SnapshotInfo>>, SnapshotDb>>,
+        Option<
+            GuardedValue<RwLockReadGuard<'_, Vec<SnapshotInfo>>, SnapshotDb>,
+        >,
     > {
         // Make sure that the snapshot info is ready at the same time of the
         // snapshot db. This variable is used for the whole scope

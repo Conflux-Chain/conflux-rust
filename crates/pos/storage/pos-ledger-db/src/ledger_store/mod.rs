@@ -323,7 +323,7 @@ impl LedgerStore {
     /// starting from `start_version`.
     pub fn get_transaction_info_iter(
         &self, start_version: Version, num_transaction_infos: usize,
-    ) -> Result<TransactionInfoIter> {
+    ) -> Result<TransactionInfoIter<'_>> {
         let mut iter = self
             .db
             .iter::<TransactionInfoSchema>(ReadOptions::default())?;
@@ -343,7 +343,7 @@ impl LedgerStore {
     /// from `start_epoch`, and ends at the one before `end_epoch`
     pub fn get_epoch_ending_ledger_info_iter(
         &self, start_epoch: u64, end_epoch: u64,
-    ) -> Result<EpochEndingLedgerInfoIter> {
+    ) -> Result<EpochEndingLedgerInfoIter<'_>> {
         let mut iter =
             self.db.iter::<LedgerInfoSchema>(ReadOptions::default())?;
         iter.seek(&start_epoch)?;
