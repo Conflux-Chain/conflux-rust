@@ -225,7 +225,7 @@ impl TryFrom<BlockId> for EpochNumber {
             BlockId::Num(num) => Ok(EpochNumber::Number(num)),
             BlockId::Latest => Ok(EpochNumber::LatestState),
             BlockId::Earliest => Ok(EpochNumber::Earliest),
-            BlockId::Pending => Ok(EpochNumber::LatestMined),
+            BlockId::Pending => Ok(EpochNumber::LatestState), /* TODO: LatestMined maybe is better or add a new Pending variant for EpochNumber */
             BlockId::Safe => Ok(EpochNumber::LatestConfirmed),
             BlockId::Finalized => Ok(EpochNumber::LatestFinalized),
             BlockId::Hash { .. } => Err(Error::InvalidParams(
@@ -249,7 +249,7 @@ impl From<BlockId> for BlockHashOrEpochNumber {
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::Earliest)
             }
             BlockId::Pending => {
-                BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestMined)
+                BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
             }
             BlockId::Safe => BlockHashOrEpochNumber::EpochNumber(
                 EpochNumber::LatestConfirmed,
