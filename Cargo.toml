@@ -256,7 +256,7 @@ cfx-config = { path = "./crates/config" }
 cfx-mallocator-utils = { path = "./crates/util/mallocator" }
 
 # basics
-bytes = "1.9"
+bytes = "1.10"
 byte-unit = "1.1"
 libc = "0.2"
 smallvec = "1.15"
