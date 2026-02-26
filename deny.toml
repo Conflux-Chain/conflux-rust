@@ -75,13 +75,26 @@ ignore = [
     #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
     #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
     #{ crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },
-    "RUSTSEC-2024-0436", # paste unmaintained
-    "RUSTSEC-2022-0080", # parity-util-mem unmaintained
-    "RUSTSEC-2020-0016", # net2 unmaintained
-    "RUSTSEC-2024-0384", # instant unmaintained
-    "RUSTSEC-2024-0388", # derivative unmaintained
-    "RUSTSEC-2025-0056", # adler is unmaintained, use adler2 instead
-    "RUSTSEC-2025-0137", # https://github.com/rustsec/advisory-db/pull/2538#issuecomment-3684201405
+    # paste unmaintained; pulled by alloy-primitives, alloy-sol-macro, ark-ff,
+    # revm-bytecode — all external, no fix until upstream crates migrate.
+    "RUSTSEC-2024-0436",
+
+    # parity-util-mem unmaintained; directly used by crates/dbs/storage and
+    # crates/dbs/kvdb-rocksdb. No maintained drop-in; requires substantial refactoring.
+    "RUSTSEC-2022-0080",
+
+    # net2 unmaintained; pulled by parity-ws (→ mio 0.6.23 → net2) and
+    # jsonrpc-http-server (direct dep). Both paths are external.
+    "RUSTSEC-2020-0016",
+
+    # instant unmaintained; pulled by parking_lot 0.11.2 which is a transitive dep of
+    # the legacy jsonrpc framework (jsonrpc-http-server et al.). Cannot fix without
+    # replacing the jsonrpc framework used by Core Space RPC.
+    "RUSTSEC-2024-0384",
+
+    # adler unmaintained; pulled by miniz_oxide → adler. Requires upstream
+    # miniz_oxide to migrate to adler2.
+    "RUSTSEC-2025-0056",
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
