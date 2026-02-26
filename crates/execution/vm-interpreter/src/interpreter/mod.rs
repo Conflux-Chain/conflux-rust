@@ -395,18 +395,6 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                     + *gas;
         }
 
-        // if self.do_trace {
-        //     context.trace_executed(
-        //         self.gasometer
-        //             .as_mut()
-        //             .expect(GASOMETER_PROOF)
-        //             .current_gas
-        //             .as_u256(),
-        //         self.stack.peek_top(self.last_stack_ret_len),
-        //         &self.mem,
-        //     );
-        // }
-
         // Advance
         match result {
             InstructionResult::JumpToPosition(position) => {
@@ -568,19 +556,6 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
             Instruction::from_u8_versioned(opcode, context.spec());
         self.reader.position += 1;
 
-        // TODO: make compile-time removable if too much of a
-        // performance hit.
-        // self.do_trace = self.do_trace
-        //     && context.trace_next_instruction(
-        //         self.reader.position - 1,
-        //         opcode,
-        //         self.gasometer
-        //             .as_mut()
-        //             .expect(GASOMETER_PROOF)
-        //             .current_gas
-        //             .as_u256(),
-        //     );
-
         let instruction = match instruction {
             Some(i) => i,
             None => {
@@ -592,8 +567,10 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
             }
         };
 
-        let info =
-            instruction.info::<CANCUN>(context.spec().cip645.opcode_update);
+        let info = instruction.info::<CANCUN>(
+            context.spec().cip645.opcode_update,
+            context.spec().eip7939,
+        );
         self.last_stack_ret_len = info.ret;
         if let Err(e) = self.verify_instruction(context, instruction, info) {
             return Err(InterpreterResult::Done(Err(e)));
@@ -612,15 +589,6 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
             Ok(t) => t,
             Err(e) => return Err(InterpreterResult::Done(Err(e))),
         };
-        // if self.do_trace {
-        //     context.trace_prepare_execute(
-        //         self.reader.position - 1,
-        //         opcode,
-        //         requirements.gas_cost.as_u256(),
-        //         Self::mem_written(instruction, &self.stack),
-        //         Self::store_written(instruction, &self.stack),
-        //     );
-        // }
 
         if let Err(e) = gasometer.verify_gas(&requirements.gas_cost) {
             return Err(InterpreterResult::Done(Err(e)));
@@ -1324,19 +1292,6 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                 let b = self.stack.pop_back();
                 self.stack.push(
                     if !b.is_zero() {
-                        // match b {
-                        //     ONE => a,
-                        //     TWO => a >> 1,
-                        //     TWO_POW_5 => a >> 5,
-                        //     TWO_POW_8 => a >> 8,
-                        //     TWO_POW_16 => a >> 16,
-                        //     TWO_POW_24 => a >> 24,
-                        //     TWO_POW_64 => a >> 64,
-                        //     TWO_POW_96 => a >> 96,
-                        //     TWO_POW_224 => a >> 224,
-                        //     TWO_POW_248 => a >> 248,
-                        //     _ => a / b,
-                        // }
                         if b == ONE {
                             a
                         } else if b == TWO {
@@ -1581,6 +1536,10 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                     shifted
                 };
                 self.stack.push(result);
+            }
+            instructions::CLZ => {
+                let value = self.stack.pop_back();
+                self.stack.push(U256::from(value.leading_zeros()))
             }
         };
         Ok(InstructionResult::Ok)
