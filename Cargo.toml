@@ -451,7 +451,7 @@ num-traits = { version = "0.2.8", default-features = false }
 
 # time misc 
 timer = "0.2"
-time = "0.3"
+time = "0.3.47"
 chrono = "0.4"
 duration-str = "0.17"
 
