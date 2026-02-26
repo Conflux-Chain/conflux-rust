@@ -254,7 +254,7 @@ cfx-config = { path = "./crates/config" }
 cfx-mallocator-utils = { path = "./crates/util/mallocator" }
 
 # basics
-bytes = "1.9"
+bytes = "1.10"
 byte-unit = "1.1"
 libc = "0.2"
 smallvec = "1.15"
@@ -414,7 +414,7 @@ bit-set = "0.4"
 typenum = "1.17.0"
 typemap = { package = "typemap-ors", version = "1.0" }
 impl-trait-for-tuples = "0.2"
-impl-tools = "0.10"
+impl-tools = "0.11"
 derive_more = { version = "2.0.1", features = ["full"] }
 c-kzg = { version = "2.1.5", default-features = false }
 strfmt = "0.2"
