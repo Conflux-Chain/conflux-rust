@@ -42,7 +42,6 @@ use std::path::PathBuf;
 use std::process::Command;
 
 type DBError = String;
-type KeyValuePair = (Box<[u8]>, Box<[u8]>);
 fn other_io_err<E>(e: E) -> io::Error
 where E: Into<Box<dyn error::Error + Send + Sync>> {
     io::Error::new(io::ErrorKind::Other, e)
