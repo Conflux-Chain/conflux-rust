@@ -136,25 +136,27 @@ impl Reportable for StandardMeter {
     fn get_value(&self) -> String {
         let snapshot = self.snapshot();
         format!(
-            "{{count: {}, m1: {:.2}, m5: {:.2}, m15: {:.2}, mean: {:.2}}}",
+            "{{count: {}, m1: {:.2}, m5: {:.2}, m15: {:.2}, mean: {:.2}, instant: {:.2}}}",
             snapshot.count(),
             snapshot.rate1(),
             snapshot.rate5(),
             snapshot.rate15(),
-            snapshot.rate_mean()
+            snapshot.rate_mean(),
+            snapshot.rate_instant()
         )
     }
 
     fn get_value_with_group(&self, name: &String) -> String {
         let snapshot = self.snapshot();
         format!(
-            "{0}.count: {1}, {0}.m1: {2:.2}, {0}.m5: {3:.2}, {0}.m15: {4:.2}, {0}.mean: {5:.2}",
+            "{0}.count: {1}, {0}.m1: {2:.2}, {0}.m5: {3:.2}, {0}.m15: {4:.2}, {0}.mean: {5:.2}, {0}.instant: {6:.2}",
             name,
             snapshot.count(),
             snapshot.rate1(),
             snapshot.rate5(),
             snapshot.rate15(),
-            snapshot.rate_mean()
+            snapshot.rate_mean(),
+            snapshot.rate_instant()
         )
     }
 }
