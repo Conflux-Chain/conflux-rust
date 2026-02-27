@@ -19,11 +19,11 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::crypto::Crypto;
-use crate::{account::Version, crypto, json, Error};
+use crate::{account::Version, json, Error};
+use cfx_crypto::crypto::ecdh::agree;
 use cfx_types::address_util::AddressUtil;
 use cfxkey::{
-    self, crypto::ecdh::agree, sign, Address, KeyPair, Message, Password,
-    Public, Secret, Signature,
+    self, sign, Address, KeyPair, Message, Password, Public, Secret, Signature,
 };
 use log::warn;
 
@@ -64,7 +64,7 @@ impl SafeAccount {
     pub fn create(
         keypair: &KeyPair, id: [u8; 16], password: &Password, iterations: u32,
         name: String, meta: String,
-    ) -> Result<Self, crypto::Error> {
+    ) -> Result<Self, Error> {
         Ok(SafeAccount {
             id,
             version: Version::V3,
@@ -195,7 +195,7 @@ impl SafeAccount {
         &self, password: &Password, shared_mac: &[u8], message: &[u8],
     ) -> Result<Vec<u8>, Error> {
         let secret = self.crypto.secret(password)?;
-        cfxkey::crypto::ecies::decrypt(&secret, shared_mac, message)
+        cfx_crypto::crypto::ecies::decrypt(&secret, shared_mac, message)
             .map_err(From::from)
     }
 

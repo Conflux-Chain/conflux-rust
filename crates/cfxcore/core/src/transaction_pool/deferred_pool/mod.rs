@@ -197,8 +197,6 @@ impl DeferredPool {
                         );
                         break 'all;
                     }
-                } else {
-                    rest_gas_limit -= gas_limit;
                 }
 
                 let tx_size = tx.rlp_size();
@@ -223,9 +221,10 @@ impl DeferredPool {
                         );
                         break 'all;
                     }
-                } else {
-                    rest_size_limit -= tx_size;
                 }
+
+                rest_gas_limit -= gas_limit;
+                rest_size_limit -= tx_size;
 
                 to_pack_txs.push(tx.clone());
                 debug!(

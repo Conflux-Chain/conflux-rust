@@ -44,8 +44,9 @@ use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use cfx_bytes::BytesRef;
 use cfx_types::{Address, Space, H256, U256};
 use cfx_vm_types::Spec;
-use cfxkey::{public_to_address, recover as ec_recover, Signature};
-use parity_crypto::digest;
+use cfxkey::{
+    crypto::digest, public_to_address, recover as ec_recover, Signature,
+};
 
 use blake2f::compress;
 

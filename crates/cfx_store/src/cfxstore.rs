@@ -24,13 +24,13 @@ use std::{
 use crate::{
     account::SafeAccount,
     accounts_dir::{KeyDirectory, SetKeyError, VaultKey, VaultKeyDirectory},
-    crypto::KEY_ITERATIONS,
     import,
     json::{self, OpaqueKeyFile, Uuid},
     random::Random,
     Derivation, Error, OpaqueSecret, SecretStore, SecretVaultRef,
     SimpleSecretStore, StoreAccountRef,
 };
+use cfx_crypto::crypto::KEY_ITERATIONS;
 use cfxkey::{
     self, Address, ExtendedKeyPair, KeyPair, Message, Password, Public, Secret,
     Signature,

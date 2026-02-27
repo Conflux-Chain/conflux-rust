@@ -16,10 +16,12 @@
 
 use crate::{
     account::{Aes128Ctr, Cipher, Kdf, Pbkdf2, Prf},
-    crypto::{self, Keccak256},
     json,
     random::Random,
     Error,
+};
+use cfx_crypto::crypto::{
+    aes, derive_mac, is_equal, keccak::Keccak256, pbkdf2, scrypt, KEY_LENGTH,
 };
 use cfxkey::{Password, Secret};
 use smallvec::SmallVec;
@@ -76,14 +78,14 @@ impl Crypto {
     /// Encrypt account secret
     pub fn with_secret(
         secret: &Secret, password: &Password, iterations: u32,
-    ) -> Result<Self, crypto::Error> {
+    ) -> Result<Self, Error> {
         Crypto::with_plain(secret.as_ref(), password, iterations)
     }
 
     /// Encrypt custom plain data
     pub fn with_plain(
         plain: &[u8], password: &Password, iterations: u32,
-    ) -> Result<Self, crypto::Error> {
+    ) -> Result<Self, Error> {
         let salt: [u8; 32] = Random::random();
         let iv: [u8; 16] = Random::random();
 
@@ -91,11 +93,12 @@ impl Crypto {
         // DK = [ DK[0..15] DK[16..31] ] = [derived_left_bits,
         // derived_right_bits]
         let (derived_left_bits, derived_right_bits) =
-            crypto::derive_key_iterations(
+            pbkdf2::derive_key_iterations(
                 password.as_bytes(),
                 &salt,
                 iterations,
-            );
+            )
+            .map_err(Error::EthCrypto)?;
 
         // preallocated (on-stack in case of `Secret`) buffer to hold cipher
         // length = length(plain) as we are using CTR-approach
@@ -104,23 +107,17 @@ impl Crypto {
             SmallVec::from_vec(vec![0; plain_len]);
 
         // aes-128-ctr with initial vector of iv
-        crypto::aes::encrypt_128_ctr(
-            &derived_left_bits,
-            &iv,
-            plain,
-            &mut *ciphertext,
-        )?;
+        aes::encrypt_128_ctr(&derived_left_bits, &iv, plain, &mut *ciphertext)?;
 
         // KECCAK(DK[16..31] ++ <ciphertext>), where DK[16..31] -
         // derived_right_bits
-        let mac =
-            crypto::derive_mac(&derived_right_bits, &*ciphertext).keccak256();
+        let mac = derive_mac(&derived_right_bits, &*ciphertext).keccak256();
 
         Ok(Crypto {
             cipher: Cipher::Aes128Ctr(Aes128Ctr { iv }),
             ciphertext: ciphertext.into_vec(),
             kdf: Kdf::Pbkdf2(Pbkdf2 {
-                dklen: crypto::KEY_LENGTH as u32,
+                dklen: KEY_LENGTH as u32,
                 salt: salt.to_vec(),
                 c: iterations,
                 prf: Prf::HmacSha256,
@@ -149,24 +146,25 @@ impl Crypto {
         &self, password: &Password, expected_len: usize,
     ) -> Result<Vec<u8>, Error> {
         let (derived_left_bits, derived_right_bits) = match self.kdf {
-            Kdf::Pbkdf2(ref params) => crypto::derive_key_iterations(
+            Kdf::Pbkdf2(ref params) => pbkdf2::derive_key_iterations(
                 password.as_bytes(),
                 &params.salt,
                 params.c,
-            ),
-            Kdf::Scrypt(ref params) => crypto::scrypt::derive_key(
+            )
+            .map_err(Error::EthCrypto)?,
+            Kdf::Scrypt(ref params) => scrypt::derive_key(
                 password.as_bytes(),
                 &params.salt,
                 params.n,
                 params.p,
                 params.r,
-            )?,
+            )
+            .map_err(Error::EthCrypto)?,
         };
 
-        let mac = crypto::derive_mac(&derived_right_bits, &self.ciphertext)
-            .keccak256();
+        let mac = derive_mac(&derived_right_bits, &self.ciphertext).keccak256();
 
-        if !crypto::is_equal(&mac, &self.mac) {
+        if !is_equal(&mac, &self.mac) {
             return Err(Error::InvalidPassword);
         }
 
@@ -179,7 +177,7 @@ impl Crypto {
                 debug_assert!(expected_len >= self.ciphertext.len());
 
                 let from = expected_len - self.ciphertext.len();
-                crypto::aes::decrypt_128_ctr(
+                aes::decrypt_128_ctr(
                     &derived_left_bits,
                     &params.iv,
                     &self.ciphertext,
