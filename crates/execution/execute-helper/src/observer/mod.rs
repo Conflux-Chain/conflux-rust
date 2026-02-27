@@ -47,14 +47,12 @@ impl Observer {
         }
     }
 
-    pub fn virtual_call(
-        access_list_inspector: Option<AccessListInspector>,
-    ) -> Self {
+    pub fn virtual_call() -> Self {
         Observer {
             tracer: Some(ExecTracer::default()),
             gas_man: Some(GasMan::default()),
             geth_tracer: None,
-            access_list_inspector,
+            access_list_inspector: None,
         }
     }
 

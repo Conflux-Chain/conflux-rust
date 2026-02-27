@@ -546,15 +546,17 @@ impl EstimateRequest {
     fn first_pass_options(
         self, access_list_inspector: Option<AccessListInspector>,
     ) -> TransactOptions<Observer> {
+        let mut observer = Observer::virtual_call();
+        observer.access_list_inspector = access_list_inspector;
         TransactOptions {
-            observer: Observer::virtual_call(access_list_inspector),
+            observer,
             settings: self.transact_settings(ChargeCollateral::EstimateSender),
         }
     }
 
     pub fn second_pass_options(self) -> TransactOptions<Observer> {
         TransactOptions {
-            observer: Observer::virtual_call(None),
+            observer: Observer::virtual_call(),
             settings: self.transact_settings(ChargeCollateral::EstimateSponsor),
         }
     }
