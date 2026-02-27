@@ -2,8 +2,8 @@
 
 use c_kzg::{ethereum_kzg_settings, Bytes32, Bytes48, KzgSettings};
 
+use cfx_crypto::crypto::digest;
 use hex_literal::hex;
-use parity_crypto::digest;
 use std::convert::TryInto;
 
 use super::Error;

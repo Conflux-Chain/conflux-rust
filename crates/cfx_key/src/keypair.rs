@@ -15,9 +15,9 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::{Address, Error, Public, Secret, SECP256K1};
+use cfx_crypto::crypto::keccak::Keccak256;
 use cfx_types::address_util::AddressUtil;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use parity_crypto::Keccak256 as _;
 use secp256k1::key;
 use std::fmt;
 

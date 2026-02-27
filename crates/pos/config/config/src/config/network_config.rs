@@ -12,7 +12,6 @@ use crate::{
     utils,
 };
 use diem_crypto::{x25519, Uniform, ValidCryptoMaterial};
-use diem_network_address_encryption::Encryptor;
 use diem_secure_storage::{CryptoStorage, KVStorage, Storage};
 use diem_types::{
     network_address::NetworkAddress,
@@ -168,15 +167,6 @@ impl NetworkConfig {
             identity
         } else {
             panic!("Invalid identity found, expected a storage identity.");
-        }
-    }
-
-    pub fn encryptor(&self) -> Encryptor {
-        if let Some(backend) = self.network_address_key_backend.as_ref() {
-            let storage = backend.into();
-            Encryptor::new(storage)
-        } else {
-            Encryptor::for_testing()
         }
     }
 

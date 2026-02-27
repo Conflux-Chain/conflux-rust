@@ -25,8 +25,6 @@ mod error;
 pub use error::*;
 mod execution_config;
 pub use execution_config::*;
-mod key_manager_config;
-pub use key_manager_config::*;
 mod logger_config;
 pub use logger_config::*;
 mod metrics_config;
@@ -96,6 +94,7 @@ pub struct NodeConfig {
 pub struct BaseConfig {
     data_dir: PathBuf,
     pub role: RoleType,
+    #[serde(with = "yaml_serde::with::singleton_map")]
     pub waypoint: WaypointConfig,
 }
 
@@ -394,9 +393,14 @@ pub trait PersistableConfig: Serialize + DeserializeOwned {
     }
 
     fn save_config<P: AsRef<Path>>(&self, output_file: P) -> Result<(), Error> {
-        let contents = serde_yaml::to_vec(&self).map_err(|e| {
-            Error::Yaml(output_file.as_ref().to_str().unwrap().to_string(), e)
-        })?;
+        let contents = yaml_serde::to_string(&self)
+            .map_err(|e| {
+                Error::Yaml(
+                    output_file.as_ref().to_str().unwrap().to_string(),
+                    e,
+                )
+            })?
+            .into_bytes();
         let mut file = File::create(output_file.as_ref()).map_err(|e| {
             Error::IO(output_file.as_ref().to_str().unwrap().to_string(), e)
         })?;
@@ -407,7 +411,7 @@ pub trait PersistableConfig: Serialize + DeserializeOwned {
     }
 
     fn parse(serialized: &str) -> Result<Self, Error> {
-        serde_yaml::from_str(&serialized)
+        yaml_serde::from_str(&serialized)
             .map_err(|e| Error::Yaml("config".to_string(), e))
     }
 }

@@ -16,7 +16,7 @@ pub enum Error {
     #[error("Error (de)serializing {0}: {1}")]
     BCS(&'static str, #[source] bcs::Error),
     #[error("Error (de)serializing {0}: {1}")]
-    Yaml(String, #[source] serde_yaml::Error),
+    Yaml(String, #[source] yaml_serde::Error),
     #[error("Config is missing expected value: {0}")]
     Missing(&'static str),
 }
