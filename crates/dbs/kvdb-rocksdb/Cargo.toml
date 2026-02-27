@@ -17,7 +17,6 @@ parking_lot = { workspace = true }
 regex = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
-parity-util-mem = { workspace = true, default-features = false }
 rocksdb = { workspace = true }
 
 [dev-dependencies]

@@ -78,8 +78,6 @@ ignore = [
 
     # paste unmaintained; external transitive dep, no fix until upstream.
     "RUSTSEC-2024-0436",
-    # parity-util-mem unmaintained; used by storage crates, no drop-in.
-    "RUSTSEC-2022-0080",
     # net2 unmaintained; pulled by legacy jsonrpc/parity-ws, external.
     "RUSTSEC-2020-0016",
     # instant unmaintained; pulled by parking_lot 0.11 via jsonrpc + prometheus 0.12.

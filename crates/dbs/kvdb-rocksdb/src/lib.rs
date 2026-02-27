@@ -32,10 +32,6 @@ use log::warn;
 
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
-use parity_util_mem::{
-    MallocSizeOf as ParityMallocSizeOf,
-    MallocSizeOfOps as ParityMallocSizeOfOps,
-};
 #[cfg(target_os = "linux")]
 use regex::Regex;
 #[cfg(target_os = "linux")]
@@ -291,11 +287,6 @@ pub struct Database {
     flushing_lock: Mutex<bool>,
 }
 
-// Compatible hack for KeyValueDB
-impl ParityMallocSizeOf for Database {
-    fn size_of(&self, _ops: &mut ParityMallocSizeOfOps) -> usize { 0 }
-}
-
 #[inline]
 fn check_for_corruption<T, P: AsRef<Path>>(
     path: P, res: result::Result<T, DBError>,
@@ -468,6 +459,9 @@ impl Database {
                 DBOp::Delete { col, key } => {
                     overlay[col as usize].insert(key, KeyState::Delete);
                 }
+                DBOp::DeletePrefix { .. } => {
+                    unimplemented!("DeletePrefix is not supported")
+                }
             }
         }
     }
@@ -555,6 +549,9 @@ impl Database {
                         DBOp::Delete { col, key } => batch
                             .delete_cf(cfs.get_cf(col as usize), &key)
                             .map_err(other_io_err)?,
+                        DBOp::DeletePrefix { .. } => {
+                            unimplemented!("DeletePrefix is not supported")
+                        }
                     }
                 }
 
@@ -707,34 +704,26 @@ impl KeyValueDB for Database {
         Database::get(self, col, key)
     }
 
-    fn get_by_prefix(&self, _col: u32, _prefix: &[u8]) -> Option<Box<[u8]>> {
+    fn get_by_prefix(
+        &self, _col: u32, _prefix: &[u8],
+    ) -> io::Result<Option<DBValue>> {
         unimplemented!()
-    }
-
-    fn write_buffered(&self, transaction: DBTransaction) {
-        Database::write_buffered(self, transaction)
     }
 
     fn write(&self, transaction: DBTransaction) -> io::Result<()> {
         Database::write(self, transaction)
     }
 
-    fn flush(&self) -> io::Result<()> { Database::flush(self) }
-
     fn iter<'a>(
         &'a self, _col: u32,
-    ) -> Box<dyn Iterator<Item = KeyValuePair> + 'a> {
+    ) -> Box<dyn Iterator<Item = io::Result<kvdb::DBKeyValue>> + 'a> {
         unimplemented!()
     }
 
-    fn iter_from_prefix<'a>(
+    fn iter_with_prefix<'a>(
         &'a self, _col: u32, _prefix: &'a [u8],
-    ) -> Box<dyn Iterator<Item = KeyValuePair> + 'a> {
+    ) -> Box<dyn Iterator<Item = io::Result<kvdb::DBKeyValue>> + 'a> {
         unimplemented!()
-    }
-
-    fn restore(&self, new_db: &str) -> io::Result<()> {
-        Database::restore(self, new_db)
     }
 }
 
