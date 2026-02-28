@@ -1,7 +1,6 @@
 import pytest
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
-from integration_tests.test_framework.util import *
-from eth_utils import decode_hex
+from integration_tests.test_framework.util import assert_equal
 from integration_tests.conflux.rpc import RpcClient
 from integration_tests.test_framework.blocktools import encode_hex_0x
 
@@ -31,18 +30,29 @@ def test_cross_space_transfer(cw3, ew3, erc20_contract, evm_accounts, network):
     epoch = receipt["epochNumber"]
     ret = network.nodes[0].debug_getTransactionsByEpoch(hex(epoch))
     assert_equal(len(ret), 1)
-
-def test_tx_and_receipt(ew3, evm_accounts, receiver_account, network):
+    
+@pytest.fixture(scope="module")
+def tx_hash(ew3, evm_accounts, receiver_account):
     account = evm_accounts[0]
-    nonce = ew3.eth.get_transaction_count(account.address)
     tx_hash = ew3.eth.send_transaction({
         "from": account.address,
         "to": receiver_account.address,
         "value": ew3.to_wei(1, "ether"),
         "gasPrice": 1,
         "gas": 21000,
-        "nonce": nonce,
     })
+    ew3.eth.wait_for_transaction_receipt(tx_hash)
+    return tx_hash
+
+def test_tx_data(ew3, tx_hash, receiver_account):
+    data = ew3.eth.get_transaction(tx_hash)
+    assert data["gasPrice"] == 1
+    assert data["gas"] == 21000
+    assert data["to"] == receiver_account.address
+    assert data["value"] == ew3.to_wei(1, "ether")
+    
+
+def test_tx_and_receipt(ew3, network, tx_hash):
     receipt = ew3.eth.wait_for_transaction_receipt(tx_hash)
     assert receipt["status"] == 1
     assert receipt["gasUsed"] == 21000
