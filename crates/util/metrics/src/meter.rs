@@ -17,6 +17,9 @@ use std::{
 };
 use timer::Timer;
 
+/// The tick interval in seconds used by `MeterArbiter` to update rates.
+const TICK_INTERVAL_SECS: i64 = 5;
+
 // Meters count events to produce exponentially-weighted moving average rates
 // at one-, five-, and fifteen-minutes, a mean rate, and an instantaneous rate.
 pub trait Meter: Send + Sync {
@@ -132,7 +135,8 @@ impl StandardMeter {
 
         // Instantaneous rate: events since last tick / 5 seconds.
         let instant_rate =
-            (snapshot.count - snapshot.last_tick_count) as f64 / 5.0;
+            (snapshot.count - snapshot.last_tick_count) as f64
+                / TICK_INTERVAL_SECS as f64;
         snapshot.last_tick_count = snapshot.count;
         snapshot.rates[4] = f64::to_bits(instant_rate);
     }
@@ -215,7 +219,7 @@ impl Default for MeterArbiter {
         let meters = arbiter.meters.clone();
         arbiter
             .timer
-            .schedule_repeating(Duration::seconds(5), move || {
+            .schedule_repeating(Duration::seconds(TICK_INTERVAL_SECS), move || {
                 for (_, meter) in meters.lock().iter() {
                     meter.tick();
                 }
