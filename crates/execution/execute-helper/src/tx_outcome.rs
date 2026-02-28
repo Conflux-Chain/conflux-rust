@@ -24,7 +24,7 @@ pub struct ProcessTxOutcome {
     pub geth_trace: Option<GethTrace>,
 }
 
-fn parity_traces(outcome: &ExecutionOutcome) -> Vec<ExecTrace> {
+pub fn parity_traces(outcome: &ExecutionOutcome) -> Vec<ExecTrace> {
     outcome
         .try_as_executed()
         .and_then(|executed| executed.ext_result.get::<ExecTraceKey>().cloned())

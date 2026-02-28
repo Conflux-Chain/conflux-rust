@@ -1,3 +1,5 @@
+pub use alloy_rpc_types_trace::parity::TraceType;
+use alloy_rpc_types_trace::parity::{StateDiff, VmTrace};
 use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
 use cfx_parity_trace_types::{
     Action as VmAction, Outcome, SetAuth as VmSetAuth,
@@ -16,7 +18,7 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use std::{collections::HashMap, convert::TryFrom, fmt};
 
 /// Create response
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Create {
     /// Sender
@@ -32,7 +34,7 @@ pub struct Create {
 }
 
 /// Call response
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Call {
     /// Sender
@@ -50,7 +52,9 @@ pub struct Call {
 }
 
 /// Represents a _selfdestruct_ action fka `suicide`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct SelfDestructAction {
     /// destroyed/suicided address.
@@ -62,7 +66,7 @@ pub struct SelfDestructAction {
 }
 
 /// Action
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     /// Call
     Call(Call),
@@ -71,6 +75,10 @@ pub enum Action {
     /// SelfDestruct
     SelfDestruct(SelfDestructAction),
     /* TODO: Support Reward */
+}
+
+impl Default for Action {
+    fn default() -> Self { Action::Call(Default::default()) }
 }
 
 impl Action {
@@ -118,7 +126,7 @@ impl TryFrom<VmAction> for Action {
 }
 
 /// Call Result
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CallResult {
     /// Gas used
@@ -128,7 +136,7 @@ pub struct CallResult {
 }
 
 /// Craete Result
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateResult {
     /// Gas used
@@ -140,13 +148,14 @@ pub struct CreateResult {
 }
 
 /// Response
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum ActionResult {
     /// Call
     Call(CallResult),
     /// Create
     Create(CreateResult),
     /// None
+    #[default]
     None,
 }
 
@@ -297,8 +306,8 @@ impl LocalizedTrace {
 }
 
 /// Trace
-#[derive(Debug)]
-pub struct Trace {
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TransactionTrace {
     /// Trace address
     trace_address: Vec<usize>,
     /// Subtraces
@@ -311,7 +320,31 @@ pub struct Trace {
     error: Option<String>,
 }
 
-impl Serialize for Trace {
+impl From<LocalizedTrace> for TransactionTrace {
+    fn from(local_trace: LocalizedTrace) -> Self {
+        let LocalizedTrace {
+            action,
+            result,
+            error,
+            trace_address,
+            subtraces,
+            transaction_position: _,
+            transaction_hash: _,
+            block_number: _,
+            block_hash: _,
+            valid: _,
+        } = local_trace;
+        TransactionTrace {
+            action,
+            result,
+            error,
+            subtraces,
+            trace_address,
+        }
+    }
+}
+
+impl Serialize for TransactionTrace {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         let mut struc = serializer.serialize_struct("Trace", 4)?;
@@ -351,6 +384,21 @@ impl Serialize for Trace {
 
         struc.end()
     }
+}
+
+/// The Outcome of a traced transaction with optional settings
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TraceResults {
+    /// Output of the trace
+    pub output: Bytes,
+    /// Enabled if [TraceType::StateDiff] is provided
+    pub state_diff: Option<StateDiff>,
+    /// Enabled if [TraceType::Trace] is provided, otherwise an empty vec
+    #[serde(default)]
+    pub trace: Vec<TransactionTrace>,
+    /// Enabled if [TraceType::VmTrace] is provided
+    pub vm_trace: Option<VmTrace>,
 }
 
 #[derive(Debug, Clone)]
