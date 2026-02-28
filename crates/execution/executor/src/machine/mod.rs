@@ -37,7 +37,7 @@ impl Machine {
             params,
             vm_factory,
             builtins: Arc::new(BTreeMap::new()),
-            builtins_evm: Arc::new(Default::default()),
+            builtins_evm: Arc::new(BTreeMap::new()),
             internal_contracts: Arc::new(InternalContractMap::default()),
             #[cfg(test)]
             max_depth: None,

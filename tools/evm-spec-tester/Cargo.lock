@@ -1447,6 +1447,7 @@ dependencies = [
  "cfx-parity-trace-types",
  "cfx-statedb",
  "cfx-types",
+ "cfx-vm-interpreter",
  "cfx-vm-tracer-derive",
  "cfx-vm-types",
  "geth-tracer",
@@ -1887,6 +1888,7 @@ dependencies = [
  "malloc_size_of",
  "memory-cache",
  "parking_lot 0.12.1",
+ "primitives",
  "rustc-hex",
 ]
 

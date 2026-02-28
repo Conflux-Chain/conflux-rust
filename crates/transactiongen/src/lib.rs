@@ -8,10 +8,9 @@ use log::{debug, info, trace};
 
 use crate::bytes::Bytes;
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressSpaceUtil, BigEndianHash, H256,
-    H512, U256, U512,
+    address_util::AddressUtil, cal_contract_address, Address, AddressSpaceUtil,
+    BigEndianHash, CreateContractAddressType, H256, H512, U256, U512,
 };
-use cfx_vm_types::{contract_address, CreateContractAddress};
 use cfxcore::{
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
@@ -301,11 +300,10 @@ impl DirectTransactionGenerator {
         accounts.insert(start_address.clone(), info);
         let address_by_index = vec![start_address.clone()];
 
-        let mut erc20_address = contract_address(
-            CreateContractAddress::FromSenderNonceAndCodeHash,
+        let mut erc20_address = cal_contract_address(
+            CreateContractAddressType::FromSenderNonceAndCodeHash,
             // A fake block_number. There field is unnecessary in Ethereum
             // replay test.
-            0,
             &contract_creator,
             &0.into(),
             // A fake code. There field is unnecessary in Ethereum replay test.

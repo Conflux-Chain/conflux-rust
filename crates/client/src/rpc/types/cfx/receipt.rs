@@ -5,10 +5,10 @@
 use crate::rpc::types::{Log, RpcAddress};
 use cfx_addr::Network;
 use cfx_types::{
-    address_util::AddressUtil, Bloom, Space, SpaceMap, H256, U256, U64,
+    address_util::AddressUtil, cal_contract_address, Bloom,
+    CreateContractAddressType, Space, SpaceMap, H256, U256, U64,
 };
 use cfx_util_macros::bail;
-use cfx_vm_types::{contract_address, CreateContractAddress};
 use primitives::{
     receipt::{
         Receipt as PrimitiveReceipt, StorageChange as PrimitiveStorageChange,
@@ -96,8 +96,7 @@ impl Receipt {
     pub fn new(
         transaction: PrimitiveTransaction, receipt: PrimitiveReceipt,
         transaction_index: TransactionIndex, prior_gas_used: U256,
-        epoch_number: Option<u64>, block_number: u64,
-        maybe_base_price: Option<SpaceMap<U256>>,
+        epoch_number: Option<u64>, maybe_base_price: Option<SpaceMap<U256>>,
         maybe_state_root: Option<H256>, tx_exec_error_msg: Option<String>,
         network: Network, include_eth_receipt: bool,
         include_accumulated_gas_used: bool,
@@ -120,9 +119,8 @@ impl Receipt {
                 if Action::Create == unsigned.action()
                     && outcome_status == TransactionStatus::Success
                 {
-                    let (mut created_address, _) = contract_address(
-                        CreateContractAddress::FromSenderNonceAndCodeHash,
-                        block_number.into(),
+                    let (mut created_address, _) = cal_contract_address(
+                        CreateContractAddressType::FromSenderNonceAndCodeHash,
                         &transaction.sender,
                         unsigned.nonce(),
                         unsigned.data(),
@@ -142,9 +140,8 @@ impl Receipt {
                     if Action::Create == unsigned.action()
                         && outcome_status == TransactionStatus::Success
                     {
-                        let (created_address, _) = contract_address(
-                            CreateContractAddress::FromSenderNonce,
-                            0,
+                        let (created_address, _) = cal_contract_address(
+                            CreateContractAddressType::FromSenderNonce,
                             &transaction.sender,
                             unsigned.nonce(),
                             unsigned.data(),

@@ -18,6 +18,7 @@ malloc_size_of = { workspace = true }
 memory-cache = { workspace = true }
 parking_lot = { workspace = true }
 rustc-hex = { workspace = true }
+primitives = { workspace = true }
 
 [dev-dependencies]
 cfx-vm-types = { workspace = true, features = ["testonly_code"] }
