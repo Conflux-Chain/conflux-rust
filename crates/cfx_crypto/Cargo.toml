@@ -1,0 +1,26 @@
+[package]
+description = "Conflux Cryptographic Primitives"
+name = "cfx-crypto"
+version = "0.3.0"
+authors = ["Conflux Foundation"]
+edition = "2021"
+license-file.workspace = true
+
+[dependencies]
+cfx-types = { workspace = true }
+parity-secp256k1 = { workspace = true }
+lazy_static = { workspace = true }
+thiserror = { workspace = true }
+aes = { workspace = true }
+hmac = { workspace = true }
+ctr = { workspace = true }
+sha2 = { workspace = true }
+subtle = { workspace = true }
+cbc = { workspace = true }
+scrypt = { workspace = true }
+pbkdf2 = { workspace = true }
+digest = { workspace = true }
+typenum = { workspace = true }
+ripemd = { workspace = true }
+tiny-keccak = { workspace = true }
+

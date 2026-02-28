@@ -44,6 +44,9 @@ One copy of the state test cases is included in the `testdata` directory. Which 
 cd testdata
 # make sure you have zstd installed
 tar --use-compress-program="zstd --long=31" -xvf evm-spec-test.tar.zst
+# or decompress in two steps
+zstd -k -d --long=31 evm-spec-test.tar.zst
+tar -xvf evm-spec-test.tar 
 ```
 
 ### How to run the statetest

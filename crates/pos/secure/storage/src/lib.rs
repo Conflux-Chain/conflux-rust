@@ -10,27 +10,23 @@
 mod crypto_kv_storage;
 mod crypto_storage;
 mod error;
-mod github;
 mod in_memory;
 mod kv_storage;
 mod namespaced_storage;
 mod on_disk;
 mod policy;
 mod storage;
-mod vault;
 
 pub use crate::{
     crypto_kv_storage::CryptoKVStorage,
     crypto_storage::{CryptoStorage, PublicKeyResponse},
     error::Error,
-    github::GitHubStorage,
     in_memory::InMemoryStorage,
     kv_storage::{GetResponse, KVStorage},
     namespaced_storage::NamespacedStorage,
     on_disk::OnDiskStorage,
     policy::{Capability, Identity, Permission, Policy},
     storage::Storage,
-    vault::VaultStorage,
 };
 
 // Some common serializations for interacting with bytes these must be manually

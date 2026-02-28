@@ -5,8 +5,7 @@ mod utils;
 
 pub use error::TestError;
 
-use cfx_executor::machine::{Machine, VmFactory};
-use cfxcore::verification::VerificationConfig;
+use cfx_config::Configuration;
 use eest_types::StateTestSuite;
 use itertools::Itertools;
 use std::{path::PathBuf, sync::Arc};
@@ -57,16 +56,6 @@ impl StateTestCmd {
             path.display()
         );
 
-        let machine = {
-            let vm_factory = VmFactory::new(1024 * 32);
-            Arc::new(Machine::new_with_builtin(
-                self.config.common_params(),
-                vm_factory,
-            ))
-        };
-
-        let verification = self.config.verification_config(machine.clone());
-
         let mut skipped_suite = 0;
         let mut load_err_suite = 0;
 
@@ -83,12 +72,8 @@ impl StateTestCmd {
             }
 
             let (success_cnt, skipped_cnt, transact_cnt, errors) =
-                match SuiteTester::load(&path) {
-                    Ok(tester) => tester.run(
-                        &machine,
-                        &verification,
-                        self.matches.as_deref(),
-                    ),
+                match SuiteTester::load(&path, self.config.clone()) {
+                    Ok(tester) => tester.run(self.matches.as_deref()),
                     Err(err_msg) => {
                         warn!(
                             "TestSuite load failed. path: {:?}, error: {}",
@@ -133,21 +118,27 @@ impl StateTestCmd {
 struct SuiteTester {
     path: String,
     suite: StateTestSuite,
+    config: Arc<Configuration>,
 }
 
 impl SuiteTester {
-    pub fn load(path: &PathBuf) -> Result<Self, String> {
+    pub fn load(
+        path: &PathBuf, config: Arc<Configuration>,
+    ) -> Result<Self, String> {
         let s = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
         let suite: StateTestSuite =
             serde_json::from_str(&s).map_err(|e| e.to_string())?;
 
         let path = path.to_string_lossy().into_owned();
-        Ok(Self { path, suite })
+        Ok(Self {
+            path,
+            suite,
+            config,
+        })
     }
 
     fn run(
-        self, machine: &Machine, verification: &VerificationConfig,
-        matches: Option<&str>,
+        self, matches: Option<&str>,
     ) -> (usize, usize, usize, Vec<TestError>) {
         if matches.is_some() {
             trace!("Running TestUnit: {}", self.path);
@@ -160,8 +151,9 @@ impl SuiteTester {
         let mut skipped_cnt = 0;
         let mut transact_cnt = 0;
         for (name, unit) in self.suite.0 {
-            let unit_tester = UnitTester::new(&self.path, name, unit);
-            match unit_tester.run(&machine, verification, matches) {
+            let unit_tester =
+                UnitTester::new(&self.path, name, unit, self.config.clone());
+            match unit_tester.run(matches) {
                 Ok(cnt) => {
                     transact_cnt += cnt;
                     if cnt > 0 {

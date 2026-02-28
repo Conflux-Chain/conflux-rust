@@ -45,10 +45,6 @@ name = "safety_rules"
 harness = false
 required-features = ["testing"]
 
-[[test]]
-name = "binary"
-required-features = ["testing"]
-
 [features]
 default = []
 fuzzing = [

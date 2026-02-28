@@ -53,7 +53,9 @@ impl Trace for TraceHandler {
         into_jsonrpc_result(Ok(self.inner.transaction_trace_impl(&tx_hash)))
     }
 
-    fn epoch_traces(&self, epoch: RpcEpochNumber) -> JsonRpcResult<EpochTrace> {
+    fn epoch_traces(
+        &self, epoch: RpcEpochNumber,
+    ) -> JsonRpcResult<Option<EpochTrace>> {
         into_jsonrpc_result(self.inner.epoch_trace_impl(epoch.into_primitive()))
     }
 }

@@ -158,6 +158,8 @@ pub struct TransitionsEpochHeight {
     pub eip7623: BlockHeight,
     pub cip_c2_fix: BlockHeight,
     pub cip145_fix: BlockHeight,
+    /// EIP-7939: Count Leading Zeros Instruction
+    pub cip166: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -229,6 +231,7 @@ impl CommonParams {
         spec.cip_c2_fix = height >= self.transition_heights.cip_c2_fix;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
         spec.align_evm = height >= self.transition_heights.align_evm && cip645;
+        spec.eip7939 = height >= self.transition_heights.cip166;
 
         spec.overwrite_gas_plan_by_cip();
 
