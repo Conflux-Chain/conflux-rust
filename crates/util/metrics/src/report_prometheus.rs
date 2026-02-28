@@ -231,6 +231,14 @@ impl PrometheusReportable for StandardMeter {
         )?;
         writeln!(buffer, "# TYPE {} gauge", mean_name)?;
         writeln!(buffer, "{} {}", mean_name, snapshot.rate_mean())?;
+        let instant_name = format!("{}_instant_rate", base_name);
+        writeln!(
+            buffer,
+            "# HELP {} Instantaneous rate over the last tick window.",
+            instant_name
+        )?;
+        writeln!(buffer, "# TYPE {} gauge", instant_name)?;
+        writeln!(buffer, "{} {}", instant_name, snapshot.rate_instant())?;
         Ok(())
     }
 }
