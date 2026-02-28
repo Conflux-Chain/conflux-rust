@@ -79,7 +79,7 @@ pub fn register_meter_with_group(group: &str, name: &str) -> Arc<dyn Meter> {
 #[derive(Default, Clone)]
 struct MeterSnapshot {
     count: usize,
-    // rates[0..3] = m1, m5, m15, mean (EWMA smoothed)
+    // rates[0..3] = m1, m5, m15, mean 
     // rates[4]    = instant (raw rate over the last tick window)
     rates: [u64; 5],
     /// Count at the previous tick, used to derive instantaneous rate.
