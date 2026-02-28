@@ -270,23 +270,23 @@ mod test {
     #[test]
     fn test_serialization() {
         let id = NetworkId::vfn_network();
-        let encoded = serde_yaml::to_string(&id).unwrap();
+        let encoded = yaml_serde::to_string(&id).unwrap();
         let decoded: NetworkId =
-            serde_yaml::from_str(encoded.as_str()).unwrap();
+            yaml_serde::from_str(encoded.as_str()).unwrap();
         assert_eq!(id, decoded);
-        let encoded = serde_yaml::to_vec(&id).unwrap();
+        let encoded = yaml_serde::to_string(&id).unwrap().into_bytes();
         let decoded: NetworkId =
-            serde_yaml::from_slice(encoded.as_slice()).unwrap();
+            yaml_serde::from_slice(encoded.as_slice()).unwrap();
         assert_eq!(id, decoded);
 
         let id = NetworkId::Validator;
-        let encoded = serde_yaml::to_string(&id).unwrap();
+        let encoded = yaml_serde::to_string(&id).unwrap();
         let decoded: NetworkId =
-            serde_yaml::from_str(encoded.as_str()).unwrap();
+            yaml_serde::from_str(encoded.as_str()).unwrap();
         assert_eq!(id, decoded);
-        let encoded = serde_yaml::to_vec(&id).unwrap();
+        let encoded = yaml_serde::to_string(&id).unwrap().into_bytes();
         let decoded: NetworkId =
-            serde_yaml::from_slice(encoded.as_slice()).unwrap();
+            yaml_serde::from_slice(encoded.as_slice()).unwrap();
         assert_eq!(id, decoded);
     }
 
@@ -299,11 +299,11 @@ mod test {
             peer_id,
         );
         let expected = format!(
-            "---\nrole: {}\nnetwork_id: {}\npeer_id: {:x}\n",
+            "role: {}\nnetwork_id: {}\npeer_id: {:x}\n",
             RoleType::Validator,
             VFN_NETWORK,
             peer_id
         );
-        assert_eq!(expected, serde_yaml::to_string(&context).unwrap());
+        assert_eq!(expected, yaml_serde::to_string(&context).unwrap());
     }
 }

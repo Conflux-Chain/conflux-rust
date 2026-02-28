@@ -11,4 +11,3 @@ mod safety_rules;
 mod serializer;
 mod suite;
 mod thread;
-mod vault;

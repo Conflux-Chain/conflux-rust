@@ -10,6 +10,7 @@ members = [
     "crates/cfx_bytes",
     "crates/cfx_types",
     "crates/cfx_addr",
+    "crates/cfx_crypto",
     "crates/stratum",
     "crates/accounts",
     "crates/blockgen",
@@ -104,7 +105,6 @@ members = [
     "crates/pos/types/move-core-types",
     "crates/pos/types/pow-types",
     "crates/pos/types/types",
-    "crates/pos/config/management/network-address-encryption",
     "crates/rpc/rpc-middlewares",
     "crates/tasks",
     "crates/eest_types",
@@ -186,6 +186,7 @@ cfxcore = { path = "./crates/cfxcore/core" }
 cfxcore-types = { path = "./crates/cfxcore/types" }
 cfxcore-pow = { path = "./crates/cfxcore/pow" }
 cfxcore-errors = { path = "./crates/cfxcore/errors" }
+cfx-crypto = { path = "./crates/cfx_crypto" }
 cfx-parameters = { path = "./crates/parameters" }
 cfx-execute-helper = { path = "./crates/execution/execute-helper" }
 cfx-executor = { path = "./crates/execution/executor" }
@@ -247,14 +248,13 @@ executor-types = { path = "./crates/pos/types/executor-types" }
 move-core-types = { path = "./crates/pos/types/move-core-types" }
 pow-types = { path = "./crates/pos/types/pow-types" }
 diem-types = { path = "./crates/pos/types/types" }
-diem-network-address-encryption = { path = "./crates/pos/config/management/network-address-encryption" }
 cfx-tasks = { path = "./crates/tasks" }
 # eest_types = { path = "./crates/eest_types" }
 cfx-config = { path = "./crates/config" }
 cfx-mallocator-utils = { path = "./crates/util/mallocator" }
 
 # basics
-bytes = "1.9"
+bytes = "1.10"
 byte-unit = "1.1"
 libc = "0.2"
 smallvec = "1.15"
@@ -291,15 +291,15 @@ crossbeam-channel = "0.5"
 atom = "0.3"
 
 # alloy & revm
-alloy-sol-types = "0.7.2"
-alloy-primitives = "0.7.2"
-alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
-alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
-revm = { version = "8.0", default-features = false }
-
-# revm v8
-revm-primitives = "3.1.1"
-revm-interpreter = "4.0.0"
+alloy-sol-types = "1.4.1"
+alloy-primitives = "1.4.1"
+alloy-rpc-types = "~1.0.41"
+alloy-rpc-types-trace = "~1.0.41"
+revm = { version = "30.2.0", default-features = false }
+revm-primitives = "21.0.1"
+revm-interpreter = "28.0.0"
+revm-context-interface = "11.1.2"
+revm-bytecode = "7.0.2"
 
 # jsonrpc framework(old)
 jsonrpc-core = "18.0.0"
@@ -354,6 +354,18 @@ blst = "0.3"
 #rustls = "0.21"
 hashbrown = "0.7"
 vrf = "0.2"
+hmac = "0.12.1"
+aes = "0.8.4"
+aes-gcm = "0.10.3"
+ctr = "0.9.2"
+sha2 = "0.10.9"
+subtle = "2.6.1"
+cbc = "0.1.2"
+scrypt = "0.11.0"
+pbkdf2 = "0.12.0"
+digest = "0.10.7"
+ripemd = "0.1.3"
+
 
 clap = "4"
 
@@ -396,15 +408,15 @@ igd = "0.10"
 ipnetwork = "0.12.6"
 edit-distance = "2"
 zeroize = "1"
-vergen = "8.3.2"
+vergen-git2 = "1.0.7"
 target_info = "0.1"
 bit-set = "0.4"
 typenum = "1.17.0"
 typemap = { package = "typemap-ors", version = "1.0" }
 impl-trait-for-tuples = "0.2"
-impl-tools = "0.10"
+impl-tools = "0.11"
 derive_more = { version = "2.0.1", features = ["full"] }
-c-kzg = { version = "1.0.2", default-features = false }
+c-kzg = { version = "2.1.5", default-features = false }
 strfmt = "0.2"
 smart-default = "0.6.0"
 num-derive = { version = "0.4.2", default-features = false }
@@ -439,7 +451,7 @@ num-traits = { version = "0.2.8", default-features = false }
 
 # time misc
 timer = "0.2"
-time = "0.3"
+time = "0.3.47"
 chrono = "0.4"
 duration-str = "0.17"
 
@@ -451,7 +463,6 @@ dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = 
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
 ethereum-types = "0.9"
 parity-wordlist = "1.3.0"
-parity-crypto = "0.9.0"
 parity-path = "0.1"
 parity-util-mem = { version = "0.5", default-features = false }
 parity-secp256k1 = { git = "https://github.com/paritytech/rust-secp256k1.git" }
