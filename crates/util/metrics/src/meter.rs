@@ -79,7 +79,8 @@ pub fn register_meter_with_group(group: &str, name: &str) -> Arc<dyn Meter> {
 #[derive(Default, Clone)]
 struct MeterSnapshot {
     count: usize,
-    rates: [u64; 5], //m1, m5, m15, mean, instant (raw rate over the last tick window)
+    /* m1, m5, m15, mean, instant (raw rate over the last tick window) */
+    rates: [u64; 5],
     /// Count at the previous tick, used to derive instantaneous rate.
     last_tick_count: usize,
 }
@@ -132,9 +133,8 @@ impl StandardMeter {
         snapshot.rates[3] = f64::to_bits(rate_mean_nano * 1e9);
 
         // Instantaneous rate: events since last tick / 5 seconds.
-        let instant_rate =
-            (snapshot.count - snapshot.last_tick_count) as f64
-                / TICK_INTERVAL_SECS as f64;
+        let instant_rate = (snapshot.count - snapshot.last_tick_count) as f64
+            / TICK_INTERVAL_SECS as f64;
         snapshot.last_tick_count = snapshot.count;
         snapshot.rates[4] = f64::to_bits(instant_rate);
     }
@@ -217,11 +217,14 @@ impl Default for MeterArbiter {
         let meters = arbiter.meters.clone();
         arbiter
             .timer
-            .schedule_repeating(Duration::seconds(TICK_INTERVAL_SECS), move || {
-                for (_, meter) in meters.lock().iter() {
-                    meter.tick();
-                }
-            })
+            .schedule_repeating(
+                Duration::seconds(TICK_INTERVAL_SECS),
+                move || {
+                    for (_, meter) in meters.lock().iter() {
+                        meter.tick();
+                    }
+                },
+            )
             .ignore();
 
         arbiter
