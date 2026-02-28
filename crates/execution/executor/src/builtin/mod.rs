@@ -23,280 +23,39 @@
 mod blake2f;
 mod bls12_381;
 mod executable;
+mod interface;
 mod kzg_point_evaluations;
+mod modexp;
 mod price_plan;
+mod pricer;
 
 pub use bls12_381::build_bls12_builtin_map;
 pub use executable::BuiltinExec;
+pub use interface::*;
 pub use price_plan::{IfPricer, StaticPlan};
 
 use std::{
-    cmp::{max, min},
-    convert::TryInto,
+    cmp::min,
     io::{self, Cursor, Read},
     mem::size_of,
 };
 
-use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
+use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use cfx_bytes::BytesRef;
-use cfx_types::{Space, H256, U256};
+use cfx_types::{Address, Space, H256, U256};
 use cfx_vm_types::Spec;
 use cfxkey::{
-    crypto::digest, public_to_address, recover as ec_recover, Address,
-    Signature,
+    crypto::digest, public_to_address, recover as ec_recover, Signature,
 };
-use num::{BigUint, One, Zero};
 
 use blake2f::compress;
 
-use self::{bls12_381::bls12_builtin_factory, price_plan::PricePlan};
-
-/// Execution error.
-#[derive(Debug)]
-pub struct Error(pub String);
-
-impl From<&'static str> for Error {
-    fn from(val: &'static str) -> Self { Error(val.into()) }
-}
-
-impl From<String> for Error {
-    fn from(val: String) -> Self { Error(val) }
-}
-
-impl Into<cfx_vm_types::Error> for Error {
-    fn into(self) -> cfx_vm_types::Error {
-        cfx_vm_types::Error::BuiltIn(self.0)
-    }
-}
-
-/// Native implementation of a built-in contract.
-pub trait Impl: Send + Sync {
-    /// execute this built-in on the given input, writing to the given output.
-    fn execute(&self, input: &[u8], output: &mut BytesRef)
-        -> Result<(), Error>;
-}
-
-/// A gas pricing scheme for built-in contracts.
-pub trait Pricer: Send + Sync {
-    /// The gas cost of running this built-in for the given input data.
-    fn cost(&self, input: &[u8]) -> U256;
-}
-
-/// A linear pricing model. This computes a price using a base cost and a cost
-/// per-word.
-pub(crate) struct Linear {
-    base: usize,
-    word: usize,
-}
-
-impl Linear {
-    pub(crate) fn new(base: usize, word: usize) -> Linear {
-        Linear { base, word }
-    }
-}
-
-pub(crate) struct ConstPricer {
-    price: u64,
-}
-
-impl ConstPricer {
-    pub(crate) const fn new(price: u64) -> ConstPricer { ConstPricer { price } }
-}
-
-/// A special pricing model for modular exponentiation.
-#[derive(Debug)]
-pub(crate) enum ModexpPricer {
-    Byzantium { divisor: usize },
-    // CIP-645e: EIP-2565
-    Berlin { base: usize },
-}
-
-impl ModexpPricer {
-    pub(crate) fn new_byzantium(divisor: usize) -> ModexpPricer {
-        ModexpPricer::Byzantium { divisor }
-    }
-
-    pub(crate) fn new_berlin(base: usize) -> ModexpPricer {
-        ModexpPricer::Berlin { base }
-    }
-}
-
-impl Pricer for Linear {
-    fn cost(&self, input: &[u8]) -> U256 {
-        U256::from(self.base)
-            + U256::from(self.word) * U256::from((input.len() + 31) / 32)
-    }
-}
-
-impl Pricer for ConstPricer {
-    fn cost(&self, _input: &[u8]) -> U256 { U256::from(self.price) }
-}
-
-/// A alt_bn128_parinig pricing model. This computes a price using a base cost
-/// and a cost per pair.
-pub(crate) struct AltBn128PairingPricer {
-    base: usize,
-    pair: usize,
-}
-
-impl AltBn128PairingPricer {
-    pub(crate) fn new(base: usize, pair: usize) -> AltBn128PairingPricer {
-        AltBn128PairingPricer { base, pair }
-    }
-}
-
-impl Pricer for AltBn128PairingPricer {
-    fn cost(&self, input: &[u8]) -> U256 {
-        let cost = U256::from(self.base)
-            + U256::from(self.pair) * U256::from(input.len() / 192);
-        cost
-    }
-}
-
-impl Pricer for ModexpPricer {
-    fn cost(&self, input: &[u8]) -> U256 {
-        let mut reader = input.chain(io::repeat(0));
-        let mut buf = [0; 32];
-
-        // read lengths as U256 here for accurate gas calculation.
-        let mut read_len = || {
-            reader
-                .read_exact(&mut buf[..])
-                .expect("reading from zero-extended memory cannot fail; qed");
-            U256::from_big_endian(&buf[..])
-        };
-        let base_len = read_len();
-        let exp_len = read_len();
-        let mod_len = read_len();
-
-        if mod_len.is_zero() && base_len.is_zero() {
-            return match self {
-                Self::Byzantium { .. } => 0.into(),
-                Self::Berlin { base } => (*base).into(),
-            };
-        }
-
-        let max_len = U256::from(u32::max_value() / 2);
-
-        if base_len > max_len || mod_len > max_len || exp_len > max_len {
-            return U256::max_value();
-        }
-        let (base_len, exp_len, mod_len) =
-            (base_len.low_u64(), exp_len.low_u64(), mod_len.low_u64());
-
-        // read fist 32-byte word of the exponent.
-        let exp_low = if base_len + 96 >= input.len() as u64 {
-            U256::zero()
-        } else {
-            let mut buf = [0; 32];
-            let mut reader =
-                input[(96 + base_len as usize)..].chain(io::repeat(0));
-            let len = min(exp_len, 32) as usize;
-            reader
-                .read_exact(&mut buf[(32 - len)..])
-                .expect("reading from zero-extended memory cannot fail; qed");
-            U256::from_big_endian(&buf[..])
-        };
-        let iter_count = max(Self::adjusted_exp_len(exp_len, exp_low), 1);
-
-        match self {
-            ModexpPricer::Byzantium { divisor } => Self::byzantium_gas_calc(
-                base_len, mod_len, iter_count, *divisor,
-            ),
-            ModexpPricer::Berlin { base } => {
-                Self::berlin_gas_calc(base_len, mod_len, iter_count, *base)
-            }
-        }
-    }
-}
-
-impl ModexpPricer {
-    pub fn byzantium_gas_calc(
-        base_len: u64, mod_len: u64, iter_count: u64, divisor: usize,
-    ) -> U256 {
-        let m = max(mod_len, base_len);
-        let (gas, overflow) =
-            Self::mult_complexity(m).overflowing_mul(iter_count);
-        if overflow {
-            return U256::max_value();
-        }
-        (gas / divisor as u64).into()
-    }
-
-    fn adjusted_exp_len(len: u64, exp_low: U256) -> u64 {
-        let bit_index = if exp_low.is_zero() {
-            0
-        } else {
-            (255 - exp_low.leading_zeros()) as u64
-        };
-        if len <= 32 {
-            bit_index
-        } else {
-            8 * (len - 32) + bit_index
-        }
-    }
-
-    fn mult_complexity(x: u64) -> u64 {
-        match x {
-            x if x <= 64 => x * x,
-            x if x <= 1024 => (x * x) / 4 + 96 * x - 3072,
-            x => (x * x) / 16 + 480 * x - 199680,
-        }
-    }
-
-    pub fn berlin_gas_calc(
-        base_len: u64, mod_len: u64, iter_count: u64, base_gas: usize,
-    ) -> U256 {
-        fn calculate_multiplication_complexity(
-            base_len: u64, mod_len: u64,
-        ) -> U256 {
-            let max_len = max(base_len, mod_len);
-            let mut words = max_len / 8;
-            if max_len % 8 > 0 {
-                words += 1;
-            }
-            let words = U256::from(words);
-            words * words
-        }
-
-        let multiplication_complexity =
-            calculate_multiplication_complexity(base_len, mod_len);
-        let gas = (multiplication_complexity * U256::from(iter_count))
-            / U256::from(3);
-        let gas_u64 = if gas >= U256::from(u64::MAX) {
-            u64::MAX
-        } else {
-            gas.as_u64()
-        };
-        max(base_gas as u64, gas_u64).into()
-    }
-}
-
-/// Pricing for Blake2 compression function: each call costs the same amount per
-/// round.
-pub(crate) struct Blake2FPricer {
-    /// Price per round of Blake2 compression function.
-    gas_per_round: u64,
-}
-
-impl Blake2FPricer {
-    pub fn new(gas_per_round: u64) -> Self { Self { gas_per_round } }
-}
-
-impl Pricer for Blake2FPricer {
-    fn cost(&self, input: &[u8]) -> U256 {
-        const FOUR: usize = std::mem::size_of::<u32>();
-        // Returning zero if the conversion fails is fine because `execute()`
-        // will check the length and bail with the appropriate error.
-        if input.len() < FOUR {
-            return U256::zero();
-        }
-        let (rounds_bytes, _) = input.split_at(FOUR);
-        let rounds =
-            u32::from_be_bytes(rounds_bytes.try_into().unwrap_or([0u8; 4]));
-        U256::from(self.gas_per_round * rounds as u64)
-    }
-}
+use bls12_381::bls12_builtin_factory;
+use modexp::ModexpImpl;
+pub(crate) use modexp::ModexpPricer;
+pub(crate) use pricer::{
+    AltBn128PairingPricer, Blake2FPricer, ConstPricer, Linear,
+};
 
 /// Pricing scheme, execution definition, and activation block for a built-in
 /// contract.
@@ -308,7 +67,7 @@ impl Pricer for Blake2FPricer {
 /// Unless `is_active` is true,
 pub struct Builtin {
     price_plan: Box<dyn PricePlan>,
-    native: Box<dyn Impl>,
+    native: Box<dyn Precompile>,
     activate_at: u64,
 }
 
@@ -335,7 +94,8 @@ impl Builtin {
     pub fn is_active(&self, at: u64) -> bool { at >= self.activate_at }
 
     pub fn new(
-        price_plan: Box<dyn PricePlan>, native: Box<dyn Impl>, activate_at: u64,
+        price_plan: Box<dyn PricePlan>, native: Box<dyn Precompile>,
+        activate_at: u64,
     ) -> Builtin {
         Builtin {
             price_plan,
@@ -346,21 +106,25 @@ impl Builtin {
 }
 
 /// Built-in instruction factory.
-pub fn builtin_factory(name: &str) -> Box<dyn Impl> {
+pub fn builtin_factory(name: &str) -> Box<dyn Precompile> {
     match name {
-        "identity" => Box::new(Identity) as Box<dyn Impl>,
-        "ecrecover" => Box::new(EcRecover(Space::Native)) as Box<dyn Impl>,
-        "ecrecover_evm" => {
-            Box::new(EcRecover(Space::Ethereum)) as Box<dyn Impl>
+        "identity" => Box::new(Identity) as Box<dyn Precompile>,
+        "ecrecover" => {
+            Box::new(EcRecover(Space::Native)) as Box<dyn Precompile>
         }
-        "sha256" => Box::new(Sha256) as Box<dyn Impl>,
-        "ripemd160" => Box::new(Ripemd160) as Box<dyn Impl>,
-        "modexp" => Box::new(ModexpImpl) as Box<dyn Impl>,
-        "alt_bn128_add" => Box::new(Bn128AddImpl) as Box<dyn Impl>,
-        "alt_bn128_mul" => Box::new(Bn128MulImpl) as Box<dyn Impl>,
-        "alt_bn128_pairing" => Box::new(Bn128PairingImpl) as Box<dyn Impl>,
-        "blake2_f" => Box::new(Blake2FImpl) as Box<dyn Impl>,
-        "kzg_point_eval" => Box::new(KzgPointEval) as Box<dyn Impl>,
+        "ecrecover_evm" => {
+            Box::new(EcRecover(Space::Ethereum)) as Box<dyn Precompile>
+        }
+        "sha256" => Box::new(Sha256) as Box<dyn Precompile>,
+        "ripemd160" => Box::new(Ripemd160) as Box<dyn Precompile>,
+        "modexp" => Box::new(ModexpImpl) as Box<dyn Precompile>,
+        "alt_bn128_add" => Box::new(Bn128AddImpl) as Box<dyn Precompile>,
+        "alt_bn128_mul" => Box::new(Bn128MulImpl) as Box<dyn Precompile>,
+        "alt_bn128_pairing" => {
+            Box::new(Bn128PairingImpl) as Box<dyn Precompile>
+        }
+        "blake2_f" => Box::new(Blake2FImpl) as Box<dyn Precompile>,
+        "kzg_point_eval" => Box::new(KzgPointEval) as Box<dyn Precompile>,
         "bls12_g1add"
         | "bls12_g1msm"
         | "bls12_g2add"
@@ -398,10 +162,6 @@ struct Ripemd160;
 
 #[derive(Debug)]
 #[allow(dead_code)]
-struct ModexpImpl;
-
-#[derive(Debug)]
-#[allow(dead_code)]
 struct Bn128AddImpl;
 
 #[derive(Debug)]
@@ -420,7 +180,7 @@ struct Blake2FImpl;
 #[allow(dead_code)]
 struct KzgPointEval;
 
-impl Impl for Identity {
+impl Precompile for Identity {
     fn execute(
         &self, input: &[u8], output: &mut BytesRef,
     ) -> Result<(), Error> {
@@ -429,7 +189,7 @@ impl Impl for Identity {
     }
 }
 
-impl Impl for EcRecover {
+impl Precompile for EcRecover {
     fn execute(&self, i: &[u8], output: &mut BytesRef) -> Result<(), Error> {
         let len = min(i.len(), 128);
 
@@ -471,7 +231,7 @@ impl Impl for EcRecover {
     }
 }
 
-impl Impl for Sha256 {
+impl Precompile for Sha256 {
     fn execute(
         &self, input: &[u8], output: &mut BytesRef,
     ) -> Result<(), Error> {
@@ -481,127 +241,13 @@ impl Impl for Sha256 {
     }
 }
 
-impl Impl for Ripemd160 {
+impl Precompile for Ripemd160 {
     fn execute(
         &self, input: &[u8], output: &mut BytesRef,
     ) -> Result<(), Error> {
         let hash = digest::ripemd160(input);
         output.write(0, &[0; 12][..]);
         output.write(12, &hash);
-        Ok(())
-    }
-}
-
-// calculate modexp: left-to-right binary exponentiation to keep multiplicands
-// lower
-fn modexp(mut base: BigUint, exp: Vec<u8>, modulus: BigUint) -> BigUint {
-    const BITS_PER_DIGIT: usize = 8;
-
-    // n^m % 0 || n^m % 1
-    if modulus <= BigUint::one() {
-        return BigUint::zero();
-    }
-
-    // normalize exponent
-    let mut exp = exp.into_iter().skip_while(|d| *d == 0).peekable();
-
-    // n^0 % m
-    if let None = exp.peek() {
-        return BigUint::one();
-    }
-
-    // 0^n % m, n > 0
-    if base.is_zero() {
-        return BigUint::zero();
-    }
-
-    base = base % &modulus;
-
-    // Fast path for base divisible by modulus.
-    if base.is_zero() {
-        return BigUint::zero();
-    }
-
-    // Left-to-right binary exponentiation (Handbook of Applied Cryptography -
-    // Algorithm 14.79). http://www.cacr.math.uwaterloo.ca/hac/about/chap14.pdf
-    let mut result = BigUint::one();
-
-    for digit in exp {
-        let mut mask = 1 << (BITS_PER_DIGIT - 1);
-
-        for _ in 0..BITS_PER_DIGIT {
-            result = &result * &result % &modulus;
-
-            if digit & mask > 0 {
-                result = result * &base % &modulus;
-            }
-
-            mask >>= 1;
-        }
-    }
-
-    result
-}
-
-impl Impl for ModexpImpl {
-    fn execute(
-        &self, input: &[u8], output: &mut BytesRef,
-    ) -> Result<(), Error> {
-        let mut reader = input.chain(io::repeat(0));
-        let mut buf = [0; 32];
-
-        // read lengths as usize.
-        // ignoring the first 24 bytes might technically lead us to fall out of
-        // consensus, but so would running out of addressable memory!
-        let mut read_len = |reader: &mut io::Chain<&[u8], io::Repeat>| {
-            reader
-                .read_exact(&mut buf[..])
-                .expect("reading from zero-extended memory cannot fail; qed");
-            BigEndian::read_u64(&buf[24..]) as usize
-        };
-
-        let base_len = read_len(&mut reader);
-        let exp_len = read_len(&mut reader);
-        let mod_len = read_len(&mut reader);
-
-        // Gas formula allows arbitrary large exp_len when base and modulus are
-        // empty, so we need to handle empty base first.
-        let r = if base_len == 0 && mod_len == 0 {
-            BigUint::zero()
-        } else {
-            // read the numbers themselves.
-            let mut buf = vec![0; max(mod_len, max(base_len, exp_len))];
-            let mut read_num = |reader: &mut io::Chain<&[u8], io::Repeat>,
-                                len: usize| {
-                reader.read_exact(&mut buf[..len]).expect(
-                    "reading from zero-extended memory cannot fail; qed",
-                );
-                BigUint::from_bytes_be(&buf[..len])
-            };
-
-            let base = read_num(&mut reader, base_len);
-
-            let mut exp_buf = vec![0; exp_len];
-            reader
-                .read_exact(&mut exp_buf[..exp_len])
-                .expect("reading from zero-extended memory cannot fail; qed");
-
-            let modulus = read_num(&mut reader, mod_len);
-
-            modexp(base, exp_buf, modulus)
-        };
-
-        // write output to given memory, left padded and same length as the
-        // modulus.
-        let bytes = r.to_bytes_be();
-
-        // always true except in the case of zero-length modulus, which leads to
-        // output of length and value 1.
-        if bytes.len() <= mod_len {
-            let res_start = mod_len - bytes.len();
-            output.write(res_start, &bytes);
-        }
-
         Ok(())
     }
 }
@@ -645,7 +291,7 @@ fn read_point(
     })
 }
 
-impl Impl for Bn128AddImpl {
+impl Precompile for Bn128AddImpl {
     // Can fail if any of the 2 points does not belong the bn128 curve
     fn execute(
         &self, input: &[u8], output: &mut BytesRef,
@@ -672,7 +318,7 @@ impl Impl for Bn128AddImpl {
     }
 }
 
-impl Impl for Bn128MulImpl {
+impl Precompile for Bn128MulImpl {
     // Can fail if first paramter (bn128 curve point) does not actually belong
     // to the curve
     fn execute(
@@ -699,7 +345,7 @@ impl Impl for Bn128MulImpl {
     }
 }
 
-impl Impl for Bn128PairingImpl {
+impl Precompile for Bn128PairingImpl {
     /// Can fail if:
     ///     - input length is not a multiple of 192
     ///     - any of odd points does not belong to bn128 curve
@@ -818,7 +464,7 @@ impl Bn128PairingImpl {
     }
 }
 
-impl Impl for Blake2FImpl {
+impl Precompile for Blake2FImpl {
     /// Format of `input`:
     /// [4 bytes for rounds][64 bytes for h][128 bytes for m][8 bytes for t_0][8
     /// bytes for t_1][1 byte for f]
@@ -876,7 +522,7 @@ impl Impl for Blake2FImpl {
     }
 }
 
-impl Impl for KzgPointEval {
+impl Precompile for KzgPointEval {
     fn execute(
         &self, input: &[u8], output: &mut BytesRef,
     ) -> Result<(), Error> {
@@ -888,8 +534,8 @@ impl Impl for KzgPointEval {
 #[cfg(test)]
 mod tests {
     use super::{
-        builtin_factory, modexp as me, price_plan::StaticPlan, Blake2FPricer,
-        Builtin, Linear, ModexpPricer,
+        builtin_factory, modexp::modexp as me, price_plan::StaticPlan,
+        Blake2FPricer, Builtin, Linear, ModexpPricer,
     };
     use cfx_bytes::BytesRef;
     use cfx_types::U256;
