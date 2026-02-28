@@ -181,7 +181,7 @@ impl Executed {
         };
 
         let mut gas_sponsor_paid = cost.gas_sponsored;
-        if !r.apply_state && !spec.cip78b {
+        if !r.apply_state && !spec.cip78a {
             gas_sponsor_paid = false;
             storage_sponsor_paid = false;
         }
