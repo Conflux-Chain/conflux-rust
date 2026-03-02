@@ -56,4 +56,3 @@ impl From<serde_json::Error> for Error {
         Self::SerializationError(format!("{}", error))
     }
 }
-
