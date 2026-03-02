@@ -77,7 +77,6 @@ members = [
     "crates/pos/common/nibble",
     "crates/pos/common/num-variants",
     "crates/pos/common/proptest-helpers",
-    "crates/pos/common/proxy",
     "crates/pos/common/short-hex-str",
     "crates/pos/common/subscription-service",
     "crates/pos/common/temppath",
@@ -218,7 +217,6 @@ diem-metrics-core = { path = "./crates/pos/common/metrics-core" }
 diem-nibble = { path = "./crates/pos/common/nibble" }
 num-variants = { path = "./crates/pos/common/num-variants" }
 diem-proptest-helpers = { path = "./crates/pos/common/proptest-helpers" }
-proxy = { path = "./crates/pos/common/proxy" }
 short-hex-str = { path = "./crates/pos/common/short-hex-str" }
 subscription-service = { path = "./crates/pos/common/subscription-service" }
 diem-temppath = { path = "./crates/pos/common/temppath" }

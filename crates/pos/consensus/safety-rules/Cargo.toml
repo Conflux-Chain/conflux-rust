@@ -25,7 +25,6 @@ diem-secure-push-metrics = { workspace = true }
 diem-secure-storage = { workspace = true }
 diem-temppath = { workspace = true }
 diem-types = { workspace = true }
-diem-vault-client = { path = "../../secure/storage/vault" }
 serde = { version = "1.0.124", default-features = false }
 thiserror = { workspace = true }
 log = { workspace = true }
