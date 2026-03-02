@@ -1,1 +1,0 @@
-searchState.loadedDescShard("dag", 0, "Return the future set of the nodes in <code>index_set</code>. The …\nTopologically sort <code>index_set</code> and return a sorted <code>Vec</code>. For …")

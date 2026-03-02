@@ -1,1 +1,0 @@
-searchState.loadedDescShard("cfx_rpc_cfx_impl", 0, "Returns the argument unchanged.\nCalls <code>U::from(self)</code>.")

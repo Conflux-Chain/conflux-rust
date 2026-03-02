@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Action","ActionType"],"struct":["Call","CallResult","Create","CreateResult","InternalTransferAction","LocalizedBlockTrace","LocalizedTrace","LocalizedTransactionTrace","SelfDestructAction","SetAuth"]};
+window.SIDEBAR_ITEMS = {"enum":["Action","ActionType"],"struct":["Call","CallResult","Create","CreateResult","InternalTransferAction","LocalizedBlockTrace","LocalizedTrace","LocalizedTransactionTrace","SelfDestructAction","SetAuth","Trace"]};

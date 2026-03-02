@@ -1,1 +1,0 @@
-searchState.loadedDescShard("link_cut_tree", 0, "link cut tree with support for caterpillar_apply\ndefault implementation of link cut tree, ancestor_at and …\nlink cut tree with support for ancestor_at\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.")

@@ -1,1 +1,0 @@
-searchState.loadedDescShard("delegate", 0, "This crate removes some boilerplate for structs that …")

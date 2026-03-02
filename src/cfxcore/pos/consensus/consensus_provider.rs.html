@@ -1,245 +1,122 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/cfxcore/core/src/pos/consensus/consensus_provider.rs`."><title>consensus_provider.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-cf3c48c1.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="cfxcore" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0-nightly (854f22563 2025-01-31)" data-channel="nightly" data-search-js="search-2d513d54.js" data-settings-js="settings-6dad6058.js" ><script src="../../../../static.files/storage-302de22f.js"></script><script defer src="../../../../static.files/src-script-8fee9dc5.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-9b5d7e41.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">cfxcore/pos/consensus/</div>consensus_provider.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
-<a href="#1" id="1">1</a>
-<a href="#2" id="2">2</a>
-<a href="#3" id="3">3</a>
-<a href="#4" id="4">4</a>
-<a href="#5" id="5">5</a>
-<a href="#6" id="6">6</a>
-<a href="#7" id="7">7</a>
-<a href="#8" id="8">8</a>
-<a href="#9" id="9">9</a>
-<a href="#10" id="10">10</a>
-<a href="#11" id="11">11</a>
-<a href="#12" id="12">12</a>
-<a href="#13" id="13">13</a>
-<a href="#14" id="14">14</a>
-<a href="#15" id="15">15</a>
-<a href="#16" id="16">16</a>
-<a href="#17" id="17">17</a>
-<a href="#18" id="18">18</a>
-<a href="#19" id="19">19</a>
-<a href="#20" id="20">20</a>
-<a href="#21" id="21">21</a>
-<a href="#22" id="22">22</a>
-<a href="#23" id="23">23</a>
-<a href="#24" id="24">24</a>
-<a href="#25" id="25">25</a>
-<a href="#26" id="26">26</a>
-<a href="#27" id="27">27</a>
-<a href="#28" id="28">28</a>
-<a href="#29" id="29">29</a>
-<a href="#30" id="30">30</a>
-<a href="#31" id="31">31</a>
-<a href="#32" id="32">32</a>
-<a href="#33" id="33">33</a>
-<a href="#34" id="34">34</a>
-<a href="#35" id="35">35</a>
-<a href="#36" id="36">36</a>
-<a href="#37" id="37">37</a>
-<a href="#38" id="38">38</a>
-<a href="#39" id="39">39</a>
-<a href="#40" id="40">40</a>
-<a href="#41" id="41">41</a>
-<a href="#42" id="42">42</a>
-<a href="#43" id="43">43</a>
-<a href="#44" id="44">44</a>
-<a href="#45" id="45">45</a>
-<a href="#46" id="46">46</a>
-<a href="#47" id="47">47</a>
-<a href="#48" id="48">48</a>
-<a href="#49" id="49">49</a>
-<a href="#50" id="50">50</a>
-<a href="#51" id="51">51</a>
-<a href="#52" id="52">52</a>
-<a href="#53" id="53">53</a>
-<a href="#54" id="54">54</a>
-<a href="#55" id="55">55</a>
-<a href="#56" id="56">56</a>
-<a href="#57" id="57">57</a>
-<a href="#58" id="58">58</a>
-<a href="#59" id="59">59</a>
-<a href="#60" id="60">60</a>
-<a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
-<a href="#63" id="63">63</a>
-<a href="#64" id="64">64</a>
-<a href="#65" id="65">65</a>
-<a href="#66" id="66">66</a>
-<a href="#67" id="67">67</a>
-<a href="#68" id="68">68</a>
-<a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a>
-<a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
-<a href="#95" id="95">95</a>
-<a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
-<a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a></pre></div><pre class="rust"><code><span class="comment">// Copyright (c) The Diem Core Contributors
-// SPDX-License-Identifier: Apache-2.0
-
-// Copyright 2021 Conflux Foundation. All rights reserved.
-// Conflux is free software and distributed under GNU General Public License.
-// See http://www.gnu.org/licenses/
-
-</span><span class="kw">use </span>std::sync::{atomic::AtomicBool, Arc};
-
-<span class="kw">use </span>futures::channel::{mpsc, oneshot};
-<span class="kw">use </span>tokio::runtime::{<span class="self">self</span>, Runtime};
-
-<span class="kw">use </span>cached_pos_ledger_db::CachedPosLedgerDB;
-<span class="kw">use </span>channel::diem_channel;
-<span class="kw">use </span>consensus_types::db::LedgerBlockRW;
-<span class="kw">use </span>diem_config::config::NodeConfig;
-<span class="kw">use </span>diem_logger::prelude::<span class="kw-2">*</span>;
-<span class="kw">use </span>diem_types::{
-    account_address::AccountAddress, on_chain_config::OnChainConfigPayload,
-    transaction::SignedTransaction,
-};
-<span class="kw">use </span>executor::{vm::PosVM, Executor};
-<span class="kw">use </span>storage_interface::DbReader;
-
-<span class="kw">use </span><span class="kw">crate</span>::pos::{
-    mempool::{ConsensusRequest, SubmissionStatus},
-    pow_handler::PowHandler,
-    protocol::network_sender::NetworkSender,
-    state_sync::client::StateSyncClient,
-};
-
-<span class="kw">use super</span>::{
-    counters, epoch_manager::EpochManager, network::NetworkReceivers,
-    persistent_liveness_storage::StorageWriteProxy,
-    state_computer::ExecutionProxy, txn_manager::MempoolProxy,
-    util::time_service::ClockTimeService,
-};
-<span class="kw">use </span><span class="kw">crate</span>::pos::consensus::{ConsensusDB, TestCommand};
-
-<span class="doccomment">/// Helper function to start consensus based on configuration and return the
-/// runtime
-</span><span class="kw">pub fn </span>start_consensus(
-    node_config: <span class="kw-2">&amp;</span>NodeConfig, network_sender: NetworkSender,
-    network_receiver: NetworkReceivers,
-    consensus_to_mempool_sender: mpsc::Sender&lt;ConsensusRequest&gt;,
-    state_sync_client: StateSyncClient, pos_ledger_db: Arc&lt;<span class="kw">dyn </span>DbReader&gt;,
-    db_with_cache: Arc&lt;CachedPosLedgerDB&gt;,
-    reconfig_events: diem_channel::Receiver&lt;(), OnChainConfigPayload&gt;,
-    author: AccountAddress,
-    tx_sender: mpsc::Sender&lt;(
-        SignedTransaction,
-        oneshot::Sender&lt;anyhow::Result&lt;SubmissionStatus&gt;&gt;,
-    )&gt;,
-    test_command_receiver: channel::Receiver&lt;TestCommand&gt;,
-    started_as_voter: bool,
-) -&gt; (Runtime, Arc&lt;PowHandler&gt;, Arc&lt;AtomicBool&gt;, Arc&lt;ConsensusDB&gt;) {
-    <span class="kw">let </span>stopped = Arc::new(AtomicBool::new(<span class="bool-val">false</span>));
-    <span class="kw">let </span>runtime = runtime::Builder::new_multi_thread()
-        .thread_name(<span class="string">"consensus"</span>)
-        .enable_all()
-        <span class="comment">// TODO(lpl): This is for debugging.
-        </span>.worker_threads(<span class="number">4</span>)
-        .build()
-        .expect(<span class="string">"Failed to create Tokio runtime!"</span>);
-    <span class="kw">let </span>storage = Arc::new(StorageWriteProxy::new(node_config, pos_ledger_db));
-    <span class="kw">let </span>consensus_db = storage.consensus_db();
-    <span class="kw">let </span>txn_manager = Arc::new(MempoolProxy::new(
-        consensus_to_mempool_sender,
-        node_config.consensus.mempool_poll_count,
-        node_config.consensus.mempool_txn_pull_timeout_ms,
-        node_config.consensus.mempool_executed_txn_timeout_ms,
-    ));
-    <span class="kw">let </span>pow_handler = Arc::new(PowHandler::new(
-        runtime.handle().clone(),
-        consensus_db.clone(),
-    ));
-    <span class="kw">let </span>executor = Box::new(Executor::&lt;PosVM&gt;::new(
-        db_with_cache,
-        pow_handler.clone(),
-        consensus_db.clone() <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>LedgerBlockRW&gt;,
-    ));
-    <span class="kw">let </span>state_computer =
-        Arc::new(ExecutionProxy::new(executor, state_sync_client));
-    <span class="kw">let </span>time_service =
-        Arc::new(ClockTimeService::new(runtime.handle().clone()));
-
-    <span class="kw">let </span>(timeout_sender, timeout_receiver) =
-        channel::new(<span class="number">1_024</span>, <span class="kw-2">&amp;</span>counters::PENDING_ROUND_TIMEOUTS);
-    <span class="kw">let </span>(proposal_timeout_sender, proposal_timeout_receiver) =
-        channel::new(<span class="number">1_024</span>, <span class="kw-2">&amp;</span>counters::PENDING_PROPOSAL_TIMEOUTS);
-    <span class="kw">let </span>(new_round_timeout_sender, new_round_timeout_receiver) =
-        channel::new(<span class="number">1_024</span>, <span class="kw-2">&amp;</span>counters::PENDING_NEW_ROUND_TIMEOUTS);
-
-    <span class="kw">let </span>epoch_mgr = EpochManager::new(
-        node_config,
-        time_service,
-        network_sender,
-        timeout_sender,
-        proposal_timeout_sender,
-        new_round_timeout_sender,
-        txn_manager,
-        state_computer,
-        storage,
-        reconfig_events,
-        pow_handler.clone(),
-        author,
-        tx_sender,
-        started_as_voter,
-    );
-
-    runtime.spawn(epoch_mgr.start(
-        timeout_receiver,
-        proposal_timeout_receiver,
-        new_round_timeout_receiver,
-        network_receiver,
-        test_command_receiver,
-        stopped.clone(),
-    ));
-
-    <span class="macro">diem_debug!</span>(<span class="string">"Consensus started."</span>);
-    (runtime, pow_handler, stopped, consensus_db)
-}
-</code></pre></div></section></main></body></html>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/cfxcore/core/src/pos/consensus/consensus_provider.rs`."><title>consensus_provider.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="cfxcore" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0-nightly (fa3155a64 2025-09-30)" data-channel="nightly" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-828709d0.js" data-settings-js="settings-c38705f0.js" ><script src="../../../../static.files/storage-e2aeef58.js"></script><script defer src="../../../../static.files/src-script-813739b1.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">cfxcore/pos/consensus/</div>consensus_provider.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) The Diem Core Contributors
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a>// Copyright 2021 Conflux Foundation. All rights reserved.
+<a href=#5 id=5 data-nosnippet>5</a>// Conflux is free software and distributed under GNU General Public License.
+<a href=#6 id=6 data-nosnippet>6</a>// See http://www.gnu.org/licenses/
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a></span><span class="kw">use </span>std::sync::{atomic::AtomicBool, Arc};
+<a href=#9 id=9 data-nosnippet>9</a>
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>futures::channel::{mpsc, oneshot};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>tokio::runtime::{<span class="self">self</span>, Runtime};
+<a href=#12 id=12 data-nosnippet>12</a>
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>cached_pos_ledger_db::CachedPosLedgerDB;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>channel::diem_channel;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>consensus_types::db::LedgerBlockRW;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>diem_config::config::NodeConfig;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>diem_logger::prelude::<span class="kw-2">*</span>;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>diem_types::{
+<a href=#19 id=19 data-nosnippet>19</a>    account_address::AccountAddress, on_chain_config::OnChainConfigPayload,
+<a href=#20 id=20 data-nosnippet>20</a>    transaction::SignedTransaction,
+<a href=#21 id=21 data-nosnippet>21</a>};
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>executor::{vm::PosVM, Executor};
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>storage_interface::DbReader;
+<a href=#24 id=24 data-nosnippet>24</a>
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span><span class="kw">crate</span>::pos::{
+<a href=#26 id=26 data-nosnippet>26</a>    mempool::{ConsensusRequest, SubmissionStatus},
+<a href=#27 id=27 data-nosnippet>27</a>    pow_handler::PowHandler,
+<a href=#28 id=28 data-nosnippet>28</a>    protocol::network_sender::NetworkSender,
+<a href=#29 id=29 data-nosnippet>29</a>    state_sync::client::StateSyncClient,
+<a href=#30 id=30 data-nosnippet>30</a>};
+<a href=#31 id=31 data-nosnippet>31</a>
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use super</span>::{
+<a href=#33 id=33 data-nosnippet>33</a>    counters, epoch_manager::EpochManager, network::NetworkReceivers,
+<a href=#34 id=34 data-nosnippet>34</a>    persistent_liveness_storage::StorageWriteProxy,
+<a href=#35 id=35 data-nosnippet>35</a>    state_computer::ExecutionProxy, txn_manager::MempoolProxy,
+<a href=#36 id=36 data-nosnippet>36</a>    util::time_service::ClockTimeService,
+<a href=#37 id=37 data-nosnippet>37</a>};
+<a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span><span class="kw">crate</span>::pos::consensus::{ConsensusDB, TestCommand};
+<a href=#39 id=39 data-nosnippet>39</a>
+<a href=#40 id=40 data-nosnippet>40</a><span class="doccomment">/// Helper function to start consensus based on configuration and return the
+<a href=#41 id=41 data-nosnippet>41</a>/// runtime
+<a href=#42 id=42 data-nosnippet>42</a></span><span class="kw">pub fn </span>start_consensus(
+<a href=#43 id=43 data-nosnippet>43</a>    node_config: <span class="kw-2">&amp;</span>NodeConfig, network_sender: NetworkSender,
+<a href=#44 id=44 data-nosnippet>44</a>    network_receiver: NetworkReceivers,
+<a href=#45 id=45 data-nosnippet>45</a>    consensus_to_mempool_sender: mpsc::Sender&lt;ConsensusRequest&gt;,
+<a href=#46 id=46 data-nosnippet>46</a>    state_sync_client: StateSyncClient, pos_ledger_db: Arc&lt;<span class="kw">dyn </span>DbReader&gt;,
+<a href=#47 id=47 data-nosnippet>47</a>    db_with_cache: Arc&lt;CachedPosLedgerDB&gt;,
+<a href=#48 id=48 data-nosnippet>48</a>    reconfig_events: diem_channel::Receiver&lt;(), OnChainConfigPayload&gt;,
+<a href=#49 id=49 data-nosnippet>49</a>    author: AccountAddress,
+<a href=#50 id=50 data-nosnippet>50</a>    tx_sender: mpsc::Sender&lt;(
+<a href=#51 id=51 data-nosnippet>51</a>        SignedTransaction,
+<a href=#52 id=52 data-nosnippet>52</a>        oneshot::Sender&lt;anyhow::Result&lt;SubmissionStatus&gt;&gt;,
+<a href=#53 id=53 data-nosnippet>53</a>    )&gt;,
+<a href=#54 id=54 data-nosnippet>54</a>    test_command_receiver: channel::Receiver&lt;TestCommand&gt;,
+<a href=#55 id=55 data-nosnippet>55</a>    started_as_voter: bool,
+<a href=#56 id=56 data-nosnippet>56</a>) -&gt; (Runtime, Arc&lt;PowHandler&gt;, Arc&lt;AtomicBool&gt;, Arc&lt;ConsensusDB&gt;) {
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">let </span>stopped = Arc::new(AtomicBool::new(<span class="bool-val">false</span>));
+<a href=#58 id=58 data-nosnippet>58</a>    <span class="kw">let </span>runtime = runtime::Builder::new_multi_thread()
+<a href=#59 id=59 data-nosnippet>59</a>        .thread_name(<span class="string">"consensus"</span>)
+<a href=#60 id=60 data-nosnippet>60</a>        .enable_all()
+<a href=#61 id=61 data-nosnippet>61</a>        <span class="comment">// TODO(lpl): This is for debugging.
+<a href=#62 id=62 data-nosnippet>62</a>        </span>.worker_threads(<span class="number">4</span>)
+<a href=#63 id=63 data-nosnippet>63</a>        .build()
+<a href=#64 id=64 data-nosnippet>64</a>        .expect(<span class="string">"Failed to create Tokio runtime!"</span>);
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="kw">let </span>storage = Arc::new(StorageWriteProxy::new(node_config, pos_ledger_db));
+<a href=#66 id=66 data-nosnippet>66</a>    <span class="kw">let </span>consensus_db = storage.consensus_db();
+<a href=#67 id=67 data-nosnippet>67</a>    <span class="kw">let </span>txn_manager = Arc::new(MempoolProxy::new(
+<a href=#68 id=68 data-nosnippet>68</a>        consensus_to_mempool_sender,
+<a href=#69 id=69 data-nosnippet>69</a>        node_config.consensus.mempool_poll_count,
+<a href=#70 id=70 data-nosnippet>70</a>        node_config.consensus.mempool_txn_pull_timeout_ms,
+<a href=#71 id=71 data-nosnippet>71</a>        node_config.consensus.mempool_executed_txn_timeout_ms,
+<a href=#72 id=72 data-nosnippet>72</a>    ));
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">let </span>pow_handler = Arc::new(PowHandler::new(
+<a href=#74 id=74 data-nosnippet>74</a>        runtime.handle().clone(),
+<a href=#75 id=75 data-nosnippet>75</a>        consensus_db.clone(),
+<a href=#76 id=76 data-nosnippet>76</a>    ));
+<a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">let </span>executor = Box::new(Executor::&lt;PosVM&gt;::new(
+<a href=#78 id=78 data-nosnippet>78</a>        db_with_cache,
+<a href=#79 id=79 data-nosnippet>79</a>        pow_handler.clone(),
+<a href=#80 id=80 data-nosnippet>80</a>        consensus_db.clone() <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>LedgerBlockRW&gt;,
+<a href=#81 id=81 data-nosnippet>81</a>    ));
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">let </span>state_computer =
+<a href=#83 id=83 data-nosnippet>83</a>        Arc::new(ExecutionProxy::new(executor, state_sync_client));
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="kw">let </span>time_service =
+<a href=#85 id=85 data-nosnippet>85</a>        Arc::new(ClockTimeService::new(runtime.handle().clone()));
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">let </span>(timeout_sender, timeout_receiver) =
+<a href=#88 id=88 data-nosnippet>88</a>        channel::new(<span class="number">1_024</span>, <span class="kw-2">&amp;</span>counters::PENDING_ROUND_TIMEOUTS);
+<a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">let </span>(proposal_timeout_sender, proposal_timeout_receiver) =
+<a href=#90 id=90 data-nosnippet>90</a>        channel::new(<span class="number">1_024</span>, <span class="kw-2">&amp;</span>counters::PENDING_PROPOSAL_TIMEOUTS);
+<a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">let </span>(new_round_timeout_sender, new_round_timeout_receiver) =
+<a href=#92 id=92 data-nosnippet>92</a>        channel::new(<span class="number">1_024</span>, <span class="kw-2">&amp;</span>counters::PENDING_NEW_ROUND_TIMEOUTS);
+<a href=#93 id=93 data-nosnippet>93</a>
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">let </span>epoch_mgr = EpochManager::new(
+<a href=#95 id=95 data-nosnippet>95</a>        node_config,
+<a href=#96 id=96 data-nosnippet>96</a>        time_service,
+<a href=#97 id=97 data-nosnippet>97</a>        network_sender,
+<a href=#98 id=98 data-nosnippet>98</a>        timeout_sender,
+<a href=#99 id=99 data-nosnippet>99</a>        proposal_timeout_sender,
+<a href=#100 id=100 data-nosnippet>100</a>        new_round_timeout_sender,
+<a href=#101 id=101 data-nosnippet>101</a>        txn_manager,
+<a href=#102 id=102 data-nosnippet>102</a>        state_computer,
+<a href=#103 id=103 data-nosnippet>103</a>        storage,
+<a href=#104 id=104 data-nosnippet>104</a>        reconfig_events,
+<a href=#105 id=105 data-nosnippet>105</a>        pow_handler.clone(),
+<a href=#106 id=106 data-nosnippet>106</a>        author,
+<a href=#107 id=107 data-nosnippet>107</a>        tx_sender,
+<a href=#108 id=108 data-nosnippet>108</a>        started_as_voter,
+<a href=#109 id=109 data-nosnippet>109</a>    );
+<a href=#110 id=110 data-nosnippet>110</a>
+<a href=#111 id=111 data-nosnippet>111</a>    runtime.spawn(epoch_mgr.start(
+<a href=#112 id=112 data-nosnippet>112</a>        timeout_receiver,
+<a href=#113 id=113 data-nosnippet>113</a>        proposal_timeout_receiver,
+<a href=#114 id=114 data-nosnippet>114</a>        new_round_timeout_receiver,
+<a href=#115 id=115 data-nosnippet>115</a>        network_receiver,
+<a href=#116 id=116 data-nosnippet>116</a>        test_command_receiver,
+<a href=#117 id=117 data-nosnippet>117</a>        stopped.clone(),
+<a href=#118 id=118 data-nosnippet>118</a>    ));
+<a href=#119 id=119 data-nosnippet>119</a>
+<a href=#120 id=120 data-nosnippet>120</a>    <span class="macro">diem_debug!</span>(<span class="string">"Consensus started."</span>);
+<a href=#121 id=121 data-nosnippet>121</a>    (runtime, pow_handler, stopped, consensus_db)
+<a href=#122 id=122 data-nosnippet>122</a>}</code></pre></div></section></main></body></html>

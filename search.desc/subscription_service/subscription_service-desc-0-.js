@@ -1,1 +1,0 @@
-searchState.loadedDescShard("subscription_service", 0, "Generic pub/sub service framework\nA subscription service for on-chain reconfiguration …\nReturns the argument unchanged.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.\nConstructs an subscription object for <code>items</code> Returns the …")

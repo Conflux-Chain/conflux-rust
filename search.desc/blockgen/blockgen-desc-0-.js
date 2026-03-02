@@ -1,1 +1,0 @@
-searchState.loadedDescShard("blockgen", 0, "The interface for a conflux block generator\nReturns the argument unchanged.\nReturns the argument unchanged.\nGenerate a block with transactions in the pool This is …\nGenerate a block with transactions in the pool. This is …\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.\nStop mining")

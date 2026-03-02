@@ -1,1 +1,0 @@
-searchState.loadedDescShard("solidity_abi_derive", 0, "")
