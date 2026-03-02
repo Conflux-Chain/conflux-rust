@@ -432,7 +432,7 @@ fs-swap = { git = "https://github.com/Conflux-Chain/fs-swap", rev = "72fed3585f4
 regex = "1.3.1"
 cfg-if = "1"
 unroll = "0.1.5"
-winapi = "0.3"
+winapi = { version = "0.3", features = ["heapapi"] }
 synstructure = "0.12"
 lru-cache = "0.1"
 lru_time_cache = "0.9.0"
