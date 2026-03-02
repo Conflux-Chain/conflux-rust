@@ -82,7 +82,6 @@ members = [
     "crates/pos/common/subscription-service",
     "crates/pos/common/temppath",
     "crates/pos/common/time-service",
-    # "crates/pos/config/generate-key",
     "crates/pos/config/global-constants",
     "crates/pos/consensus/consensus-types",
     "crates/pos/config/config",
@@ -224,7 +223,6 @@ short-hex-str = { path = "./crates/pos/common/short-hex-str" }
 subscription-service = { path = "./crates/pos/common/subscription-service" }
 diem-temppath = { path = "./crates/pos/common/temppath" }
 diem-time-service = { path = "./crates/pos/common/time-service" }
-#generate-key = { path = "./crates/pos/config/generate-key" }
 diem-global-constants = { path = "./crates/pos/config/global-constants" }
 diem-config = { path = "./crates/pos/config/config" }
 consensus-types = { path = "./crates/pos/consensus/consensus-types" }
@@ -242,7 +240,6 @@ pos-ledger-db = { path = "./crates/pos/storage/pos-ledger-db" }
 schemadb = { path = "./crates/pos/storage/schemadb" }
 scratchpad = { path = "./crates/pos/storage/scratchpad" }
 diem-state-view = { path = "./crates/pos/storage/state-view" }
-#storage-client = { path = "./crates/pos/storage/storage-client" }
 storage-interface = { path = "./crates/pos/storage/storage-interface" }
 executor-types = { path = "./crates/pos/types/executor-types" }
 move-core-types = { path = "./crates/pos/types/move-core-types" }
