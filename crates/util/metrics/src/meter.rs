@@ -21,7 +21,7 @@ use timer::Timer;
 const TICK_INTERVAL_SECS: i64 = 5;
 
 // Meters count events to produce exponentially-weighted moving average rates
-// at one-, five-, and fifteen-minutes, a mean rate, and an instantaneous rate.
+// at one-, five-, and fifteen-minutes, a mean rate, and a raw rate (m0).
 pub trait Meter: Send + Sync {
     fn count(&self) -> usize { 0 }
     fn mark(&self, _n: usize) {}
@@ -29,9 +29,9 @@ pub trait Meter: Send + Sync {
     fn rate5(&self) -> f64 { 0.0 }
     fn rate15(&self) -> f64 { 0.0 }
     fn rate_mean(&self) -> f64 { 0.0 }
-    /// Returns the raw instantaneous rate (events/sec) measured over the
-    /// last 5-second tick window, without any smoothing.
-    fn rate_instant(&self) -> f64 { 0.0 }
+    /// Returns the raw rate (events/sec) measured over the last 5-second
+    /// tick window, without any smoothing.
+    fn rate_m0(&self) -> f64 { 0.0 }
     fn snapshot(&self) -> Arc<dyn Meter> { Arc::new(MeterSnapshot::default()) }
     fn stop(&self) {}
 }
@@ -79,9 +79,9 @@ pub fn register_meter_with_group(group: &str, name: &str) -> Arc<dyn Meter> {
 #[derive(Default, Clone)]
 struct MeterSnapshot {
     count: usize,
-    /* m1, m5, m15, mean, instant (raw rate over the last-tick window) */
+    /* m1, m5, m15, mean, m0 (raw rate over the last-tick window) */
     rates: [u64; 5],
-    /// Count at the previous tick, used to derive instantaneous rate.
+    /// Count at the previous tick, used to derive m0 rate.
     last_tick_count: usize,
 }
 
@@ -96,7 +96,7 @@ impl Meter for MeterSnapshot {
 
     fn rate_mean(&self) -> f64 { f64::from_bits(self.rates[3]) }
 
-    fn rate_instant(&self) -> f64 { f64::from_bits(self.rates[4]) }
+    fn rate_m0(&self) -> f64 { f64::from_bits(self.rates[4]) }
 
     fn snapshot(&self) -> Arc<dyn Meter> { Arc::new(self.clone()) }
 }
@@ -132,11 +132,11 @@ impl StandardMeter {
             snapshot.count as f64 / self.start_time.elapsed().as_nanos() as f64;
         snapshot.rates[3] = f64::to_bits(rate_mean_nano * 1e9);
 
-        // Instantaneous rate: events since last tick / 5 seconds.
-        let instant_rate = (snapshot.count - snapshot.last_tick_count) as f64
+        // m0 rate: events since last tick / 5 seconds.
+        let m0_rate = (snapshot.count - snapshot.last_tick_count) as f64
             / TICK_INTERVAL_SECS as f64;
         snapshot.last_tick_count = snapshot.count;
-        snapshot.rates[4] = f64::to_bits(instant_rate);
+        snapshot.rates[4] = f64::to_bits(m0_rate);
     }
 }
 
@@ -168,7 +168,7 @@ impl Meter for StandardMeter {
 
     fn rate_mean(&self) -> f64 { f64::from_bits(self.snapshot.read().rates[3]) }
 
-    fn rate_instant(&self) -> f64 {
+    fn rate_m0(&self) -> f64 {
         f64::from_bits(self.snapshot.read().rates[4])
     }
 

@@ -165,8 +165,8 @@ impl InfluxdbReportable for StandardMeter {
                 Value::Float(snapshot.rate_mean()),
             )
             .add_field(
-                field("instant", prefix),
-                Value::Float(snapshot.rate_instant()),
+                field("m0", prefix),
+                Value::Float(snapshot.rate_m0()),
             )
     }
 }
