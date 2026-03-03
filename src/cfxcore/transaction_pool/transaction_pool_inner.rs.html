@@ -275,7 +275,7 @@
 <a href=#275 id=275 data-nosnippet>275</a>                .remove_lowest_nonce(<span class="kw-2">&amp;</span>victim_address)
 <a href=#276 id=276 data-nosnippet>276</a>                .unwrap();
 <a href=#277 id=277 data-nosnippet>277</a>            <span class="kw">let </span>to_remove_tx = tx_with_ready_info.get_arc_tx().clone();
-<a href=#278 id=278 data-nosnippet>278</a>            <span class="macro">debug!</span>(
+<a href=#278 id=278 data-nosnippet>278</a>            <span class="macro">trace!</span>(
 <a href=#279 id=279 data-nosnippet>279</a>                <span class="string">"txpool::collect_garbage removed tx {:?} sender={:?} nonce={:?} new_tx={:?}"</span>,
 <a href=#280 id=280 data-nosnippet>280</a>                to_remove_tx.hash(),
 <a href=#281 id=281 data-nosnippet>281</a>                victim_address,
@@ -600,7 +600,7 @@
 <a href=#600 id=600 data-nosnippet>600</a>        <span class="kw">let </span>(nonce, balance) =
 <a href=#601 id=601 data-nosnippet>601</a>            <span class="self">self</span>.get_and_update_nonce_and_balance_from_storage(addr, state)<span class="question-mark">?</span>;
 <a href=#602 id=602 data-nosnippet>602</a>        <span class="self">self</span>.recalculate_readiness(addr, nonce, balance);
-<a href=#603 id=603 data-nosnippet>603</a>        <span class="macro">debug!</span>(
+<a href=#603 id=603 data-nosnippet>603</a>        <span class="macro">trace!</span>(
 <a href=#604 id=604 data-nosnippet>604</a>            <span class="string">"txpool::recalculate_readiness_with_state addr={:?} nonce={:?} balance={:?}"</span>,
 <a href=#605 id=605 data-nosnippet>605</a>            addr,
 <a href=#606 id=606 data-nosnippet>606</a>            nonce,
@@ -617,7 +617,7 @@
 <a href=#617 id=617 data-nosnippet>617</a>            </span>.deferred_pool
 <a href=#618 id=618 data-nosnippet>618</a>            .recalculate_readiness_with_local_info(addr, nonce, balance);
 <a href=#619 id=619 data-nosnippet>619</a>        <span class="kw">match </span><span class="kw-2">&amp;</span>ret {
-<a href=#620 id=620 data-nosnippet>620</a>            <span class="prelude-val">Some</span>(tx) =&gt; <span class="macro">debug!</span>(
+<a href=#620 id=620 data-nosnippet>620</a>            <span class="prelude-val">Some</span>(tx) =&gt; <span class="macro">trace!</span>(
 <a href=#621 id=621 data-nosnippet>621</a>                <span class="string">"txpool::recalculate_readiness addr={:?} state_nonce={:?} ready_nonce={:?} ready_hash={:?} balance={:?}"</span>,
 <a href=#622 id=622 data-nosnippet>622</a>                addr,
 <a href=#623 id=623 data-nosnippet>623</a>                nonce,
@@ -625,7 +625,7 @@
 <a href=#625 id=625 data-nosnippet>625</a>                tx.hash(),
 <a href=#626 id=626 data-nosnippet>626</a>                balance
 <a href=#627 id=627 data-nosnippet>627</a>            ),
-<a href=#628 id=628 data-nosnippet>628</a>            <span class="prelude-val">None </span>=&gt; <span class="macro">debug!</span>(
+<a href=#628 id=628 data-nosnippet>628</a>            <span class="prelude-val">None </span>=&gt; <span class="macro">trace!</span>(
 <a href=#629 id=629 data-nosnippet>629</a>                <span class="string">"txpool::recalculate_readiness addr={:?} state_nonce={:?} no_ready_tx balance={:?}"</span>,
 <a href=#630 id=630 data-nosnippet>630</a>                addr,
 <a href=#631 id=631 data-nosnippet>631</a>                nonce,

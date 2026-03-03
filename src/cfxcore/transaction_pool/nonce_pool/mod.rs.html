@@ -295,7 +295,7 @@
 <a href=#295 id=295 data-nosnippet>295</a>        <span class="kw">let </span>tx = <span class="kw">match </span><span class="self">self</span>.map.query(<span class="kw-2">&amp;</span>nonce) {
 <a href=#296 id=296 data-nosnippet>296</a>            <span class="prelude-val">Some</span>(tx) =&gt; tx,
 <a href=#297 id=297 data-nosnippet>297</a>            <span class="prelude-val">None </span>=&gt; {
-<a href=#298 id=298 data-nosnippet>298</a>                <span class="macro">debug!</span>(
+<a href=#298 id=298 data-nosnippet>298</a>                <span class="macro">trace!</span>(
 <a href=#299 id=299 data-nosnippet>299</a>                    <span class="string">"txpool::nonce_pool readiness nonce={:?} has no transaction starting from sender"</span>,
 <a href=#300 id=300 data-nosnippet>300</a>                    nonce
 <a href=#301 id=301 data-nosnippet>301</a>                );
@@ -318,7 +318,7 @@
 <a href=#318 id=318 data-nosnippet>318</a>        </span><span class="kw">let </span>size_elapsed = b.size - a.size;
 <a href=#319 id=319 data-nosnippet>319</a>        <span class="kw">let </span>cost_elapsed = b.cost - a.cost;
 <a href=#320 id=320 data-nosnippet>320</a>        <span class="kw">if </span>U256::from(size_elapsed - <span class="number">1</span>) != tx.nonce() - nonce {
-<a href=#321 id=321 data-nosnippet>321</a>            <span class="macro">debug!</span>(
+<a href=#321 id=321 data-nosnippet>321</a>            <span class="macro">trace!</span>(
 <a href=#322 id=322 data-nosnippet>322</a>                <span class="string">"txpool::nonce_pool readiness gap sender={:?} start_nonce={:?} first_missing_nonce={:?}"</span>,
 <a href=#323 id=323 data-nosnippet>323</a>                tx.sender(),
 <a href=#324 id=324 data-nosnippet>324</a>                nonce,
@@ -327,7 +327,7 @@
 <a href=#327 id=327 data-nosnippet>327</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
 <a href=#328 id=328 data-nosnippet>328</a>        }
 <a href=#329 id=329 data-nosnippet>329</a>        <span class="kw">if </span>cost_elapsed &gt; balance {
-<a href=#330 id=330 data-nosnippet>330</a>            <span class="macro">debug!</span>(
+<a href=#330 id=330 data-nosnippet>330</a>            <span class="macro">trace!</span>(
 <a href=#331 id=331 data-nosnippet>331</a>                <span class="string">"txpool::nonce_pool readiness insufficient balance sender={:?} need={:?} have={:?}"</span>,
 <a href=#332 id=332 data-nosnippet>332</a>                tx.sender(),
 <a href=#333 id=333 data-nosnippet>333</a>                cost_elapsed,
@@ -341,7 +341,7 @@
 <a href=#341 id=341 data-nosnippet>341</a>            b,
 <a href=#342 id=342 data-nosnippet>342</a>            balance - cost_elapsed,
 <a href=#343 id=343 data-nosnippet>343</a>        );
-<a href=#344 id=344 data-nosnippet>344</a>        <span class="macro">debug!</span>(
+<a href=#344 id=344 data-nosnippet>344</a>        <span class="macro">trace!</span>(
 <a href=#345 id=345 data-nosnippet>345</a>            <span class="string">"txpool::nonce_pool readiness range sender={:?} start_nonce={:?} end_nonce={:?} first_hash={:?}"</span>,
 <a href=#346 id=346 data-nosnippet>346</a>            tx.sender(),
 <a href=#347 id=347 data-nosnippet>347</a>            tx.nonce(),

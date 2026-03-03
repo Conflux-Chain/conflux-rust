@@ -145,7 +145,7 @@
 <a href=#145 id=145 data-nosnippet>145</a>        {
 <a href=#146 id=146 data-nosnippet>146</a>            <span class="lifetime">'sender</span>: <span class="kw">for </span>tx <span class="kw">in </span>sender_txs.iter() {
 <a href=#147 id=147 data-nosnippet>147</a>                <span class="kw">if </span>tx.gas_price() &lt; <span class="kw-2">&amp;</span>tx_min_price {
-<a href=#148 id=148 data-nosnippet>148</a>                    <span class="macro">debug!</span>(
+<a href=#148 id=148 data-nosnippet>148</a>                    <span class="macro">trace!</span>(
 <a href=#149 id=149 data-nosnippet>149</a>                        <span class="string">"txpool::packing_sampler skip sender={:?} nonce={} reason=low_price tx_price={} min_price={}"</span>,
 <a href=#150 id=150 data-nosnippet>150</a>                        sender,
 <a href=#151 id=151 data-nosnippet>151</a>                        tx.nonce(),
@@ -157,7 +157,7 @@
 <a href=#157 id=157 data-nosnippet>157</a>                <span class="kw">match </span>validity(<span class="kw-2">&amp;*</span>tx) {
 <a href=#158 id=158 data-nosnippet>158</a>                    PackingCheckResult::Pack =&gt; {}
 <a href=#159 id=159 data-nosnippet>159</a>                    PackingCheckResult::Pending =&gt; {
-<a href=#160 id=160 data-nosnippet>160</a>                        <span class="macro">debug!</span>(
+<a href=#160 id=160 data-nosnippet>160</a>                        <span class="macro">trace!</span>(
 <a href=#161 id=161 data-nosnippet>161</a>                            <span class="string">"txpool::packing_sampler stop sender={:?} nonce={} reason=pending"</span>,
 <a href=#162 id=162 data-nosnippet>162</a>                            sender,
 <a href=#163 id=163 data-nosnippet>163</a>                            tx.nonce()
@@ -166,7 +166,7 @@
 <a href=#166 id=166 data-nosnippet>166</a>                    }
 <a href=#167 id=167 data-nosnippet>167</a>                    PackingCheckResult::Drop =&gt; {
 <a href=#168 id=168 data-nosnippet>168</a>                        to_drop_txs.push(tx.clone());
-<a href=#169 id=169 data-nosnippet>169</a>                        <span class="macro">debug!</span>(
+<a href=#169 id=169 data-nosnippet>169</a>                        <span class="macro">trace!</span>(
 <a href=#170 id=170 data-nosnippet>170</a>                            <span class="string">"txpool::packing_sampler drop sender={:?} nonce={} reason=invalid"</span>,
 <a href=#171 id=171 data-nosnippet>171</a>                            sender,
 <a href=#172 id=172 data-nosnippet>172</a>                            tx.nonce()
@@ -179,7 +179,7 @@
 <a href=#179 id=179 data-nosnippet>179</a>                <span class="kw">if </span>gas_limit &gt; rest_gas_limit {
 <a href=#180 id=180 data-nosnippet>180</a>                    <span class="kw">if </span>gas_limit &gt;= minimum_unit_gas_limit {
 <a href=#181 id=181 data-nosnippet>181</a>                        minimum_unit_gas_limit += minimum_unit_gas_limit &gt;&gt; <span class="number">4</span>;
-<a href=#182 id=182 data-nosnippet>182</a>                        <span class="macro">debug!</span>(
+<a href=#182 id=182 data-nosnippet>182</a>                        <span class="macro">trace!</span>(
 <a href=#183 id=183 data-nosnippet>183</a>                            <span class="string">"txpool::packing_sampler sender={:?} nonce={} gas_limit={} exceeds remaining_gas={} adjust_threshold={}"</span>,
 <a href=#184 id=184 data-nosnippet>184</a>                            sender,
 <a href=#185 id=185 data-nosnippet>185</a>                            tx.nonce(),
@@ -189,7 +189,7 @@
 <a href=#189 id=189 data-nosnippet>189</a>                        );
 <a href=#190 id=190 data-nosnippet>190</a>                        <span class="kw">break </span><span class="lifetime">'sender</span>;
 <a href=#191 id=191 data-nosnippet>191</a>                    } <span class="kw">else </span>{
-<a href=#192 id=192 data-nosnippet>192</a>                        <span class="macro">debug!</span>(
+<a href=#192 id=192 data-nosnippet>192</a>                        <span class="macro">trace!</span>(
 <a href=#193 id=193 data-nosnippet>193</a>                            <span class="string">"txpool::packing_sampler stop all space={:?} reason=gas_exhausted remaining_gas={} next_gas_limit={}"</span>,
 <a href=#194 id=194 data-nosnippet>194</a>                            space,
 <a href=#195 id=195 data-nosnippet>195</a>                            rest_gas_limit,
@@ -203,7 +203,7 @@
 <a href=#203 id=203 data-nosnippet>203</a>                <span class="kw">if </span>tx_size &gt; rest_size_limit {
 <a href=#204 id=204 data-nosnippet>204</a>                    <span class="kw">if </span>tx_size &gt;= minimum_unit_tx_size {
 <a href=#205 id=205 data-nosnippet>205</a>                        minimum_unit_tx_size += minimum_unit_tx_size &gt;&gt; <span class="number">4</span>;
-<a href=#206 id=206 data-nosnippet>206</a>                        <span class="macro">debug!</span>(
+<a href=#206 id=206 data-nosnippet>206</a>                        <span class="macro">trace!</span>(
 <a href=#207 id=207 data-nosnippet>207</a>                            <span class="string">"txpool::packing_sampler sender={:?} nonce={} tx_size={} exceeds remaining_size={} adjust_threshold_size={}"</span>,
 <a href=#208 id=208 data-nosnippet>208</a>                            sender,
 <a href=#209 id=209 data-nosnippet>209</a>                            tx.nonce(),
@@ -213,7 +213,7 @@
 <a href=#213 id=213 data-nosnippet>213</a>                        );
 <a href=#214 id=214 data-nosnippet>214</a>                        <span class="kw">break </span><span class="lifetime">'sender</span>;
 <a href=#215 id=215 data-nosnippet>215</a>                    } <span class="kw">else </span>{
-<a href=#216 id=216 data-nosnippet>216</a>                        <span class="macro">debug!</span>(
+<a href=#216 id=216 data-nosnippet>216</a>                        <span class="macro">trace!</span>(
 <a href=#217 id=217 data-nosnippet>217</a>                            <span class="string">"txpool::packing_sampler stop all space={:?} reason=size_exhausted remaining_size={} next_size={}"</span>,
 <a href=#218 id=218 data-nosnippet>218</a>                            space,
 <a href=#219 id=219 data-nosnippet>219</a>                            rest_size_limit,
@@ -227,7 +227,7 @@
 <a href=#227 id=227 data-nosnippet>227</a>                rest_size_limit -= tx_size;
 <a href=#228 id=228 data-nosnippet>228</a>
 <a href=#229 id=229 data-nosnippet>229</a>                to_pack_txs.push(tx.clone());
-<a href=#230 id=230 data-nosnippet>230</a>                <span class="macro">debug!</span>(
+<a href=#230 id=230 data-nosnippet>230</a>                <span class="macro">trace!</span>(
 <a href=#231 id=231 data-nosnippet>231</a>                    <span class="string">"txpool::packing_sampler select sender={:?} nonce={} remaining_gas={} remaining_size={} count={}"</span>,
 <a href=#232 id=232 data-nosnippet>232</a>                    sender,
 <a href=#233 id=233 data-nosnippet>233</a>                    tx.nonce(),
@@ -249,7 +249,7 @@
 <a href=#249 id=249 data-nosnippet>249</a>        // directly may break gc logic. So we only update packing
 <a href=#250 id=250 data-nosnippet>250</a>        // pool now.
 <a href=#251 id=251 data-nosnippet>251</a>        </span><span class="kw">for </span>tx <span class="kw">in </span>to_drop_txs {
-<a href=#252 id=252 data-nosnippet>252</a>            <span class="macro">debug!</span>(
+<a href=#252 id=252 data-nosnippet>252</a>            <span class="macro">trace!</span>(
 <a href=#253 id=253 data-nosnippet>253</a>                <span class="string">"txpool::packing_sampler prune sender={:?} nonce={}"</span>,
 <a href=#254 id=254 data-nosnippet>254</a>                tx.sender(),
 <a href=#255 id=255 data-nosnippet>255</a>                tx.nonce()
