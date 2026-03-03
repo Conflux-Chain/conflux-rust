@@ -168,9 +168,7 @@ impl Meter for StandardMeter {
 
     fn rate_mean(&self) -> f64 { f64::from_bits(self.snapshot.read().rates[3]) }
 
-    fn rate_m0(&self) -> f64 {
-        f64::from_bits(self.snapshot.read().rates[4])
-    }
+    fn rate_m0(&self) -> f64 { f64::from_bits(self.snapshot.read().rates[4]) }
 
     fn snapshot(&self) -> Arc<dyn Meter> {
         Arc::new(self.snapshot.read().clone())
