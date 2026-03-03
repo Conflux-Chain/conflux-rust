@@ -15,6 +15,7 @@ build_clippy/
 **/pos_db/
 **/sqlite_db/
 **/net_config/
+**/pos_config/
 **/*.log
 **/stderr.txt
 **/testnet.toml
@@ -27,3 +28,4 @@ venv
 testdata/evm-spec-test/
 testdata/config.toml
 testdata/evm-spec-test.tar
+run/dev_metrics.toml
