@@ -295,7 +295,7 @@ impl NoncePool {
         let tx = match self.map.query(&nonce) {
             Some(tx) => tx,
             None => {
-                debug!(
+                trace!(
                     "txpool::nonce_pool readiness nonce={:?} has no transaction starting from sender",
                     nonce
                 );
@@ -318,7 +318,7 @@ impl NoncePool {
         let size_elapsed = b.size - a.size;
         let cost_elapsed = b.cost - a.cost;
         if U256::from(size_elapsed - 1) != tx.nonce() - nonce {
-            debug!(
+            trace!(
                 "txpool::nonce_pool readiness gap sender={:?} start_nonce={:?} first_missing_nonce={:?}",
                 tx.sender(),
                 nonce,
@@ -327,7 +327,7 @@ impl NoncePool {
             return None;
         }
         if cost_elapsed > balance {
-            debug!(
+            trace!(
                 "txpool::nonce_pool readiness insufficient balance sender={:?} need={:?} have={:?}",
                 tx.sender(),
                 cost_elapsed,
@@ -341,7 +341,7 @@ impl NoncePool {
             b,
             balance - cost_elapsed,
         );
-        debug!(
+        trace!(
             "txpool::nonce_pool readiness range sender={:?} start_nonce={:?} end_nonce={:?} first_hash={:?}",
             tx.sender(),
             tx.nonce(),

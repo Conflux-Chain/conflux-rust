@@ -145,7 +145,7 @@ impl DeferredPool {
         {
             'sender: for tx in sender_txs.iter() {
                 if tx.gas_price() < &tx_min_price {
-                    debug!(
+                    trace!(
                         "txpool::packing_sampler skip sender={:?} nonce={} reason=low_price tx_price={} min_price={}",
                         sender,
                         tx.nonce(),
@@ -157,7 +157,7 @@ impl DeferredPool {
                 match validity(&*tx) {
                     PackingCheckResult::Pack => {}
                     PackingCheckResult::Pending => {
-                        debug!(
+                        trace!(
                             "txpool::packing_sampler stop sender={:?} nonce={} reason=pending",
                             sender,
                             tx.nonce()
@@ -166,7 +166,7 @@ impl DeferredPool {
                     }
                     PackingCheckResult::Drop => {
                         to_drop_txs.push(tx.clone());
-                        debug!(
+                        trace!(
                             "txpool::packing_sampler drop sender={:?} nonce={} reason=invalid",
                             sender,
                             tx.nonce()
@@ -179,7 +179,7 @@ impl DeferredPool {
                 if gas_limit > rest_gas_limit {
                     if gas_limit >= minimum_unit_gas_limit {
                         minimum_unit_gas_limit += minimum_unit_gas_limit >> 4;
-                        debug!(
+                        trace!(
                             "txpool::packing_sampler sender={:?} nonce={} gas_limit={} exceeds remaining_gas={} adjust_threshold={}",
                             sender,
                             tx.nonce(),
@@ -189,7 +189,7 @@ impl DeferredPool {
                         );
                         break 'sender;
                     } else {
-                        debug!(
+                        trace!(
                             "txpool::packing_sampler stop all space={:?} reason=gas_exhausted remaining_gas={} next_gas_limit={}",
                             space,
                             rest_gas_limit,
@@ -203,7 +203,7 @@ impl DeferredPool {
                 if tx_size > rest_size_limit {
                     if tx_size >= minimum_unit_tx_size {
                         minimum_unit_tx_size += minimum_unit_tx_size >> 4;
-                        debug!(
+                        trace!(
                             "txpool::packing_sampler sender={:?} nonce={} tx_size={} exceeds remaining_size={} adjust_threshold_size={}",
                             sender,
                             tx.nonce(),
@@ -213,7 +213,7 @@ impl DeferredPool {
                         );
                         break 'sender;
                     } else {
-                        debug!(
+                        trace!(
                             "txpool::packing_sampler stop all space={:?} reason=size_exhausted remaining_size={} next_size={}",
                             space,
                             rest_size_limit,
@@ -227,7 +227,7 @@ impl DeferredPool {
                 rest_size_limit -= tx_size;
 
                 to_pack_txs.push(tx.clone());
-                debug!(
+                trace!(
                     "txpool::packing_sampler select sender={:?} nonce={} remaining_gas={} remaining_size={} count={}",
                     sender,
                     tx.nonce(),
@@ -249,7 +249,7 @@ impl DeferredPool {
         // directly may break gc logic. So we only update packing
         // pool now.
         for tx in to_drop_txs {
-            debug!(
+            trace!(
                 "txpool::packing_sampler prune sender={:?} nonce={}",
                 tx.sender(),
                 tx.nonce()
