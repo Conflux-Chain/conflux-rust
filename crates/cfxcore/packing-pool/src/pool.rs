@@ -82,7 +82,8 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             Err(e) => {
                 trace!(
                     "packing_pool::insert failed hash={:?} err={:?}",
-                    tx_hash, e
+                    tx_hash,
+                    e
                 );
             }
         }
@@ -144,7 +145,9 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
         let config = &self.config;
         trace!(
             "packing_pool::split_off sender={:?} start_nonce={} keep_prefix={}",
-            sender, start_nonce, keep_prefix
+            sender,
+            start_nonce,
+            keep_prefix
         );
         let update = move |node: &mut Node<PackingPoolMap<TX>>| {
             let old_info = node.value.pack_info();
