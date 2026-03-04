@@ -81,8 +81,6 @@ use crate::{
 };
 use diem_types::block_metadata::BlockMetadata;
 
-#[cfg(any(feature = "diemsum"))]
-pub mod diemsum;
 // Used in this and other crates for testing.
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod test_helper;
