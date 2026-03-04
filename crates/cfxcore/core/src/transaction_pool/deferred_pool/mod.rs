@@ -381,7 +381,7 @@ impl DeferredPool {
         let bucket = match self.buckets.get_mut(addr) {
             Some(bucket) => bucket,
             None => {
-                debug!(
+                trace!(
                     "txpool::packing readiness addr={:?} missing bucket",
                     addr
                 );
@@ -394,7 +394,7 @@ impl DeferredPool {
         let (first_tx, last_valid_nonce) = if let Some(info) = pack_info {
             info
         } else {
-            debug!(
+            trace!(
                 "txpool::packing readiness addr={:?} no contiguous unpaid tx (nonce={:?}, balance={:?})",
                 addr, nonce, balance
             );
@@ -403,7 +403,7 @@ impl DeferredPool {
             return None;
         };
 
-        debug!(
+        trace!(
             "txpool::packing readiness addr={:?} candidate window start_nonce={:?} last_valid_nonce={:?} first_tx_hash={:?}",
             addr,
             first_tx.nonce(),
@@ -441,7 +441,7 @@ impl DeferredPool {
                 .in_space_mut(addr.space)
                 .split_off_prefix(*addr, &first_valid_nonce);
             if !dropped.is_empty() {
-                debug!(
+                trace!(
                     "txpool::packing readiness addr={:?} dropped {} txs with nonce < {:?}",
                     addr,
                     dropped.len(),
@@ -456,7 +456,7 @@ impl DeferredPool {
                 .in_space_mut(addr.space)
                 .split_off_suffix(*addr, &(last_valid_nonce + 1));
             if !dropped.is_empty() {
-                debug!(
+                trace!(
                     "txpool::packing readiness addr={:?} dropped {} txs with nonce > {:?}",
                     addr,
                     dropped.len(),
@@ -474,7 +474,7 @@ impl DeferredPool {
                     .insert(tx.transaction.clone());
                 match &res {
                     Ok(_) => {
-                        debug!(
+                        trace!(
                             "txpool::packing readiness addr={:?} promoted tx hash={:?} nonce={:?} evicted={}",
                             addr,
                             tx.transaction.hash(),
@@ -483,7 +483,7 @@ impl DeferredPool {
                         );
                     }
                     Err(e) => {
-                        debug!(
+                        trace!(
                             "txpool::packing readiness addr={:?} failed to promote tx hash={:?} nonce={:?} err={:?}",
                             addr,
                             tx.transaction.hash(),
