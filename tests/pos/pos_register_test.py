@@ -28,10 +28,12 @@ class PosRegisterTest(ConfluxTestFramework):
 
         client0.generate_empty_blocks(30)
         pos_identifier0, priv_key0 = client0.wait_for_pos_register(priv_key=priv0, legacy=True)
+        sync_blocks(self.nodes)
         _, priv_key1 = client1.wait_for_pos_register(priv_key=priv1, legacy=False, should_fail=True)
 
         client0.generate_empty_blocks(1000)
         pos_identifier2, priv_key2 = client2.wait_for_pos_register(priv_key=priv2, legacy=False)
+        sync_blocks(self.nodes)
         client3.wait_for_pos_register(priv_key=priv3, legacy=True, should_fail=True)
 
         self.log.info("Done")
