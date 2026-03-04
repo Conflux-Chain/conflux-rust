@@ -1616,8 +1616,8 @@ impl ConsensusNewBlockHandler {
             } else {
                 confirmed_height -= DEFERRED_STATE_EPOCH_COUNT;
             }
-            // We can not assume that confirmed epoch are already executed,
-            // but we can assume that the deferred block are executed.
+            confirmed_height =
+                inner.confirmed_height_for_state_maintenance(confirmed_height);
             self.data_man
                 .storage_manager
                 .get_storage_manager()
@@ -2090,6 +2090,10 @@ impl ConsensusNewBlockHandler {
                     } else {
                         confirmed_height -= DEFERRED_STATE_EPOCH_COUNT;
                     }
+                    confirmed_height = inner
+                        .confirmed_height_for_state_maintenance(
+                            confirmed_height,
+                        );
 
                     self.data_man
                         .storage_manager
