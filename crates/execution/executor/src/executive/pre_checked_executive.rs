@@ -1,5 +1,4 @@
 use super::{
-    contract_address,
     executed::make_ext_result,
     fresh_executive::CostInfo,
     transact_options::{ChargeCollateral, TransactSettings},
@@ -18,23 +17,20 @@ use crate::{
 };
 use cfx_parameters::staking::code_collateral_units;
 use cfx_vm_types::{
-    self as vm, ActionParams, ActionValue, CallType, CreateContractAddress,
-    CreateType,
+    self as vm, ActionParams, ActionValue, CallType, CreateType,
 };
 
 use cfx_parity_trace_types::{SetAuth, SetAuthOutcome};
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
-    Address, AddressSpaceUtil, BigEndianHash, Space, H256, U256, U512,
+    cal_contract_address_with_space, Address, AddressSpaceUtil,
+    CreateContractAddressType, Space, U256, U512,
 };
-use cfxkey::{public_to_address, Signature};
-use keccak_hash::keccak;
 use primitives::{
     transaction::Action, AuthorizationListItem, SignedTransaction,
+    CODE_PREFIX_7702,
 };
-use rlp::RlpStream;
 use std::{convert::TryInto, sync::Arc};
-use vm::CODE_PREFIX_7702;
 
 pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserver> {
     pub context: ExecutiveContext<'a>,
@@ -166,7 +162,6 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     fn make_action_params(&self) -> DbResult<ActionParams> {
         let tx = self.tx;
         let cost = &self.cost;
-        let env = self.context.env;
         let state = &*self.context.state;
         let sender = tx.sender();
         let nonce = tx.nonce();
@@ -177,13 +172,14 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             Action::Create => {
                 let address_scheme = match tx.space() {
                     Space::Native => {
-                        CreateContractAddress::FromSenderNonceAndCodeHash
+                        CreateContractAddressType::FromSenderNonceAndCodeHash
                     }
-                    Space::Ethereum => CreateContractAddress::FromSenderNonce,
+                    Space::Ethereum => {
+                        CreateContractAddressType::FromSenderNonce
+                    }
                 };
-                let (new_address, code_hash) = contract_address(
+                let (new_address, code_hash) = cal_contract_address_with_space(
                     address_scheme,
-                    env.number.into(),
                     &sender,
                     &nonce,
                     &tx.data(),
@@ -689,8 +685,6 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 
 impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     fn process_cip7702_authorization(&mut self) -> DbResult<u64> {
-        const MAGIC: u8 = 0x05;
-
         let Some(authorization_list) = self.tx.authorization_list() else {
             return Ok(0);
         };
@@ -701,15 +695,13 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             self.context.env.chain_id[&Space::Ethereum] as u64;
         let state = &mut self.context.state;
 
-        for AuthorizationListItem {
-            chain_id,
-            address,
-            nonce,
-            y_parity,
-            r,
-            s,
-        } in authorization_list.iter()
-        {
+        for auth_item in authorization_list.iter() {
+            let AuthorizationListItem {
+                chain_id,
+                address,
+                nonce,
+                ..
+            } = auth_item;
             let mut set_auth_action = SetAuth {
                 space: self.tx.space(),
                 chain_id: *chain_id,
@@ -719,53 +711,37 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 outcome: SetAuthOutcome::Success,
             };
             // 1. Verify the chain id is either 0 or the chain's current ID.
-            if *chain_id != U256::zero()
-                && *chain_id != U256::from(current_chain_id)
-            {
+            if !auth_item.is_chain_id_valid(current_chain_id) {
                 set_auth_action.outcome = SetAuthOutcome::InvalidChainId;
                 self.observer.as_tracer().record_set_auth(set_auth_action);
                 continue;
             }
 
             // 2. Verify the nonce is less than 2**64 - 1
-            if *nonce == u64::MAX {
+            if !auth_item.is_nonce_valid() {
                 set_auth_action.outcome = SetAuthOutcome::NonceOverflow;
                 self.observer.as_tracer().record_set_auth(set_auth_action);
                 continue;
             }
 
-            let valid_signature = {
-                let r: H256 = BigEndianHash::from_uint(r);
-                let s: H256 = BigEndianHash::from_uint(s);
-                let signature = Signature::from_rsv(&r, &s, *y_parity);
-                if !signature.is_low_s() || !signature.is_valid() {
+            let _validator_signature = match auth_item.signature() {
+                Some(sig) => sig,
+                None => {
                     set_auth_action.outcome = SetAuthOutcome::InvalidSignature;
                     self.observer.as_tracer().record_set_auth(set_auth_action);
                     continue;
                 }
-                signature
             };
 
-            // 3. authority = ecrecover(keccak(MAGIC || rlp([chain_id, address,
-            //    nonce])), y_parity, r, s)
-            let authorization_hash = {
-                let mut rlp = RlpStream::new_list(3);
-                rlp.append(chain_id).append(address).append(nonce);
-
-                let mut hash_input = vec![MAGIC];
-                hash_input.extend_from_slice(rlp.as_raw());
-
-                keccak(hash_input)
-            };
-            let authority = if let Ok(public) =
-                cfxkey::recover(&valid_signature, &authorization_hash)
-            {
-                public_to_address(&public, /* type_nibble */ false)
-                    .with_evm_space()
-            } else {
-                set_auth_action.outcome = SetAuthOutcome::InvalidSignature;
-                self.observer.as_tracer().record_set_auth(set_auth_action);
-                continue;
+            // 3. authority = ecrecover(keccak(AUTH_MAGIC || rlp([chain_id,
+            //    address, nonce])), y_parity, r, s)
+            let authority = match auth_item.authority() {
+                Some(addr) => addr.with_evm_space(),
+                None => {
+                    set_auth_action.outcome = SetAuthOutcome::InvalidSignature;
+                    self.observer.as_tracer().record_set_auth(set_auth_action);
+                    continue;
+                }
             };
 
             set_auth_action.author = Some(authority.address);
