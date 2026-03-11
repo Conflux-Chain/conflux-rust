@@ -6,9 +6,12 @@
 extern crate lazy_static;
 
 use cfx_types::U256;
+use once_cell::sync::OnceCell;
 
 pub mod genesis;
 pub mod internal_contract_addresses;
+
+pub static EVM_TX_GAS_RATIO: OnceCell<u64> = OnceCell::new();
 
 pub mod consensus {
     pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
@@ -251,10 +254,6 @@ pub mod block {
     // core space after CIP1559 is enabled. Setting it to N means that only N/10
     // of the block gas limit can be used for core space transactions.
     pub const CIP1559_CORE_TRANSACTION_GAS_RATIO: u64 = 9;
-    // The following parameter controls the ratio of block gas limit for the
-    // espace after CIP1559 is enabled. Setting it to N means that only N/10
-    // of the block gas limit can be used for  espace transactions.
-    pub const CIP1559_ESPACE_TRANSACTION_GAS_RATIO: u64 = 5;
 
     pub fn espace_block_gas_limit(
         can_pack_espace_tx: bool, block_gas_limit: U256,
@@ -269,8 +268,9 @@ pub mod block {
     pub fn espace_block_gas_limit_of_enabled_block(
         block_gas_limit: U256,
     ) -> U256 {
-        block_gas_limit * CIP1559_ESPACE_TRANSACTION_GAS_RATIO
-            / super::RATIO_BASE_TEN
+        use crate::EVM_TX_GAS_RATIO;
+        let evm_tx_gas_ratio = *EVM_TX_GAS_RATIO.get().unwrap_or(&2);
+        block_gas_limit / evm_tx_gas_ratio
     }
 
     pub fn cspace_block_gas_limit(

@@ -1791,6 +1791,7 @@ dependencies = [
  "cfxkey",
  "hex-literal",
  "lazy_static",
+ "once_cell",
  "rustc-hex",
 ]
 

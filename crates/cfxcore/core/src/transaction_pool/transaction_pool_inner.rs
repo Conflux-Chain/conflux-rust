@@ -771,7 +771,9 @@ impl TransactionPoolInner {
             machine.params().can_pack_evm_transaction(best_epoch_height);
 
         let (evm_packed_tx_num, evm_used_size) = if can_pack_evm {
-            let gas_target = block_gas_limit * 5 / 10 / ELASTICITY_MULTIPLIER;
+            let gas_target = block_gas_limit
+                / machine.params().evm_transaction_gas_ratio
+                / ELASTICITY_MULTIPLIER;
             let parent_base_price = parent_base_price[Space::Ethereum];
             let min_base_price =
                 machine.params().min_base_price()[Space::Ethereum];

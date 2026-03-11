@@ -14,3 +14,4 @@ cfx-bytes = { workspace = true }
 lazy_static ={ workspace = true }
 hex-literal = { workspace = true }
 rustc-hex = { workspace = true }
+once_cell = { workspace = true }

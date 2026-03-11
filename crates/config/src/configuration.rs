@@ -17,6 +17,7 @@ use cfx_internal_common::{
 };
 use cfx_parameters::{
     block::DEFAULT_TARGET_BLOCK_GAS_LIMIT, tx_pool::TXPOOL_DEFAULT_NONCE_BITS,
+    EVM_TX_GAS_RATIO,
 };
 use cfx_rpc_cfx_types::{
     address::USE_SIMPLE_RPC_ADDRESS, apis::ApiSet, RpcImplConfiguration,
@@ -490,6 +491,10 @@ impl Configuration {
 
         USE_SIMPLE_RPC_ADDRESS
             .set(config.raw_conf.rpc_address_simple_mode)
+            .expect("called once");
+
+        EVM_TX_GAS_RATIO
+            .set(config.raw_conf.evm_transaction_gas_ratio)
             .expect("called once");
 
         Ok(config)
