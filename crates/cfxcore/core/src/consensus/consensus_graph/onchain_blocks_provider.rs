@@ -114,7 +114,9 @@ impl ConsensusGraph {
     ) -> Result<H256, ProviderBlockError> {
         self.get_height_from_epoch_number(epoch_number)
             .and_then(|height| {
-                self.inner.read().get_pivot_hash_from_epoch_number(height)
+                self.inner
+                    .read_recursive()
+                    .get_pivot_hash_from_epoch_number(height)
             })
     }
 

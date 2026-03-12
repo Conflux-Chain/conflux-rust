@@ -949,7 +949,7 @@ impl TransactionPool {
             ) {
                 // TODO: A transaction that is packed multiple times would also
                 // throw an error here, but it should be normal.
-                debug!("set tx err: tx={}, e={:?}", tx_hash, e);
+                trace!("set tx err: tx={}, e={:?}", tx_hash, e);
             }
         }
 

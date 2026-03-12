@@ -18,39 +18,32 @@ const TEST_NUMBER_OF_KEYS: usize = 100000;
 #[derive(Default)]
 pub struct FakeDbForStateTest {}
 
-// Compatible hack for KeyValueDB
-impl MallocSizeOf for FakeDbForStateTest {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
-}
-
 impl KeyValueDB for FakeDbForStateTest {
     fn get(&self, _col: u32, _key: &[u8]) -> std::io::Result<Option<DBValue>> {
         Ok(None)
     }
 
-    fn get_by_prefix(&self, _col: u32, _prefix: &[u8]) -> Option<Box<[u8]>> {
+    fn get_by_prefix(
+        &self, _col: u32, _prefix: &[u8],
+    ) -> std::io::Result<Option<DBValue>> {
         unreachable!()
     }
 
-    /// No-op
-    fn write_buffered(&self, _transaction: DBTransaction) {}
-
-    /// No-op
-    fn flush(&self) -> std::io::Result<()> { Ok(()) }
+    fn write(&self, _transaction: DBTransaction) -> std::io::Result<()> {
+        Ok(())
+    }
 
     fn iter<'a>(
         &'a self, _col: u32,
-    ) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)>> {
+    ) -> Box<dyn Iterator<Item = std::io::Result<kvdb::DBKeyValue>> + 'a> {
         unreachable!()
     }
 
-    fn iter_from_prefix<'a>(
+    fn iter_with_prefix<'a>(
         &'a self, _col: u32, _prefix: &'a [u8],
-    ) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)>> {
+    ) -> Box<dyn Iterator<Item = std::io::Result<kvdb::DBKeyValue>> + 'a> {
         unreachable!()
     }
-
-    fn restore(&self, _new_db: &str) -> std::io::Result<()> { unreachable!() }
 }
 
 #[cfg(any(test, feature = "testonly_code"))]
@@ -260,7 +253,6 @@ use crate::{
 };
 use fallible_iterator::FallibleIterator;
 use kvdb::{DBTransaction, DBValue, KeyValueDB};
-use parity_util_mem::{MallocSizeOf, MallocSizeOfOps};
 use primitives::StorageKeyWithSpace;
 #[cfg(any(test, feature = "testonly_code"))]
 use rand::random;
