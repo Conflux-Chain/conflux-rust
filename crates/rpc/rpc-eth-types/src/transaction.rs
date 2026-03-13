@@ -19,6 +19,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Bytes, SignedAuthorization};
+use cfx_rpc_cfx_types::Transaction as CfxTransaction;
 use cfx_types::{
     cal_contract_address, CreateContractAddressType, H160, H256, H512, U256,
     U64,
@@ -188,4 +189,11 @@ impl Transaction {
             Action::Call(_) => None,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WrapTransaction {
+    NativeTransaction(CfxTransaction),
+    EthTransaction(Transaction),
 }

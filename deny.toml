@@ -75,13 +75,13 @@ ignore = [
     #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
     #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
     #{ crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },
-    "RUSTSEC-2024-0436", # paste unmaintained
-    "RUSTSEC-2022-0080", # parity-util-mem unmaintained
-    "RUSTSEC-2020-0016", # net2 unmaintained
-    "RUSTSEC-2024-0384", # instant unmaintained
-    "RUSTSEC-2024-0388", # derivative unmaintained
-    "RUSTSEC-2025-0056", # adler is unmaintained, use adler2 instead
-    "RUSTSEC-2025-0137", # https://github.com/rustsec/advisory-db/pull/2538#issuecomment-3684201405
+
+    # paste unmaintained; external transitive dep, no fix until upstream.
+    "RUSTSEC-2024-0436",
+    # net2 unmaintained; pulled by legacy jsonrpc/parity-ws, external.
+    "RUSTSEC-2020-0016",
+    # instant unmaintained; pulled by parking_lot 0.11 via jsonrpc + prometheus 0.12.
+    "RUSTSEC-2024-0384",
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
@@ -271,7 +271,6 @@ unknown-git = "deny"
 allow-registry = [
     "https://github.com/rust-lang/crates.io-index",
     "https://github.com/paritytech/bn",
-    "https://github.com/alloy-rs/alloy",
 ]
 # List of URLs for allowed Git repositories
 allow-git = [
@@ -287,8 +286,6 @@ allow-git = [
     "https://github.com/aleksuss/pipe-logger-lib.git",
 
     "https://github.com/andrcmdr/vrf-rs.git",
-    "https://github.com/Pana/mio-timer",
-    "https://github.com/Pana/mio-misc",
 ]
 
 [sources.allow-org]

@@ -50,7 +50,6 @@ move-core-types = { workspace = true }
 
 [features]
 default = []
-diemsum = []
 fuzzing = [
     "proptest",
     "proptest-derive",

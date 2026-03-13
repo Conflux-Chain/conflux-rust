@@ -4,6 +4,10 @@ from web3 import Web3
 from typing import List
 from web3.types import FilterTrace, TxReceipt
 from integration_tests.test_framework.util import load_contract_metadata
+from integration_tests.test_framework.util.eip7702.eip7702 import (
+    send_eip7702_transaction,
+    sign_authorization,
+)
 
 
 def verify_erc20_token_transfer_trace(traces: List[FilterTrace], receipt: TxReceipt):
@@ -79,3 +83,58 @@ def test_trace_suicide(ew3, evm_accounts, ew3_tracing):
     assert traces[1]["type"] == "suicide"
     assert traces[1]["action"]["refundAddress"] == account.address
     assert traces[1]["traceAddress"] == [0]
+
+
+def _fund_account(ew3: Web3, from_address: str, to_address: str, amount_wei: int) -> None:
+    tx_hash = ew3.eth.send_transaction(
+        {"from": from_address, "to": to_address, "value": amount_wei}
+    )
+    ew3.eth.wait_for_transaction_receipt(tx_hash)
+
+
+def test_trace_block_set_auth(ew3: Web3, evm_accounts, erc20_contract) -> None:
+    sender = ew3.eth.account.create()
+    auth = ew3.eth.account.create()
+
+    _fund_account(ew3, evm_accounts[0].address, sender.address, ew3.to_wei(1, "ether"))
+    _fund_account(ew3, evm_accounts[0].address, auth.address, ew3.to_wei(1, "ether"))
+
+    chain_id = ew3.eth.chain_id
+    contract_address = erc20_contract["contract"].address
+    authorization = sign_authorization(
+        contract_address=contract_address,
+        chain_id=chain_id,
+        nonce=0,
+        private_key=auth.key.to_0x_hex(),
+    )
+
+    tx_hash = send_eip7702_transaction(
+        ew3,
+        sender=sender,
+        transaction={
+            "authorizationList": [authorization],
+            "to": contract_address,
+            "value": 0,
+            "gas": 200000,
+        },
+    )
+    receipt = ew3.eth.wait_for_transaction_receipt(tx_hash)
+
+    traces = ew3.manager.request_blocking(
+        "trace_blockSetAuth", [Web3.to_hex(receipt["blockNumber"])]
+    )
+
+    assert traces is not None
+    assert len(traces) >= 1
+
+    trace0 = traces[0]
+    assert trace0["transactionHash"] == receipt["transactionHash"].to_0x_hex()
+    assert trace0["blockHash"] == receipt["blockHash"].to_0x_hex()
+    assert trace0["blockNumber"] == receipt["blockNumber"]
+    assert trace0["transactionPosition"] == receipt["transactionIndex"]
+    assert trace0["result"] == "success"
+
+    action = trace0["action"]
+    assert action["address"].lower() == contract_address.lower()
+    assert action["chainId"] == Web3.to_hex(chain_id)
+    assert action["nonce"] == "0x0"

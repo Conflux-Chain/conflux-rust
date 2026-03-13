@@ -87,12 +87,13 @@ use crate::{
             pos::Block as PosBlock, Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CfxRpcLogFilter,
-            CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
-            EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
-            PackedOrExecuted, Receipt as RpcReceipt,
-            RewardInfo as RpcRewardInfo, Status as RpcStatus,
-            StorageCollateralInfo, SyncGraphStates,
-            Transaction as RpcTransaction, TransactionRequest,
+            CheckBalanceAgainstTransactionResponse,
+            ConsensusGraphBlockExecutionState, ConsensusGraphBlockState,
+            ConsensusGraphStates, EpochNumber,
+            EstimateGasAndCollateralResponse, Log as RpcLog, PackedOrExecuted,
+            Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
+            Status as RpcStatus, StorageCollateralInfo, SyncGraphBlockState,
+            SyncGraphStates, Transaction as RpcTransaction, TransactionRequest,
         },
         CoreResult,
     },
@@ -633,6 +634,7 @@ impl RpcImpl {
             password,
             self.accounts.clone(),
         )
+        .map_err(Into::into)
     }
 
     fn send_transaction(
@@ -1249,7 +1251,13 @@ impl RpcImpl {
                         *self.sync.network.get_network_type(),
                     )?;
 
-                    ret.push(RpcRewardInfo::new(b, author, reward_result));
+                    ret.push(RpcRewardInfo {
+                        block_hash: b.into(),
+                        author,
+                        total_reward: reward_result.total_reward.into(),
+                        base_reward: reward_result.base_reward.into(),
+                        tx_fee: reward_result.tx_fee.into(),
+                    })
                 }
             }
         }
@@ -1532,12 +1540,55 @@ impl RpcImpl {
     pub fn consensus_graph_state(&self) -> CoreResult<ConsensusGraphStates> {
         let consensus_graph_states =
             STATE_EXPOSER.consensus_graph.lock().retrieve();
-        Ok(ConsensusGraphStates::new(consensus_graph_states))
+        // Ok(ConsensusGraphStates::new(consensus_graph_states))
+        let mut block_state_vec = Vec::new();
+        let mut block_execution_state_vec = Vec::new();
+
+        for block_state in &consensus_graph_states.block_state_vec {
+            block_state_vec.push(ConsensusGraphBlockState {
+                block_hash: block_state.block_hash.into(),
+                best_block_hash: block_state.best_block_hash.into(),
+                block_status: (block_state.block_status as u8).into(),
+                era_block_hash: block_state.era_block_hash.into(),
+                adaptive: block_state.adaptive,
+            })
+        }
+        for exec_state in &consensus_graph_states.block_execution_state_vec {
+            block_execution_state_vec.push(ConsensusGraphBlockExecutionState {
+                block_hash: exec_state.block_hash.into(),
+                deferred_state_root: exec_state.deferred_state_root.into(),
+                deferred_receipt_root: exec_state.deferred_receipt_root.into(),
+                deferred_logs_bloom_hash: exec_state
+                    .deferred_logs_bloom_hash
+                    .into(),
+                state_valid: exec_state.state_valid,
+            })
+        }
+
+        Ok(ConsensusGraphStates {
+            block_state_vec,
+            block_execution_state_vec,
+        })
     }
 
     pub fn sync_graph_state(&self) -> CoreResult<SyncGraphStates> {
         let sync_graph_states = STATE_EXPOSER.sync_graph.lock().retrieve();
-        Ok(SyncGraphStates::new(sync_graph_states))
+        let mut ready_block_vec = Vec::new();
+        for block_state in sync_graph_states.ready_block_vec {
+            ready_block_vec.push(SyncGraphBlockState {
+                block_hash: block_state.block_hash.into(),
+                parent: block_state.parent.into(),
+                referees: block_state
+                    .referees
+                    .iter()
+                    .map(|x| H256::from(*x))
+                    .collect(),
+                nonce: block_state.nonce.into(),
+                timestamp: U64::from(block_state.timestamp),
+                adaptive: block_state.adaptive,
+            })
+        }
+        Ok(SyncGraphStates { ready_block_vec })
     }
 
     /// Return (block_info.status, state_valid)
