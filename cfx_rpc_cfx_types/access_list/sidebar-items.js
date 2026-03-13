@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["from_primitive_access_list","to_primitive_access_list"],"struct":["CfxAccessListItem"],"type":["CfxAccessList"]};
