@@ -2,8 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{Bytes, RpcAddress};
+use crate::RpcAddress;
 use cfx_addr::Network;
+use cfx_rpc_primitives::Bytes;
 use cfx_types::{Space, H256, U256};
 use primitives::log_entry::{LocalizedLogEntry, LogEntry};
 use serde::{Deserialize, Serialize};
@@ -93,7 +94,7 @@ impl Log {
 
 #[cfg(test)]
 mod tests {
-    use crate::rpc::types::{Log, RpcAddress};
+    use crate::{Log, RpcAddress};
     use cfx_addr::Network;
     use cfx_types::{Space, H160, H256, U256};
     use serde_json;

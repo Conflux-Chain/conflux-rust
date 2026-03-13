@@ -20,7 +20,7 @@
 
 //! Pub-Sub types.
 
-use crate::rpc::types::{CfxRpcLogFilter, Header, Log};
+use crate::{CfxRpcLogFilter, Header, Log};
 use cfx_types::{H256, U256};
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
 use serde_json::{from_value, Value};

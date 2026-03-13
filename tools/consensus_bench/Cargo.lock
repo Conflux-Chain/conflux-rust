@@ -265,7 +265,7 @@ dependencies = [
  "rustc-hash 2.1.1",
  "serde",
  "sha3",
- "tiny-keccak",
+ "tiny-keccak 2.0.2",
 ]
 
 [[package]]
@@ -396,7 +396,7 @@ dependencies = [
  "quote",
  "syn 2.0.111",
  "syn-solidity",
- "tiny-keccak",
+ "tiny-keccak 2.0.2",
 ]
 
 [[package]]
@@ -534,6 +534,18 @@ name = "anyhow"
 version = "1.0.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
+
+[[package]]
+name = "app_dirs"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e73a24bad9bd6a94d6395382a6c69fe071708ae4409f763c5475e14ee896313d"
+dependencies = [
+ "ole32-sys",
+ "shell32-sys",
+ "winapi 0.2.8",
+ "xdg",
+]
 
 [[package]]
 name = "arc-swap"
@@ -1376,7 +1388,7 @@ dependencies = [
  "sha2 0.10.9",
  "subtle",
  "thiserror 2.0.18",
- "tiny-keccak",
+ "tiny-keccak 2.0.2",
  "typenum",
 ]
 
@@ -1454,7 +1466,7 @@ dependencies = [
  "solidity-abi",
  "solidity-abi-derive",
  "substrate-bn",
- "tiny-keccak",
+ "tiny-keccak 2.0.2",
  "typemap-ors",
 ]
 
@@ -1544,12 +1556,16 @@ dependencies = [
  "cfx-parameters",
  "cfx-parity-trace-types",
  "cfx-rpc-primitives",
+ "cfx-rpc-utils",
  "cfx-types",
  "cfx-util-macros",
  "cfx-vm-types",
+ "cfxcore-accounts",
+ "cfxkey",
  "diem-crypto",
  "diem-types",
  "jsonrpc-core",
+ "keccak-hash",
  "log",
  "once_cell",
  "parity-version",
@@ -1631,7 +1647,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "primitives",
  "rlp 0.4.6",
- "tiny-keccak",
+ "tiny-keccak 2.0.2",
 ]
 
 [[package]]
@@ -1688,7 +1704,7 @@ dependencies = [
 name = "cfx-types"
 version = "0.2.0"
 dependencies = [
- "ethereum-types",
+ "ethereum-types 0.9.2",
  "hex",
  "keccak-hash",
  "rlp 0.4.6",
@@ -1846,12 +1862,26 @@ dependencies = [
  "thiserror 2.0.18",
  "threadpool",
  "throttling",
- "tiny-keccak",
+ "tiny-keccak 2.0.2",
  "tokio",
  "tokio-stream",
  "toml 0.8.19",
  "treap-map",
  "unexpected",
+]
+
+[[package]]
+name = "cfxcore-accounts"
+version = "0.1.0"
+dependencies = [
+ "cfx-types",
+ "cfxkey",
+ "cfxstore",
+ "log",
+ "parking_lot 0.12.3",
+ "serde",
+ "serde_derive",
+ "serde_json",
 ]
 
 [[package]]
@@ -1918,8 +1948,30 @@ dependencies = [
  "serde",
  "sha2 0.10.9",
  "thiserror 2.0.18",
- "tiny-keccak",
+ "tiny-keccak 2.0.2",
  "zeroize",
+]
+
+[[package]]
+name = "cfxstore"
+version = "0.2.1"
+dependencies = [
+ "cfx-crypto",
+ "cfx-types",
+ "cfxkey",
+ "dir",
+ "libc",
+ "log",
+ "parity-wordlist",
+ "parking_lot 0.12.3",
+ "rand 0.9.0",
+ "rustc-hex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "smallvec 1.15.1",
+ "tempfile",
+ "time",
 ]
 
 [[package]]
@@ -2600,7 +2652,7 @@ dependencies = [
  "sha2 0.9.9",
  "static_assertions",
  "thiserror 1.0.63",
- "tiny-keccak",
+ "tiny-keccak 2.0.2",
  "vrf",
  "x25519-dalek-fiat",
 ]
@@ -2788,7 +2840,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "thiserror 1.0.63",
- "tiny-keccak",
+ "tiny-keccak 2.0.2",
 ]
 
 [[package]]
@@ -2810,6 +2862,16 @@ dependencies = [
  "const-oid 0.9.6",
  "crypto-common",
  "subtle",
+]
+
+[[package]]
+name = "dir"
+version = "0.1.2"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=09da4dfeecd754df2034d4e71a260277aaaf9783#09da4dfeecd754df2034d4e71a260277aaaf9783"
+dependencies = [
+ "app_dirs",
+ "ethereum-types 0.8.0",
+ "home 0.3.4",
 ]
 
 [[package]]
@@ -3032,6 +3094,19 @@ dependencies = [
 
 [[package]]
 name = "ethbloom"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32cfe1c169414b709cf28aa30c74060bdb830a03a8ba473314d079ac79d80a5f"
+dependencies = [
+ "crunchy",
+ "fixed-hash 0.5.2",
+ "impl-rlp",
+ "impl-serde 0.2.3",
+ "tiny-keccak 1.5.0",
+]
+
+[[package]]
+name = "ethbloom"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71a6567e6fd35589fea0c63b94b4cf2e55573e413901bdbe60ab15cf0e25e5df"
@@ -3039,8 +3114,8 @@ dependencies = [
  "crunchy",
  "fixed-hash 0.6.1",
  "impl-rlp",
- "impl-serde",
- "tiny-keccak",
+ "impl-serde 0.3.2",
+ "tiny-keccak 2.0.2",
 ]
 
 [[package]]
@@ -3051,14 +3126,28 @@ checksum = "e957efe1e627f8ec4e253660615fd9fe3736e10026197740b8b4b26c812be2e9"
 
 [[package]]
 name = "ethereum-types"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba744248e3553a393143d5ebb68939fc3a4ec0c22a269682535f5ffe7fed728c"
+dependencies = [
+ "ethbloom 0.8.1",
+ "fixed-hash 0.5.2",
+ "impl-rlp",
+ "impl-serde 0.2.3",
+ "primitive-types 0.6.2",
+ "uint 0.8.5",
+]
+
+[[package]]
+name = "ethereum-types"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "473aecff686bd8e7b9db0165cbbb53562376b39bf35b427f0c60446a9e1634b0"
 dependencies = [
- "ethbloom",
+ "ethbloom 0.9.2",
  "fixed-hash 0.6.1",
  "impl-rlp",
- "impl-serde",
+ "impl-serde 0.3.2",
  "primitive-types 0.7.3",
  "uint 0.8.5",
 ]
@@ -3175,6 +3264,18 @@ checksum = "93ace6ec7cc19c8ed33a32eaa9ea692d7faea05006b5356b9e2b668ec4bc3955"
 
 [[package]]
 name = "fixed-hash"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3367952ceb191f4ab95dd5685dc163ac539e36202f9fcfd0cb22f9f9c542fefc"
+dependencies = [
+ "byteorder",
+ "rand 0.7.3",
+ "rustc-hex",
+ "static_assertions",
+]
+
+[[package]]
+name = "fixed-hash"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11498d382790b7a8f2fd211780bec78619bba81cdad3a283997c0c41f836759c"
@@ -3251,7 +3352,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libloading 0.5.2",
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -3653,11 +3754,21 @@ checksum = "4a8575493d277c9092b988c780c94737fb9fd8651a1001e16bee3eccfc1baedb"
 
 [[package]]
 name = "home"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29302b90cfa76231a757a887d1e3153331a63c7f80b6c75f86366334cbe70708"
+dependencies = [
+ "scopeguard 0.3.3",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "home"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "747309b4b440c06d57b0b25f2aee03ee9b5e5397d288c60e21fc709bb98a7408"
 dependencies = [
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -3668,7 +3779,7 @@ checksum = "3c731c3e10504cc8ed35cfe2f1db4c9274c3d35fa486e3b31df46f068ef3e867"
 dependencies = [
  "libc",
  "match_cfg",
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -4030,6 +4141,15 @@ dependencies = [
 
 [[package]]
 name = "impl-serde"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58e3cae7e99c7ff5a995da2cf78dd0a5383740eda71d98cf7b1910c301ac69b8"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "impl-serde"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4551f042f3438e64dbd6226b20527fc84a6e1fe65688b58746a2f53623f25f5c"
@@ -4304,9 +4424,9 @@ dependencies = [
 
 [[package]]
 name = "keccak"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecc2af9a1119c51f12a14607e783cb977bde58bc069ff0c3da1095e635d70654"
+checksum = "cb26cec98cce3a3d96cbb7bced3c4b16e3d13f27ec56dbd62cbc8f39cfb9d653"
 dependencies = [
  "cpufeatures",
 ]
@@ -4328,7 +4448,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f58a51ef3df9398cf2434bea8d4eb61fb748d0feb1571f87388579a120a4c8f"
 dependencies = [
  "primitive-types 0.7.3",
- "tiny-keccak",
+ "tiny-keccak 2.0.2",
 ]
 
 [[package]]
@@ -4416,7 +4536,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2b111a074963af1d37a139918ac6d49ad1d0d5e47f72fd55388619691a7d753"
 dependencies = [
  "cc",
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -4426,7 +4546,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
 dependencies = [
  "cfg-if 1.0.0",
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -4523,7 +4643,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "435011366fe56583b16cf956f9df0095b405b82d76425bc8981c0e22e60ec4df"
 dependencies = [
  "autocfg",
- "scopeguard",
+ "scopeguard 1.1.0",
 ]
 
 [[package]]
@@ -4568,7 +4688,7 @@ dependencies = [
  "thread-id",
  "typemap-ors",
  "unicode-segmentation",
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -4617,7 +4737,7 @@ dependencies = [
  "slab",
  "smallvec 1.15.1",
  "tikv-jemallocator",
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -5014,6 +5134,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ole32-sys"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d2c49021782e5233cd243168edfa8037574afed4eba4bbaf538b3d8d1789d8c"
+dependencies = [
+ "winapi 0.2.8",
+ "winapi-build",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5105,7 +5235,7 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f66a327a200fe67c16f1d0acab2f74a2ec67c41d6202a2a98a7378df653d848d"
 dependencies = [
- "home",
+ "home 0.5.4",
 ]
 
 [[package]]
@@ -5208,7 +5338,7 @@ dependencies = [
  "libc",
  "redox_syscall",
  "smallvec 1.15.1",
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -5576,6 +5706,19 @@ dependencies = [
 
 [[package]]
 name = "primitive-types"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4336f4f5d5524fa60bcbd6fe626f9223d8142a50e7053e979acdf0da41ab975"
+dependencies = [
+ "fixed-hash 0.5.2",
+ "impl-codec 0.4.2",
+ "impl-rlp",
+ "impl-serde 0.3.2",
+ "uint 0.8.5",
+]
+
+[[package]]
+name = "primitive-types"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dd39dcacf71411ba488570da7bbc89b717225e46478b30ba99b92db6b149809"
@@ -5583,7 +5726,7 @@ dependencies = [
  "fixed-hash 0.6.1",
  "impl-codec 0.4.2",
  "impl-rlp",
- "impl-serde",
+ "impl-serde 0.3.2",
  "uint 0.8.5",
 ]
 
@@ -6479,6 +6622,12 @@ dependencies = [
 
 [[package]]
 name = "scopeguard"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94258f53601af11e6a49f722422f6e3425c52b06245a5cf9bc09908b174f5e27"
+
+[[package]]
+name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
@@ -6844,6 +6993,16 @@ dependencies = [
  "keccak-hash",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "shell32-sys"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ee04b46101f57121c9da2b151988283b6beb79b34f5bb29a58ee48cb695122c"
+dependencies = [
+ "winapi 0.2.8",
+ "winapi-build",
 ]
 
 [[package]]
@@ -7404,6 +7563,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31d42176308937165701f50638db1c31586f183f1aab416268216577aec7306b"
 dependencies = [
  "chrono",
+]
+
+[[package]]
+name = "tiny-keccak"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d8a021c69bb74a44ccedb824a046447e2c84a01df9e5c20779750acb38e11b2"
+dependencies = [
+ "crunchy",
 ]
 
 [[package]]
@@ -7983,6 +8151,12 @@ dependencies = [
 
 [[package]]
 name = "winapi"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "167dc9d6949a9b857f3451275e911c3f44255842c1f7a76f33c55103a909087a"
+
+[[package]]
+name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c839a674fcd7a98952e593242ea400abe93992746761e38641405d28b00f419"
@@ -7990,6 +8164,12 @@ dependencies = [
  "winapi-i686-pc-windows-gnu",
  "winapi-x86_64-pc-windows-gnu",
 ]
+
+[[package]]
+name = "winapi-build"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d315eee3b34aca4797b2da6b13ed88266e6d612562a0c46390af8299fc699bc"
 
 [[package]]
 name = "winapi-i686-pc-windows-gnu"
@@ -8003,7 +8183,7 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70ec6ce85bb158151cae5e5c87f95a8e97d2c0c4b001223f33a334e3ce5de178"
 dependencies = [
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -8306,7 +8486,7 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80d0f4e272c85def139476380b12f9ac60926689dd2e01d4923222f40580869d"
 dependencies = [
- "winapi",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -8349,6 +8529,12 @@ dependencies = [
  "rand_core 0.6.4",
  "zeroize",
 ]
+
+[[package]]
+name = "xdg"
+version = "2.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213b7324336b53d2414b2db8537e56544d981803139155afa84f76eeebb7a546"
 
 [[package]]
 name = "xml-rs"

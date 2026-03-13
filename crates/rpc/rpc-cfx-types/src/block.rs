@@ -2,7 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::RpcAddress;
+use crate::{RpcAddress, Transaction};
+use cfx_rpc_primitives::Bytes;
 use cfx_types::{H160, H256, U256, U64};
 use cfx_util_macros::bail;
 use jsonrpc_core::Error as RpcError;
@@ -14,7 +15,6 @@ use serde::{
 use serde_json::Value;
 use std::{convert::TryInto, sync::Arc};
 
-use crate::rpc::types::{Bytes, Transaction};
 use primitives::pos::PosBlockId;
 
 #[derive(PartialEq, Debug)]
@@ -238,7 +238,7 @@ pub struct Header {
 #[cfg(test)]
 mod tests {
     use super::{Block, BlockTransactions, Header, RpcAddress};
-    use crate::rpc::types::Transaction;
+    use crate::Transaction;
     use cfx_addr::Network;
     use cfx_types::{H256, U256};
     use keccak_hash::KECCAK_EMPTY_LIST_RLP;

@@ -4,18 +4,16 @@
 
 pub mod cfx;
 mod constants;
-mod provenance;
-pub use cfx_rpc_cfx_types::pos;
-
-pub use cfx_rpc_primitives::{Bytes, Index, U64};
 
 pub use self::{
     cfx::{
-        address,
-        address::{check_two_rpc_address_network_match, RpcAddress},
+        address::{self, check_two_rpc_address_network_match, RpcAddress},
         blame_info::BlameInfo,
         block::{Block, BlockTransactions, Header},
-        consensus_graph_states::ConsensusGraphStates,
+        consensus_graph_states::{
+            ConsensusGraphBlockExecutionState, ConsensusGraphBlockState,
+            ConsensusGraphStates,
+        },
         epoch_number::{BlockHashOrEpochNumber, EpochNumber},
         filter::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, RevertTo},
         log::Log,
@@ -26,9 +24,9 @@ pub use self::{
         stat_on_gas_load::StatOnGasLoad,
         status::Status,
         storage_collateral_info::StorageCollateralInfo,
-        sync_graph_states::SyncGraphStates,
+        sync_graph_states::{SyncGraphBlockState, SyncGraphStates},
         token_supply_info::TokenSupplyInfo,
-        transaction::{PackedOrExecuted, Transaction, WrapTransaction},
+        transaction::{PackedOrExecuted, Transaction},
         transaction_request::{
             self, CheckBalanceAgainstTransactionResponse,
             EstimateGasAndCollateralResponse, TransactionRequest,
@@ -42,13 +40,15 @@ pub use self::{
         Account, CfxFeeHistory, SponsorInfo,
     },
     constants::MAX_GAS_CALL_REQUEST,
-    provenance::Origin,
 };
 pub use cfx_rpc_cfx_types::{
+    pos,
+    provenance::Origin,
     trace::{
         Action, LocalizedBlockTrace, LocalizedTrace, LocalizedTransactionTrace,
     },
     trace_filter::TraceFilter,
 };
+pub use cfx_rpc_primitives::{Bytes, Index, U64};
 
-pub use cfx_rpc_eth_types::FeeHistory;
+pub use cfx_rpc_eth_types::{FeeHistory, WrapTransaction};

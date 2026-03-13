@@ -1,4 +1,4 @@
-use crate::rpc::types::address::RpcAddress;
+use crate::RpcAddress;
 use cfx_addr::Network;
 use cfx_types::H256;
 use primitives::{AccessList, AccessListItem};

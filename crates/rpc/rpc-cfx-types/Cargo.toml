@@ -34,5 +34,9 @@ diem-types = { workspace = true }
 rustc-hex = { workspace = true }
 bls-signatures = { workspace = true }
 once_cell = { workspace = true }
+cfxkey = { workspace = true }
+cfx-rpc-utils = { workspace = true }
+cfxcore-accounts = { workspace = true }
+keccak-hash = { workspace = true }
 
 [dev-dependencies]

@@ -2,13 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::{
-    helpers::{maybe_vec_into, VariadicValue},
-    types::{EpochNumber, Log, RpcAddress},
-};
+use crate::{EpochNumber, Log, RpcAddress};
+use cfx_rpc_primitives::{maybe_vec_into, VariadicValue};
 use cfx_types::{Space, H256, U256, U64};
 use cfx_util_macros::bail;
-use jsonrpc_core::Error as RpcError;
+use jsonrpc_core::Error as RpcError; // TODO replace with jsonrpsee error
 use primitives::filter::{LogFilter as PrimitiveFilter, LogFilterParams};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
@@ -222,11 +220,11 @@ impl Serialize for CfxFilterChanges {
 
 #[cfg(test)]
 mod tests {
-    use crate::rpc::types::{cfx::filter::RevertTo, CfxFilterLog, Log};
-
     use super::{
-        super::RpcAddress, CfxRpcLogFilter, EpochNumber, VariadicValue,
+        CfxFilterLog, CfxRpcLogFilter, EpochNumber, Log, RevertTo,
+        VariadicValue,
     };
+    use crate::RpcAddress;
     use cfx_addr::Network;
     use cfx_types::{Space, H160, H256, U256, U64};
     use primitives::{

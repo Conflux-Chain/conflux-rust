@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::RpcAddress;
+use crate::RpcAddress;
 use cfx_addr::Network;
 use cfx_types::{H256, U256};
 use primitives::Account as PrimitiveAccount;

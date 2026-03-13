@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VoteParamsInfo {
-    pub(crate) pow_base_reward: U256,
-    pub(crate) interest_rate: U256,
-    pub(crate) storage_point_prop: U256,
-    pub(crate) base_fee_share_prop: U256,
+    pub pow_base_reward: U256,
+    pub interest_rate: U256,
+    pub storage_point_prop: U256,
+    pub base_fee_share_prop: U256,
 }

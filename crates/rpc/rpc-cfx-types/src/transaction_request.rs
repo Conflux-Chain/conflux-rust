@@ -2,17 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::{
-    errors::{invalid_params, invalid_params_check},
-    types::{
-        address::RpcAddress,
-        cfx::{
-            check_rpc_address_network, check_two_rpc_address_network_match,
-            to_primitive_access_list, CfxAccessList,
-        },
-        Bytes,
-    },
-    CoreResult,
+use crate::{
+    access_list::{to_primitive_access_list, CfxAccessList},
+    address::{check_rpc_address_network, check_two_rpc_address_network_match},
+    RpcAddress,
 };
 use cfx_addr::Network;
 use cfx_parameters::{
@@ -21,10 +14,15 @@ use cfx_parameters::{
     },
     RATIO_BASE_TEN,
 };
+use cfx_rpc_primitives::Bytes;
+use cfx_rpc_utils::error::jsonrpc_error_helpers::{
+    invalid_params, invalid_params_check,
+};
 use cfx_types::{Address, AddressSpaceUtil, U256, U64};
 use cfx_util_macros::bail;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
+use jsonrpc_core::Error as RpcError;
 use primitives::{
     transaction::{
         Action, Cip1559Transaction, Cip2930Transaction, NativeTransaction,
@@ -96,7 +94,7 @@ pub struct CheckBalanceAgainstTransactionResponse {
 impl TransactionRequest {
     pub fn check_rpc_address_network(
         &self, param_name: &str, expected: &Network,
-    ) -> CoreResult<()> {
+    ) -> Result<(), RpcError> {
         let rpc_request_network = invalid_params_check(
             param_name,
             check_two_rpc_address_network_match(
@@ -136,7 +134,7 @@ impl TransactionRequest {
     pub fn sign_with(
         self, epoch_height: u64, chain_id: u32, password: Option<String>,
         accounts: Arc<AccountProvider>,
-    ) -> CoreResult<TransactionWithSignature> {
+    ) -> Result<TransactionWithSignature, String> {
         let gas = self.gas.ok_or("should have gas")?;
         let nonce = self.nonce.ok_or("should have nonce")?;
         let transaction_type = self.transaction_type();
@@ -208,9 +206,7 @@ impl TransactionRequest {
             }
             // TODO(7702): support transaction 7702
             x => {
-                return Err(
-                    invalid_params("Unrecognized transaction type", x).into()
-                );
+                return Err(format!("Unrecognized transaction type: {:?}", x));
             }
         };
 
@@ -230,7 +226,7 @@ impl TransactionRequest {
 
     pub fn sign_call(
         self, epoch_height: u64, chain_id: u32, max_gas: Option<U256>,
-    ) -> CoreResult<SignedTransaction> {
+    ) -> Result<SignedTransaction, RpcError> {
         let max_gas = max_gas.unwrap_or(DEFAULT_CFX_GAS_CALL_REQUEST.into());
         let gas = self.gas.unwrap_or(max_gas);
         if gas > max_gas {
@@ -318,7 +314,7 @@ impl TransactionRequest {
 mod tests {
     use super::TransactionRequest;
 
-    use crate::rpc::types::address::RpcAddress;
+    use crate::RpcAddress;
     use cfx_addr::Network;
     use cfx_types::{H160, U256, U64};
     use rustc_hex::FromHex;

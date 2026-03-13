@@ -13,5 +13,4 @@ pub use cfx_rpc::helpers::{
     poll_manager::PollManager,
     EpochQueue, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
 };
-pub use cfx_rpc_primitives::{maybe_vec_into, VariadicValue};
 pub use subscribers::{Id as SubscriberId, Subscribers};
