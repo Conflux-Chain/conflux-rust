@@ -283,7 +283,7 @@ version = "0.1.0"
 source = "git+https://github.com/Conflux-Chain/alloy-primitives-wrapper.git?rev=df227569c85fd1be773134e49f4994fa5b2b8643#df227569c85fd1be773134e49f4994fa5b2b8643"
 dependencies = [
  "alloy-primitives",
- "ethereum-types",
+ "ethereum-types 0.9.2",
 ]
 
 [[package]]
@@ -2879,17 +2879,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "diem-github-client"
-version = "0.1.0"
-dependencies = [
- "proxy",
- "serde",
- "serde_json",
- "thiserror 1.0.63",
- "ureq",
-]
-
-[[package]]
 name = "diem-global-constants"
 version = "0.1.0"
 
@@ -3002,13 +2991,11 @@ dependencies = [
  "bcs",
  "chrono",
  "diem-crypto",
- "diem-github-client",
  "diem-infallible",
  "diem-logger",
  "diem-temppath",
  "diem-time-service",
  "diem-types",
- "diem-vault-client",
  "enum_dispatch",
  "rand 0.8.5",
  "serde",
@@ -3066,22 +3053,6 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.63",
  "tiny-keccak 2.0.2",
-]
-
-[[package]]
-name = "diem-vault-client"
-version = "0.1.0"
-dependencies = [
- "base64 0.13.1",
- "chrono",
- "diem-crypto",
- "diem-types",
- "native-tls",
- "once_cell",
- "serde",
- "serde_json",
- "thiserror 1.0.63",
- "ureq",
 ]
 
 [[package]]
@@ -6408,13 +6379,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proxy"
-version = "0.1.0"
-dependencies = [
- "ipnet",
-]
-
-[[package]]
 name = "qstring"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7227,7 +7191,6 @@ dependencies = [
  "diem-secure-storage",
  "diem-temppath",
  "diem-types",
- "diem-vault-client",
  "log",
  "once_cell",
  "rand 0.8.5",
