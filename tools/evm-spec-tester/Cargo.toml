@@ -32,7 +32,6 @@ log = "0.4"
 
 alloy-rpc-types-trace = "1.0.41"
 
-structopt = { version = "0.3", default-features = false }
 env_logger = "0.11"
 itertools = "0.14"
 clap = { version = "4.5", features = ["derive"] }
