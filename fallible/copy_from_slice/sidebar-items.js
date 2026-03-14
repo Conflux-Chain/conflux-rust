@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["copy_slice_to_vec"],"struct":["CopySliceError"]};
