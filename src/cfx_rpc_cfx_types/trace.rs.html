@@ -274,7 +274,7 @@
 <a href=#274 id=274 data-nosnippet>274</a>    }
 <a href=#275 id=275 data-nosnippet>275</a>}
 <a href=#276 id=276 data-nosnippet>276</a>
-<a href=#277 id=277 data-nosnippet>277</a><span class="attr">#[derive(Debug, Serialize)]
+<a href=#277 id=277 data-nosnippet>277</a><span class="attr">#[derive(Debug, Serialize, Clone)]
 <a href=#278 id=278 data-nosnippet>278</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
 <a href=#279 id=279 data-nosnippet>279</a></span><span class="kw">pub struct </span>LocalizedBlockTrace {
 <a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">pub </span>transaction_traces: Vec&lt;LocalizedTransactionTrace&gt;,
@@ -286,7 +286,7 @@
 <a href=#286 id=286 data-nosnippet>286</a>    </span><span class="kw">pub </span>block_hash: H256,
 <a href=#287 id=287 data-nosnippet>287</a>}
 <a href=#288 id=288 data-nosnippet>288</a>
-<a href=#289 id=289 data-nosnippet>289</a><span class="attr">#[derive(Debug, Serialize)]
+<a href=#289 id=289 data-nosnippet>289</a><span class="attr">#[derive(Debug, Serialize, Clone)]
 <a href=#290 id=290 data-nosnippet>290</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
 <a href=#291 id=291 data-nosnippet>291</a></span><span class="kw">pub struct </span>LocalizedTransactionTrace {
 <a href=#292 id=292 data-nosnippet>292</a>    <span class="kw">pub </span>traces: Vec&lt;Trace&gt;,
@@ -296,7 +296,7 @@
 <a href=#296 id=296 data-nosnippet>296</a>    </span><span class="kw">pub </span>transaction_hash: H256,
 <a href=#297 id=297 data-nosnippet>297</a>}
 <a href=#298 id=298 data-nosnippet>298</a>
-<a href=#299 id=299 data-nosnippet>299</a><span class="attr">#[derive(Debug)]
+<a href=#299 id=299 data-nosnippet>299</a><span class="attr">#[derive(Debug, Clone)]
 <a href=#300 id=300 data-nosnippet>300</a></span><span class="kw">pub struct </span>Trace {
 <a href=#301 id=301 data-nosnippet>301</a>    <span class="kw">pub </span>action: Action,
 <a href=#302 id=302 data-nosnippet>302</a>    <span class="kw">pub </span>valid: bool,
@@ -343,7 +343,7 @@
 <a href=#343 id=343 data-nosnippet>343</a>    }
 <a href=#344 id=344 data-nosnippet>344</a>}
 <a href=#345 id=345 data-nosnippet>345</a>
-<a href=#346 id=346 data-nosnippet>346</a><span class="attr">#[derive(Debug, Serialize)]
+<a href=#346 id=346 data-nosnippet>346</a><span class="attr">#[derive(Debug, Serialize, Clone)]
 <a href=#347 id=347 data-nosnippet>347</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
 <a href=#348 id=348 data-nosnippet>348</a></span><span class="kw">pub struct </span>LocalizedTrace {
 <a href=#349 id=349 data-nosnippet>349</a>    <span class="attr">#[serde(flatten)]

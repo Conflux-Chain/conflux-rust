@@ -69,7 +69,7 @@
 <a href=#69 id=69 data-nosnippet>69</a>    </span><span class="kw">pub </span>epoch_height: <span class="prelude-ty">Option</span>&lt;U256&gt;,
 <a href=#70 id=70 data-nosnippet>70</a>}
 <a href=#71 id=71 data-nosnippet>71</a>
-<a href=#72 id=72 data-nosnippet>72</a><span class="attr">#[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
+<a href=#72 id=72 data-nosnippet>72</a><span class="attr">#[derive(Debug, Default, PartialEq, Deserialize, Serialize, Clone)]
 <a href=#73 id=73 data-nosnippet>73</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
 <a href=#74 id=74 data-nosnippet>74</a></span><span class="kw">pub struct </span>EstimateGasAndCollateralResponse {
 <a href=#75 id=75 data-nosnippet>75</a>    <span class="doccomment">/// The recommended gas_limit.
@@ -80,7 +80,7 @@
 <a href=#80 id=80 data-nosnippet>80</a>    </span><span class="kw">pub </span>storage_collateralized: U64,
 <a href=#81 id=81 data-nosnippet>81</a>}
 <a href=#82 id=82 data-nosnippet>82</a>
-<a href=#83 id=83 data-nosnippet>83</a><span class="attr">#[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
+<a href=#83 id=83 data-nosnippet>83</a><span class="attr">#[derive(Debug, Default, PartialEq, Deserialize, Serialize, Clone)]
 <a href=#84 id=84 data-nosnippet>84</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
 <a href=#85 id=85 data-nosnippet>85</a></span><span class="kw">pub struct </span>CheckBalanceAgainstTransactionResponse {
 <a href=#86 id=86 data-nosnippet>86</a>    <span class="doccomment">/// Whether the account should pay transaction fee by self.
