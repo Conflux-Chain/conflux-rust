@@ -253,7 +253,12 @@ impl LocalizedTrace {
                 });
                 match call_result.outcome {
                     Outcome::Reverted => {
-                        self.error = Some(TraceError::Reverted.to_string());
+                        self.error = Some(
+                            TraceError::Reverted(
+                                call_result.return_data.into(),
+                            )
+                            .to_string(),
+                        );
                     }
                     Outcome::Fail => {
                         self.error = Some(
@@ -279,7 +284,12 @@ impl LocalizedTrace {
                 });
                 match create_result.outcome {
                     Outcome::Reverted => {
-                        self.error = Some(TraceError::Reverted.to_string());
+                        self.error = Some(
+                            TraceError::Reverted(
+                                create_result.return_data.into(),
+                            )
+                            .to_string(),
+                        );
                     }
                     Outcome::Fail => {
                         self.error = Some(
@@ -356,7 +366,7 @@ impl Serialize for Trace {
 #[derive(Debug, Clone)]
 pub enum TraceError {
     /// Execution has been reverted with REVERT instruction.
-    Reverted,
+    Reverted(Bytes),
     /// Other errors with error message encoded.
     Error(Bytes),
 }
@@ -364,7 +374,12 @@ pub enum TraceError {
 impl fmt::Display for TraceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let message = match &self {
-            TraceError::Reverted => "Reverted",
+            TraceError::Reverted(msg) => &format!(
+                "Reverted: {}",
+                serde_json::to_string(&msg)
+                    .expect("Bytes should be serializable to hex string")
+            ),
+            // utf8 decode the error message
             // error bytes are constructed from `format`, so this should
             // succeed.
             TraceError::Error(b) => {
