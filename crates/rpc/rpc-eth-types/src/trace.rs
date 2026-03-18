@@ -127,7 +127,7 @@ pub struct CallResult {
     output: Bytes,
 }
 
-/// Craete Result
+/// Create Result
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateResult {
@@ -273,7 +273,9 @@ impl LocalizedTrace {
                 if !matches!(self.action, Action::Create(_)) {
                     bail!(JsonRpcError::internal_error());
                 }
-                // FIXME(lpl): Check if `return_data` is `code`.
+                // When outcome is success `return_data` is `code`.
+                // Otherwise `return_data` is the revert reason or error
+                // message.
                 let gas =
                     self.action.gas().expect("call action should have gas");
                 let gas_used = gas - create_result.gas_left;
