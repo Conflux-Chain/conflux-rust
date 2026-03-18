@@ -31,6 +31,7 @@ jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
 similar-asserts = { workspace = true }
 cfx-util-macros = { workspace = true }
 cfx-vm-types = { workspace = true }
+solidity-abi = { workspace = true }
 
 [features]
 default = ["serde"]

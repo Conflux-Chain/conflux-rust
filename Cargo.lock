@@ -1985,6 +1985,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "similar-asserts",
+ "solidity-abi",
  "thiserror 2.0.18",
 ]
 

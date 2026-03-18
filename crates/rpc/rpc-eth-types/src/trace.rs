@@ -13,6 +13,7 @@ use cfx_util_macros::bail;
 use cfx_vm_types::{CallType, CreateType};
 use jsonrpc_core::Error as JsonRpcError;
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use solidity_abi::string_revert_reason_decode;
 use std::{collections::HashMap, convert::TryFrom, fmt};
 
 /// Create response
@@ -254,9 +255,9 @@ impl LocalizedTrace {
                 match call_result.outcome {
                     Outcome::Reverted => {
                         self.error = Some(
-                            TraceError::Reverted(
-                                call_result.return_data.into(),
-                            )
+                            TraceError::Reverted(string_revert_reason_decode(
+                                &call_result.return_data,
+                            ))
                             .to_string(),
                         );
                     }
@@ -287,9 +288,9 @@ impl LocalizedTrace {
                 match create_result.outcome {
                     Outcome::Reverted => {
                         self.error = Some(
-                            TraceError::Reverted(
-                                create_result.return_data.into(),
-                            )
+                            TraceError::Reverted(string_revert_reason_decode(
+                                &create_result.return_data,
+                            ))
                             .to_string(),
                         );
                     }
@@ -368,7 +369,7 @@ impl Serialize for Trace {
 #[derive(Debug, Clone)]
 pub enum TraceError {
     /// Execution has been reverted with REVERT instruction.
-    Reverted(Bytes),
+    Reverted(String),
     /// Other errors with error message encoded.
     Error(Bytes),
 }
@@ -376,11 +377,7 @@ pub enum TraceError {
 impl fmt::Display for TraceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let message = match &self {
-            TraceError::Reverted(msg) => &format!(
-                "Reverted: {}",
-                serde_json::to_string(&msg)
-                    .expect("Bytes should be serializable to hex string")
-            ),
+            TraceError::Reverted(msg) => &format!("Reverted: {}", msg),
             // utf8 decode the error message
             // error bytes are constructed from `format`, so this should
             // succeed.
