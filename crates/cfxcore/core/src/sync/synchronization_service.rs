@@ -15,10 +15,11 @@ use crate::{
     ConsensusGraph, NodeType,
 };
 use cfx_types::H256;
+use log::info;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{NetworkService, ProtocolId};
 use primitives::{transaction::SignedTransaction, Block};
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 #[derive(DeriveMallocSizeOf)]
 pub struct SynchronizationService {
@@ -98,9 +99,22 @@ impl SynchronizationService {
     }
 
     pub fn on_mined_block(&self, block: Block) -> Result<(), Error> {
+        let total_start = Instant::now();
         let hash = block.hash();
+        let protocol_handler_start = Instant::now();
         self.protocol_handler.on_mined_block(block);
-        self.relay_blocks(vec![hash])
+        let protocol_handler_elapsed = protocol_handler_start.elapsed();
+        let relay_start = Instant::now();
+        let relay_result = self.relay_blocks(vec![hash]);
+        let relay_elapsed = relay_start.elapsed();
+        info!(
+            "timing.sync_on_mined_block hash={:?} protocol_handler_ms={} relay_ms={} total_ms={}",
+            hash,
+            protocol_handler_elapsed.as_millis(),
+            relay_elapsed.as_millis(),
+            total_start.elapsed().as_millis(),
+        );
+        relay_result
     }
 
     pub fn expire_block_gc(&self, timeout: u64) {

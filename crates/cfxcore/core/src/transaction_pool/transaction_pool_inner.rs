@@ -22,6 +22,7 @@ use cfx_types::{
     address_util::AddressUtil, AddressWithSpace, Space, SpaceMap, H256, U128,
     U256, U512,
 };
+use log::info;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::MeterTimer;
 use primitives::{
@@ -32,7 +33,7 @@ use rlp::*;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 // lazy_static! {
@@ -676,6 +677,7 @@ impl TransactionPoolInner {
         best_block_number: u64, verification_config: &VerificationConfig,
         machine: &Machine,
     ) -> Vec<Arc<SignedTransaction>> {
+        let total_start = Instant::now();
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
         if num_txs == 0 {
             return packed_transactions;
@@ -702,6 +704,7 @@ impl TransactionPoolInner {
             )
         };
 
+        let evm_start = Instant::now();
         let (sampled_tx, used_gas, used_size) =
             self.deferred_pool.packing_sampler(
                 Space::Ethereum,
@@ -711,6 +714,7 @@ impl TransactionPoolInner {
                 U256::zero(),
                 validity,
             );
+        let evm_elapsed = evm_start.elapsed();
         debug!(
             "txpool::pack_transactions espace selected={} gas_used={} size_used={}",
             sampled_tx.len(),
@@ -719,6 +723,7 @@ impl TransactionPoolInner {
         );
         packed_transactions.extend_from_slice(&sampled_tx);
 
+        let native_start = Instant::now();
         let (sampled_tx, _, _) = self.deferred_pool.packing_sampler(
             Space::Native,
             block_gas_limit - used_gas,
@@ -727,6 +732,7 @@ impl TransactionPoolInner {
             U256::zero(),
             validity,
         );
+        let native_elapsed = native_start.elapsed();
         debug!(
             "txpool::pack_transactions native selected={} total={}",
             sampled_tx.len(),
@@ -746,6 +752,16 @@ impl TransactionPoolInner {
             );
         }
 
+        info!(
+            "timing.transaction_pool_inner_pack_transactions limit={} evm_selected={} native_selected={} evm_ms={} native_ms={} total_ms={}",
+            num_txs,
+            packed_transactions.len().saturating_sub(sampled_tx.len()),
+            sampled_tx.len(),
+            evm_elapsed.as_millis(),
+            native_elapsed.as_millis(),
+            total_start.elapsed().as_millis(),
+        );
+
         packed_transactions
     }
 
@@ -755,6 +771,7 @@ impl TransactionPoolInner {
         best_epoch_height: u64, machine: &Machine,
         validity: impl Fn(&SignedTransaction) -> PackingCheckResult,
     ) -> (Vec<Arc<SignedTransaction>>, SpaceMap<U256>) {
+        let total_start = Instant::now();
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
         if num_txs == 0 {
             return (packed_transactions, parent_base_price);
@@ -770,6 +787,7 @@ impl TransactionPoolInner {
         let can_pack_evm =
             machine.params().can_pack_evm_transaction(best_epoch_height);
 
+        let evm_stage_start = Instant::now();
         let (evm_packed_tx_num, evm_used_size) = if can_pack_evm {
             let gas_target = block_gas_limit * 5 / 10 / ELASTICITY_MULTIPLIER;
             let parent_base_price = parent_base_price[Space::Ethereum];
@@ -833,6 +851,9 @@ impl TransactionPoolInner {
             (0, 0)
         };
 
+        let evm_stage_elapsed = evm_stage_start.elapsed();
+
+        let native_stage_start = Instant::now();
         {
             let gas_target =
                 cspace_block_gas_limit_after_cip1559(block_gas_limit)
@@ -893,6 +914,17 @@ impl TransactionPoolInner {
                 );
             }
         }
+
+        let native_stage_elapsed = native_stage_start.elapsed();
+
+        info!(
+            "timing.transaction_pool_inner_pack_transactions_1559 limit={} selected={} evm_stage_ms={} native_stage_ms={} total_ms={}",
+            num_txs,
+            packed_transactions.len(),
+            evm_stage_elapsed.as_millis(),
+            native_stage_elapsed.as_millis(),
+            total_start.elapsed().as_millis(),
+        );
 
         if log::max_level() >= log::Level::Debug {
             let mut rlp_s = RlpStream::new();

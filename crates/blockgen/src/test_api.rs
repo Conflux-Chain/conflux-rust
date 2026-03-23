@@ -2,10 +2,15 @@ use cfx_parameters::consensus::GENESIS_GAS_LIMIT;
 use cfx_types::{H256, U256};
 
 use cfxcore::pow::{ProofOfWorkProblem, ProofOfWorkSolution};
-use log::debug;
+use log::{debug, info};
 
 use primitives::*;
-use std::{ops::Deref, sync::Arc, thread, time::Duration};
+use std::{
+    ops::Deref,
+    sync::Arc,
+    thread,
+    time::{Duration, Instant},
+};
 
 use crate::BlockGenerator;
 
@@ -124,6 +129,7 @@ impl BlockGeneratorTestApi {
     }
 
     fn generate_block_impl(&self, block_init: Block) -> H256 {
+        let total_start = Instant::now();
         let mut block = block_init;
         let difficulty = block.block_header.difficulty();
         let problem = ProofOfWorkProblem::new(
@@ -131,6 +137,7 @@ impl BlockGeneratorTestApi {
             block.block_header.problem_hash(),
             *difficulty,
         );
+        let pow_start = Instant::now();
         let mut nonce: u64 = rand::random();
         loop {
             if self.pow.validate(
@@ -144,22 +151,41 @@ impl BlockGeneratorTestApi {
             }
             nonce += 1;
         }
+        let pow_elapsed = pow_start.elapsed();
         let hash = block.block_header.compute_hash();
+        let tx_count = block.transactions.len();
+        let block_size = block.size();
         debug!(
             "generate_block with block header:{:?} tx_number:{}, block_size:{}",
-            block.block_header,
-            block.transactions.len(),
-            block.size(),
+            &block.block_header,
+            tx_count,
+            block_size,
         );
+        let on_mined_start = Instant::now();
         self.on_mined_block(block);
+        let on_mined_elapsed = on_mined_start.elapsed();
 
         debug!("generate_block finished on_mined_block()");
         // FIXME: We should add a flag to enable/disable this wait
         // Ensure that when `generate**` function returns, the block has been
         // handled by Consensus This order is assumed by some tests, and
         // this function is also only used in tests.
+        let wait_start = Instant::now();
         self.consensus.wait_for_generation(&hash);
+        let wait_elapsed = wait_start.elapsed();
         debug!("generate_block finished wait_for_generation()");
+
+        let total_elapsed = total_start.elapsed();
+        info!(
+            "timing.generate_block_impl hash={:?} txs={} block_size={} pow_ms={} on_mined_ms={} wait_for_generation_ms={} total_ms={}",
+            hash,
+            tx_count,
+            block_size,
+            pow_elapsed.as_millis(),
+            on_mined_elapsed.as_millis(),
+            wait_elapsed.as_millis(),
+            total_elapsed.as_millis(),
+        );
 
         hash
     }

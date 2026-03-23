@@ -1157,28 +1157,57 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn on_mined_block(&self, mut block: Block) {
+        let total_start = Instant::now();
         let hash = block.block_header.hash();
         info!("Mined block {:?} header={:?}", hash, block.block_header);
         let parent_hash = *block.block_header.parent_hash();
+        let tx_count = block.transactions.len();
 
         assert!(self.graph.contains_block_header(&parent_hash));
         if self.graph.contains_block_header(&hash) {
             warn!("Mined an duplicate block, the mining power is wasted!");
+            info!(
+                "timing.protocol_on_mined_block hash={:?} parent={:?} txs={} duplicate=true total_ms={}",
+                hash,
+                parent_hash,
+                tx_count,
+                total_start.elapsed().as_millis(),
+            );
             return;
         }
-        self.graph.insert_block_header(
+        let header_insert_start = Instant::now();
+        let (header_insert_result, _) = self.graph.insert_block_header(
             &mut block.block_header,
             false,
             false,
             false,
             true,
         );
+        let header_insert_elapsed = header_insert_start.elapsed();
         // Do not need to look at the result since this new block will be
         // broadcast to peers.
-        self.graph.insert_block(
+        let block_insert_start = Instant::now();
+        let block_insert_result = self.graph.insert_block(
             block, false, /* need_to_verify */
             true,  /* persistent */
             false, /* recover_from_db */
+        );
+        let block_insert_elapsed = block_insert_start.elapsed();
+        info!(
+            "timing.protocol_on_mined_block hash={:?} parent={:?} txs={} duplicate=false header_insert_ms={} block_insert_ms={} total_ms={} header_new_valid={} header_invalid={} header_process_body={} block_valid={} block_invalid={} block_should_relay={} block_request_again={}",
+            hash,
+            parent_hash,
+            tx_count,
+            header_insert_elapsed.as_millis(),
+            block_insert_elapsed.as_millis(),
+            total_start.elapsed().as_millis(),
+            header_insert_result.is_new_valid(),
+            header_insert_result.is_invalid(),
+            header_insert_result.should_process_body(),
+            block_insert_result.is_valid(),
+            block_insert_result.is_invalid(),
+            block_insert_result.should_relay(),
+            block_insert_result.request_again(),
         );
     }
 

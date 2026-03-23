@@ -4,9 +4,13 @@ use crate::consensus::consensus_inner::{ConsensusGraphInner, StateBlameInfo};
 
 use cfx_parameters::consensus::*;
 use cfx_types::{H256, U256};
+use log::info;
 use primitives::pos::PosBlockId;
 
-use std::{thread::sleep, time::Duration};
+use std::{
+    thread::sleep,
+    time::{Duration, Instant},
+};
 
 impl ConsensusGraph {
     /// Determine whether the next mined block should have adaptive weight or
@@ -41,6 +45,8 @@ impl ConsensusGraph {
     /// Wait for the generation and the execution completion of a block in the
     /// consensus graph. This API is used mainly for testing purpose
     pub fn wait_for_generation(&self, hash: &H256) {
+        let total_start = Instant::now();
+        let graph_insert_start = Instant::now();
         while !self
             .inner
             .read_recursive()
@@ -49,24 +55,42 @@ impl ConsensusGraph {
         {
             sleep(Duration::from_millis(1));
         }
+        let graph_insert_elapsed = graph_insert_start.elapsed();
         let best_state_block =
             self.inner.read_recursive().best_state_block_hash();
+        let wait_result_start = Instant::now();
         match self.executor.wait_for_result(best_state_block) {
             Ok(_) => (),
             Err(msg) => warn!("wait_for_generation() gets the following error from the ConsensusExecutor: {}", msg)
         }
+        let wait_result_elapsed = wait_result_start.elapsed();
         // Ensure that `best_info` has been updated when this returns, so if we
         // are calling RPCs to generate many blocks, they will form a
         // strict chain. Note that it's okay to call `update_best_info`
         // multiple times, and we only generate blocks after
         // `ready_for_mining` is true.
+        let update_best_info_start = Instant::now();
         self.update_best_info(true);
+        let update_best_info_elapsed = update_best_info_start.elapsed();
+        let notify_txpool_start = Instant::now();
         if let Err(e) = self
             .txpool
             .notify_new_best_info(self.best_info.read_recursive().clone())
         {
             error!("wait for generation: notify_new_best_info err={:?}", e);
         }
+        let notify_txpool_elapsed = notify_txpool_start.elapsed();
+        let total_elapsed = total_start.elapsed();
+        info!(
+            "timing.wait_for_generation hash={:?} best_state_block={:?} graph_insert_ms={} wait_result_ms={} update_best_info_ms={} notify_txpool_ms={} total_ms={}",
+            hash,
+            best_state_block,
+            graph_insert_elapsed.as_millis(),
+            wait_result_elapsed.as_millis(),
+            update_best_info_elapsed.as_millis(),
+            notify_txpool_elapsed.as_millis(),
+            total_elapsed.as_millis(),
+        );
     }
 
     /// After considering the latest `pos_reference`, `parent_hash` may become

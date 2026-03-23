@@ -37,6 +37,7 @@ use cfx_types::{
 };
 use cfx_vm_types::Spec;
 
+use log::info;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{MeterTimer, RwLockExtensions};
 use parking_lot::{Mutex, RwLock};
@@ -55,6 +56,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    time::Instant,
 };
 use transaction_pool_inner::TransactionPoolInner;
 
@@ -723,11 +725,15 @@ impl TransactionPool {
         block_size_limit: usize, mut best_epoch_height: u64,
         mut best_block_number: u64,
     ) -> Vec<Arc<SignedTransaction>> {
+        let total_start = Instant::now();
+        let lock_start = Instant::now();
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
+        let lock_elapsed = lock_start.elapsed();
         best_epoch_height += 1;
         // The best block number is not necessary an exact number.
         best_block_number += 1;
-        inner.pack_transactions(
+        let pack_start = Instant::now();
+        let txs = inner.pack_transactions(
             num_txs,
             block_gas_limit,
             evm_gas_limit,
@@ -736,7 +742,17 @@ impl TransactionPool {
             best_block_number,
             &self.verification_config,
             &self.machine,
-        )
+        );
+        let pack_elapsed = pack_start.elapsed();
+        info!(
+            "timing.txpool_pack_transactions limit={} selected={} lock_ms={} pack_ms={} total_ms={}",
+            num_txs,
+            txs.len(),
+            lock_elapsed.as_millis(),
+            pack_elapsed.as_millis(),
+            total_start.elapsed().as_millis(),
+        );
+        txs
     }
 
     pub fn pack_transactions_1559<'a>(
@@ -744,7 +760,10 @@ impl TransactionPool {
         parent_base_price: SpaceMap<U256>, block_size_limit: usize,
         mut best_epoch_height: u64, mut best_block_number: u64,
     ) -> (Vec<Arc<SignedTransaction>>, SpaceMap<U256>) {
+        let total_start = Instant::now();
+        let lock_start = Instant::now();
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
+        let lock_elapsed = lock_start.elapsed();
         best_epoch_height += 1;
         // The best block number is not necessary an exact number.
         best_block_number += 1;
@@ -761,7 +780,8 @@ impl TransactionPool {
             )
         };
 
-        inner.pack_transactions_1559(
+        let pack_start = Instant::now();
+        let result = inner.pack_transactions_1559(
             num_txs,
             block_gas_limit,
             parent_base_price,
@@ -769,7 +789,17 @@ impl TransactionPool {
             best_epoch_height,
             &self.machine,
             validity,
-        )
+        );
+        let pack_elapsed = pack_start.elapsed();
+        info!(
+            "timing.txpool_pack_transactions_1559 limit={} selected={} lock_ms={} pack_ms={} total_ms={}",
+            num_txs,
+            result.0.len(),
+            lock_elapsed.as_millis(),
+            pack_elapsed.as_millis(),
+            total_start.elapsed().as_millis(),
+        );
+        result
     }
 
     // A helper function for python test. Not intented to be used in the
@@ -1039,10 +1069,13 @@ impl TransactionPool {
         Vec<Arc<SignedTransaction>>,
         Option<SpaceMap<U256>>,
     ) {
+        let total_start = Instant::now();
         // We do not need to hold the lock because it is fine for us to generate
         // blocks that are slightly behind the best state.
         // We do not want to stall the consensus thread.
+        let best_info_start = Instant::now();
         let consensus_best_info_clone = self.consensus_best_info.lock().clone();
+        let best_info_elapsed = best_info_start.elapsed();
         debug!(
             "get_best_info_with_packed_transactions: {:?}",
             consensus_best_info_clone
@@ -1053,11 +1086,13 @@ impl TransactionPool {
         let cip1559_height = params.transition_heights.cip1559;
         let pack_height = consensus_best_info_clone.best_epoch_number + 1;
 
+        let parent_lookup_start = Instant::now();
         let parent_block = self
             .data_man
             .block_header_by_hash(&consensus_best_info_clone.best_block_hash)
             // The parent block must exists.
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
+        let parent_lookup_elapsed = parent_lookup_start.elapsed();
         let parent_block_gas_limit = *parent_block.gas_limit()
             * if cip1559_height == pack_height {
                 ELASTICITY_MULTIPLIER
@@ -1087,6 +1122,10 @@ impl TransactionPool {
         let self_gas_limit =
             min(max(target_gas_limit.into(), gas_lower), gas_upper);
 
+        let plan_elapsed =
+            total_start.elapsed() - best_info_elapsed - parent_lookup_elapsed;
+
+        let pool_pack_start = Instant::now();
         let (transactions_from_pool, maybe_base_price) = if pack_height
             < cip1559_height
         {
@@ -1151,12 +1190,29 @@ impl TransactionPool {
             }
             (txs, Some(base_price))
         };
+        let pool_pack_elapsed = pool_pack_start.elapsed();
 
+        let concat_start = Instant::now();
         let transactions = [
             additional_transactions.as_slice(),
             transactions_from_pool.as_slice(),
         ]
         .concat();
+        let concat_elapsed = concat_start.elapsed();
+
+        info!(
+            "timing.get_best_info_with_packed_transactions pack_height={} additional_txs={} pool_txs={} total_txs={} best_info_ms={} parent_lookup_ms={} planning_ms={} pool_pack_ms={} concat_ms={} total_ms={}",
+            pack_height,
+            additional_transactions.len(),
+            transactions_from_pool.len(),
+            transactions.len(),
+            best_info_elapsed.as_millis(),
+            parent_lookup_elapsed.as_millis(),
+            plan_elapsed.as_millis(),
+            pool_pack_elapsed.as_millis(),
+            concat_elapsed.as_millis(),
+            total_start.elapsed().as_millis(),
+        );
 
         (
             consensus_best_info_clone,

@@ -1033,9 +1033,18 @@ impl RpcImpl {
         &self, num_txs: usize, block_size_limit: usize,
     ) -> CoreResult<H256> {
         info!("RPC Request: generate_one_block()");
-        Ok(self
+        let rpc_start = std::time::Instant::now();
+        let hash = self
             .block_gen
-            .generate_block(num_txs, block_size_limit, vec![]))
+            .generate_block(num_txs, block_size_limit, vec![]);
+        info!(
+            "timing.rpc_generate_one_block hash={:?} num_txs={} block_size_limit={} total_ms={}",
+            hash,
+            num_txs,
+            block_size_limit,
+            rpc_start.elapsed().as_millis(),
+        );
+        Ok(hash)
     }
 
     fn generate_one_block_with_direct_txgen(

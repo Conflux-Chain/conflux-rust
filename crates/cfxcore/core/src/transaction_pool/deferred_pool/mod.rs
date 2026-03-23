@@ -15,6 +15,7 @@ use rand_xorshift::XorShiftRng;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
+    time::Instant,
 };
 
 #[cfg(test)]
@@ -99,6 +100,7 @@ impl DeferredPool {
         block_size_limit: usize, tx_num_limit: usize, tx_min_price: U256,
         validity: F,
     ) -> (Vec<Arc<SignedTransaction>>, U256, usize) {
+        let total_start = Instant::now();
         if block_gas_limit.is_zero()
             || block_size_limit == 0
             || tx_num_limit == 0
@@ -281,6 +283,15 @@ impl DeferredPool {
                 rest_size_limit
             );
         }
+        info!(
+            "timing.deferred_pool_packing_sampler space={:?} ready_entries={} selected={} gas_used={} size_used={} total_ms={}",
+            space,
+            self.packing_pool.in_space(space).len(),
+            to_pack_txs.len(),
+            gas_used,
+            size_used,
+            total_start.elapsed().as_millis(),
+        );
         (to_pack_txs, gas_used, size_used)
     }
 
