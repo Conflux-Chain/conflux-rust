@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["TraceHandler"]};
+window.SIDEBAR_ITEMS = {"struct":["TraceHandler","TxPoolHandler"]};

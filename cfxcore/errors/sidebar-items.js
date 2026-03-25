@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["EXCEPTION_ERROR"],"enum":["Error"],"fn":["account_result_to_rpc_result"],"type":["BoxFuture","Result"]};
+window.SIDEBAR_ITEMS = {"constant":["EXCEPTION_ERROR"],"enum":["Error"],"fn":["account_result_to_rpc_result","error_object_owned_to_jsonrpc_error"],"type":["BoxFuture","Result"]};
