@@ -79,8 +79,15 @@ use std::{
     fs::{create_dir_all, File, OpenOptions},
     io::Write,
     path::Path,
+    sync::atomic::{AtomicBool, Ordering},
     thread, time,
 };
+
+static STOPPED: AtomicBool = AtomicBool::new(false);
+
+/// Signal all diem metrics reporter threads to stop.
+pub fn stop() { STOPPED.store(true, Ordering::Relaxed); }
+pub fn is_stopped() -> bool { STOPPED.load(Ordering::Relaxed) }
 
 pub static NUM_METRICS: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
@@ -197,6 +204,9 @@ pub fn dump_all_metrics_to_file_periodically<P: AsRef<Path>>(
 ) {
     let mut file = get_metrics_file(dir_path, file_name);
     thread::spawn(move || loop {
+        if is_stopped() {
+            return;
+        }
         let mut buffer = get_all_metrics_as_serialized_string()
             .expect("Error gathering metrics");
         if !buffer.is_empty() {
@@ -204,6 +214,9 @@ pub fn dump_all_metrics_to_file_periodically<P: AsRef<Path>>(
             file.write_all(&buffer).expect("Error writing metrics");
         }
         thread::sleep(time::Duration::from_millis(interval));
+        if is_stopped() {
+            return;
+        }
     });
 }
 

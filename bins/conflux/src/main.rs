@@ -130,7 +130,17 @@ Current Version: {}
         NodeType::Unknown => return Err("Unknown node type".into()),
     };
     info!("Conflux client started");
-    shutdown_handler::run(client_handle, exit);
+    let graceful = shutdown_handler::run(client_handle, exit);
+
+    if !graceful {
+        eprintln!("Unclean shutdown, force exiting to avoid static destructor issues.");
+        // Use _exit() to skip C++ static destructors (e.g. RocksDB's
+        // PeriodicWorkScheduler) which may have already been invalidated
+        // by background threads during shutdown.
+        unsafe {
+            libc::_exit(1);
+        }
+    }
 
     Ok(())
 }
