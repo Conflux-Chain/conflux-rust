@@ -160,6 +160,10 @@
 <a href=#160 id=160 data-nosnippet>160</a>    Error {
 <a href=#161 id=161 data-nosnippet>161</a>        code: ErrorCode::from(e.code() <span class="kw">as </span>i64),
 <a href=#162 id=162 data-nosnippet>162</a>        message: e.message().into(),
-<a href=#163 id=163 data-nosnippet>163</a>        data: e.data().map(|v| Value::String(v.to_string())),
+<a href=#163 id=163 data-nosnippet>163</a>        data: e.data().and_then(|v| serde_json::from_str(v.get()).ok()),
 <a href=#164 id=164 data-nosnippet>164</a>    }
-<a href=#165 id=165 data-nosnippet>165</a>}</code></pre></div></section></main></body></html>
+<a href=#165 id=165 data-nosnippet>165</a>}
+<a href=#166 id=166 data-nosnippet>166</a>
+<a href=#167 id=167 data-nosnippet>167</a><span class="kw">pub fn </span>jsonrpc_error_to_error_object_owned(e: Error) -&gt; ErrorObjectOwned {
+<a href=#168 id=168 data-nosnippet>168</a>    ErrorObjectOwned::owned(e.code.code() <span class="kw">as </span>i32, e.message, e.data)
+<a href=#169 id=169 data-nosnippet>169</a>}</code></pre></div></section></main></body></html>

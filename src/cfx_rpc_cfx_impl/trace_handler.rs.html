@@ -4,14 +4,14 @@
 <a href=#4 id=4 data-nosnippet>4</a>
 <a href=#5 id=5 data-nosnippet>5</a></span><span class="kw">use </span>cfx_addr::Network;
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>cfx_execute_helper::exec_tracer::TraceFilter <span class="kw">as </span>PrimitiveTraceFilter;
-<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>cfx_types::{Space, H256};
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>cfx_util_macros::bail;
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>cfxcore::{
-<a href=#10 id=10 data-nosnippet>10</a>    block_data_manager::DataVersionTuple, errors::Result <span class="kw">as </span>CoreResult,
-<a href=#11 id=11 data-nosnippet>11</a>    BlockDataManager, ConsensusGraph, SharedConsensusGraph,
-<a href=#12 id=12 data-nosnippet>12</a>};
-<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>cfxcore_errors::ProviderBlockError;
-<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>jsonrpc_core::Error <span class="kw">as </span>JsonRpcError;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>cfx_rpc_utils::error::jsonrpsee_error_helpers::internal_error;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>cfx_types::{Space, H256};
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>cfx_util_macros::bail;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>cfxcore::{
+<a href=#11 id=11 data-nosnippet>11</a>    block_data_manager::DataVersionTuple, errors::Result <span class="kw">as </span>CoreResult,
+<a href=#12 id=12 data-nosnippet>12</a>    BlockDataManager, ConsensusGraph, SharedConsensusGraph,
+<a href=#13 id=13 data-nosnippet>13</a>};
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>cfxcore_errors::ProviderBlockError;
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>log::warn;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>primitives::EpochNumber;
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>std::sync::Arc;
@@ -205,7 +205,7 @@
 <a href=#205 id=205 data-nosnippet>205</a>            primitive_traces_to_eth_localized_traces(<span class="kw-2">&amp;</span>primitive_eth_traces)
 <a href=#206 id=206 data-nosnippet>206</a>                .map_err(|e| {
 <a href=#207 id=207 data-nosnippet>207</a>                    <span class="macro">warn!</span>(<span class="string">"Internal error on trace reconstruction: {}"</span>, e);
-<a href=#208 id=208 data-nosnippet>208</a>                    JsonRpcError::internal_error()
+<a href=#208 id=208 data-nosnippet>208</a>                    internal_error()
 <a href=#209 id=209 data-nosnippet>209</a>                })<span class="question-mark">?</span>;
 <a href=#210 id=210 data-nosnippet>210</a>
 <a href=#211 id=211 data-nosnippet>211</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(EpochTrace::new(cfx_traces, eth_traces)))
@@ -217,7 +217,7 @@
 <a href=#217 id=217 data-nosnippet>217</a>        <span class="kw">let </span>consensus = <span class="self">self</span>.consensus_graph();
 <a href=#218 id=218 data-nosnippet>218</a>        <span class="kw">let </span>epoch = consensus
 <a href=#219 id=219 data-nosnippet>219</a>            .get_block_epoch_number(<span class="kw-2">&amp;</span>epoch_hash)
-<a href=#220 id=220 data-nosnippet>220</a>            .ok_or(JsonRpcError::internal_error())<span class="question-mark">?</span>;
+<a href=#220 id=220 data-nosnippet>220</a>            .ok_or(internal_error())<span class="question-mark">?</span>;
 <a href=#221 id=221 data-nosnippet>221</a>        <span class="kw">let </span><span class="kw-2">mut </span>trace_filter = PrimitiveTraceFilter::space_filter(space);
 <a href=#222 id=222 data-nosnippet>222</a>        trace_filter.from_epoch = EpochNumber::Number(epoch);
 <a href=#223 id=223 data-nosnippet>223</a>        trace_filter.to_epoch = EpochNumber::Number(epoch);
