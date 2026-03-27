@@ -16,7 +16,7 @@ use std::{
 
 use cfx_parameters::consensus_internal::ELASTICITY_MULTIPLIER;
 use futures::executor::block_on;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use slab::Slab;
 use tokio::sync::mpsc::error::TryRecvError;
 use unexpected::{Mismatch, OutOfBounds};
@@ -1007,6 +1007,30 @@ pub struct SynchronizationGraph {
     pub future_blocks: FutureBlockContainer,
 
     machine: Arc<Machine>,
+
+    /// Join handle for the "Consensus Worker" thread.
+    /// Stored so we can join the thread on drop for clean shutdown.
+    worker_thread: Mutex<Option<thread::JoinHandle<()>>>,
+
+    /// Subscription ID for the consensus receiver channel.
+    /// Used to unsubscribe (disconnect the receiver) on drop,
+    /// signaling the worker thread to exit.
+    consensus_receiver_id: u64,
+}
+
+impl Drop for SynchronizationGraph {
+    fn drop(&mut self) {
+        // Unsubscribe from the channel to drop the sender, which causes
+        // consensus_receiver.recv() to return None, signaling the worker
+        // thread to exit its loop.
+        self.new_block_hashes
+            .unsubscribe(self.consensus_receiver_id);
+
+        // Wait for the worker thread to finish.
+        if let Some(thread) = self.worker_thread.lock().take() {
+            thread.join().ok();
+        }
+    }
 }
 
 impl MallocSizeOf for SynchronizationGraph {
@@ -1044,6 +1068,7 @@ impl SynchronizationGraph {
         // worker will be blocked on waiting the first block forever.
         let consensus_unprocessed_count = Arc::new(AtomicUsize::new(0));
         let mut consensus_receiver = notifications.new_block_hashes.subscribe();
+        let consensus_receiver_id = consensus_receiver.id;
         let inner = Arc::new(RwLock::new(
             SynchronizationGraphInner::with_genesis_block(
                 genesis_block_header.clone(),
@@ -1069,11 +1094,13 @@ impl SynchronizationGraph {
             consensus_unprocessed_count: consensus_unprocessed_count.clone(),
             new_block_hashes: notifications.new_block_hashes.clone(),
             machine,
+            worker_thread: Mutex::new(None),
+            consensus_receiver_id,
         };
 
         // It receives `BLOCK_GRAPH_READY` blocks in order and handles them in
         // `ConsensusGraph`
-        thread::Builder::new()
+        let worker_handle = thread::Builder::new()
             .name("Consensus Worker".into())
             .spawn(move || {
                 // The Consensus Worker will prioritize blocks based on its parent epoch number while respecting the topological order. This has the following two benefits:
@@ -1171,6 +1198,7 @@ impl SynchronizationGraph {
                 }
             })
             .expect("Cannot fail");
+        *sync_graph.worker_thread.lock() = Some(worker_handle);
         sync_graph
     }
 
