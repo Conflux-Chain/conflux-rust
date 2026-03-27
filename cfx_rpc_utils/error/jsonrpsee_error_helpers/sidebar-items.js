@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["internal_error","internal_rpc_err","invalid_input_rpc_err","invalid_params","invalid_params_check","invalid_params_msg","invalid_params_rpc_err","invalid_request_msg","rpc_err","rpc_error_with_code"]};
+window.SIDEBAR_ITEMS = {"fn":["internal_error","internal_error_with_data","invalid_input_rpc_err","invalid_params","invalid_params_check","invalid_params_msg","invalid_params_rpc_err","invalid_request_msg","rpc_err","rpc_error_with_code"]};

@@ -49,7 +49,7 @@
 <a href=#49 id=49 data-nosnippet>49</a>}
 <a href=#50 id=50 data-nosnippet>50</a>
 <a href=#51 id=51 data-nosnippet>51</a><span class="doccomment">/// Constructs an internal JSON-RPC error.
-<a href=#52 id=52 data-nosnippet>52</a></span><span class="kw">pub fn </span>internal_rpc_err&lt;S: Serialize&gt;(data: S) -&gt; ErrorObjectOwned {
+<a href=#52 id=52 data-nosnippet>52</a></span><span class="kw">pub fn </span>internal_error_with_data&lt;S: Serialize&gt;(data: S) -&gt; ErrorObjectOwned {
 <a href=#53 id=53 data-nosnippet>53</a>    rpc_err(INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, <span class="prelude-val">Some</span>(data))
 <a href=#54 id=54 data-nosnippet>54</a>}
 <a href=#55 id=55 data-nosnippet>55</a>
