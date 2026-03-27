@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["calculate_genesis","generate_waypoint","maybe_bootstrap"],"struct":["GenesisCommitter"]};
+window.SIDEBAR_ITEMS = {"fn":["calculate_genesis","maybe_bootstrap"],"struct":["GenesisCommitter"]};

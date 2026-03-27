@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ContractEvent"],"struct":["ContractEventHasher","ContractEventV0","ContractEventV0Hasher","EventWithProof"]};
+window.SIDEBAR_ITEMS = {"enum":["ContractEvent"],"struct":["ContractEventHasher","ContractEventV0","ContractEventV0Hasher"]};

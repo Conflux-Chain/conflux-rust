@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["ROOT_NIBBLE_HEIGHT"],"mod":["iterator","metrics","node_type","restore"],"struct":["JellyfishMerkleTree","MissingRootError","NodeStats","StaleNodeIndex","TreeUpdateBatch"],"trait":["TreeReader","TreeWriter","Value"],"type":["NodeBatch","StaleNodeIndexBatch"]};

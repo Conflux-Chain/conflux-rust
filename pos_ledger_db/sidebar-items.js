@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["backup","errors","metrics","schema"],"struct":["PosLedgerDB"],"trait":["GetRestoreHandler"]};
+window.SIDEBAR_ITEMS = {"mod":["errors","metrics","schema"],"struct":["PosLedgerDB"]};

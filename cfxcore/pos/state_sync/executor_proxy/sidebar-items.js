@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"trait":["ExecutorProxyTrait"]};
+window.SIDEBAR_ITEMS = {"struct":["SyncState"],"trait":["ExecutorProxyTrait"]};

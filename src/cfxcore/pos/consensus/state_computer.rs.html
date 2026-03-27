@@ -103,45 +103,29 @@
 <a href=#103 id=103 data-nosnippet>103</a>    }
 <a href=#104 id=104 data-nosnippet>104</a>
 <a href=#105 id=105 data-nosnippet>105</a>    <span class="doccomment">/// Synchronize to a commit that not present locally.
-<a href=#106 id=106 data-nosnippet>106</a>    </span><span class="kw">async fn </span>sync_to(
-<a href=#107 id=107 data-nosnippet>107</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, _target: LedgerInfoWithSignatures,
-<a href=#108 id=108 data-nosnippet>108</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), StateSyncError&gt; {
-<a href=#109 id=109 data-nosnippet>109</a>        <span class="macro">fail_point!</span>(<span class="string">"consensus::sync_to"</span>, |<span class="kw">_</span>| {
-<a href=#110 id=110 data-nosnippet>110</a>            <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Injected error in sync_to"</span>).into())
-<a href=#111 id=111 data-nosnippet>111</a>        });
-<a href=#112 id=112 data-nosnippet>112</a>        <span class="comment">// Here to start to do state synchronization where ChunkExecutor inside
-<a href=#113 id=113 data-nosnippet>113</a>        // will process chunks and commit to Storage. However, after
-<a href=#114 id=114 data-nosnippet>114</a>        // block execution and commitments, the sync state of
-<a href=#115 id=115 data-nosnippet>115</a>        // ChunkExecutor may be not up to date so it is required to
-<a href=#116 id=116 data-nosnippet>116</a>        // reset the cache of ChunkExecutor in State Sync when requested
-<a href=#117 id=117 data-nosnippet>117</a>        // to sync.
-<a href=#118 id=118 data-nosnippet>118</a>        //let res = monitor!("sync_to",
-<a href=#119 id=119 data-nosnippet>119</a>        // self.synchronizer.sync_to(target).await); Similarily, after
-<a href=#120 id=120 data-nosnippet>120</a>        // the state synchronization, we have to reset the
-<a href=#121 id=121 data-nosnippet>121</a>        // cache of BlockExecutor to guarantee the latest committed
-<a href=#122 id=122 data-nosnippet>122</a>        // state is up to date.
-<a href=#123 id=123 data-nosnippet>123</a>        // self.executor.reset()?;
-<a href=#124 id=124 data-nosnippet>124</a>
-<a href=#125 id=125 data-nosnippet>125</a>        /*res.map_err(|error| {
-<a href=#126 id=126 data-nosnippet>126</a>            let anyhow_error: anyhow::Error = error.into();
-<a href=#127 id=127 data-nosnippet>127</a>            anyhow_error.into()
-<a href=#128 id=128 data-nosnippet>128</a>        })*/
-<a href=#129 id=129 data-nosnippet>129</a>        </span><span class="prelude-val">Ok</span>(())
-<a href=#130 id=130 data-nosnippet>130</a>    }
-<a href=#131 id=131 data-nosnippet>131</a>}
-<a href=#132 id=132 data-nosnippet>132</a>
-<a href=#133 id=133 data-nosnippet>133</a><span class="kw">fn </span>id_and_transactions_from_block(
-<a href=#134 id=134 data-nosnippet>134</a>    block: <span class="kw-2">&amp;</span>Block,
-<a href=#135 id=135 data-nosnippet>135</a>) -&gt; (HashValue, Vec&lt;Transaction&gt;) {
-<a href=#136 id=136 data-nosnippet>136</a>    <span class="kw">let </span>id = block.id();
-<a href=#137 id=137 data-nosnippet>137</a>    <span class="comment">// TODO(lpl): Do we need BlockMetadata?
-<a href=#138 id=138 data-nosnippet>138</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>transactions = <span class="macro">vec!</span>[Transaction::BlockMetadata(block.into())];
-<a href=#139 id=139 data-nosnippet>139</a>    transactions.extend(
-<a href=#140 id=140 data-nosnippet>140</a>        block
-<a href=#141 id=141 data-nosnippet>141</a>            .payload()
-<a href=#142 id=142 data-nosnippet>142</a>            .unwrap_or(<span class="kw-2">&amp;</span><span class="macro">vec!</span>[])
-<a href=#143 id=143 data-nosnippet>143</a>            .iter()
-<a href=#144 id=144 data-nosnippet>144</a>            .map(|txn| Transaction::UserTransaction(txn.clone())),
-<a href=#145 id=145 data-nosnippet>145</a>    );
-<a href=#146 id=146 data-nosnippet>146</a>    (id, transactions)
-<a href=#147 id=147 data-nosnippet>147</a>}</code></pre></div></section></main></body></html>
+<a href=#106 id=106 data-nosnippet>106</a>    /// State sync via chunk execution has been removed; this is now a no-op.
+<a href=#107 id=107 data-nosnippet>107</a>    </span><span class="kw">async fn </span>sync_to(
+<a href=#108 id=108 data-nosnippet>108</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, _target: LedgerInfoWithSignatures,
+<a href=#109 id=109 data-nosnippet>109</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), StateSyncError&gt; {
+<a href=#110 id=110 data-nosnippet>110</a>        <span class="macro">fail_point!</span>(<span class="string">"consensus::sync_to"</span>, |<span class="kw">_</span>| {
+<a href=#111 id=111 data-nosnippet>111</a>            <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Injected error in sync_to"</span>).into())
+<a href=#112 id=112 data-nosnippet>112</a>        });
+<a href=#113 id=113 data-nosnippet>113</a>        <span class="prelude-val">Ok</span>(())
+<a href=#114 id=114 data-nosnippet>114</a>    }
+<a href=#115 id=115 data-nosnippet>115</a>}
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a><span class="kw">fn </span>id_and_transactions_from_block(
+<a href=#118 id=118 data-nosnippet>118</a>    block: <span class="kw-2">&amp;</span>Block,
+<a href=#119 id=119 data-nosnippet>119</a>) -&gt; (HashValue, Vec&lt;Transaction&gt;) {
+<a href=#120 id=120 data-nosnippet>120</a>    <span class="kw">let </span>id = block.id();
+<a href=#121 id=121 data-nosnippet>121</a>    <span class="comment">// TODO(lpl): Do we need BlockMetadata?
+<a href=#122 id=122 data-nosnippet>122</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>transactions = <span class="macro">vec!</span>[Transaction::BlockMetadata(block.into())];
+<a href=#123 id=123 data-nosnippet>123</a>    transactions.extend(
+<a href=#124 id=124 data-nosnippet>124</a>        block
+<a href=#125 id=125 data-nosnippet>125</a>            .payload()
+<a href=#126 id=126 data-nosnippet>126</a>            .unwrap_or(<span class="kw-2">&amp;</span><span class="macro">vec!</span>[])
+<a href=#127 id=127 data-nosnippet>127</a>            .iter()
+<a href=#128 id=128 data-nosnippet>128</a>            .map(|txn| Transaction::UserTransaction(txn.clone())),
+<a href=#129 id=129 data-nosnippet>129</a>    );
+<a href=#130 id=130 data-nosnippet>130</a>    (id, transactions)
+<a href=#131 id=131 data-nosnippet>131</a>}</code></pre></div></section></main></body></html>

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["AccountStateBlob","AccountStateBlobHasher","AccountStateWithProof"]};
+window.SIDEBAR_ITEMS = {"struct":["AccountStateBlob","AccountStateBlobHasher"]};
