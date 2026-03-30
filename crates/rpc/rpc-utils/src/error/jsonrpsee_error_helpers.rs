@@ -101,6 +101,14 @@ pub fn rpc_error_with_code(
     rpc_err(code, msg, None::<()>)
 }
 
+pub fn unimplemented(details: Option<String>) -> ErrorObjectOwned {
+    ErrorObjectOwned::owned(
+        codes::UNSUPPORTED as i32,
+        "This API is not implemented yet",
+        details,
+    )
+}
+
 /// Constructs a JSON-RPC error, consisting of `code`, `message` and optional
 /// `data`.
 pub fn rpc_err<S: Serialize>(

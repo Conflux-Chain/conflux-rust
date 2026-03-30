@@ -166,27 +166,7 @@ impl CfxHandler {
                 Ok(EpochNumber::Num(U64::from(epoch_number)))
             }
             Some(BlockHashOrEpochNumber::EpochNumber(epoch_number)) => {
-                Ok(match epoch_number {
-                    PrimitiveEpochNumber::Number(n) => {
-                        EpochNumber::Num(cfx_types::U64::from(n))
-                    }
-                    PrimitiveEpochNumber::Earliest => EpochNumber::Earliest,
-                    PrimitiveEpochNumber::LatestCheckpoint => {
-                        EpochNumber::LatestCheckpoint
-                    }
-                    PrimitiveEpochNumber::LatestFinalized => {
-                        EpochNumber::LatestFinalized
-                    }
-                    PrimitiveEpochNumber::LatestConfirmed => {
-                        EpochNumber::LatestConfirmed
-                    }
-                    PrimitiveEpochNumber::LatestState => {
-                        EpochNumber::LatestState
-                    }
-                    PrimitiveEpochNumber::LatestMined => {
-                        EpochNumber::LatestMined
-                    }
-                })
+                Ok(epoch_number)
             }
             None => Ok(EpochNumber::LatestState),
         }
@@ -469,9 +449,8 @@ impl CfxHandler {
             let nonce = consensus_graph.next_nonce(
                 Address::from(tx.from.clone().ok_or("from should have")?)
                     .with_native_space(),
-                BlockHashOrEpochNumber::EpochNumber(
-                    PrimitiveEpochNumber::LatestState,
-                ),
+                BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
+                    .into(),
                 "internal EpochNumber::LatestState",
             )?;
             tx.nonce.replace(nonce.into());
@@ -1038,7 +1017,7 @@ impl CfxRpcServer for CfxHandler {
         self.check_address_network(addr.network)?;
         let consensus_graph = self.consensus_graph();
         let num = num.unwrap_or(BlockHashOrEpochNumber::EpochNumber(
-            PrimitiveEpochNumber::LatestState,
+            EpochNumber::LatestState,
         ));
         info!(
             "RPC Request: cfx_getNextNonce address={:?} epoch_num={:?}",
