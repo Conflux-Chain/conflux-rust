@@ -48,6 +48,7 @@ tempfile = { workspace = true }
 rustc-hex = { workspace = true }
 threadpool = { workspace = true }
 metrics = { workspace = true }
+diem-metrics = { workspace = true }
 delegate = { workspace = true }
 itertools = { workspace = true }
 order-stat = { workspace = true }
