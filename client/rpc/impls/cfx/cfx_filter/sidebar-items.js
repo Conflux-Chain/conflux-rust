@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["CfxFilterClient","UnfinalizedEpochs"],"trait":["Filterable"]};
+window.SIDEBAR_ITEMS = {"struct":["CfxFilterClient"]};

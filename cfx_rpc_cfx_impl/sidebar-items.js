@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["convert_to_pos_epoch_reward","hash_value_to_h256"],"struct":["DebugHandler","PosHandler","TestHandler","TraceHandler","TxPoolHandler"]};
+window.SIDEBAR_ITEMS = {"fn":["check_balance_against_transaction","convert_to_pos_epoch_reward","eth_data_hash","hash_value_to_h256"],"mod":["helpers"],"struct":["CfxFilterHandler","CfxHandler","DebugHandler","PosHandler","TestHandler","TraceHandler","TxPoolHandler","UnfinalizedEpochs"]};
