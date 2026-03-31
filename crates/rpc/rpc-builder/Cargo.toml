@@ -24,11 +24,17 @@ jsonrpsee = { workspace = true, features = ["server"] }
 rand = { workspace = true }
 cfx-rpc-eth-impl = { workspace = true }
 cfx-rpc-eth-api = { workspace = true }
+cfx-rpc-cfx-impl = { workspace = true }
+cfx-rpc-cfx-api = { workspace = true }
 cfxcore = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 log = { workspace = true }
 cfx-rpc-middlewares = { workspace = true }
 cfx-tasks = { workspace = true }
 tokio = { workspace = true }
+cfx-addr = { workspace = true }
+primitives = { workspace = true }
+network = { workspace = true }
+parking_lot = { workspace = true }
 
 [dev-dependencies]

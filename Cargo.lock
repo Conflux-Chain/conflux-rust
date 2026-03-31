@@ -1817,6 +1817,9 @@ name = "cfx-rpc-builder"
 version = "3.0.0"
 dependencies = [
  "alloy-primitives",
+ "cfx-addr",
+ "cfx-rpc-cfx-api",
+ "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-api",
  "cfx-rpc-eth-impl",
@@ -1827,6 +1830,9 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-types",
  "log",
+ "network",
+ "parking_lot 0.12.1",
+ "primitives",
  "rand 0.9.0",
  "serde",
  "strum 0.26.3",
