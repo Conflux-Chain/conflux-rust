@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["pipe_from_stream"],"struct":["Id","Subscribers","SubscriptionSerializeError"]};

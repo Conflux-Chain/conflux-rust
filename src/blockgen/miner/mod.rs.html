@@ -20,13 +20,13 @@
 <a href=#20 id=20 data-nosnippet>20</a>    Cpu(usize), <span class="comment">// Number of CPU workers
 <a href=#21 id=21 data-nosnippet>21</a></span>}
 <a href=#22 id=22 data-nosnippet>22</a>
-<a href=#23 id=23 data-nosnippet>23</a><span class="kw">pub fn </span>spawn(
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">pub async fn </span>spawn(
 <a href=#24 id=24 data-nosnippet>24</a>    bg: Arc&lt;BlockGenerator&gt;, miner_type: MinerType,
 <a href=#25 id=25 data-nosnippet>25</a>) -&gt; (Box&lt;<span class="kw">dyn </span>MineWorker&gt;, SolutionReceiver) {
 <a href=#26 id=26 data-nosnippet>26</a>    <span class="kw">let </span>(worker, solution_receiver): (Box&lt;<span class="kw">dyn </span>MineWorker&gt;, <span class="kw">_</span>) = <span class="kw">match </span>miner_type
 <a href=#27 id=27 data-nosnippet>27</a>    {
 <a href=#28 id=28 data-nosnippet>28</a>        MinerType::Stratum =&gt; {
-<a href=#29 id=29 data-nosnippet>29</a>            <span class="kw">let </span>(stratum, receiver) = Stratum::spawn(<span class="kw-2">&amp;*</span>bg);
+<a href=#29 id=29 data-nosnippet>29</a>            <span class="kw">let </span>(stratum, receiver) = Stratum::spawn(<span class="kw-2">&amp;*</span>bg).<span class="kw">await</span>;
 <a href=#30 id=30 data-nosnippet>30</a>            (Box::new(stratum), receiver)
 <a href=#31 id=31 data-nosnippet>31</a>        }
 <a href=#32 id=32 data-nosnippet>32</a>        MinerType::Cpu(num_workers) =&gt; {

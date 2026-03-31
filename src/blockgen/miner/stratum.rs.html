@@ -265,7 +265,7 @@
 <a href=#265 id=265 data-nosnippet>265</a>}
 <a href=#266 id=266 data-nosnippet>266</a>
 <a href=#267 id=267 data-nosnippet>267</a><span class="kw">impl </span>Stratum {
-<a href=#268 id=268 data-nosnippet>268</a>    <span class="kw">pub fn </span>spawn(bg: <span class="kw-2">&amp;</span>BlockGenerator) -&gt; (<span class="self">Self</span>, SolutionReceiver) {
+<a href=#268 id=268 data-nosnippet>268</a>    <span class="kw">pub async fn </span>spawn(bg: <span class="kw-2">&amp;</span>BlockGenerator) -&gt; (<span class="self">Self</span>, SolutionReceiver) {
 <a href=#269 id=269 data-nosnippet>269</a>        <span class="kw">let </span>(solution_sender, solution_receiver) = mpsc::channel();
 <a href=#270 id=270 data-nosnippet>270</a>        <span class="kw">let </span>cfg = Options {
 <a href=#271 id=271 data-nosnippet>271</a>            listen_addr: bg.pow_config.stratum_listen_addr.clone(),
@@ -278,37 +278,39 @@
 <a href=#278 id=278 data-nosnippet>278</a>            bg.pow_config.pow_problem_window_size,
 <a href=#279 id=279 data-nosnippet>279</a>            solution_sender,
 <a href=#280 id=280 data-nosnippet>280</a>        )
-<a href=#281 id=281 data-nosnippet>281</a>        .expect(<span class="string">"Failed to start Stratum service."</span>);
-<a href=#282 id=282 data-nosnippet>282</a>
-<a href=#283 id=283 data-nosnippet>283</a>        (stratum, solution_receiver)
-<a href=#284 id=284 data-nosnippet>284</a>    }
-<a href=#285 id=285 data-nosnippet>285</a>
-<a href=#286 id=286 data-nosnippet>286</a>    <span class="doccomment">/// New stratum job dispatcher, given the miner, client and dedicated
-<a href=#287 id=287 data-nosnippet>287</a>    /// stratum service
-<a href=#288 id=288 data-nosnippet>288</a>    </span><span class="kw">pub fn </span>start(
-<a href=#289 id=289 data-nosnippet>289</a>        options: <span class="kw-2">&amp;</span>Options, pow: Arc&lt;PowComputer&gt;, pow_window_size: usize,
-<a href=#290 id=290 data-nosnippet>290</a>        solution_sender: mpsc::Sender&lt;ProofOfWorkSolution&gt;,
-<a href=#291 id=291 data-nosnippet>291</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Stratum, Error&gt; {
-<a href=#292 id=292 data-nosnippet>292</a>        <span class="kw">use </span>std::net::IpAddr;
-<a href=#293 id=293 data-nosnippet>293</a>
-<a href=#294 id=294 data-nosnippet>294</a>        <span class="kw">let </span>dispatcher = Arc::new(StratumJobDispatcher::new(
-<a href=#295 id=295 data-nosnippet>295</a>            solution_sender,
-<a href=#296 id=296 data-nosnippet>296</a>            pow,
-<a href=#297 id=297 data-nosnippet>297</a>            pow_window_size,
-<a href=#298 id=298 data-nosnippet>298</a>        ));
-<a href=#299 id=299 data-nosnippet>299</a>
-<a href=#300 id=300 data-nosnippet>300</a>        <span class="kw">let </span>stratum_svc = StratumService::start(
-<a href=#301 id=301 data-nosnippet>301</a>            <span class="kw-2">&amp;</span>SocketAddr::new(
-<a href=#302 id=302 data-nosnippet>302</a>                options.listen_addr.parse::&lt;IpAddr&gt;()<span class="question-mark">?</span>,
-<a href=#303 id=303 data-nosnippet>303</a>                options.port,
-<a href=#304 id=304 data-nosnippet>304</a>            ),
-<a href=#305 id=305 data-nosnippet>305</a>            dispatcher.clone(),
-<a href=#306 id=306 data-nosnippet>306</a>            options.secret.clone(),
-<a href=#307 id=307 data-nosnippet>307</a>        )<span class="question-mark">?</span>;
-<a href=#308 id=308 data-nosnippet>308</a>
-<a href=#309 id=309 data-nosnippet>309</a>        <span class="prelude-val">Ok</span>(Stratum {
-<a href=#310 id=310 data-nosnippet>310</a>            dispatcher,
-<a href=#311 id=311 data-nosnippet>311</a>            service: stratum_svc,
-<a href=#312 id=312 data-nosnippet>312</a>        })
-<a href=#313 id=313 data-nosnippet>313</a>    }
-<a href=#314 id=314 data-nosnippet>314</a>}</code></pre></div></section></main></body></html>
+<a href=#281 id=281 data-nosnippet>281</a>        .<span class="kw">await
+<a href=#282 id=282 data-nosnippet>282</a>        </span>.expect(<span class="string">"Failed to start Stratum service."</span>);
+<a href=#283 id=283 data-nosnippet>283</a>
+<a href=#284 id=284 data-nosnippet>284</a>        (stratum, solution_receiver)
+<a href=#285 id=285 data-nosnippet>285</a>    }
+<a href=#286 id=286 data-nosnippet>286</a>
+<a href=#287 id=287 data-nosnippet>287</a>    <span class="doccomment">/// New stratum job dispatcher, given the miner, client and dedicated
+<a href=#288 id=288 data-nosnippet>288</a>    /// stratum service
+<a href=#289 id=289 data-nosnippet>289</a>    </span><span class="kw">pub async fn </span>start(
+<a href=#290 id=290 data-nosnippet>290</a>        options: <span class="kw-2">&amp;</span>Options, pow: Arc&lt;PowComputer&gt;, pow_window_size: usize,
+<a href=#291 id=291 data-nosnippet>291</a>        solution_sender: mpsc::Sender&lt;ProofOfWorkSolution&gt;,
+<a href=#292 id=292 data-nosnippet>292</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Stratum, Error&gt; {
+<a href=#293 id=293 data-nosnippet>293</a>        <span class="kw">use </span>std::net::IpAddr;
+<a href=#294 id=294 data-nosnippet>294</a>
+<a href=#295 id=295 data-nosnippet>295</a>        <span class="kw">let </span>dispatcher = Arc::new(StratumJobDispatcher::new(
+<a href=#296 id=296 data-nosnippet>296</a>            solution_sender,
+<a href=#297 id=297 data-nosnippet>297</a>            pow,
+<a href=#298 id=298 data-nosnippet>298</a>            pow_window_size,
+<a href=#299 id=299 data-nosnippet>299</a>        ));
+<a href=#300 id=300 data-nosnippet>300</a>
+<a href=#301 id=301 data-nosnippet>301</a>        <span class="kw">let </span>stratum_svc = StratumService::start(
+<a href=#302 id=302 data-nosnippet>302</a>            <span class="kw-2">&amp;</span>SocketAddr::new(
+<a href=#303 id=303 data-nosnippet>303</a>                options.listen_addr.parse::&lt;IpAddr&gt;()<span class="question-mark">?</span>,
+<a href=#304 id=304 data-nosnippet>304</a>                options.port,
+<a href=#305 id=305 data-nosnippet>305</a>            ),
+<a href=#306 id=306 data-nosnippet>306</a>            dispatcher.clone(),
+<a href=#307 id=307 data-nosnippet>307</a>            options.secret.clone(),
+<a href=#308 id=308 data-nosnippet>308</a>        )
+<a href=#309 id=309 data-nosnippet>309</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#310 id=310 data-nosnippet>310</a>
+<a href=#311 id=311 data-nosnippet>311</a>        <span class="prelude-val">Ok</span>(Stratum {
+<a href=#312 id=312 data-nosnippet>312</a>            dispatcher,
+<a href=#313 id=313 data-nosnippet>313</a>            service: stratum_svc,
+<a href=#314 id=314 data-nosnippet>314</a>        })
+<a href=#315 id=315 data-nosnippet>315</a>    }
+<a href=#316 id=316 data-nosnippet>316</a>}</code></pre></div></section></main></body></html>

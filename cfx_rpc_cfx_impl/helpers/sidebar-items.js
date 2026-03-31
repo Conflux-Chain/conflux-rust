@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["MAX_FEE_HISTORY_CACHE_BLOCK_COUNT"],"mod":["block_provider","poll_filter","poll_manager"]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_FEE_HISTORY_CACHE_BLOCK_COUNT"],"mod":["block_provider","poll_filter","poll_manager","subscribers"],"struct":["EpochQueue"]};

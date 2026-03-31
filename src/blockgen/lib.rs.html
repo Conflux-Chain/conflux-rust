@@ -89,14 +89,14 @@
 <a href=#89 id=89 data-nosnippet>89</a>        BlockGeneratorTestApi::new(<span class="self">self</span>.clone())
 <a href=#90 id=90 data-nosnippet>90</a>    }
 <a href=#91 id=91 data-nosnippet>91</a>
-<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">pub fn </span>mine(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) {
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">pub async fn </span>mine(<span class="self">self</span>: <span class="kw-2">&amp;</span>Arc&lt;<span class="self">Self</span>&gt;) {
 <a href=#93 id=93 data-nosnippet>93</a>        <span class="kw">let </span>miner_type = <span class="kw">if </span><span class="self">self</span>.pow_config.use_stratum() {
 <a href=#94 id=94 data-nosnippet>94</a>            miner::MinerType::Stratum
 <a href=#95 id=95 data-nosnippet>95</a>        } <span class="kw">else </span>{
 <a href=#96 id=96 data-nosnippet>96</a>            miner::MinerType::Cpu(<span class="number">1</span>)
 <a href=#97 id=97 data-nosnippet>97</a>        };
 <a href=#98 id=98 data-nosnippet>98</a>
-<a href=#99 id=99 data-nosnippet>99</a>        <span class="kw">let </span>(miner, solution_rx) = miner::spawn(<span class="self">self</span>.clone(), miner_type);
+<a href=#99 id=99 data-nosnippet>99</a>        <span class="kw">let </span>(miner, solution_rx) = miner::spawn(<span class="self">self</span>.clone(), miner_type).<span class="kw">await</span>;
 <a href=#100 id=100 data-nosnippet>100</a>
 <a href=#101 id=101 data-nosnippet>101</a>        MiningSession::new(<span class="kw-2">&amp;*</span><span class="self">self</span>, <span class="kw-2">&amp;*</span>miner, solution_rx).run();
 <a href=#102 id=102 data-nosnippet>102</a>    }

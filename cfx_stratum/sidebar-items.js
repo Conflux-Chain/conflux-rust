@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Error"],"struct":["PeerMetaExtractor","ServiceConfiguration","SocketMetadata","Stratum"],"trait":["JobDispatcher","PushWorkHandler"]};
+window.SIDEBAR_ITEMS = {"enum":["Error"],"struct":["ServiceConfiguration","Stratum"],"trait":["JobDispatcher","PushWorkHandler"]};
