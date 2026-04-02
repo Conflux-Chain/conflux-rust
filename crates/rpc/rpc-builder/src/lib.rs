@@ -1,5 +1,7 @@
 mod cfx;
+mod error;
 mod eth;
+mod id_provider;
 
 pub use cfx::{
     CfxRpcModule, RpcModuleBuilder as CfxRpcModuleBuilder,

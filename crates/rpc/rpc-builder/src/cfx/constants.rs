@@ -1,2 +1,0 @@
-pub const DEFAULT_HTTP_PORT: u16 = 12537;
-pub const DEFAULT_WS_PORT: u16 = 12538;

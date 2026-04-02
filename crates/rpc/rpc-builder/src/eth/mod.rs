@@ -26,14 +26,11 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
-mod constants;
-mod error;
-mod id_provider;
+#![allow(unused)]
 mod module;
 
+pub use crate::{error::*, id_provider::SubscriptionIdProvider};
 use cfx_rpc_middlewares::{Logger, Metrics, Throttle};
-pub use error::*;
-pub use id_provider::EthSubscriptionIdProvider;
 use log::debug;
 pub use module::{EthRpcModule, RpcModuleSelection};
 
@@ -59,6 +56,9 @@ use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::Arc,
 };
+
+pub const DEFAULT_HTTP_PORT: u16 = 8545;
+pub const DEFAULT_WS_PORT: u16 = 8546;
 
 /// A builder type to configure the RPC module: See [`RpcModule`]
 ///
@@ -361,23 +361,23 @@ impl RpcServerConfig {
 
     /// Configures the http server
     ///
-    /// Note: this always configures an [`EthSubscriptionIdProvider`]
+    /// Note: this always configures an [`SubscriptionIdProvider`]
     /// [`IdProvider`] for convenience. To set a custom [`IdProvider`],
     /// please use [`Self::with_id_provider`].
     pub fn with_http(mut self, config: ServerConfigBuilder) -> Self {
         self.http_server_config =
-            Some(config.set_id_provider(EthSubscriptionIdProvider::default()));
+            Some(config.set_id_provider(SubscriptionIdProvider::default()));
         self
     }
 
     /// Configures the ws server
     ///
-    /// Note: this always configures an [`EthSubscriptionIdProvider`]
+    /// Note: this always configures an [`SubscriptionIdProvider`]
     /// [`IdProvider`] for convenience. To set a custom [`IdProvider`],
     /// please use [`Self::with_id_provider`].
     pub fn with_ws(mut self, config: ServerConfigBuilder) -> Self {
         self.ws_server_config =
-            Some(config.set_id_provider(EthSubscriptionIdProvider::default()));
+            Some(config.set_id_provider(SubscriptionIdProvider::default()));
         self
     }
 }
@@ -472,14 +472,12 @@ impl RpcServerConfig {
             .layer_fn(|s| Metrics::new(s))
             .layer_fn(|s| Logger::new(s));
 
-        let http_socket_addr =
-            self.http_addr.unwrap_or(SocketAddr::V4(SocketAddrV4::new(
-                Ipv4Addr::LOCALHOST,
-                constants::DEFAULT_HTTP_PORT,
-            )));
+        let http_socket_addr = self.http_addr.unwrap_or(SocketAddr::V4(
+            SocketAddrV4::new(Ipv4Addr::LOCALHOST, DEFAULT_HTTP_PORT),
+        ));
 
         let ws_socket_addr = self.ws_addr.unwrap_or(SocketAddr::V4(
-            SocketAddrV4::new(Ipv4Addr::LOCALHOST, constants::DEFAULT_WS_PORT),
+            SocketAddrV4::new(Ipv4Addr::LOCALHOST, DEFAULT_WS_PORT),
         ));
 
         // If both are configured on the same port, we combine them into one

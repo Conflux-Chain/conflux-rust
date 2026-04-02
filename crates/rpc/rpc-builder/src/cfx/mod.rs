@@ -1,11 +1,6 @@
-mod constants;
-mod error;
-mod id_provider;
 mod module;
 
-pub use constants::*;
-pub use error::*;
-pub use id_provider::CfxSubscriptionIdProvider;
+pub use crate::{error::*, id_provider::SubscriptionIdProvider};
 pub use module::{CfxRpcModule, RpcModuleSelection};
 
 use cfx_rpc_cfx_api::{
@@ -23,10 +18,13 @@ use cfxcore::{
 use jsonrpsee::server::ServerBuilder;
 use network::NetworkService;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::Arc,
 };
+
+pub const DEFAULT_HTTP_PORT: u16 = 12537;
+pub const DEFAULT_WS_PORT: u16 = 12538;
 
 #[derive(Clone)]
 pub struct RpcModuleBuilder {
@@ -245,7 +243,7 @@ impl RpcServerConfig {
         mut self, config: jsonrpsee::server::ServerConfigBuilder,
     ) -> Self {
         self.http_server_config =
-            Some(config.set_id_provider(CfxSubscriptionIdProvider::default()));
+            Some(config.set_id_provider(SubscriptionIdProvider::default()));
         self
     }
 
@@ -253,7 +251,7 @@ impl RpcServerConfig {
         mut self, config: jsonrpsee::server::ServerConfigBuilder,
     ) -> Self {
         self.ws_server_config =
-            Some(config.set_id_provider(CfxSubscriptionIdProvider::default()));
+            Some(config.set_id_provider(SubscriptionIdProvider::default()));
         self
     }
 
@@ -306,7 +304,7 @@ impl RpcServerConfig {
 
     pub async fn start(
         self, modules: &TransportRpcModules,
-    ) -> Result<RpcServerHandle, RpcError> {
+    ) -> Result<RpcServerHandle, RpcError<CfxRpcModule>> {
         let http_socket_addr = self.http_addr.unwrap_or(SocketAddr::V4(
             SocketAddrV4::new(Ipv4Addr::LOCALHOST, DEFAULT_HTTP_PORT),
         ));
@@ -453,7 +451,9 @@ impl TransportRpcModuleConfig {
 
     pub const fn ws(&self) -> Option<&RpcModuleSelection> { self.ws.as_ref() }
 
-    fn ensure_ws_http_identical(&self) -> Result<(), WsHttpSamePortError> {
+    fn ensure_ws_http_identical(
+        &self,
+    ) -> Result<(), WsHttpSamePortError<CfxRpcModule>> {
         if RpcModuleSelection::are_identical(
             self.http.as_ref(),
             self.ws.as_ref(),
@@ -471,19 +471,20 @@ impl TransportRpcModuleConfig {
                 .map(RpcModuleSelection::to_selection)
                 .unwrap_or_default();
 
-            let http_not_ws =
+            let http_not_ws: HashSet<CfxRpcModule> =
                 http_modules.difference(&ws_modules).copied().collect();
-            let ws_not_http =
+            let ws_not_http: HashSet<CfxRpcModule> =
                 ws_modules.difference(&http_modules).copied().collect();
-            let overlap =
+            let overlap: HashSet<CfxRpcModule> =
                 http_modules.intersection(&ws_modules).copied().collect();
-
+            // 指定泛型为 CfxRpcModule 以避免冲突
+            let conflicting_modules = ConflictingModules {
+                overlap,
+                http_not_ws,
+                ws_not_http,
+            };
             Err(WsHttpSamePortError::ConflictingModules(Box::new(
-                ConflictingModules {
-                    overlap,
-                    http_not_ws,
-                    ws_not_http,
-                },
+                conflicting_modules,
             )))
         }
     }
