@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Path"],"struct":["AccessPath"]};
+window.SIDEBAR_ITEMS = {"struct":["AccessPath"]};

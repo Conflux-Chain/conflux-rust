@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["CORE_CODE_ADDRESS"],"fn":["diem_root_address","validator_set_address"]};
+window.SIDEBAR_ITEMS = {"fn":["diem_root_address","validator_set_address"]};

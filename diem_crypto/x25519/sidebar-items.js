@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["PRIVATE_KEY_SIZE","PUBLIC_KEY_SIZE","SHARED_SECRET_SIZE"],"struct":["PrivateKey","PublicKey"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["config","generator","keys","network_id","utils"]};
+window.SIDEBAR_ITEMS = {"mod":["config","keys","network_id","utils"]};

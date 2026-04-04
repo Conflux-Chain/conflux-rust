@@ -19,7 +19,7 @@
 <a href=#19 id=19 data-nosnippet>19</a>    account_address::AccountAddress, on_chain_config::OnChainConfigPayload,
 <a href=#20 id=20 data-nosnippet>20</a>    transaction::SignedTransaction,
 <a href=#21 id=21 data-nosnippet>21</a>};
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>executor::{vm::PosVM, Executor};
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>executor::Executor;
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>storage_interface::DbReader;
 <a href=#24 id=24 data-nosnippet>24</a>
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span><span class="kw">crate</span>::pos::{
@@ -74,7 +74,7 @@
 <a href=#74 id=74 data-nosnippet>74</a>        runtime.handle().clone(),
 <a href=#75 id=75 data-nosnippet>75</a>        consensus_db.clone(),
 <a href=#76 id=76 data-nosnippet>76</a>    ));
-<a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">let </span>executor = Box::new(Executor::&lt;PosVM&gt;::new(
+<a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">let </span>executor = Box::new(Executor::new(
 <a href=#78 id=78 data-nosnippet>78</a>        db_with_cache,
 <a href=#79 id=79 data-nosnippet>79</a>        pow_handler.clone(),
 <a href=#80 id=80 data-nosnippet>80</a>        consensus_db.clone() <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>LedgerBlockRW&gt;,

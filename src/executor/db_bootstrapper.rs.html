@@ -7,7 +7,7 @@
 <a href=#7 id=7 data-nosnippet>7</a>
 <a href=#8 id=8 data-nosnippet>8</a></span><span class="attr">#![forbid(unsafe_code)]
 <a href=#9 id=9 data-nosnippet>9</a>
-<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">use crate</span>::{vm::VMExecutor, Executor};
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">use </span><span class="kw">crate</span>::Executor;
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>anyhow::{format_err, <span class="prelude-ty">Result</span>};
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>cached_pos_ledger_db::CachedPosLedgerDB;
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>consensus_types::db::FakeLedgerBlockDB;
@@ -32,7 +32,7 @@
 <a href=#32 id=32 data-nosnippet>32</a><span class="doccomment">/// If the database has not been bootstrapped yet, commit the genesis
 <a href=#33 id=33 data-nosnippet>33</a>/// transaction. Returns Ok(true) if committed, Ok(false) if already
 <a href=#34 id=34 data-nosnippet>34</a>/// bootstrapped.
-<a href=#35 id=35 data-nosnippet>35</a></span><span class="kw">pub fn </span>maybe_bootstrap&lt;V: VMExecutor&gt;(
+<a href=#35 id=35 data-nosnippet>35</a></span><span class="kw">pub fn </span>maybe_bootstrap(
 <a href=#36 id=36 data-nosnippet>36</a>    db: <span class="kw-2">&amp;</span>DbReaderWriter, genesis_txn: <span class="kw-2">&amp;</span>Transaction,
 <a href=#37 id=37 data-nosnippet>37</a>    genesis_pivot_decision: <span class="prelude-ty">Option</span>&lt;PivotBlockDecision&gt;, initial_seed: Vec&lt;u8&gt;,
 <a href=#38 id=38 data-nosnippet>38</a>    initial_nodes: Vec&lt;(NodeID, u64)&gt;,
@@ -50,7 +50,7 @@
 <a href=#50 id=50 data-nosnippet>50</a>        initial_nodes,
 <a href=#51 id=51 data-nosnippet>51</a>    );
 <a href=#52 id=52 data-nosnippet>52</a>
-<a href=#53 id=53 data-nosnippet>53</a>    <span class="kw">let </span>committer = calculate_genesis::&lt;V&gt;(
+<a href=#53 id=53 data-nosnippet>53</a>    <span class="kw">let </span>committer = calculate_genesis(
 <a href=#54 id=54 data-nosnippet>54</a>        db,
 <a href=#55 id=55 data-nosnippet>55</a>        tree_state,
 <a href=#56 id=56 data-nosnippet>56</a>        genesis_txn,
@@ -63,14 +63,14 @@
 <a href=#63 id=63 data-nosnippet>63</a>    <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>)
 <a href=#64 id=64 data-nosnippet>64</a>}
 <a href=#65 id=65 data-nosnippet>65</a>
-<a href=#66 id=66 data-nosnippet>66</a><span class="kw">pub struct </span>GenesisCommitter&lt;V: VMExecutor&gt; {
-<a href=#67 id=67 data-nosnippet>67</a>    executor: Executor&lt;V&gt;,
+<a href=#66 id=66 data-nosnippet>66</a><span class="kw">pub struct </span>GenesisCommitter {
+<a href=#67 id=67 data-nosnippet>67</a>    executor: Executor,
 <a href=#68 id=68 data-nosnippet>68</a>    ledger_info_with_sigs: LedgerInfoWithSignatures,
 <a href=#69 id=69 data-nosnippet>69</a>}
 <a href=#70 id=70 data-nosnippet>70</a>
-<a href=#71 id=71 data-nosnippet>71</a><span class="kw">impl</span>&lt;V: VMExecutor&gt; GenesisCommitter&lt;V&gt; {
+<a href=#71 id=71 data-nosnippet>71</a><span class="kw">impl </span>GenesisCommitter {
 <a href=#72 id=72 data-nosnippet>72</a>    <span class="kw">pub fn </span>new(
-<a href=#73 id=73 data-nosnippet>73</a>        executor: Executor&lt;V&gt;, ledger_info_with_sigs: LedgerInfoWithSignatures,
+<a href=#73 id=73 data-nosnippet>73</a>        executor: Executor, ledger_info_with_sigs: LedgerInfoWithSignatures,
 <a href=#74 id=74 data-nosnippet>74</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
 <a href=#75 id=75 data-nosnippet>75</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
 <a href=#76 id=76 data-nosnippet>76</a>            executor,
@@ -90,12 +90,12 @@
 <a href=#90 id=90 data-nosnippet>90</a>    }
 <a href=#91 id=91 data-nosnippet>91</a>}
 <a href=#92 id=92 data-nosnippet>92</a>
-<a href=#93 id=93 data-nosnippet>93</a><span class="kw">pub fn </span>calculate_genesis&lt;V: VMExecutor&gt;(
+<a href=#93 id=93 data-nosnippet>93</a><span class="kw">pub fn </span>calculate_genesis(
 <a href=#94 id=94 data-nosnippet>94</a>    db: <span class="kw-2">&amp;</span>DbReaderWriter, tree_state: TreeState, genesis_txn: <span class="kw-2">&amp;</span>Transaction,
 <a href=#95 id=95 data-nosnippet>95</a>    genesis_pivot_decision: <span class="prelude-ty">Option</span>&lt;PivotBlockDecision&gt;, initial_seed: Vec&lt;u8&gt;,
 <a href=#96 id=96 data-nosnippet>96</a>    initial_nodes: Vec&lt;(NodeID, u64)&gt;,
 <a href=#97 id=97 data-nosnippet>97</a>    initial_committee: Vec&lt;(AccountAddress, u64)&gt;,
-<a href=#98 id=98 data-nosnippet>98</a>) -&gt; <span class="prelude-ty">Result</span>&lt;GenesisCommitter&lt;V&gt;&gt; {
+<a href=#98 id=98 data-nosnippet>98</a>) -&gt; <span class="prelude-ty">Result</span>&lt;GenesisCommitter&gt; {
 <a href=#99 id=99 data-nosnippet>99</a>    <span class="comment">// DB bootstrapper works on either an empty transaction accumulator or an
 <a href=#100 id=100 data-nosnippet>100</a>    // existing block chain. In the very extreme and sad situation of losing
 <a href=#101 id=101 data-nosnippet>101</a>    // quorum among validators, we refer to the second use case said above.
@@ -108,7 +108,7 @@
 <a href=#108 id=108 data-nosnippet>108</a>        initial_committee,
 <a href=#109 id=109 data-nosnippet>109</a>        genesis_pivot_decision.clone(),
 <a href=#110 id=110 data-nosnippet>110</a>    ));
-<a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">let </span>executor = Executor::&lt;V&gt;::new(
+<a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">let </span>executor = Executor::new(
 <a href=#112 id=112 data-nosnippet>112</a>        db_with_cache,
 <a href=#113 id=113 data-nosnippet>113</a>        <span class="comment">// This will not be used in genesis execution.
 <a href=#114 id=114 data-nosnippet>114</a>        </span>Arc::new(FakePowHandler {}),

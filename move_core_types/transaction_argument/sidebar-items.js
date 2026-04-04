@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["TransactionArgument"],"fn":["convert_txn_args"]};

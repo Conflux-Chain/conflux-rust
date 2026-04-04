@@ -644,7 +644,7 @@
 <a href=#644 id=644 data-nosnippet>644</a>        <span class="kw">let </span>node = <span class="kw">match </span><span class="self">self</span>.node_map.get(<span class="kw-2">&amp;</span>node_id.addr) {
 <a href=#645 id=645 data-nosnippet>645</a>            <span class="prelude-val">Some</span>(node) =&gt; node,
 <a href=#646 id=646 data-nosnippet>646</a>            <span class="prelude-val">None </span>=&gt; {
-<a href=#647 id=647 data-nosnippet>647</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(DiscardedVMStatus::ELECTION_NON_EXISITENT_NODE);
+<a href=#647 id=647 data-nosnippet>647</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE);
 <a href=#648 id=648 data-nosnippet>648</a>            }
 <a href=#649 id=649 data-nosnippet>649</a>        };
 <a href=#650 id=650 data-nosnippet>650</a>
@@ -652,7 +652,7 @@
 <a href=#652 id=652 data-nosnippet>652</a>            .get_starting_view_for_term(election_tx.target_term)
 <a href=#653 id=653 data-nosnippet>653</a>        {
 <a href=#654 id=654 data-nosnippet>654</a>            <span class="prelude-val">None </span>=&gt; {
-<a href=#655 id=655 data-nosnippet>655</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN)
+<a href=#655 id=655 data-nosnippet>655</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(DiscardedVMStatus::ELECTION_TARGET_TERM_NOT_OPEN)
 <a href=#656 id=656 data-nosnippet>656</a>            }
 <a href=#657 id=657 data-nosnippet>657</a>            <span class="prelude-val">Some</span>(v) =&gt; v,
 <a href=#658 id=658 data-nosnippet>658</a>        };
@@ -666,7 +666,7 @@
 <a href=#666 id=666 data-nosnippet>666</a>            &lt;= <span class="self">self</span>.current_view
 <a href=#667 id=667 data-nosnippet>667</a>                + POS_STATE_CONFIG.election_term_end_round(<span class="self">self</span>.current_view)
 <a href=#668 id=668 data-nosnippet>668</a>        {
-<a href=#669 id=669 data-nosnippet>669</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN);
+<a href=#669 id=669 data-nosnippet>669</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(DiscardedVMStatus::ELECTION_TARGET_TERM_NOT_OPEN);
 <a href=#670 id=670 data-nosnippet>670</a>        }
 <a href=#671 id=671 data-nosnippet>671</a>        <span class="prelude-val">None
 <a href=#672 id=672 data-nosnippet>672</a>    </span>}

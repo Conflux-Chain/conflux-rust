@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["create_unsigned_txn","create_user_txn"],"trait":["TransactionSigner"]};

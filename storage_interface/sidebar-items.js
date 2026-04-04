@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Error","Order","StorageRequest"],"mod":["mock","state_view"],"struct":["DbReaderWriter","SaveTransactionsRequest","StartupInfo","TreeState"],"trait":["DBReaderForPoW","DbReader","DbWriter"]};
+window.SIDEBAR_ITEMS = {"enum":["Error","Order"],"mod":["mock","state_view"],"struct":["DbReaderWriter","StartupInfo","TreeState"],"trait":["DBReaderForPoW","DbReader","DbWriter"]};

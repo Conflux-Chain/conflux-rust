@@ -14,35 +14,33 @@
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">mod </span>kv_storage;
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">mod </span>namespaced_storage;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">mod </span>on_disk;
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">mod </span>policy;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">mod </span>storage;
-<a href=#19 id=19 data-nosnippet>19</a>
-<a href=#20 id=20 data-nosnippet>20</a><span class="kw">pub use crate</span>::{
-<a href=#21 id=21 data-nosnippet>21</a>    crypto_kv_storage::CryptoKVStorage,
-<a href=#22 id=22 data-nosnippet>22</a>    crypto_storage::{CryptoStorage, PublicKeyResponse},
-<a href=#23 id=23 data-nosnippet>23</a>    error::Error,
-<a href=#24 id=24 data-nosnippet>24</a>    in_memory::InMemoryStorage,
-<a href=#25 id=25 data-nosnippet>25</a>    kv_storage::{GetResponse, KVStorage},
-<a href=#26 id=26 data-nosnippet>26</a>    namespaced_storage::NamespacedStorage,
-<a href=#27 id=27 data-nosnippet>27</a>    on_disk::OnDiskStorage,
-<a href=#28 id=28 data-nosnippet>28</a>    policy::{Capability, Identity, Permission, Policy},
-<a href=#29 id=29 data-nosnippet>29</a>    storage::Storage,
-<a href=#30 id=30 data-nosnippet>30</a>};
-<a href=#31 id=31 data-nosnippet>31</a>
-<a href=#32 id=32 data-nosnippet>32</a><span class="comment">// Some common serializations for interacting with bytes these must be manually
-<a href=#33 id=33 data-nosnippet>33</a>// added to types via: #[serde(serialize_with = "to_base64", deserialize_with =
-<a href=#34 id=34 data-nosnippet>34</a>// "from_base64")] some_value: Vec&lt;u8&gt;
-<a href=#35 id=35 data-nosnippet>35</a>
-<a href=#36 id=36 data-nosnippet>36</a></span><span class="kw">pub fn </span>to_base64&lt;S&gt;(bytes: <span class="kw-2">&amp;</span>[u8], serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
-<a href=#37 id=37 data-nosnippet>37</a><span class="kw">where </span>S: serde::Serializer {
-<a href=#38 id=38 data-nosnippet>38</a>    serializer.serialize_str(<span class="kw-2">&amp;</span>base64::encode(bytes))
-<a href=#39 id=39 data-nosnippet>39</a>}
-<a href=#40 id=40 data-nosnippet>40</a>
-<a href=#41 id=41 data-nosnippet>41</a><span class="kw">pub fn </span>from_base64&lt;<span class="lifetime">'de</span>, D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, D::Error&gt;
-<a href=#42 id=42 data-nosnippet>42</a><span class="kw">where </span>D: serde::Deserializer&lt;<span class="lifetime">'de</span>&gt; {
-<a href=#43 id=43 data-nosnippet>43</a>    <span class="kw">let </span>s: String = serde::Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
-<a href=#44 id=44 data-nosnippet>44</a>    base64::decode(s).map_err(serde::de::Error::custom)
-<a href=#45 id=45 data-nosnippet>45</a>}
-<a href=#46 id=46 data-nosnippet>46</a>
-<a href=#47 id=47 data-nosnippet>47</a><span class="attr">#[cfg(test)]
-<a href=#48 id=48 data-nosnippet>48</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">mod </span>storage;
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">pub use crate</span>::{
+<a href=#20 id=20 data-nosnippet>20</a>    crypto_kv_storage::CryptoKVStorage,
+<a href=#21 id=21 data-nosnippet>21</a>    crypto_storage::{CryptoStorage, PublicKeyResponse},
+<a href=#22 id=22 data-nosnippet>22</a>    error::Error,
+<a href=#23 id=23 data-nosnippet>23</a>    in_memory::InMemoryStorage,
+<a href=#24 id=24 data-nosnippet>24</a>    kv_storage::{GetResponse, KVStorage},
+<a href=#25 id=25 data-nosnippet>25</a>    namespaced_storage::NamespacedStorage,
+<a href=#26 id=26 data-nosnippet>26</a>    on_disk::OnDiskStorage,
+<a href=#27 id=27 data-nosnippet>27</a>    storage::Storage,
+<a href=#28 id=28 data-nosnippet>28</a>};
+<a href=#29 id=29 data-nosnippet>29</a>
+<a href=#30 id=30 data-nosnippet>30</a><span class="comment">// Some common serializations for interacting with bytes these must be manually
+<a href=#31 id=31 data-nosnippet>31</a>// added to types via: #[serde(serialize_with = "to_base64", deserialize_with =
+<a href=#32 id=32 data-nosnippet>32</a>// "from_base64")] some_value: Vec&lt;u8&gt;
+<a href=#33 id=33 data-nosnippet>33</a>
+<a href=#34 id=34 data-nosnippet>34</a></span><span class="kw">pub fn </span>to_base64&lt;S&gt;(bytes: <span class="kw-2">&amp;</span>[u8], serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">where </span>S: serde::Serializer {
+<a href=#36 id=36 data-nosnippet>36</a>    serializer.serialize_str(<span class="kw-2">&amp;</span>base64::encode(bytes))
+<a href=#37 id=37 data-nosnippet>37</a>}
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">pub fn </span>from_base64&lt;<span class="lifetime">'de</span>, D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, D::Error&gt;
+<a href=#40 id=40 data-nosnippet>40</a><span class="kw">where </span>D: serde::Deserializer&lt;<span class="lifetime">'de</span>&gt; {
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="kw">let </span>s: String = serde::Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
+<a href=#42 id=42 data-nosnippet>42</a>    base64::decode(s).map_err(serde::de::Error::custom)
+<a href=#43 id=43 data-nosnippet>43</a>}
+<a href=#44 id=44 data-nosnippet>44</a>
+<a href=#45 id=45 data-nosnippet>45</a><span class="attr">#[cfg(test)]
+<a href=#46 id=46 data-nosnippet>46</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>

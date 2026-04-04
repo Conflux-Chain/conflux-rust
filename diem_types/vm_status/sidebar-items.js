@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["AbortLocation","KeptVMStatus","StatusCode","StatusType","VMStatus"],"mod":["known_locations","sub_status"],"type":["DiscardedVMStatus"]};
+window.SIDEBAR_ITEMS = {"enum":["KeptVMStatus","StatusCode","StatusType","VMStatus"],"type":["DiscardedVMStatus"]};

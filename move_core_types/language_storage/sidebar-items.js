@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["CODE_TAG","CORE_CODE_ADDRESS","RESOURCE_TAG"],"enum":["TypeTag"],"struct":["ModuleId","ResourceKey","StructTag"]};

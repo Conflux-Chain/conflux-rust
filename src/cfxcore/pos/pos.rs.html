@@ -41,7 +41,7 @@
 <a href=#41 id=41 data-nosnippet>41</a>    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
 <a href=#42 id=42 data-nosnippet>42</a>    PeerId,
 <a href=#43 id=43 data-nosnippet>43</a>};
-<a href=#44 id=44 data-nosnippet>44</a><span class="kw">use </span>executor::{db_bootstrapper::maybe_bootstrap, vm::PosVM};
+<a href=#44 id=44 data-nosnippet>44</a><span class="kw">use </span>executor::db_bootstrapper::maybe_bootstrap;
 <a href=#45 id=45 data-nosnippet>45</a><span class="kw">use </span>futures::{
 <a href=#46 id=46 data-nosnippet>46</a>    channel::{
 <a href=#47 id=47 data-nosnippet>47</a>        mpsc::{<span class="self">self</span>, channel},
@@ -209,7 +209,7 @@
 <a href=#209 id=209 data-nosnippet>209</a>
 <a href=#210 id=210 data-nosnippet>210</a>    <span class="comment">// If the DB hasn't been bootstrapped yet, commit genesis.
 <a href=#211 id=211 data-nosnippet>211</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(genesis) = get_genesis_txn(<span class="kw-2">&amp;</span>node_config) {
-<a href=#212 id=212 data-nosnippet>212</a>        maybe_bootstrap::&lt;PosVM&gt;(
+<a href=#212 id=212 data-nosnippet>212</a>        maybe_bootstrap(
 <a href=#213 id=213 data-nosnippet>213</a>            <span class="kw-2">&amp;</span>db_rw,
 <a href=#214 id=214 data-nosnippet>214</a>            genesis,
 <a href=#215 id=215 data-nosnippet>215</a>            <span class="prelude-val">Some</span>(PivotBlockDecision {

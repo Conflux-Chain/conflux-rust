@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["allowed_currency_code_string","from_currency_code_string"]};

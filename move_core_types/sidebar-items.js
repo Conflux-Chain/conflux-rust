@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["account_address","identifier","language_storage","parser","transaction_argument","value","vm_status"]};
+window.SIDEBAR_ITEMS = {"mod":["account_address","vm_status"]};
