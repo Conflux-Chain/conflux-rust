@@ -29,7 +29,9 @@
 #![allow(unused)]
 mod module;
 
-pub use crate::{error::*, id_provider::SubscriptionIdProvider};
+pub use crate::{
+    error::*, id_provider::SubscriptionIdProvider, RpcServerHandle,
+};
 use cfx_rpc_middlewares::{Logger, Metrics, Throttle};
 use log::debug;
 pub use module::{EthRpcModule, RpcModuleSelection};
@@ -779,54 +781,5 @@ impl TransportRpcModules {
         let ws_removed = self.remove_ws_method(method_name);
 
         http_removed || ws_removed
-    }
-}
-
-/// A handle to the spawned servers.
-///
-/// When this type is dropped or [`RpcServerHandle::stop`] has been called the
-/// server will be stopped.
-#[derive(Clone, Debug)]
-#[must_use = "Server stops if dropped"]
-pub struct RpcServerHandle {
-    /// The address of the http/ws server
-    http_local_addr: Option<SocketAddr>,
-    ws_local_addr: Option<SocketAddr>,
-    http: Option<ServerHandle>,
-    ws: Option<ServerHandle>,
-}
-
-impl RpcServerHandle {
-    /// Returns the [`SocketAddr`] of the http server if started.
-    pub const fn http_local_addr(&self) -> Option<SocketAddr> {
-        self.http_local_addr
-    }
-
-    /// Returns the [`SocketAddr`] of the ws server if started.
-    pub const fn ws_local_addr(&self) -> Option<SocketAddr> {
-        self.ws_local_addr
-    }
-
-    /// Tell the server to stop without waiting for the server to stop.
-    pub fn stop(self) -> Result<(), AlreadyStoppedError> {
-        if let Some(handle) = self.http {
-            handle.stop()?
-        }
-
-        if let Some(handle) = self.ws {
-            handle.stop()?
-        }
-
-        Ok(())
-    }
-
-    /// Returns the url to the http server
-    pub fn http_url(&self) -> Option<String> {
-        self.http_local_addr.map(|addr| format!("http://{addr}"))
-    }
-
-    /// Returns the url to the ws server
-    pub fn ws_url(&self) -> Option<String> {
-        self.ws_local_addr.map(|addr| format!("ws://{addr}"))
     }
 }

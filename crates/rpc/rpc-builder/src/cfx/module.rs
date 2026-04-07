@@ -43,13 +43,8 @@ pub enum RpcModuleSelection {
 }
 
 impl RpcModuleSelection {
-    pub const STANDARD_MODULES: [CfxRpcModule; 5] = [
-        CfxRpcModule::Cfx,
-        CfxRpcModule::Debug,
-        CfxRpcModule::Pos,
-        CfxRpcModule::Trace,
-        CfxRpcModule::Txpool,
-    ];
+    pub const STANDARD_MODULES: [CfxRpcModule; 2] =
+        [CfxRpcModule::Cfx, CfxRpcModule::PubSub];
 
     pub fn all_modules() -> HashSet<CfxRpcModule> {
         CfxRpcModule::modules().into_iter().collect()
@@ -173,6 +168,13 @@ impl FromStr for RpcModuleSelection {
             "all" | "All" => Ok(Self::All),
             "none" | "None" => Ok(Self::None),
             "standard" | "Standard" => Ok(Self::Standard),
+            "safe" => {
+                let mut selection = HashSet::new();
+                selection.insert(CfxRpcModule::Cfx);
+                selection.insert(CfxRpcModule::PubSub);
+                selection.insert(CfxRpcModule::Txpool);
+                Ok(Self::Selection(selection))
+            }
             _ => {
                 let mut selection = HashSet::new();
                 for module in modules {
@@ -259,7 +261,7 @@ impl FromStr for CfxRpcModule {
             "trace" => Self::Trace,
             "txpool" => Self::Txpool,
             "test" => Self::Test,
-            "pubsub" | "cfx_pubsub" => Self::PubSub,
+            "pubsub" => Self::PubSub,
             _ => return Err(ParseError::VariantNotFound),
         })
     }

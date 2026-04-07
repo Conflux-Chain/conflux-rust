@@ -1,6 +1,8 @@
 mod module;
 
-pub use crate::{error::*, id_provider::SubscriptionIdProvider};
+pub use crate::{
+    error::*, id_provider::SubscriptionIdProvider, RpcServerHandle,
+};
 pub use module::{CfxRpcModule, RpcModuleSelection};
 
 use cfx_rpc_cfx_api::{
@@ -15,7 +17,11 @@ use cfxcore::{
     Notifications, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::{
+    core::RegisterMethodError,
+    server::{IdProvider, ServerBuilder, ServerConfigBuilder},
+    Methods, RpcModule,
+};
 use network::NetworkService;
 use std::{
     collections::{HashMap, HashSet},
@@ -106,7 +112,7 @@ pub struct RpcRegistryInner {
     network: Arc<NetworkService>,
     pos_handler: Arc<PosVerifier>,
     notifications: Arc<Notifications>,
-    modules: HashMap<CfxRpcModule, jsonrpsee::Methods>,
+    modules: HashMap<CfxRpcModule, Methods>,
 }
 
 impl RpcRegistryInner {
@@ -131,14 +137,12 @@ impl RpcRegistryInner {
 
     fn maybe_module(
         &mut self, config: Option<&RpcModuleSelection>,
-    ) -> Option<jsonrpsee::RpcModule<()>> {
+    ) -> Option<RpcModule<()>> {
         config.map(|config| self.module_for(config))
     }
 
-    pub fn module_for(
-        &mut self, config: &RpcModuleSelection,
-    ) -> jsonrpsee::RpcModule<()> {
-        let mut module = jsonrpsee::RpcModule::new(());
+    pub fn module_for(&mut self, config: &RpcModuleSelection) -> RpcModule<()> {
+        let mut module = RpcModule::new(());
         let all_methods = self.cfx_methods(config.iter_selection());
         for methods in all_methods {
             module.merge(methods).expect("No conflicts");
@@ -148,7 +152,7 @@ impl RpcRegistryInner {
 
     pub fn cfx_methods(
         &mut self, namespaces: impl Iterator<Item = CfxRpcModule>,
-    ) -> Vec<jsonrpsee::Methods> {
+    ) -> Vec<Methods> {
         let namespaces: Vec<_> = namespaces.collect();
 
         let namespace_methods = |namespace| {
@@ -209,10 +213,10 @@ impl RpcRegistryInner {
 
 #[derive(Debug)]
 pub struct RpcServerConfig {
-    http_server_config: Option<jsonrpsee::server::ServerConfigBuilder>,
+    http_server_config: Option<ServerConfigBuilder>,
     http_cors_domains: Option<String>,
     http_addr: Option<SocketAddr>,
-    ws_server_config: Option<jsonrpsee::server::ServerConfigBuilder>,
+    ws_server_config: Option<ServerConfigBuilder>,
     ws_cors_domains: Option<String>,
     ws_addr: Option<SocketAddr>,
 }
@@ -231,25 +235,21 @@ impl Default for RpcServerConfig {
 }
 
 impl RpcServerConfig {
-    pub fn http(config: jsonrpsee::server::ServerConfigBuilder) -> Self {
+    pub fn http(config: ServerConfigBuilder) -> Self {
         Self::default().with_http(config)
     }
 
-    pub fn ws(config: jsonrpsee::server::ServerConfigBuilder) -> Self {
+    pub fn ws(config: ServerConfigBuilder) -> Self {
         Self::default().with_ws(config)
     }
 
-    pub fn with_http(
-        mut self, config: jsonrpsee::server::ServerConfigBuilder,
-    ) -> Self {
+    pub fn with_http(mut self, config: ServerConfigBuilder) -> Self {
         self.http_server_config =
             Some(config.set_id_provider(SubscriptionIdProvider::default()));
         self
     }
 
-    pub fn with_ws(
-        mut self, config: jsonrpsee::server::ServerConfigBuilder,
-    ) -> Self {
+    pub fn with_ws(mut self, config: ServerConfigBuilder) -> Self {
         self.ws_server_config =
             Some(config.set_id_provider(SubscriptionIdProvider::default()));
         self
@@ -281,7 +281,7 @@ impl RpcServerConfig {
     }
 
     pub fn with_id_provider<I>(mut self, id_provider: I) -> Self
-    where I: jsonrpsee::server::IdProvider + Clone + 'static {
+    where I: IdProvider + Clone + 'static {
         if let Some(http) = self.http_server_config.take() {
             self.http_server_config =
                 Some(http.set_id_provider(id_provider.clone()));
@@ -493,8 +493,8 @@ impl TransportRpcModuleConfig {
 #[derive(Debug, Clone, Default)]
 pub struct TransportRpcModules<Context = ()> {
     pub config: TransportRpcModuleConfig,
-    pub http: Option<jsonrpsee::RpcModule<Context>>,
-    pub ws: Option<jsonrpsee::RpcModule<Context>>,
+    pub http: Option<RpcModule<Context>>,
+    pub ws: Option<RpcModule<Context>>,
 }
 
 impl TransportRpcModules {
@@ -503,8 +503,8 @@ impl TransportRpcModules {
     }
 
     pub fn merge_http(
-        &mut self, other: impl Into<jsonrpsee::Methods>,
-    ) -> Result<bool, jsonrpsee::core::RegisterMethodError> {
+        &mut self, other: impl Into<Methods>,
+    ) -> Result<bool, RegisterMethodError> {
         if let Some(ref mut http) = self.http {
             return http.merge(other.into()).map(|_| true);
         }
@@ -512,8 +512,8 @@ impl TransportRpcModules {
     }
 
     pub fn merge_ws(
-        &mut self, other: impl Into<jsonrpsee::Methods>,
-    ) -> Result<bool, jsonrpsee::core::RegisterMethodError> {
+        &mut self, other: impl Into<Methods>,
+    ) -> Result<bool, RegisterMethodError> {
         if let Some(ref mut ws) = self.ws {
             return ws.merge(other.into()).map(|_| true);
         }
@@ -521,8 +521,8 @@ impl TransportRpcModules {
     }
 
     pub fn merge_configured(
-        &mut self, other: impl Into<jsonrpsee::Methods>,
-    ) -> Result<(), jsonrpsee::core::RegisterMethodError> {
+        &mut self, other: impl Into<Methods>,
+    ) -> Result<(), RegisterMethodError> {
         let other = other.into();
         self.merge_http(other.clone())?;
         self.merge_ws(other.clone())?;
@@ -552,44 +552,5 @@ impl TransportRpcModules {
         let ws_removed = self.remove_ws_method(method_name);
 
         http_removed || ws_removed
-    }
-}
-
-#[derive(Clone, Debug)]
-#[must_use = "Server stops if dropped"]
-pub struct RpcServerHandle {
-    pub http_local_addr: Option<SocketAddr>,
-    pub ws_local_addr: Option<SocketAddr>,
-    pub http: Option<jsonrpsee::server::ServerHandle>,
-    pub ws: Option<jsonrpsee::server::ServerHandle>,
-}
-
-impl RpcServerHandle {
-    pub const fn http_local_addr(&self) -> Option<SocketAddr> {
-        self.http_local_addr
-    }
-
-    pub const fn ws_local_addr(&self) -> Option<SocketAddr> {
-        self.ws_local_addr
-    }
-
-    pub fn stop(self) -> Result<(), jsonrpsee::server::AlreadyStoppedError> {
-        if let Some(handle) = self.http {
-            handle.stop()?
-        }
-
-        if let Some(handle) = self.ws {
-            handle.stop()?
-        }
-
-        Ok(())
-    }
-
-    pub fn http_url(&self) -> Option<String> {
-        self.http_local_addr.map(|addr| format!("http://{addr}"))
-    }
-
-    pub fn ws_url(&self) -> Option<String> {
-        self.ws_local_addr.map(|addr| format!("ws://{addr}"))
     }
 }

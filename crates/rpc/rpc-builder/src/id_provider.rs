@@ -32,7 +32,7 @@
 
 use std::fmt::Write;
 
-use jsonrpsee_types::SubscriptionId;
+use jsonrpsee::{core::traits::IdProvider, types::SubscriptionId};
 
 /// An [`IdProvider`](jsonrpsee_core::traits::IdProvider) for ethereum
 /// subscription ids.
@@ -42,7 +42,7 @@ use jsonrpsee_types::SubscriptionId;
 #[non_exhaustive]
 pub struct SubscriptionIdProvider;
 
-impl jsonrpsee_core::traits::IdProvider for SubscriptionIdProvider {
+impl IdProvider for SubscriptionIdProvider {
     fn next_id(&self) -> SubscriptionId<'static> {
         to_quantity(rand::random::<u128>())
     }
