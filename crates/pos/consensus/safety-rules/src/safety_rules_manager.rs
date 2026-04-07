@@ -38,18 +38,12 @@ pub fn storage(config: &SafetyRulesConfig) -> PersistentSafetyStorage {
             .as_ref()
             .expect("Missing consensus key in test config")
             .private_key();
-        let waypoint = test_config.waypoint.expect("No waypoint in config");
-        diem_debug!(
-            "safety_rules_manager: backed={:?}, waypoint={:?}",
-            config.backend,
-            waypoint
-        );
+        diem_debug!("safety_rules_manager: backend={:?}", config.backend,);
 
         PersistentSafetyStorage::initialize(
             internal_storage,
             author,
             consensus_private_key,
-            waypoint,
             config.enable_cached_safety_data,
         )
     } else {

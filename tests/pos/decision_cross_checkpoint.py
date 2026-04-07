@@ -28,19 +28,38 @@ class PosDecisionCrossCheckpoint(DefaultConfluxTestFramework):
         # No auto timeout.
         self.pos_parameters["round_time_ms"] = 1000000000
 
-    def run_test(self):
-        clients = []
-        for node in self.nodes:
-            clients.append(RpcClient(node))
+    def _advance_pos_rounds(self, clients, num_rounds):
+        """Advance PoS rounds using local timeout (TC-based) to ensure round
+        progression even when votes are split across multiple proposals."""
+        for _ in range(num_rounds):
+            for client in clients:
+                client.pos_local_timeout()
+            time.sleep(0.5)
+            for client in clients:
+                client.pos_new_round_timeout()
+            time.sleep(0.5)
 
-        # Initialize pos_consensus_blocks
-        for _ in range(4):
+    def _commit_pos_rounds(self, clients, num_rounds):
+        """Run PoS rounds with proposal timeout and block generation.
+        Requires rounds to already be advancing (i.e., QC or TC formed)."""
+        for _ in range(num_rounds):
             for client in clients:
                 client.pos_proposal_timeout()
             time.sleep(0.5)
             for client in clients:
                 client.pos_new_round_timeout()
             time.sleep(0.5)
+            clients[0].generate_blocks(1)
+            sync_blocks(self.nodes)
+
+    def run_test(self):
+        clients = []
+        for node in self.nodes:
+            clients.append(RpcClient(node))
+
+        # Initialize PoS: use local_timeout to build TC and advance rounds
+        # (pos_proposal_timeout alone cannot advance rounds when votes split)
+        self._advance_pos_rounds(clients, 4)
         wait_until(lambda: clients[0].pos_status() is not None)
         wait_until(lambda: clients[0].pos_status()["latestCommitted"] is not None)
 
@@ -55,16 +74,7 @@ class PosDecisionCrossCheckpoint(DefaultConfluxTestFramework):
             client.pos_force_sign_pivot_decision(chosen_decision, int_to_hex(pivot_decision_height))
         time.sleep(1)
 
-        for i in range(4):
-            for client in clients:
-                client.pos_proposal_timeout()
-            # Wait for proposal processing
-            time.sleep(0.5)
-            for client in clients:
-                client.pos_new_round_timeout()
-            time.sleep(0.5)
-            clients[0].generate_blocks(1)
-            sync_blocks(self.nodes)
+        self._commit_pos_rounds(clients, 4)
         assert_equal(int(clients[0].pos_status()["pivotDecision"]["height"], 0), pivot_decision_height)
         assert_equal(clients[0].epoch_number("latest_finalized"), pivot_decision_height)
 
@@ -78,15 +88,7 @@ class PosDecisionCrossCheckpoint(DefaultConfluxTestFramework):
         for client in clients:
             client.pos_force_sign_pivot_decision(chosen_decision, int_to_hex(pivot_decision_height))
         time.sleep(1)
-        for _ in range(4):
-            for client in clients:
-                client.pos_proposal_timeout()
-            time.sleep(0.5)
-            for client in clients:
-                client.pos_new_round_timeout()
-            time.sleep(0.5)
-            clients[0].generate_blocks(1)
-            sync_blocks(self.nodes)
+        self._commit_pos_rounds(clients, 4)
         assert_equal(int(clients[0].pos_status()["pivotDecision"]["height"], 0), pivot_decision_height)
         assert_equal(clients[0].epoch_number("latest_finalized"), pivot_decision_height)
 

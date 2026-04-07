@@ -24,14 +24,14 @@ impl State {
     /// A convenience function of `read_account_ext_lock`
     pub(super) fn read_account_lock(
         &self, address: &AddressWithSpace,
-    ) -> DbResult<Option<AccountReadGuard>> {
+    ) -> DbResult<Option<AccountReadGuard<'_>>> {
         self.read_account_ext_lock(address, RequireFields::None)
     }
 
     /// A convenience function of `read_account_ext_lock`
     pub(super) fn read_native_account_lock(
         &self, address: &Address,
-    ) -> DbResult<Option<AccountReadGuard>> {
+    ) -> DbResult<Option<AccountReadGuard<'_>>> {
         self.read_account_lock(&address.with_native_space())
     }
 
@@ -40,7 +40,7 @@ impl State {
     /// It returns `None` if the account doesn't exist.
     pub(super) fn read_account_ext_lock(
         &self, address: &AddressWithSpace, require: RequireFields,
-    ) -> DbResult<Option<AccountReadGuard>> {
+    ) -> DbResult<Option<AccountReadGuard<'_>>> {
         let mut cache = self.cache.write();
 
         let account_entry = Self::fetch_account_mut(
@@ -110,14 +110,14 @@ impl State {
     /// A convenience function of `write_account_ext_lock`
     pub fn write_account_lock(
         &self, address: &AddressWithSpace,
-    ) -> DbResult<AccountWriteGuard> {
+    ) -> DbResult<AccountWriteGuard<'_>> {
         self.write_account_ext_lock(address, RequireFields::None)
     }
 
     /// A convenience function of `write_account_ext_lock`
     pub(super) fn write_native_account_lock(
         &self, address: &Address,
-    ) -> DbResult<AccountWriteGuard> {
+    ) -> DbResult<AccountWriteGuard<'_>> {
         self.write_account_lock(&address.with_native_space())
     }
 
@@ -126,7 +126,7 @@ impl State {
     /// It asserts a fail if the account doesn't exist.
     pub(super) fn write_account_ext_lock(
         &self, address: &AddressWithSpace, require: RequireFields,
-    ) -> DbResult<AccountWriteGuard> {
+    ) -> DbResult<AccountWriteGuard<'_>> {
         fn no_account_is_an_error(
             address: &AddressWithSpace,
         ) -> DbResult<OverlayAccount> {
@@ -140,7 +140,7 @@ impl State {
     /// new account if the account doesn't exist.
     pub(super) fn write_account_or_new_lock(
         &self, address: &AddressWithSpace,
-    ) -> DbResult<AccountWriteGuard> {
+    ) -> DbResult<AccountWriteGuard<'_>> {
         fn init_if_no_account(
             address: &AddressWithSpace,
         ) -> DbResult<OverlayAccount> {
@@ -166,7 +166,7 @@ impl State {
     /// and sets the dirty bit.
     fn write_account_inner<F>(
         &self, address: &AddressWithSpace, require: RequireFields, default: F,
-    ) -> DbResult<AccountWriteGuard>
+    ) -> DbResult<AccountWriteGuard<'_>>
     where F: Fn(&AddressWithSpace) -> DbResult<OverlayAccount> {
         let mut cache = self.cache.write();
 

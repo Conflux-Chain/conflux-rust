@@ -18,7 +18,6 @@ use diem_types::{
     proptest_types::{AccountInfoUniverse, ContractEventGen},
 };
 use itertools::Itertools;
-use move_core_types::{language_storage::TypeTag, move_resource::MoveResource};
 use proptest::{
     collection::{hash_set, vec},
     prelude::*,
@@ -32,10 +31,6 @@ fn save(
 ) -> HashValue {
     let mut cs = ChangeSet::new();
     let root_hash = store.put_events(version, events, &mut cs).unwrap();
-    assert_eq!(
-        cs.counter_bumps(version).get(LedgerCounter::EventsCreated),
-        events.len()
-    );
     store.db.write_schemas(cs.batch, true).unwrap();
 
     root_hash

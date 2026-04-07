@@ -10,7 +10,6 @@ publish = false
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.38"
 diem-crypto = { workspace = true }
 diem-types = { workspace = true }
 

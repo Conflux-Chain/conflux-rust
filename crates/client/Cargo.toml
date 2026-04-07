@@ -48,6 +48,7 @@ tempfile = { workspace = true }
 rustc-hex = { workspace = true }
 threadpool = { workspace = true }
 metrics = { workspace = true }
+diem-metrics = { workspace = true }
 delegate = { workspace = true }
 itertools = { workspace = true }
 order-stat = { workspace = true }
@@ -68,9 +69,10 @@ alloy-rpc-types-trace = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-cfx-impl = { workspace = true }
+cfx-rpc-cfx-api = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 cfx-util-macros = { workspace = true }
-cfx-rpc = { workspace = true }
+cfx-rpc-eth-impl = { workspace = true }
 cfx-rpc-utils = { workspace = true }
 cfx-rpc-builder = { workspace = true }
 jsonrpsee = { workspace = true }
@@ -79,6 +81,8 @@ cfx-parity-trace-types = { workspace = true }
 cfx-tasks = { workspace = true }
 cfx-config = { workspace = true }
 cfxcore-types = { workspace = true }
+fallible-iterator = { workspace = true }
+chrono = { workspace = true }
 cfx-mallocator-utils = { workspace = true }
 
 [dev-dependencies]
@@ -92,6 +96,7 @@ cfx-executor = { workspace = true, features = ["testonly_code"] }
 # https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
 testonly_code = []
 u64_mpt_db_key = ["cfx-storage/u64_mpt_db_key"]
+jemalloc-prof = ["cfx-mallocator-utils/jemalloc", "cfx-mallocator-utils/jemalloc-prof"]
 
 [[bench]]
 name = "benchmark"

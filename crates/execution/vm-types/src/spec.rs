@@ -202,6 +202,8 @@ pub struct Spec {
     pub eip7623: bool,
     pub align_evm: bool,
     pub cip_c2_fix: bool,
+    /// EIP-7939: Count Leading Zeros Instruction
+    pub eip7939: bool,
 }
 
 /// Represents the feature flags for CIP-645 implementation.
@@ -413,6 +415,7 @@ impl Spec {
             eip7623: false,
             cip_c2_fix: false,
             align_evm: false,
+            eip7939: false,
         }
     }
 

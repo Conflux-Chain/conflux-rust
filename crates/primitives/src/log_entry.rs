@@ -105,6 +105,8 @@ pub struct LocalizedLogEntry {
     pub block_hash: H256,
     /// Epoch number.
     pub epoch_number: BlockNumber,
+    /// Timestamp of the block in which this log was created.
+    pub block_timestamp: Option<u64>,
     /// Hash of transaction in which this log was created.
     pub transaction_hash: H256,
     /// Index of transaction within block.

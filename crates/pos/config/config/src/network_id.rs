@@ -4,11 +4,40 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-use crate::config::{PeerRole, RoleType};
+use crate::config::RoleType;
 use diem_types::PeerId;
 use serde::{Deserialize, Serialize, Serializer};
 use short_hex_str::AsShortHexStr;
 use std::{cmp::Ordering, fmt};
+
+/// Represents the Role that a peer plays in the network ecosystem rather than
+/// the type of node.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+)]
+pub enum PeerRole {
+    Validator = 0,
+    PreferredUpstream,
+    Upstream,
+    ValidatorFullNode,
+    Downstream,
+    Known,
+    Unknown,
+}
+
+impl Default for PeerRole {
+    /// Default to least trusted
+    fn default() -> Self { PeerRole::Unknown }
+}
 
 /// A grouping of common information between all networking code for logging.
 /// This should greatly reduce the groupings between these given everywhere, and
@@ -256,6 +285,51 @@ impl NetworkId {
     }
 }
 
+/// Identifier of a node, represented as (network_id, peer_id)
+#[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct PeerNetworkId(pub NodeNetworkId, pub PeerId);
+
+impl PeerNetworkId {
+    pub fn network_id(&self) -> NodeNetworkId { self.0.clone() }
+
+    pub fn raw_network_id(&self) -> NetworkId { self.0.network_id() }
+
+    pub fn peer_id(&self) -> PeerId { self.1 }
+
+    #[cfg(any(test, feature = "fuzzing"))]
+    pub fn random() -> Self {
+        Self(
+            NodeNetworkId::new(NetworkId::default(), 0),
+            PeerId::random(),
+        )
+    }
+
+    #[cfg(any(test, feature = "fuzzing"))]
+    pub fn random_validator() -> Self {
+        Self(
+            NodeNetworkId::new(NetworkId::Validator, 0),
+            PeerId::random(),
+        )
+    }
+}
+
+impl fmt::Debug for PeerNetworkId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl fmt::Display for PeerNetworkId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "PeerId:{}, NodeNetworkId:({})",
+            self.peer_id().short_str(),
+            self.raw_network_id()
+        )
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -270,23 +344,23 @@ mod test {
     #[test]
     fn test_serialization() {
         let id = NetworkId::vfn_network();
-        let encoded = serde_yaml::to_string(&id).unwrap();
+        let encoded = yaml_serde::to_string(&id).unwrap();
         let decoded: NetworkId =
-            serde_yaml::from_str(encoded.as_str()).unwrap();
+            yaml_serde::from_str(encoded.as_str()).unwrap();
         assert_eq!(id, decoded);
-        let encoded = serde_yaml::to_vec(&id).unwrap();
+        let encoded = yaml_serde::to_string(&id).unwrap().into_bytes();
         let decoded: NetworkId =
-            serde_yaml::from_slice(encoded.as_slice()).unwrap();
+            yaml_serde::from_slice(encoded.as_slice()).unwrap();
         assert_eq!(id, decoded);
 
         let id = NetworkId::Validator;
-        let encoded = serde_yaml::to_string(&id).unwrap();
+        let encoded = yaml_serde::to_string(&id).unwrap();
         let decoded: NetworkId =
-            serde_yaml::from_str(encoded.as_str()).unwrap();
+            yaml_serde::from_str(encoded.as_str()).unwrap();
         assert_eq!(id, decoded);
-        let encoded = serde_yaml::to_vec(&id).unwrap();
+        let encoded = yaml_serde::to_string(&id).unwrap().into_bytes();
         let decoded: NetworkId =
-            serde_yaml::from_slice(encoded.as_slice()).unwrap();
+            yaml_serde::from_slice(encoded.as_slice()).unwrap();
         assert_eq!(id, decoded);
     }
 
@@ -299,11 +373,11 @@ mod test {
             peer_id,
         );
         let expected = format!(
-            "---\nrole: {}\nnetwork_id: {}\npeer_id: {:x}\n",
+            "role: {}\nnetwork_id: {}\npeer_id: {:x}\n",
             RoleType::Validator,
             VFN_NETWORK,
             peer_id
         );
-        assert_eq!(expected, serde_yaml::to_string(&context).unwrap());
+        assert_eq!(expected, yaml_serde::to_string(&context).unwrap());
     }
 }

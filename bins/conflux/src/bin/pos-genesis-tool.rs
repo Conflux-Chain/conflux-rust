@@ -27,11 +27,8 @@ use diem_types::{
         ConsensusVRFPublicKey, ValidatorConfig,
     },
     validator_info::ValidatorInfo,
-    waypoint::Waypoint,
     write_set::WriteSet,
 };
-use executor::{db_bootstrapper::generate_waypoint, vm::PosVM};
-use pos_ledger_db::PosLedgerDB;
 use rand_08::{rngs::StdRng, SeedableRng};
 use rustc_hex::FromHexError;
 use std::{
@@ -44,8 +41,6 @@ use std::{
     process,
     result::Result,
 };
-use storage_interface::DbReaderWriter;
-use tempfile::Builder;
 
 #[derive(Debug)]
 enum Error {
@@ -138,25 +133,9 @@ fn main() {
     }
 }
 
-fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
-    let tmp_dir = Builder::new().prefix("example").tempdir().unwrap();
-    let (_, db) = DbReaderWriter::wrap(
-        PosLedgerDB::open(
-            tmp_dir.path(),
-            false, /* readonly */
-            Some(1_000_000),
-            Default::default(),
-        )
-        .expect("DB should open."),
-    );
-    generate_waypoint::<PosVM>(&db, &genesis_txn).unwrap()
-}
-
 fn generate_genesis_from_public_keys(public_keys: Vec<(NodeID, u64)>) {
     let genesis_path = PathBuf::from("./genesis_file");
-    let waypoint_path = PathBuf::from("./waypoint_config");
     let mut genesis_file = File::create(&genesis_path).unwrap();
-    let mut waypoint_file = File::create(&waypoint_path).unwrap();
 
     let mut validators = Vec::new();
     for (node_id, voting_power) in public_keys {
@@ -181,11 +160,6 @@ fn generate_genesis_from_public_keys(public_keys: Vec<(NodeID, u64)>) {
     let genesis_transaction = Transaction::GenesisTransaction(write_set_paylod);
     let genesis_bytes = bcs::to_bytes(&genesis_transaction).unwrap();
     genesis_file.write_all(&genesis_bytes).unwrap();
-
-    let waypoint = execute_genesis_transaction(genesis_transaction);
-    waypoint_file
-        .write_all(waypoint.to_string().as_bytes())
-        .unwrap();
 }
 
 fn elect_genesis_committee(

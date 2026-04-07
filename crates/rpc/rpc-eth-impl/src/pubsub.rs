@@ -3,29 +3,25 @@ use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     consensus_internal::REWARD_EPOCH_COUNT,
 };
+use cfx_rpc_cfx_impl::helpers::subscribers::pipe_from_stream;
 use cfx_rpc_cfx_types::{traits::BlockProvider, PhantomBlock};
 use cfx_rpc_eth_api::EthPubSubApiServer;
 use cfx_rpc_eth_types::{
     eth_pubsub::{Kind as SubscriptionKind, Params, Result as PubSubResult},
     Header, Log,
 };
-use cfx_rpc_utils::error::jsonrpsee_error_helpers::internal_rpc_err;
 use cfx_tasks::TaskExecutor;
 use cfx_types::{Space, H256};
 use cfxcore::{
     BlockDataManager, ConsensusGraph, Notifications, SharedConsensusGraph,
 };
 use futures::StreamExt;
-use jsonrpsee::{
-    core::SubscriptionResult, server::SubscriptionMessage, types::ErrorObject,
-    PendingSubscriptionSink, SubscriptionSink,
-};
+use jsonrpsee::{core::SubscriptionResult, PendingSubscriptionSink};
 use log::{debug, error, info, trace, warn};
 use parking_lot::RwLock;
 use primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, BlockReceipts, EpochNumber,
 };
-use serde::Serialize;
 use std::{
     collections::{HashMap, VecDeque},
     iter::zip,
@@ -519,6 +515,7 @@ impl ChainDataProvider {
                     entry,
                     block_hash: pivot,
                     epoch_number,
+                    block_timestamp: Some(pb.pivot_header.timestamp()),
                     transaction_hash: tx.hash,
                     transaction_index: txid,
                     log_index,
@@ -544,52 +541,5 @@ impl BlockProvider for &ChainDataProvider {
         self.consensus
             .get_block_hashes_by_epoch(epoch_number)
             .map_err(|e| e.to_string())
-    }
-}
-
-/// Helper to convert a serde error into an [`ErrorObject`]
-#[derive(Debug, thiserror::Error)]
-#[error("Failed to serialize subscription item: {0}")]
-pub struct SubscriptionSerializeError(#[from] serde_json::Error);
-
-impl SubscriptionSerializeError {
-    const fn new(err: serde_json::Error) -> Self { Self(err) }
-}
-
-impl From<SubscriptionSerializeError> for ErrorObject<'static> {
-    fn from(value: SubscriptionSerializeError) -> Self {
-        internal_rpc_err(value.to_string())
-    }
-}
-
-/// Pipes all stream items to the subscription sink.
-/// when the stream ends or the sink is closed, the function returns.
-async fn pipe_from_stream<T, St>(
-    sink: SubscriptionSink, mut stream: St,
-) -> Result<(), ErrorObject<'static>>
-where
-    St: Stream<Item = T> + Unpin,
-    T: Serialize,
-{
-    loop {
-        tokio::select! {
-            _ = sink.closed() => {
-                // connection dropped: when user unsubscribes or network closed
-                break Ok(())
-            },
-            maybe_item = stream.next() => {
-                let item = match maybe_item {
-                    Some(item) => item,
-                    None => {
-                        // stream ended
-                        break  Ok(())
-                    },
-                };
-                let msg = SubscriptionMessage::from_json(&item).map_err(SubscriptionSerializeError::new)?;
-                if sink.send(msg).await.is_err() {
-                    break Ok(());
-                }
-            }
-        }
     }
 }

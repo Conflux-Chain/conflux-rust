@@ -34,13 +34,11 @@ use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
     block_info::BlockInfo,
-    epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     ledger_info::LedgerInfo,
     validator_config::{
         ConsensusPublicKey, ConsensusSignature, ConsensusVRFPrivateKey,
     },
-    waypoint::Waypoint,
 };
 use log::error;
 use serde::Serialize;
@@ -134,7 +132,6 @@ impl SafetyRules {
             .map_err(|e| Error::InvalidAccumulatorExtension(e.to_string()))?;
         Ok(VoteData::new(
             proposed_block.gen_block_info(
-                // TODO(lpl): Remove state tree.
                 Default::default(),
                 new_tree.version(),
                 vote_proposal.next_epoch_state().cloned(),
@@ -271,47 +268,26 @@ impl SafetyRules {
     // logging and metrics
 
     fn guarded_consensus_state(&mut self) -> Result<ConsensusState, Error> {
-        let waypoint = self.persistent_storage.waypoint()?;
         let safety_data = self.persistent_storage.safety_data()?;
 
         diem_info!(SafetyLogSchema::new(LogEntry::State, LogEvent::Update)
             .author(self.persistent_storage.author()?)
             .epoch(safety_data.epoch)
             .last_voted_round(safety_data.last_voted_round)
-            .preferred_round(safety_data.preferred_round)
-            .waypoint(waypoint));
+            .preferred_round(safety_data.preferred_round));
 
         Ok(ConsensusState::new(
             self.persistent_storage.safety_data()?,
-            self.persistent_storage.waypoint()?,
             self.signer().is_ok(),
         ))
     }
 
     fn guarded_initialize(
-        &mut self, proof: &EpochChangeProof,
+        &mut self, epoch_state: &EpochState,
     ) -> Result<(), Error> {
-        let waypoint = self.persistent_storage.waypoint()?;
-        let last_li = proof
-            .verify(&waypoint)
-            .map_err(|e| Error::InvalidEpochChangeProof(format!("{}", e)))?;
-        let ledger_info = last_li.ledger_info();
-        let epoch_state = ledger_info
-            .next_epoch_state()
-            .cloned()
-            .ok_or(Error::InvalidLedgerInfo)?;
-
         let current_epoch = self.persistent_storage.safety_data()?.epoch;
+
         if current_epoch < epoch_state.epoch {
-            // This is ordered specifically to avoid configuration issues:
-            // * First set the waypoint to lock in the minimum restarting point,
-            // * set the round information,
-            // * finally, set the epoch information because once the epoch is
-            //   set, this `if`
-            // statement cannot be re-entered.
-            let waypoint = &Waypoint::new_epoch_boundary(ledger_info)
-                .map_err(|error| Error::InternalError(error.to_string()))?;
-            self.persistent_storage.set_waypoint(waypoint)?;
             self.persistent_storage.set_safety_data(SafetyData::new(
                 epoch_state.epoch,
                 0,
@@ -546,8 +522,8 @@ impl TSafetyRules for SafetyRules {
         run_and_log(cb, |log| log, LogEntry::ConsensusState)
     }
 
-    fn initialize(&mut self, proof: &EpochChangeProof) -> Result<(), Error> {
-        let cb = || self.guarded_initialize(proof);
+    fn initialize(&mut self, epoch_state: &EpochState) -> Result<(), Error> {
+        let cb = || self.guarded_initialize(epoch_state);
         run_and_log(cb, |log| log, LogEntry::Initialize)
     }
 

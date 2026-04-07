@@ -11,7 +11,7 @@ pub trait TrieNodeTrait: Default {
     type NodeRefType: NodeRefTrait;
     type ChildrenTableType;
 
-    fn compressed_path_ref(&self) -> CompressedPathRef;
+    fn compressed_path_ref(&self) -> CompressedPathRef<'_>;
 
     fn has_value(&self) -> bool;
 
@@ -108,7 +108,7 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     type ChildrenTableType = VanillaChildrenTable<NodeRefT>;
     type NodeRefType = NodeRefT;
 
-    fn compressed_path_ref(&self) -> CompressedPathRef {
+    fn compressed_path_ref(&self) -> CompressedPathRef<'_> {
         self.compressed_path.as_ref()
     }
 
@@ -214,7 +214,7 @@ impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
 }
 
 impl VanillaTrieNode<MerkleHash> {
-    pub fn get_children_merkles(&self) -> MaybeMerkleTableRef {
+    pub fn get_children_merkles(&self) -> MaybeMerkleTableRef<'_> {
         if self.get_children_count() > 0 {
             Some(&self.children_table.get_children_table())
         } else {

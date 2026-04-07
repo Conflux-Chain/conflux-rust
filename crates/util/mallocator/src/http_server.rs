@@ -40,7 +40,7 @@ async fn handle_get_heap() -> Result<impl IntoResponse, (StatusCode, String)> {
     Ok(pprof)
 }
 
-pub async fn handle_get_heap_flamegraph(
+async fn handle_get_heap_flamegraph(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let mut prof_ctl = jemalloc_pprof::PROF_CTL
         .as_ref()

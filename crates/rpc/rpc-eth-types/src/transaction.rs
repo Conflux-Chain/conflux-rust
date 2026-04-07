@@ -19,6 +19,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Bytes, SignedAuthorization};
+use cfx_rpc_cfx_types::Transaction as CfxTransaction;
 use cfx_types::{H160, H256, H512, U256, U64};
 use primitives::{
     transaction::eth_transaction::eip155_signature, AccessList, Action,
@@ -173,4 +174,11 @@ impl Transaction {
     pub fn deployed_contract_address(t: &SignedTransaction) -> Option<H160> {
         t.cal_created_address().map(|t| t.address)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WrapTransaction {
+    NativeTransaction(CfxTransaction),
+    EthTransaction(Transaction),
 }

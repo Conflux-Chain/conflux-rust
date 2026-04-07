@@ -18,7 +18,9 @@ use cfx_internal_common::{
 use cfx_parameters::{
     block::DEFAULT_TARGET_BLOCK_GAS_LIMIT, tx_pool::TXPOOL_DEFAULT_NONCE_BITS,
 };
-use cfx_rpc_cfx_types::{apis::ApiSet, RpcImplConfiguration};
+use cfx_rpc_cfx_types::{
+    address::USE_SIMPLE_RPC_ADDRESS, apis::ApiSet, RpcImplConfiguration,
+};
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
@@ -50,11 +52,10 @@ use diem_types::term_state::{
     pos_state_config::PosStateConfig, IN_QUEUE_LOCKED_VIEWS,
     OUT_QUEUE_LOCKED_VIEWS, ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE,
 };
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::ServerConfigBuilder;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use primitives::block_header::CIP112_TRANSITION_HEIGHT;
-use tower::layer::util::Identity;
 use txgen::TransactionGeneratorConfig;
 
 use crate::{HttpConfiguration, TcpConfiguration, WsConfiguration};
@@ -189,6 +190,7 @@ build_config! {
         (base_fee_burn_transition_number, (Option<u64>), None)
         (base_fee_burn_transition_height, (Option<u64>), None)
         (cip1559_transition_height, (Option<u64>), None)
+        (cip130_transition_height, (Option<u64>), None)
         (cancun_opcodes_transition_number, (Option<u64>), None)
         (min_native_base_price, (Option<u64>), None)
         (min_eth_base_price, (Option<u64>), None)
@@ -201,6 +203,10 @@ build_config! {
         (cip145_fix_transition_height, (Option<u64>), None)
         // For test only
         (align_evm_transition_height, (u64), u64::MAX)
+        // V3.1
+        (cip166_transition_height, (Option<u64>), None)
+        (osaka_opcode_transition_height, (Option<u64>), None)
+
 
 
         // Mining section.
@@ -241,6 +247,7 @@ build_config! {
         (public_address, (Option<String>), None)
         (udp_port, (Option<u16>), Some(32323))
         (max_estimation_gas_limit, (Option<u64>), None)
+        (rpc_address_simple_mode, (bool), false)
 
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 20_000)
@@ -452,7 +459,7 @@ build_config! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Configuration {
     pub raw_conf: RawConfiguration,
 }
@@ -480,6 +487,10 @@ impl Configuration {
 
         CIP112_TRANSITION_HEIGHT
             .set(config.raw_conf.cip112_transition_height.unwrap_or(u64::MAX))
+            .expect("called once");
+
+        USE_SIMPLE_RPC_ADDRESS
+            .set(config.raw_conf.rpc_address_simple_mode)
             .expect("called once");
 
         Ok(config)
@@ -1186,10 +1197,8 @@ impl Configuration {
         TcpConfiguration::new(None, self.raw_conf.jsonrpc_tcp_port)
     }
 
-    pub fn jsonrpsee_server_builder(
-        &self,
-    ) -> ServerBuilder<Identity, Identity> {
-        let builder = ServerBuilder::default()
+    pub fn jsonrpsee_server_builder(&self) -> ServerConfigBuilder {
+        let builder = ServerConfigBuilder::default()
             .max_request_body_size(self.raw_conf.jsonrpc_max_request_body_size)
             .max_response_body_size(
                 self.raw_conf.jsonrpc_max_response_body_size,
@@ -1510,6 +1519,11 @@ impl Configuration {
             .cip1559_transition_height
             .or(self.raw_conf.base_fee_burn_transition_height)
             .unwrap_or(non_genesis_default_transition_time);
+        params.transition_heights.cip130 = self
+            .raw_conf
+            .cip130_transition_height
+            .or(self.raw_conf.base_fee_burn_transition_height)
+            .unwrap_or(default_transition_time);
         params.transition_numbers.cancun_opcodes = self
             .raw_conf
             .cancun_opcodes_transition_number
@@ -1531,7 +1545,7 @@ impl Configuration {
             .unwrap_or(default_transition_time);
 
         //
-        // 7702 hardfork (V2.6)
+        // 7702 hardfork (V3.0)
         //
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
@@ -1548,6 +1562,15 @@ impl Configuration {
         }
         params.transition_heights.align_evm =
             self.raw_conf.align_evm_transition_height;
+
+        // hardfork (V3.1)
+        set_conf!(
+            self.raw_conf.osaka_opcode_transition_height.unwrap_or(default_transition_time);
+            params.transition_heights => { cip166 }
+        );
+        if let Some(x) = self.raw_conf.cip166_transition_height {
+            params.transition_heights.cip166 = x;
+        }
     }
 }
 

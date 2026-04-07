@@ -33,5 +33,7 @@ pub trait Trace {
 
     /// Return all traces of both spaces in an epoch.
     #[rpc(name = "trace_epoch")]
-    fn epoch_traces(&self, epoch: EpochNumber) -> JsonRpcResult<EpochTrace>;
+    fn epoch_traces(
+        &self, epoch: EpochNumber,
+    ) -> JsonRpcResult<Option<EpochTrace>>;
 }

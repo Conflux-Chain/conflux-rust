@@ -27,6 +27,7 @@ pub fn into_eth_localized_traces(
                 let mut eth_trace = EthLocalizedTrace {
                     action: Action::try_from(action.action.clone())?,
                     result: EthRes::None,
+                    error: None,
                     trace_address: trace_path,
                     subtraces: child_count,
                     transaction_position: tx_idx,
@@ -51,6 +52,7 @@ pub fn into_eth_localized_traces(
                 let eth_trace = EthLocalizedTrace {
                     action: Action::try_from(action.action.clone())?,
                     result: EthRes::None,
+                    error: None,
                     trace_address: trace_path,
                     subtraces: child_count,
                     transaction_position: tx_idx,

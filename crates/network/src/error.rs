@@ -187,8 +187,8 @@ impl From<crate::keylib::Error> for Error {
     fn from(_err: crate::keylib::Error) -> Self { Error::Auth.into() }
 }
 
-impl From<crate::keylib::crypto::Error> for Error {
-    fn from(_err: crate::keylib::crypto::Error) -> Self { Error::Auth.into() }
+impl From<cfx_crypto::crypto::Error> for Error {
+    fn from(_err: cfx_crypto::crypto::Error) -> Self { Error::Auth.into() }
 }
 
 impl From<net::AddrParseError> for Error {

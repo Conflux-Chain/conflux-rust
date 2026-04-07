@@ -12,10 +12,13 @@ use cfx_rpc_eth_types::{
     trace::{LocalizedSetAuthTrace, LocalizedTrace as EthLocalizedTrace},
     BlockId, Index, LocalizedTrace, TraceFilter,
 };
+use cfx_rpc_utils::error::{
+    jsonrpc_error_helpers::error_object_owned_to_jsonrpc_error,
+    jsonrpsee_error_helpers::{internal_error, invalid_params_rpc_err},
+};
 use cfx_types::H256;
 use cfx_util_macros::unwrap_option_or_return_result_none as unwrap_or_return;
 use cfxcore::{errors::Result as CoreResult, SharedConsensusGraph};
-use jsonrpc_core::Error as RpcError;
 use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
 use log::warn;
 use primitives::EpochNumber;
@@ -39,7 +42,7 @@ impl TraceApi {
                 .get_phantom_block_by_hash(
                     &hash, true, /* include_traces */
                 )
-                .map_err(RpcError::invalid_params)?,
+                .map_err(|e| invalid_params_rpc_err(e, None::<()>))?,
 
             _ => self
                 .trace_handler
@@ -49,7 +52,7 @@ impl TraceApi {
                     None,
                     true, /* include_traces */
                 )
-                .map_err(RpcError::invalid_params)?,
+                .map_err(|e| invalid_params_rpc_err(e, None::<()>))?,
         };
 
         Ok(phantom_block)
@@ -77,7 +80,7 @@ impl TraceApi {
             )
             .map_err(|e| {
                 warn!("Internal error on trace reconstruction: {}", e);
-                RpcError::internal_error()
+                internal_error()
             })?;
             eth_traces.extend(tx_eth_traces);
         }
@@ -125,7 +128,9 @@ impl TraceApi {
     pub fn filter_traces(
         &self, filter: TraceFilter,
     ) -> CoreResult<Vec<LocalizedTrace>> {
-        let primitive_filter = filter.into_primitive()?;
+        let primitive_filter = filter
+            .into_primitive()
+            .map_err(error_object_owned_to_jsonrpc_error)?;
 
         let Some(primitive_traces) = self
             .trace_handler
@@ -138,7 +143,7 @@ impl TraceApi {
             primitive_traces_to_eth_localized_traces(&primitive_traces)
                 .map_err(|e| {
                     warn!("Internal error on trace reconstruction: {}", e);
-                    RpcError::internal_error()
+                    internal_error()
                 })?;
         Ok(traces)
     }
@@ -168,7 +173,7 @@ impl TraceApi {
                 None,
                 true, /* include_traces */
             )
-            .map_err(RpcError::invalid_params)?;
+            .map_err(|e| invalid_params_rpc_err(e, None::<()>))?;
 
         unwrap_or_return!(phantom_block);
 
@@ -192,7 +197,7 @@ impl TraceApi {
         )
         .map_err(|e| {
             warn!("Internal error on trace reconstruction: {}", e);
-            RpcError::internal_error()
+            internal_error()
         })?;
 
         Ok(Some(eth_traces))

@@ -15,7 +15,7 @@ use consensus_types::{
 };
 use diem_infallible::RwLock;
 use diem_types::{
-    epoch_change::EpochChangeProof, validator_config::ConsensusSignature,
+    epoch_state::EpochState, validator_config::ConsensusSignature,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -23,7 +23,7 @@ use std::sync::Arc;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum SafetyRulesInput {
     ConsensusState,
-    Initialize(Box<EpochChangeProof>),
+    Initialize(Box<EpochState>),
     ConstructAndSignVote(Box<MaybeSignedVoteProposal>),
     SignProposal(Box<BlockData>),
     SignTimeout(Box<Timeout>),
@@ -45,8 +45,8 @@ impl SerializerService {
             SafetyRulesInput::ConsensusState => {
                 bcs::to_bytes(&self.internal.consensus_state())
             }
-            SafetyRulesInput::Initialize(li) => {
-                bcs::to_bytes(&self.internal.initialize(&li))
+            SafetyRulesInput::Initialize(epoch_state) => {
+                bcs::to_bytes(&self.internal.initialize(&epoch_state))
             }
             SafetyRulesInput::ConstructAndSignVote(vote_proposal) => {
                 bcs::to_bytes(
@@ -94,11 +94,12 @@ impl TSafetyRules for SerializerClient {
         bcs::from_bytes(&response)?
     }
 
-    fn initialize(&mut self, proof: &EpochChangeProof) -> Result<(), Error> {
+    fn initialize(&mut self, epoch_state: &EpochState) -> Result<(), Error> {
         let _timer =
             counters::start_timer("external", LogEntry::Initialize.as_str());
-        let response = self
-            .request(SafetyRulesInput::Initialize(Box::new(proof.clone())))?;
+        let response = self.request(SafetyRulesInput::Initialize(Box::new(
+            epoch_state.clone(),
+        )))?;
         bcs::from_bytes(&response)?
     }
 

@@ -336,6 +336,7 @@ impl KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>
         &mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
     ) -> Result<
         Wrap<
+            '_,
             KvdbIterIterator<(Vec<u8>, Box<[u8]>), [u8], FakeSnapshotDb>,
             dyn FallibleIterator<Item = (Vec<u8>, Box<[u8]>), Error = Error>,
         >,
@@ -359,6 +360,7 @@ impl KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>
         &mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
     ) -> Result<
         Wrap<
+            '_,
             KvdbIterIterator<(Vec<u8>, Box<[u8]>), [u8], FakeSnapshotDb>,
             dyn FallibleIterator<Item = (Vec<u8>, Box<[u8]>), Error = Error>,
         >,
@@ -480,6 +482,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
         &self,
     ) -> Result<
         Wrap<
+            '_,
             Self::SnapshotKvdbIterType,
             dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>,
         >,

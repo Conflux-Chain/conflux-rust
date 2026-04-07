@@ -113,7 +113,7 @@ impl StatusList {
 
     pub fn len(&self) -> usize { self.inner.len() }
 
-    pub fn iter(&self) -> Iter<StatusItem> { self.inner.iter() }
+    pub fn iter(&self) -> Iter<'_, StatusItem> { self.inner.iter() }
 }
 
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug, Default)]

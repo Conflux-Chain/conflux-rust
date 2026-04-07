@@ -64,11 +64,11 @@ impl AccountTransactions {
         }
     }
 
-    pub(crate) fn iter(&self) -> AccountTransactionIter {
+    pub(crate) fn iter(&self) -> AccountTransactionIter<'_> {
         self.normal_transaction.values()
     }
 
-    pub(crate) fn iter_pivot_decision(&self) -> AccountTransactionIter {
+    pub(crate) fn iter_pivot_decision(&self) -> AccountTransactionIter<'_> {
         self.pivot_decision_transaction.values()
     }
 }
@@ -82,6 +82,7 @@ impl From<&MempoolTransaction> for TxnPointer {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Hash)]
+#[allow(dead_code)]
 pub struct OrderedQueueKey {
     pub gas_ranking_score: u64,
     pub expiration_time: Duration,

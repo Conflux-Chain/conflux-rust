@@ -10,17 +10,6 @@ use diem_metrics::{
 };
 use once_cell::sync::Lazy;
 
-pub static DIEM_EXECUTOR_EXECUTE_AND_COMMIT_CHUNK_SECONDS: Lazy<Histogram> =
-    Lazy::new(|| {
-        register_histogram!(
-        // metric name
-        "diem_executor_execute_and_commit_chunk_seconds",
-        // metric description
-        "The time spent in seconds of chunk execution and committing in Diem executor"
-    )
-    .unwrap()
-    });
-
 pub static DIEM_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS: Lazy<Histogram> =
     Lazy::new(|| {
         register_histogram!(

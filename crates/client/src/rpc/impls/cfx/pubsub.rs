@@ -17,6 +17,7 @@ use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     consensus_internal::REWARD_EPOCH_COUNT,
 };
+use cfx_rpc_utils::error::jsonrpc_error_helpers::error_object_owned_to_jsonrpc_error;
 use cfx_types::{Space, H256};
 use cfxcore::{
     channel::Channel, BlockDataManager, Notifications, SharedConsensusGraph,
@@ -315,7 +316,6 @@ impl ChainNotificationHandler {
         trace!("notify_epoch({:?})", epoch);
 
         let (epoch, hashes) = epoch;
-        let hashes = hashes.into_iter().map(H256::from).collect();
 
         notify(
             &subscriber,
@@ -489,6 +489,7 @@ impl ChainNotificationHandler {
                         entry,
                         block_hash,
                         epoch_number,
+                        block_timestamp: Some(block.block_header.timestamp()),
                         transaction_hash: tx.hash,
                         transaction_index: txid,
                         log_index,
@@ -547,7 +548,7 @@ impl PubSub for PubSubClient {
             }
             (pubsub::Kind::Logs, Some(pubsub::Params::Logs(filter))) => {
                 match filter.into_primitive() {
-                    Err(e) => e,
+                    Err(e) => error_object_owned_to_jsonrpc_error(e),
                     Ok(filter) => {
                         let id = self
                             .logs_subscribers

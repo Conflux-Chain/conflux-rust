@@ -670,17 +670,33 @@ impl VerificationConfig {
         let cip7702 = height >= transitions.cip7702;
         let cip645 = height >= transitions.cip645;
 
-        let (can_pack, later_pack) =
-            Self::fast_recheck_inner(spec, |mode: &VerifyTxMode| {
+        let (can_pack, later_pack) = Self::fast_recheck_inner(
+            spec,
+            |mode: &VerifyTxMode| {
                 if !Self::check_eip1559_transaction(tx, cip1559, mode) {
+                    trace!(
+                        "fast_recheck: EIP-1559 transaction check failed at height {} txhash={:?}",
+                        height,
+                        tx.hash()
+                    );
                     return false;
                 }
 
                 if !Self::check_eip7702_transaction(tx, cip7702, mode) {
+                    trace!(
+                        "fast_recheck: EIP-7702 transaction check failed at height {} txhash={:?}",
+                        height,
+                        tx.hash()
+                    );
                     return false;
                 }
 
                 if !Self::check_eip3860(tx, cip645) {
+                    trace!(
+                        "fast_recheck: EIP-3860 transaction check failed at height {} txhash={:?}",
+                        height,
+                        tx.hash()
+                    );
                     return false;
                 }
 
@@ -695,7 +711,8 @@ impl VerificationConfig {
                 } else {
                     Self::check_eip155_transaction(tx, cip90a, mode)
                 }
-            });
+            },
+        );
 
         match (can_pack, later_pack) {
             (true, _) => PackingCheckResult::Pack,

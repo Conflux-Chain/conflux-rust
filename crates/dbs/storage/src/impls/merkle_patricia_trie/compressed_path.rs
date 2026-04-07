@@ -15,7 +15,7 @@ pub trait CompressedPathTrait: Debug {
         )
     }
 
-    fn as_ref(&self) -> CompressedPathRef {
+    fn as_ref(&self) -> CompressedPathRef<'_> {
         CompressedPathRef {
             path_slice: self.path_slice(),
             path_mask: self.path_mask(),

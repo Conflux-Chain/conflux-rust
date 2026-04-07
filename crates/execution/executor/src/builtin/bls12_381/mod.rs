@@ -2,9 +2,7 @@
 // Copyright (c) 2021-2025 draganrakita
 // Modified by Conflux Foundation 2025
 
-use crate::builtin::StaticPlan;
-
-use super::{price_plan::PricePlan, Impl};
+use super::{Precompile, PricePlan, StaticPlan};
 
 mod consts;
 mod g1;
@@ -21,7 +19,7 @@ mod utils;
 
 pub struct Bls12Wrapper<F>(F);
 
-impl<F: Send + Sync + Fn(&[u8]) -> Result<Vec<u8>, String>> Impl
+impl<F: Send + Sync + Fn(&[u8]) -> Result<Vec<u8>, String>> Precompile
     for Bls12Wrapper<F>
 {
     fn execute(
@@ -33,7 +31,7 @@ impl<F: Send + Sync + Fn(&[u8]) -> Result<Vec<u8>, String>> Impl
     }
 }
 
-pub fn bls12_builtin_factory(name: &str) -> Box<dyn Impl> {
+pub fn bls12_builtin_factory(name: &str) -> Box<dyn Precompile> {
     match name {
         "bls12_g1add" => Box::new(Bls12Wrapper(g1_add::g1_add)),
         "bls12_g1msm" => Box::new(Bls12Wrapper(g1_msm::g1_msm)),
@@ -60,8 +58,8 @@ macro_rules! bls12_precompile {
     };
 }
 
-pub fn build_bls12_builtin_map() -> Vec<(u64, Box<dyn PricePlan>, Box<dyn Impl>)>
-{
+pub fn build_bls12_builtin_map(
+) -> Vec<(u64, Box<dyn PricePlan>, Box<dyn Precompile>)> {
     use consts::*;
     vec![
         bls12_precompile!(G1_ADD_ADDRESS, g1_add::g1_add_gas, g1_add::g1_add),

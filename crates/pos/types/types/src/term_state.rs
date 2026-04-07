@@ -644,7 +644,7 @@ impl PosState {
         let node = match self.node_map.get(&node_id.addr) {
             Some(node) => node,
             None => {
-                return Some(DiscardedVMStatus::ELECTION_NON_EXISITENT_NODE);
+                return Some(DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE);
             }
         };
 
@@ -652,7 +652,7 @@ impl PosState {
             .get_starting_view_for_term(election_tx.target_term)
         {
             None => {
-                return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN)
+                return Some(DiscardedVMStatus::ELECTION_TARGET_TERM_NOT_OPEN)
             }
             Some(v) => v,
         };
@@ -666,7 +666,7 @@ impl PosState {
             <= self.current_view
                 + POS_STATE_CONFIG.election_term_end_round(self.current_view)
         {
-            return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN);
+            return Some(DiscardedVMStatus::ELECTION_TARGET_TERM_NOT_OPEN);
         }
         None
     }

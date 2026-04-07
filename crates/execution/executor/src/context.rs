@@ -531,27 +531,6 @@ impl<'a> ContextTrait for Context<'a> {
 
     fn depth(&self) -> usize { self.depth }
 
-    // fn trace_next_instruction(
-    //     &mut self, _pc: usize, _instruction: u8, _current_gas: U256,
-    // ) -> bool {
-    //     // TODO
-    //     false
-    // }
-
-    // fn trace_prepare_execute(
-    //     &mut self, _pc: usize, _instruction: u8, _gas_cost: U256,
-    //     _mem_written: Option<(usize, usize)>,
-    //     _store_written: Option<(U256, U256)>,
-    // ) {
-    //     // TODO
-    // }
-
-    // fn trace_executed(
-    //     &mut self, _gas_used: U256, _stack_push: &[U256], _mem: &[u8],
-    // ) {
-    //     // TODO
-    // }
-
     fn trace_step(&mut self, interpreter: &dyn vm::InterpreterInfo) {
         self.tracer.step(interpreter);
     }
@@ -626,7 +605,7 @@ impl<'a> ContextTrait for Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    pub fn internal_ref(&mut self) -> InternalRefContext {
+    pub fn internal_ref(&mut self) -> InternalRefContext<'_> {
         InternalRefContext {
             env: self.env,
             spec: self.spec,

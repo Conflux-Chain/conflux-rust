@@ -1,7 +1,9 @@
 use super::super::error::TestErrorKind;
+use crate::util::set_cips_according_to_spec;
+use cfx_config::Configuration;
 use cfx_executor::{
     executive::{ChargeCollateral, TransactOptions, TransactSettings},
-    machine::Machine,
+    machine::{Machine, VmFactory},
     state::State,
 };
 use cfx_rpc_eth_types::{
@@ -16,8 +18,8 @@ use cfx_vm_types::Env;
 use cfxcore::verification::{VerificationConfig, VerifyTxMode};
 use cfxkey::{Address, Secret};
 use eest_types::{
-    AccountInfo, Env as StateTestEnv, SignedAuthorization, TransactionParts,
-    TransactionType, TxPartIndices,
+    AccountInfo, Env as StateTestEnv, SignedAuthorization, SpecName,
+    TransactionParts, TransactionType, TxPartIndices,
 };
 use primitives::{
     transaction::{
@@ -29,8 +31,25 @@ use primitives::{
 };
 use std::{
     collections::{BTreeMap, HashMap},
+    sync::Arc,
     u64,
 };
+
+pub fn make_machine_verify_conf(
+    raw_config: Arc<Configuration>, spec: &SpecName,
+) -> (Arc<Machine>, VerificationConfig) {
+    let mut config = raw_config.as_ref().clone();
+    set_cips_according_to_spec(&mut config, spec);
+    let machine = {
+        let vm_factory = VmFactory::new(1024 * 32);
+        Arc::new(Machine::new_with_builtin(
+            config.common_params(),
+            vm_factory,
+        ))
+    };
+    let verification = config.verification_config(machine.clone());
+    (machine, verification)
+}
 
 pub fn make_tx(
     tx_meta: &TransactionParts, tx_part_indices: &TxPartIndices, chain_id: u64,

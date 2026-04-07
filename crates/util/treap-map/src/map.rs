@@ -183,7 +183,7 @@ impl<C: TreapMapConfig> TreapMap<C> {
     }
 
     /// See details in [`crate::accumulate_weight_search`]
-    pub fn search<F>(&self, f: F) -> Option<SearchResult<C, C::Weight>>
+    pub fn search<F>(&self, f: F) -> Option<SearchResult<'_, C, C::Weight>>
     where F: FnMut(&C::Weight, &Node<C>) -> SearchDirection<C::Weight> {
         Some(accumulate_weight_search(self.root.as_ref()?, f, |weight| {
             weight
@@ -196,7 +196,7 @@ impl<C: TreapMapConfig> TreapMap<C> {
     /// dimension.
     pub fn search_no_weight<F>(
         &self, mut f: F,
-    ) -> Option<SearchResult<C, NoWeight>>
+    ) -> Option<SearchResult<'_, C, NoWeight>>
     where F: FnMut(&Node<C>) -> SearchDirection<()> {
         static NW: NoWeight = NoWeight;
         Some(accumulate_weight_search(
@@ -206,7 +206,7 @@ impl<C: TreapMapConfig> TreapMap<C> {
         ))
     }
 
-    pub fn iter(&self) -> Iter<C> {
+    pub fn iter(&self) -> Iter<'_, C> {
         let mut iter = Iter { nodes: vec![] };
         if let Some(ref n) = self.root {
             iter.nodes.push(&**n);
@@ -215,7 +215,7 @@ impl<C: TreapMapConfig> TreapMap<C> {
         iter
     }
 
-    pub fn iter_range(&self, key: &C::SearchKey) -> Iter<C>
+    pub fn iter_range(&self, key: &C::SearchKey) -> Iter<'_, C>
     where C: TreapMapConfig<SortKey = ()> {
         let mut iter = Iter { nodes: vec![] };
         if let Some(ref n) = self.root {

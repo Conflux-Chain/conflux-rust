@@ -8,7 +8,7 @@ use diem_types::{
     block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     epoch_state::EpochState,
-    on_chain_config::{self, new_epoch_event_key, OnChainConfig, ValidatorSet},
+    on_chain_config::new_epoch_event_key,
     term_state::pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
     transaction::{
         authenticator::TransactionAuthenticator, ConflictSignature,
@@ -19,29 +19,15 @@ use diem_types::{
     },
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
-    write_set::{WriteOp, WriteSetMut},
 };
-
-/// This trait describes the VM's execution interface.
-pub trait VMExecutor: Send {
-    // NOTE: At the moment there are no persistent caches that live past the end
-    // of a block (that's why execute_block doesn't take &self.)
-    // There are some cache invalidation issues around transactions publishing
-    // code that need to be sorted out before that's possible.
-
-    /// Executes a block of transactions and returns output for each one of
-    /// them.
-    fn execute_block(
-        transactions: Vec<Transaction>, state_view: &dyn StateView,
-        catch_up_mode: bool,
-    ) -> Result<Vec<TransactionOutput>, VMStatus>;
-}
 
 /// A VM for Conflux PoS chain.
 pub struct PosVM;
 
-impl VMExecutor for PosVM {
-    fn execute_block(
+impl PosVM {
+    /// Executes a block of transactions and returns output for each one of
+    /// them.
+    pub fn execute_block(
         transactions: Vec<Transaction>, state_view: &dyn StateView,
         catch_up_mode: bool,
     ) -> Result<Vec<TransactionOutput>, VMStatus> {
@@ -57,7 +43,7 @@ impl VMExecutor for PosVM {
                     Self::process_user_transaction(state_view, &tx, &spec)?
                 }
                 Transaction::GenesisTransaction(change_set) => {
-                    Self::process_genesis_transction(&change_set)?
+                    Self::process_genesis_transaction(&change_set)?
                 }
             };
             vm_outputs.push(output);
@@ -95,7 +81,7 @@ impl PosVM {
                 ContractEvent::new(new_epoch_event_key(), validator_bytes);
             events.push(contract_event);
         }
-        Ok(Self::gen_output(events, false))
+        Ok(Self::gen_output(events))
     }
 
     fn check_signature_for_user_tx(
@@ -137,40 +123,19 @@ impl PosVM {
             _ => return Err(VMStatus::Error(StatusCode::CFX_UNEXPECTED_TX)),
         };
 
-        Ok(Self::gen_output(events, false))
+        Ok(Self::gen_output(events))
     }
 
-    fn process_genesis_transction(
-        change_set: &WriteSetPayload,
+    fn process_genesis_transaction(
+        write_set: &WriteSetPayload,
     ) -> Result<TransactionOutput, VMStatus> {
-        let events = match change_set {
-            WriteSetPayload::Direct(change_set) => change_set.events().to_vec(),
-            _ => return Err(VMStatus::Error(StatusCode::CFX_UNEXPECTED_TX)),
-        };
-
-        Ok(Self::gen_output(events, true))
+        let WriteSetPayload::Direct(change_set) = write_set;
+        Ok(Self::gen_output(change_set.events().to_vec()))
     }
 
-    fn gen_output(
-        events: Vec<ContractEvent>, record_events_on_state: bool,
-    ) -> TransactionOutput {
-        let new_epoch_event_key = on_chain_config::new_epoch_event_key();
+    fn gen_output(events: Vec<ContractEvent>) -> TransactionOutput {
         let status = TransactionStatus::Keep(KeptVMStatus::Executed);
-        let mut write_set = WriteSetMut::default();
-
-        // TODO(linxi): support other event key
-        if record_events_on_state {
-            for event in &events {
-                if *event.key() == new_epoch_event_key {
-                    write_set.push((
-                        ValidatorSet::CONFIG_ID.access_path(),
-                        WriteOp::Value(event.event_data().to_vec()),
-                    ));
-                }
-            }
-        }
-
-        TransactionOutput::new(write_set.freeze().unwrap(), events, 0, status)
+        TransactionOutput::new(events, 0, status)
     }
 }
 

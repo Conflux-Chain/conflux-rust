@@ -15,10 +15,10 @@ license-file.workspace = true
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_with = { workspace = true, features = ["base64"] }
 cfx-types = { workspace = true }
 cfx-bytes = { workspace = true }
 thiserror = { workspace = true }
-jsonrpc-core = { workspace = true }
 primitives = { workspace = true }
 rlp = { workspace = true }
 cfx-parameters = { workspace = true }
@@ -30,6 +30,7 @@ jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
 similar-asserts = { workspace = true }
 cfx-util-macros = { workspace = true }
 cfx-vm-types = { workspace = true }
+cfx-rpc-utils = { workspace = true }
 
 [features]
 default = ["serde"]

@@ -4093,6 +4093,15 @@ impl ConsensusGraphInner {
     pub fn latest_epoch_confirmed_by_pos(&self) -> &(H256, u64) {
         &self.best_pos_pivot_decision
     }
+
+    /// Cap the confirmed height for state maintenance at the PoS
+    /// finalized height. Snapshots above the PoS finalized height
+    /// must not be pruned.
+    pub fn confirmed_height_for_state_maintenance(
+        &self, confirmed_height: u64,
+    ) -> u64 {
+        std::cmp::min(confirmed_height, self.best_pos_pivot_decision.1)
+    }
 }
 
 impl pow::ConsensusProvider for &ConsensusGraphInner {

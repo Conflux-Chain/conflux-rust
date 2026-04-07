@@ -841,6 +841,7 @@ where KvdbIterIterator<(Vec<u8>, ValueType), [u8], KvdbSqliteShardedIteratorTag>
         &mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
     ) -> Result<
         Wrap<
+            '_,
             KvdbIterIterator<
                 (Vec<u8>, ValueType),
                 [u8],
@@ -868,6 +869,7 @@ where KvdbIterIterator<(Vec<u8>, ValueType), [u8], KvdbSqliteShardedIteratorTag>
         &mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
     ) -> Result<
         Wrap<
+            '_,
             KvdbIterIterator<
                 (Vec<u8>, ValueType),
                 [u8],

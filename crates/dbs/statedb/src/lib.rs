@@ -11,6 +11,8 @@ pub mod global_params;
 #[cfg(feature = "testonly_code")]
 mod in_memory_storage;
 mod statedb_ext;
+use cfx_types::H256;
+use primitives::StorageValue;
 
 use cfx_db_errors::statedb as error;
 
@@ -175,6 +177,26 @@ mod impls {
             self.modify_single_value(key, None)
         }
 
+        pub fn read_all(
+            &mut self, key_prefix: StorageKeyWithSpace,
+            debug_record: Option<&mut ComputeEpochDebugRecord>,
+        ) -> Result<Vec<MptKeyValue>> {
+            self.delete_all::<access_mode::Read>(key_prefix, debug_record)
+        }
+
+        pub fn read_all_with_callback(
+            &mut self, access_key_prefix: StorageKeyWithSpace,
+            callback: &mut dyn FnMut(MptKeyValue), only_account_key: bool,
+        ) -> Result<()> {
+            self.storage
+                .read_all_with_callback(
+                    access_key_prefix,
+                    callback,
+                    only_account_key,
+                )
+                .map_err(|err| err.into())
+        }
+
         pub fn delete_all<AM: access_mode::AccessMode>(
             &mut self, key_prefix: StorageKeyWithSpace,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
@@ -247,6 +269,42 @@ mod impls {
             }
 
             Ok(deleted_kvs)
+        }
+
+        pub fn get_account_storage_entries(
+            &mut self, address: &AddressWithSpace,
+            debug_record: Option<&mut ComputeEpochDebugRecord>,
+        ) -> Result<BTreeMap<cfx_types::StorageKey, cfx_types::StorageValue>>
+        {
+            let mut storage = BTreeMap::new();
+
+            let storage_prefix =
+                StorageKey::new_storage_root_key(&address.address)
+                    .with_space(address.space);
+
+            let kv_pairs = self.read_all(storage_prefix, debug_record)?;
+            for (key, value) in kv_pairs {
+                let storage_key_with_space =
+                    StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&key);
+                if let StorageKey::StorageKey {
+                    address_bytes: _,
+                    storage_key,
+                } = storage_key_with_space.key
+                {
+                    let h256_storage_key = H256::from_slice(storage_key);
+                    let storage_value_with_owner: StorageValue =
+                        rlp::decode(&value)?;
+                    storage.insert(
+                        h256_storage_key,
+                        storage_value_with_owner.value,
+                    );
+                } else {
+                    trace!("Not an storage key: {:?}", storage_key_with_space);
+                    continue;
+                }
+            }
+
+            Ok(storage)
         }
 
         /// Load the storage layout for state commits.

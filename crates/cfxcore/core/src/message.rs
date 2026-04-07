@@ -142,7 +142,7 @@ pub fn decode_rlp_and_check_deprecation<T: Message + Decodable>(
     Ok(msg)
 }
 
-pub fn decode_msg(mut msg: &[u8]) -> Option<(MsgId, Rlp)> {
+pub fn decode_msg(mut msg: &[u8]) -> Option<(MsgId, Rlp<'_>)> {
     let len = msg.len();
     if len < 2 {
         return None;

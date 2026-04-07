@@ -3,7 +3,7 @@ use cfx_types::H128;
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;
 
-/// Eth filters rpc api (polling).
+/// Cfx filters rpc api (polling).
 #[rpc(server)]
 pub trait CfxFilter {
     /// Returns id of new filter.

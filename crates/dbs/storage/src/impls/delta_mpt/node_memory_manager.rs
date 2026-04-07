@@ -129,7 +129,7 @@ impl<
         }
     }
 
-    pub fn get_allocator(&self) -> AllocatorRef<CacheAlgoDataT> {
+    pub fn get_allocator(&self) -> AllocatorRef<'_, CacheAlgoDataT> {
         self.allocator.read_recursive()
     }
 

@@ -527,18 +527,18 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                 } else {
                     warn!(
                         "In MptCursorRw, non-existing key {:?} is asked to be deleted.",
-                        key);
+                        key.to_hex::<String>());
                 }
             }
             CursorOpenPathTerminal::PathDiverted(_) => {
                 warn!(
                     "In MptCursorRw, non-existing key {:?} is asked to be deleted.",
-                    key);
+                    key.to_hex::<String>());
             }
             CursorOpenPathTerminal::ChildNotFound { .. } => {
                 warn!(
                     "In MptCursorRw, non-existing key {:?} is asked to be deleted.",
-                    key);
+                    key.to_hex::<String>());
             }
         }
         Ok(())
@@ -1617,6 +1617,7 @@ use crate::{
     utils::access_mode,
 };
 use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
+use rustc_hex::ToHex;
 use std::{
     cell::Cell,
     mem,
