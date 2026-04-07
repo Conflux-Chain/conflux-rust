@@ -12,7 +12,7 @@ use consensus_types::{
 };
 use diem_metrics::monitor;
 use diem_types::{
-    epoch_change::EpochChangeProof, validator_config::ConsensusSignature,
+    epoch_state::EpochState, validator_config::ConsensusSignature,
 };
 use safety_rules::{ConsensusState, Error, TSafetyRules};
 use std::sync::Arc;
@@ -32,18 +32,37 @@ impl MetricsSafetyRules {
     }
 
     pub fn perform_initialize(&mut self) -> Result<(), Error> {
-        let consensus_state = self.consensus_state()?;
-        let sr_waypoint = consensus_state.waypoint();
-        let proofs = self
-            .storage
-            .retrieve_epoch_change_proof(sr_waypoint.version())
+        let db = self.storage.pos_ledger_db();
+        // Determine the latest epoch from the DB, then load the
+        // epoch-ending LI that transitions into it.
+        let latest_li = db.get_latest_ledger_info().map_err(|e| {
+            Error::InternalError(format!(
+                "Unable to retrieve latest ledger info: {}",
+                e
+            ))
+        })?;
+        let target_epoch = latest_li.ledger_info().next_block_epoch();
+        let proof = db
+            .get_epoch_ending_ledger_infos(
+                target_epoch.saturating_sub(1),
+                target_epoch,
+            )
             .map_err(|e| {
                 Error::InternalError(format!(
-                    "Unable to retrieve Waypoint state from storage, encountered Error:{}",
+                    "Unable to retrieve epoch ending LI: {}",
                     e
                 ))
             })?;
-        self.initialize(&proofs)
+        let li = proof.ledger_info_with_sigs.last().ok_or_else(|| {
+            Error::InternalError("No epoch ending LI found".into())
+        })?;
+        let epoch_state =
+            li.ledger_info().next_epoch_state().ok_or_else(|| {
+                Error::InternalError(
+                    "Epoch ending LI has no next_epoch_state".into(),
+                )
+            })?;
+        self.initialize(epoch_state)
     }
 }
 
@@ -52,8 +71,8 @@ impl TSafetyRules for MetricsSafetyRules {
         monitor!("safety_rules", self.inner.consensus_state())
     }
 
-    fn initialize(&mut self, proof: &EpochChangeProof) -> Result<(), Error> {
-        monitor!("safety_rules", self.inner.initialize(proof))
+    fn initialize(&mut self, epoch_state: &EpochState) -> Result<(), Error> {
+        monitor!("safety_rules", self.inner.initialize(epoch_state))
     }
 
     fn construct_and_sign_vote(

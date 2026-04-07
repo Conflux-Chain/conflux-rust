@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_rpc_utils::error::jsonrpc_error_helpers::error_object_owned_to_jsonrpc_error;
 use cfx_types::{
     AddressSpaceUtil, BigEndianHash, Space, H160, H256, H520, U128, U256, U64,
 };
@@ -471,7 +472,9 @@ impl RpcImpl {
                 }
             }
 
-            let filter = filter.into_primitive()?;
+            let filter = filter
+                .into_primitive()
+                .map_err(error_object_owned_to_jsonrpc_error)?;
 
             let logs = light
                 .get_logs(filter)
@@ -529,7 +532,8 @@ impl RpcImpl {
         let accounts = self.accounts.clone();
 
         let fut = async move {
-            tx.check_rpc_address_network("tx", light.get_network_type())?;
+            tx.check_rpc_address_network("tx", light.get_network_type())
+                .map_err(error_object_owned_to_jsonrpc_error)?;
 
             if tx.nonce.is_none() {
                 // TODO(thegaram): consider adding a light node specific tx pool

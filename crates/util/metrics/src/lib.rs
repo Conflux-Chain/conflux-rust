@@ -22,7 +22,7 @@ pub use self::{
     histogram::{Histogram, Sample},
     lock::{Lock, MutexExtensions, RwLockExtensions},
     meter::{register_meter, register_meter_with_group, Meter, MeterTimer},
-    metrics::{initialize, is_enabled, Metric, MetricsConfiguration},
+    metrics::{initialize, is_enabled, stop, Metric, MetricsConfiguration},
     queue::{register_queue, register_queue_with_group, Queue},
     registry::{
         GroupingRegistry, Registry, DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY,

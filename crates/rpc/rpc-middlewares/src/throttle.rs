@@ -1,6 +1,6 @@
-use cfx_rpc_utils::error::{
-    jsonrpc_error_helpers::request_rejected_too_many_request_error,
-    jsonrpsee_error_helpers::jsonrpc_error_to_error_object_owned,
+use cfx_rpc_utils::error::jsonrpc_error_helpers::{
+    jsonrpc_error_to_error_object_owned,
+    request_rejected_too_many_request_error,
 };
 use cfx_util_macros::bail;
 use futures::FutureExt;

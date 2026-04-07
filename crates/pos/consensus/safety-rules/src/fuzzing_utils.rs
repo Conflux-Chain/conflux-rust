@@ -22,7 +22,6 @@ use diem_crypto::{
 };
 use diem_types::{
     account_address::AccountAddress,
-    epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
     proof::AccumulatorExtensionProof,
@@ -36,7 +35,6 @@ use rand::{rngs::StdRng, SeedableRng};
 const MAX_BLOCK_SIZE: usize = 10000;
 const MAX_NUM_ADDR_TO_VALIDATOR_INFO: usize = 10;
 const MAX_NUM_LEAVES: usize = 20;
-const MAX_NUM_LEDGER_INFO_WITH_SIGS: usize = 10;
 const MAX_NUM_SUBTREE_ROOTS: usize = 20;
 const MAX_PROPOSAL_TRANSACTIONS: usize = 5;
 const NUM_UNIVERSE_ACCOUNTS: usize = 3;
@@ -132,23 +130,6 @@ prop_compose! {
     }
 }
 
-// This generates an arbitrary EpochChangeProof.
-prop_compose! {
-    pub fn arb_epoch_change_proof(
-    )(
-        more in any::<bool>(),
-        ledger_info_with_sigs in prop::collection::vec(
-            any::<LedgerInfoWithSignatures>(),
-            0..MAX_NUM_LEDGER_INFO_WITH_SIGS
-        ),
-    ) -> EpochChangeProof {
-        EpochChangeProof::new(
-            ledger_info_with_sigs,
-            more,
-        )
-    }
-}
-
 // This generates an arbitrary Timeout.
 prop_compose! {
     pub fn arb_timeout(
@@ -241,8 +222,19 @@ fn arb_block_type() -> impl Strategy<Value = BlockType> {
 pub fn arb_safety_rules_input() -> impl Strategy<Value = SafetyRulesInput> {
     prop_oneof![
         Just(SafetyRulesInput::ConsensusState),
-        arb_epoch_change_proof()
-            .prop_map(|input| SafetyRulesInput::Initialize(Box::new(input))),
+        arb_epoch_state().prop_map(|input| {
+            SafetyRulesInput::Initialize(Box::new(input.unwrap_or_else(|| {
+                EpochState::new(
+                    0,
+                    ValidatorVerifier::new_for_testing(
+                        std::collections::BTreeMap::new(),
+                        0,
+                        0,
+                    ),
+                    vec![],
+                )
+            })))
+        }),
         arb_maybe_signed_vote_proposal().prop_map(|input| {
             SafetyRulesInput::ConstructAndSignVote(Box::new(input))
         }),
@@ -265,11 +257,11 @@ pub mod fuzzing {
         vote_proposal::MaybeSignedVoteProposal,
     };
     use diem_crypto::bls::BLSSignature;
-    use diem_types::epoch_change::EpochChangeProof;
+    use diem_types::epoch_state::EpochState;
 
-    pub fn fuzz_initialize(proof: EpochChangeProof) -> Result<(), Error> {
+    pub fn fuzz_initialize(epoch_state: EpochState) -> Result<(), Error> {
         let mut safety_rules = test_utils::test_safety_rules_uninitialized();
-        safety_rules.initialize(&proof)
+        safety_rules.initialize(&epoch_state)
     }
 
     pub fn fuzz_construct_and_sign_vote(
@@ -318,9 +310,8 @@ mod tests {
             fuzz_sign_proposal, fuzz_sign_timeout,
         },
         fuzzing_utils::{
-            arb_block_data, arb_epoch_change_proof,
-            arb_maybe_signed_vote_proposal, arb_safety_rules_input,
-            arb_timeout,
+            arb_block_data, arb_epoch_state, arb_maybe_signed_vote_proposal,
+            arb_safety_rules_input, arb_timeout,
         },
     };
     use proptest::prelude::*;
@@ -334,8 +325,10 @@ mod tests {
         }
 
         #[test]
-        fn initialize_proptest(input in arb_epoch_change_proof()) {
-            let _ = fuzz_initialize(input);
+        fn initialize_proptest(input in arb_epoch_state()) {
+            if let Some(epoch_state) = input {
+                let _ = fuzz_initialize(epoch_state);
+            }
         }
 
         #[test]

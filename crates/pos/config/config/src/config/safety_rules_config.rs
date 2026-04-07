@@ -14,7 +14,6 @@ use diem_crypto::Uniform;
 use diem_types::{
     network_address::NetworkAddress,
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
-    waypoint::Waypoint,
     PeerId,
 };
 use rand::rngs::StdRng;
@@ -104,7 +103,6 @@ pub struct SafetyRulesTestConfig {
     pub author: PeerId,
     pub consensus_key: Option<ConfigKey<ConsensusPrivateKey>>,
     pub execution_key: Option<ConfigKey<ConsensusPrivateKey>>,
-    pub waypoint: Option<Waypoint>,
 }
 
 impl SafetyRulesTestConfig {
@@ -113,7 +111,6 @@ impl SafetyRulesTestConfig {
             author,
             consensus_key: None,
             execution_key: None,
-            waypoint: None,
         }
     }
 

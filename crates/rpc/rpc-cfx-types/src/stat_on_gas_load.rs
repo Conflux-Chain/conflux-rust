@@ -1,7 +1,7 @@
 use cfx_types::{SpaceMap, U256, U64};
 use serde_derive::Serialize;
 
-#[derive(Default, Serialize)]
+#[derive(Default, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct StatOnGasLoad {
     pub time_elapsed: U64,

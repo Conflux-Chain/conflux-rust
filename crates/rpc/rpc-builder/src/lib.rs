@@ -37,9 +37,9 @@ pub use id_provider::EthSubscriptionIdProvider;
 use log::debug;
 pub use module::{EthRpcModule, RpcModuleSelection};
 
-use cfx_rpc::{helpers::ChainInfo, *};
 use cfx_rpc_cfx_types::RpcImplConfiguration;
 use cfx_rpc_eth_api::*;
+use cfx_rpc_eth_impl::{helpers::ChainInfo, *};
 use cfx_tasks::TaskExecutor;
 use cfxcore::{
     Notifications, SharedConsensusGraph, SharedSynchronizationService,

@@ -24,14 +24,9 @@ use diem_config::config::MempoolConfig;
 use diem_crypto::HashValue;
 use diem_infallible::{Mutex, RwLock};
 use diem_types::{
-    account_address::AccountAddress,
-    mempool_status::MempoolStatus,
-    on_chain_config::{
-        ConfigID, DiemVersion, OnChainConfig, OnChainConfigPayload, VMConfig,
-    },
-    term_state::PosState,
-    transaction::SignedTransaction,
-    validator_verifier::ValidatorVerifier,
+    account_address::AccountAddress, mempool_status::MempoolStatus,
+    on_chain_config::OnChainConfigPayload, term_state::PosState,
+    transaction::SignedTransaction, validator_verifier::ValidatorVerifier,
     vm_status::DiscardedVMStatus,
 };
 use futures::{
@@ -277,14 +272,12 @@ pub type MempoolClientSender = mpsc::Sender<(
     oneshot::Sender<Result<SubmissionStatus>>,
 )>;
 
-const MEMPOOL_SUBSCRIBED_CONFIGS: &[ConfigID] =
-    &[DiemVersion::CONFIG_ID, VMConfig::CONFIG_ID];
-
+/// The mempool reconfig subscription no longer subscribes to any specific
+/// on-chain configs. Previously it subscribed to `DiemVersion` and `VMConfig`,
+/// but those Diem config types were dead code in Conflux PoS (commented out
+/// of `ON_CHAIN_CONFIG_REGISTRY` and never populated) so removing them has
+/// no behavioral effect.
 pub fn gen_mempool_reconfig_subscription(
 ) -> (ReconfigSubscription, Receiver<(), OnChainConfigPayload>) {
-    ReconfigSubscription::subscribe_all(
-        "mempool",
-        MEMPOOL_SUBSCRIBED_CONFIGS.to_vec(),
-        vec![],
-    )
+    ReconfigSubscription::subscribe_all("mempool", vec![], vec![])
 }

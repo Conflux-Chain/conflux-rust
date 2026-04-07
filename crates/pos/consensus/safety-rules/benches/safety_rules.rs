@@ -7,7 +7,6 @@
 
 use consensus_types::block::block_test_utils;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use diem_crypto::{ed25519::Ed25519PrivateKey, Uniform};
 use diem_secure_storage::{InMemoryStorage, OnDiskStorage, Storage};
 use diem_types::validator_signer::ValidatorSigner;
 use safety_rules::{
@@ -76,13 +75,10 @@ fn lsr(
 
 fn in_memory(n: u64) {
     let signer = ValidatorSigner::from_int(0);
-    let waypoint = test_utils::validator_signers_to_waypoint(&[&signer]);
     let storage = PersistentSafetyStorage::initialize(
         Storage::from(InMemoryStorage::new()),
         signer.author(),
         signer.private_key().clone(),
-        Ed25519PrivateKey::generate_for_testing(),
-        waypoint,
         true,
     );
     let safety_rules_manager =
@@ -94,13 +90,10 @@ fn on_disk(n: u64) {
     let signer = ValidatorSigner::from_int(0);
     let file_path =
         NamedTempFile::new().unwrap().into_temp_path().to_path_buf();
-    let waypoint = test_utils::validator_signers_to_waypoint(&[&signer]);
     let storage = PersistentSafetyStorage::initialize(
         Storage::from(OnDiskStorage::new(file_path)),
         signer.author(),
         signer.private_key().clone(),
-        Ed25519PrivateKey::generate_for_testing(),
-        waypoint,
         true,
     );
     let safety_rules_manager =
@@ -112,13 +105,10 @@ fn serializer(n: u64) {
     let signer = ValidatorSigner::from_int(0);
     let file_path =
         NamedTempFile::new().unwrap().into_temp_path().to_path_buf();
-    let waypoint = test_utils::validator_signers_to_waypoint(&[&signer]);
     let storage = PersistentSafetyStorage::initialize(
         Storage::from(OnDiskStorage::new(file_path)),
         signer.author(),
         signer.private_key().clone(),
-        Ed25519PrivateKey::generate_for_testing(),
-        waypoint,
         true,
     );
     let safety_rules_manager =
@@ -130,13 +120,10 @@ fn thread(n: u64) {
     let signer = ValidatorSigner::from_int(0);
     let file_path =
         NamedTempFile::new().unwrap().into_temp_path().to_path_buf();
-    let waypoint = test_utils::validator_signers_to_waypoint(&[&signer]);
     let storage = PersistentSafetyStorage::initialize(
         Storage::from(OnDiskStorage::new(file_path)),
         signer.author(),
         signer.private_key().clone(),
-        Ed25519PrivateKey::generate_for_testing(),
-        waypoint,
         true,
     );
     // Test value, in milliseconds

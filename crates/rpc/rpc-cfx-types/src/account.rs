@@ -8,7 +8,7 @@ use cfx_types::{H256, U256};
 use primitives::Account as PrimitiveAccount;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     // This field isn't part of Account RLP but is helpful for debugging.

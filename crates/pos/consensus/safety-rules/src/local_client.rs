@@ -12,7 +12,7 @@ use consensus_types::{
 };
 use diem_infallible::RwLock;
 use diem_types::{
-    epoch_change::EpochChangeProof, validator_config::ConsensusSignature,
+    epoch_state::EpochState, validator_config::ConsensusSignature,
 };
 use std::sync::Arc;
 
@@ -33,8 +33,8 @@ impl TSafetyRules for LocalClient {
         self.internal.write().consensus_state()
     }
 
-    fn initialize(&mut self, proof: &EpochChangeProof) -> Result<(), Error> {
-        self.internal.write().initialize(proof)
+    fn initialize(&mut self, epoch_state: &EpochState) -> Result<(), Error> {
+        self.internal.write().initialize(epoch_state)
     }
 
     fn construct_and_sign_vote(

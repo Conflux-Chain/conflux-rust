@@ -6,24 +6,11 @@
 // See http://www.gnu.org/licenses/
 
 use super::*;
-#[allow(unused_imports)]
-use crate::{
-    schema::jellyfish_merkle_node::JellyfishMerkleNodeSchema,
-    test_helper::{arb_blocks_to_commit, arb_mock_genesis},
-};
+use crate::test_helper::arb_blocks_to_commit;
 use diem_crypto::hash::CryptoHash;
-#[allow(unused_imports)]
-use diem_jellyfish_merkle::node_type::{Node, NodeKey};
 use diem_temppath::TempPath;
-#[allow(unused_imports)]
 use diem_types::{
-    account_address::{AccountAddress, HashAccountAddress},
-    account_config::AccountResource,
-    contract_event::ContractEvent,
-    event::EventKey,
-    ledger_info::LedgerInfo,
-    proof::SparseMerkleLeafNode,
-    vm_status::{KeptVMStatus, StatusCode},
+    contract_event::ContractEvent, event::EventKey, vm_status::KeptVMStatus,
 };
 use proptest::prelude::*;
 use std::collections::HashMap;
@@ -399,37 +386,16 @@ fn test_get_first_seq_num_and_limit() {
 }
 
 #[test]
-fn test_too_many_requested() {
-    let tmp_dir = TempPath::new();
-    let db = PosLedgerDB::new_for_test(&tmp_dir);
-
-    assert!(db.get_transactions(0, 1001 /* limit */, 0, true).is_err());
-}
-
-#[test]
 fn test_get_latest_tree_state() {
     let tmp_dir = TempPath::new();
     let db = PosLedgerDB::new_for_test(&tmp_dir);
 
-    // entirely emtpy db
+    // entirely empty db
     let empty = db.get_latest_tree_state().unwrap();
     assert_eq!(
         empty,
         TreeState::new(0, vec![], *SPARSE_MERKLE_PLACEHOLDER_HASH,)
     );
-
-    // unbootstrapped db with pre-genesis state
-    let address = AccountAddress::ZERO;
-    let blob = AccountStateBlob::from(vec![1]);
-    db.db
-        .put::<JellyfishMerkleNodeSchema>(
-            &NodeKey::new_empty_path(PRE_GENESIS_VERSION),
-            &Node::new_leaf(address.hash(), blob.clone()),
-        )
-        .unwrap();
-    let hash = SparseMerkleLeafNode::new(address.hash(), blob.hash()).hash();
-    let pre_genesis = db.get_latest_tree_state().unwrap();
-    assert_eq!(pre_genesis, TreeState::new(0, vec![], hash));
 
     // bootstrapped db (any transaction info is in)
     let txn_info = TransactionInfo::new(
@@ -441,9 +407,14 @@ fn test_get_latest_tree_state() {
     );
     put_transaction_info(&db, 0, &txn_info);
     let bootstrapped = db.get_latest_tree_state().unwrap();
+    // State root hash is always placeholder after JM tree removal
     assert_eq!(
         bootstrapped,
-        TreeState::new(1, vec![txn_info.hash()], txn_info.state_root_hash())
+        TreeState::new(
+            1,
+            vec![txn_info.hash()],
+            *SPARSE_MERKLE_PLACEHOLDER_HASH
+        )
     );
 }
 

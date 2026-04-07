@@ -5,7 +5,7 @@
 use cfx_types::{H256, U64};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     /// Hash of the block

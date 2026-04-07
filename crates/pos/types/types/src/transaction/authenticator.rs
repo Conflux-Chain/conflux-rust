@@ -12,10 +12,8 @@ use diem_crypto::{
         BLSPublicKey, BLSPublicKeyUnchecked, BLSSignature,
         BLSSignatureUnchecked,
     },
-    ed25519::{Ed25519PublicKey, Ed25519Signature},
     hash::CryptoHash,
     multi_bls::MultiBLSSignature,
-    multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
     traits::Signature,
     CryptoMaterialError, HashValue, ValidCryptoMaterial,
     ValidCryptoMaterialStringExt,
@@ -45,8 +43,6 @@ use std::{convert::TryFrom, fmt, str::FromStr};
 #[derive(Debug)]
 #[repr(u8)]
 pub enum Scheme {
-    Ed25519 = 0,
-    MultiEd25519 = 1,
     BLS = 2,
     MultiBLS = 3,
     // ... add more schemes here
@@ -55,8 +51,6 @@ pub enum Scheme {
 impl fmt::Display for Scheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let display = match self {
-            Scheme::Ed25519 => "Ed25519",
-            Scheme::MultiEd25519 => "MultiEd25519",
             Scheme::BLS => "bls",
             Scheme::MultiBLS => "multi_bls",
         };
@@ -66,16 +60,12 @@ impl fmt::Display for Scheme {
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum TransactionAuthenticator {
-    /// Single signature
-    Ed25519 {
-        public_key: Ed25519PublicKey,
-        signature: Ed25519Signature,
-    },
-    /// K-of-N multisignature
-    MultiEd25519 {
-        public_key: MultiEd25519PublicKey,
-        signature: MultiEd25519Signature,
-    },
+    /// Reserved (was Ed25519, never used in Conflux PoS). Kept for BCS index
+    /// compat.
+    _ReservedEd25519,
+    /// Reserved (was MultiEd25519, never used in Conflux PoS). Kept for BCS
+    /// index compat.
+    _ReservedMultiEd25519,
     /// BLS signature
     BLS {
         public_key: BLSPublicKey,
@@ -88,14 +78,12 @@ pub enum TransactionAuthenticator {
 
 #[derive(Deserialize)]
 pub enum TransactionAuthenticatorUnchecked {
-    Ed25519 {
-        public_key: Ed25519PublicKey,
-        signature: Ed25519Signature,
-    },
-    MultiEd25519 {
-        public_key: MultiEd25519PublicKey,
-        signature: MultiEd25519Signature,
-    },
+    /// Reserved (was Ed25519, never used in Conflux PoS). Kept for BCS index
+    /// compat.
+    _ReservedEd25519,
+    /// Reserved (was MultiEd25519, never used in Conflux PoS). Kept for BCS
+    /// index compat.
+    _ReservedMultiEd25519,
     BLS {
         public_key: BLSPublicKeyUnchecked,
         signature: BLSSignatureUnchecked,
@@ -108,6 +96,12 @@ pub enum TransactionAuthenticatorUnchecked {
 impl From<TransactionAuthenticatorUnchecked> for TransactionAuthenticator {
     fn from(t: TransactionAuthenticatorUnchecked) -> Self {
         match t {
+            TransactionAuthenticatorUnchecked::_ReservedEd25519 => {
+                Self::_ReservedEd25519
+            }
+            TransactionAuthenticatorUnchecked::_ReservedMultiEd25519 => {
+                Self::_ReservedMultiEd25519
+            }
             TransactionAuthenticatorUnchecked::BLS {
                 public_key,
                 signature,
@@ -118,20 +112,6 @@ impl From<TransactionAuthenticatorUnchecked> for TransactionAuthenticator {
             TransactionAuthenticatorUnchecked::MultiBLS { signature } => {
                 Self::MultiBLS { signature }
             }
-            TransactionAuthenticatorUnchecked::Ed25519 {
-                public_key,
-                signature,
-            } => Self::Ed25519 {
-                public_key,
-                signature,
-            },
-            TransactionAuthenticatorUnchecked::MultiEd25519 {
-                public_key,
-                signature,
-            } => Self::MultiEd25519 {
-                public_key,
-                signature,
-            },
         }
     }
 }
@@ -140,30 +120,11 @@ impl TransactionAuthenticator {
     /// Unique identifier for the signature scheme
     pub fn scheme(&self) -> Scheme {
         match self {
-            Self::Ed25519 { .. } => Scheme::Ed25519,
-            Self::MultiEd25519 { .. } => Scheme::MultiEd25519,
+            Self::_ReservedEd25519 | Self::_ReservedMultiEd25519 => {
+                unreachable!("reserved variant")
+            }
             Self::BLS { .. } => Scheme::BLS,
             Self::MultiBLS { .. } => Scheme::MultiBLS,
-        }
-    }
-
-    /// Create a single-signature ed25519 authenticator
-    pub fn ed25519(
-        public_key: Ed25519PublicKey, signature: Ed25519Signature,
-    ) -> Self {
-        Self::Ed25519 {
-            public_key,
-            signature,
-        }
-    }
-
-    /// Create a multisignature ed25519 authenticator
-    pub fn multi_ed25519(
-        public_key: MultiEd25519PublicKey, signature: MultiEd25519Signature,
-    ) -> Self {
-        Self::MultiEd25519 {
-            public_key,
-            signature,
         }
     }
 
@@ -182,14 +143,9 @@ impl TransactionAuthenticator {
     /// otherwise
     pub fn verify<T: Serialize + CryptoHash>(&self, message: &T) -> Result<()> {
         match self {
-            Self::Ed25519 {
-                public_key,
-                signature,
-            } => signature.verify(message, public_key),
-            Self::MultiEd25519 {
-                public_key,
-                signature,
-            } => signature.verify(message, public_key),
+            Self::_ReservedEd25519 | Self::_ReservedMultiEd25519 => {
+                unreachable!("reserved variant")
+            }
             Self::BLS {
                 public_key,
                 signature,
@@ -204,9 +160,8 @@ impl TransactionAuthenticator {
     /// Return the raw bytes of `self.public_key`
     pub fn public_key_bytes(&self) -> Vec<u8> {
         match self {
-            Self::Ed25519 { public_key, .. } => public_key.to_bytes().to_vec(),
-            Self::MultiEd25519 { public_key, .. } => {
-                public_key.to_bytes().to_vec()
+            Self::_ReservedEd25519 | Self::_ReservedMultiEd25519 => {
+                unreachable!("reserved variant")
             }
             Self::BLS { public_key, .. } => public_key.to_bytes().to_vec(),
             Self::MultiBLS { .. } => todo!(),
@@ -216,9 +171,8 @@ impl TransactionAuthenticator {
     /// Return the raw bytes of `self.signature`
     pub fn signature_bytes(&self) -> Vec<u8> {
         match self {
-            Self::Ed25519 { signature, .. } => signature.to_bytes().to_vec(),
-            Self::MultiEd25519 { signature, .. } => {
-                signature.to_bytes().to_vec()
+            Self::_ReservedEd25519 | Self::_ReservedMultiEd25519 => {
+                unreachable!("reserved variant")
             }
             Self::BLS { signature, .. } => signature.to_bytes().to_vec(),
             Self::MultiBLS { .. } => todo!(),
@@ -270,18 +224,6 @@ impl AuthenticationKey {
         AuthenticationKey::new(*HashValue::sha3_256_of(&preimage.0).as_ref())
     }
 
-    /// Create an authentication key from an Ed25519 public key
-    pub fn ed25519(public_key: &Ed25519PublicKey) -> AuthenticationKey {
-        Self::from_preimage(&AuthenticationKeyPreimage::ed25519(public_key))
-    }
-
-    /// Create an authentication key from a MultiEd25519 public key
-    pub fn multi_ed25519(public_key: &MultiEd25519PublicKey) -> Self {
-        Self::from_preimage(&AuthenticationKeyPreimage::multi_ed25519(
-            public_key,
-        ))
-    }
-
     /// Return an address derived from the last `AccountAddress::LENGTH` bytes
     /// of this authentication key.
     pub fn derived_address(&self) -> AccountAddress {
@@ -321,18 +263,6 @@ impl AuthenticationKeyPreimage {
     fn new(mut public_key_bytes: Vec<u8>, scheme: Scheme) -> Self {
         public_key_bytes.push(scheme as u8);
         Self(public_key_bytes)
-    }
-
-    /// Construct a preimage from an Ed25519 public key
-    pub fn ed25519(public_key: &Ed25519PublicKey) -> AuthenticationKeyPreimage {
-        Self::new(public_key.to_bytes().to_vec(), Scheme::Ed25519)
-    }
-
-    /// Construct a preimage from a MultiEd25519 public key
-    pub fn multi_ed25519(
-        public_key: &MultiEd25519PublicKey,
-    ) -> AuthenticationKeyPreimage {
-        Self::new(public_key.to_bytes(), Scheme::MultiEd25519)
     }
 
     /// Construct a vector from this authentication key

@@ -2,7 +2,7 @@ use crate::{Transaction, TransactionStatus};
 use cfx_types::{H256, U256, U64};
 use serde::Serialize;
 
-#[derive(Default, Serialize)]
+#[derive(Default, Serialize, Clone)]
 pub struct TxWithPoolInfo {
     pub exist: bool,
     pub packed: bool,
@@ -14,13 +14,13 @@ pub struct TxWithPoolInfo {
     pub state_balance_enough: bool,
 }
 
-#[derive(Default, Serialize)]
+#[derive(Default, Serialize, Clone)]
 pub struct TxPoolPendingNonceRange {
     pub min_nonce: U256,
     pub max_nonce: U256,
 }
 
-#[derive(Default, Serialize)]
+#[derive(Default, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountPendingInfo {
     pub local_nonce: U256,
@@ -29,7 +29,7 @@ pub struct AccountPendingInfo {
     pub next_pending_tx: H256,
 }
 
-#[derive(Default, Serialize)]
+#[derive(Default, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountPendingTransactions {
     pub pending_transactions: Vec<Transaction>,
@@ -37,7 +37,7 @@ pub struct AccountPendingTransactions {
     pub pending_count: U64,
 }
 
-#[derive(Default, Serialize)]
+#[derive(Default, Serialize, Clone)]
 pub struct TxPoolStatus {
     pub deferred: U64,
     pub ready: U64,

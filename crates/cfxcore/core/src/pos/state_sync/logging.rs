@@ -5,38 +5,20 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#![allow(unused)]
-use crate::pos::state_sync::{
-    chunk_request::GetChunkRequest, chunk_response::GetChunkResponse,
-    error::Error,
-};
-use diem_config::{config::PeerNetworkId, network_id::NetworkId};
 use diem_logger::Schema;
 use diem_types::{
     contract_event::ContractEvent, ledger_info::LedgerInfoWithSignatures,
-    waypoint::Waypoint,
 };
 use serde::Serialize;
 
 #[derive(Clone, Schema)]
-pub struct LogSchema<'a> {
+pub struct LogSchema {
     name: LogEntry,
     event: Option<LogEvent>,
-    #[schema(debug)]
-    error: Option<&'a Error>,
-    #[schema(display)]
-    peer: Option<&'a PeerNetworkId>,
-    is_valid_peer: Option<bool>,
-    #[schema(display)]
-    chunk_request: Option<GetChunkRequest>,
-    version: Option<u64>,
-    #[schema(display)]
-    chunk_response: Option<GetChunkResponse>,
-    #[schema(display)]
-    waypoint: Option<Waypoint>,
     subscription_name: Option<String>,
     count: Option<usize>,
     reconfig_events: Option<Vec<ContractEvent>>,
+    version: Option<u64>,
     local_li_version: Option<u64>,
     local_synced_version: Option<u64>,
     local_epoch: Option<u64>,
@@ -44,14 +26,10 @@ pub struct LogSchema<'a> {
     ledger_info: Option<LedgerInfoWithSignatures>,
     old_epoch: Option<u64>,
     new_epoch: Option<u64>,
-    request_version: Option<u64>,
     target_version: Option<u64>,
-    old_multicast_level: Option<NetworkId>,
-    new_multicast_level: Option<NetworkId>,
-    //chunk_req_info: Option<&'a ChunkRequestInfo>,
 }
 
-impl<'a> LogSchema<'a> {
+impl LogSchema {
     pub fn new(name: LogEntry) -> Self { Self::new_event(name, None) }
 
     pub fn event_log(name: LogEntry, event: LogEvent) -> Self {
@@ -62,13 +40,7 @@ impl<'a> LogSchema<'a> {
         Self {
             name,
             event,
-            peer: None,
-            is_valid_peer: None,
-            error: None,
-            chunk_request: None,
-            chunk_response: None,
             version: None,
-            waypoint: None,
             subscription_name: None,
             reconfig_events: None,
             count: None,
@@ -78,11 +50,7 @@ impl<'a> LogSchema<'a> {
             ledger_info: None,
             new_epoch: None,
             old_epoch: None,
-            request_version: None,
             target_version: None,
-            old_multicast_level: None,
-            new_multicast_level: None,
-            //chunk_req_info: None,
         }
     }
 }
@@ -91,59 +59,22 @@ impl<'a> LogSchema<'a> {
 #[serde(rename_all = "snake_case")]
 pub enum LogEntry {
     Reconfig,
-    NewPeer,
-    NewPeerAlreadyExists,
-    LostPeer,
-    LostPeerNotKnown,
-    Waypoint,
     RuntimeStart,
     ConsensusCommit,
     SyncRequest,
-    Timeout,
-    LocalState,
-    SendChunkRequest,
-    ProcessChunkRequest,
-    ProcessChunkResponse,
-    ProcessChunkMessage,
-    NetworkError,
     EpochChange,
     CommitFlow,
-    Multicast,
-    SubscriptionDeliveryFail,
     ProgressCheck,
 }
 
 #[derive(Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogEvent {
-    // Generic events
     CallbackFail,
     Complete,
     Fail,
-    Initialize,
     Timeout,
     PublishError,
-    Received,
-
-    // SendChunkRequest events
-    MissingPeers,
-    NetworkSendError,
     Success,
-    //ChunkRequestInfo,
-
-    // ProcessChunkResponse events
-    ReceivedChunkWithoutRequest,
-    SendChunkRequestFail,
-    ApplyChunkSuccess,
-    ApplyChunkFail,
     PostCommitFail,
-    OldResponseLI,
-
-    // ProcessChunkRequest events
-    PastEpochRequested,
-    DeliverChunk,
-
-    // Multicast network events
-    Failover,
-    Recover,
 }

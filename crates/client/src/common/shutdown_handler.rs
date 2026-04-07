@@ -31,6 +31,10 @@ pub fn run(
 
 /// Returns whether the shutdown is considered clean.
 pub fn shutdown(this: Box<dyn ClientTrait>) -> bool {
+    // Signal metrics reporter threads to stop before dropping components.
+    metrics::stop();
+    diem_metrics::stop();
+
     let (ledger_db, maybe_pos_handler, maybe_blockgen) =
         this.take_out_components_for_shutdown();
     drop(this);

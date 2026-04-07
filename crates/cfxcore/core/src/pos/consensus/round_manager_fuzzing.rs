@@ -27,13 +27,9 @@ use super::{
 use channel::{self, diem_channel, message_queues::QueueStyle};
 use consensus_types::proposal_msg::ProposalMsg;
 use diem_types::{
-    epoch_change::EpochChangeProof,
-    epoch_state::EpochState,
-    ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
-    on_chain_config::ValidatorSet,
-    validator_info::ValidatorInfo,
-    validator_signer::ValidatorSigner,
-    validator_verifier::ValidatorVerifier,
+    epoch_state::EpochState, ledger_info::LedgerInfo,
+    on_chain_config::ValidatorSet, validator_info::ValidatorInfo,
+    validator_signer::ValidatorSigner, validator_verifier::ValidatorVerifier,
 };
 use futures::{channel::mpsc, executor::block_on};
 use network::{
@@ -42,7 +38,7 @@ use network::{
 };
 use once_cell::sync::Lazy;
 use safety_rules::{test_utils, SafetyRules, TSafetyRules};
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::runtime::Runtime;
 
 // This generates a proposal for round 1
@@ -83,9 +79,7 @@ fn build_empty_store(
 }
 
 // helpers for safety rule initialization
-fn make_initial_epoch_change_proof(
-    signer: &ValidatorSigner,
-) -> EpochChangeProof {
+fn make_initial_epoch_state(signer: &ValidatorSigner) -> EpochState {
     let validator_info = ValidatorInfo::new_with_test_network_keys(
         signer.author(),
         signer.public_key(),
@@ -93,8 +87,9 @@ fn make_initial_epoch_change_proof(
     );
     let validator_set = ValidatorSet::new(vec![validator_info]);
     let li = LedgerInfo::mock_genesis(Some(validator_set));
-    let lis = LedgerInfoWithSignatures::new(li, BTreeMap::new());
-    EpochChangeProof::new(vec![lis], false)
+    li.next_epoch_state()
+        .cloned()
+        .expect("Genesis LI must carry next_epoch_state")
 }
 
 // TODO: MockStorage -> EmptyStorage
@@ -120,10 +115,10 @@ fn create_node_for_fuzzing() -> RoundManager {
     let (initial_data, storage) = MockStorage::start_for_testing(validator_set);
 
     // TODO: remove
-    let proof = make_initial_epoch_change_proof(&signer);
+    let epoch_state = make_initial_epoch_state(&signer);
     let mut safety_rules =
         SafetyRules::new(test_utils::test_storage(&signer), false, false);
-    safety_rules.initialize(&proof).unwrap();
+    safety_rules.initialize(&epoch_state).unwrap();
 
     // TODO: mock channels
     let (network_reqs_tx, _network_reqs_rx) =

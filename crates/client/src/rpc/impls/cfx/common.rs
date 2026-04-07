@@ -17,8 +17,7 @@ use crate::rpc::{
     types::{
         cfx::check_rpc_address_network, pos::PoSEpochReward,
         AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,
-        BlockHashOrEpochNumber, Bytes, CfxFeeHistory,
-        CheckBalanceAgainstTransactionResponse, EpochNumber, FeeHistory,
+        BlockHashOrEpochNumber, Bytes, CfxFeeHistory, EpochNumber, FeeHistory,
         RpcAddress, Status as RpcStatus, Transaction as RpcTransaction,
         TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo, U64 as HexU64,
     },
@@ -30,7 +29,6 @@ use bigdecimal::BigDecimal;
 use jsonrpc_core::{
     Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
 };
-use keccak_hash::keccak;
 use num_bigint::{BigInt, ToBigInt};
 use parking_lot::{Condvar, Mutex};
 
@@ -39,9 +37,11 @@ use cfx_addr::Network;
 use cfx_parameters::{
     rpc::GAS_PRICE_DEFAULT_VALUE, staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
+pub use cfx_rpc_cfx_impl::check_balance_against_transaction;
+use cfx_rpc_cfx_impl::eth_data_hash;
 use cfx_rpc_utils::error::jsonrpc_error_helpers::internal_rpc_err;
 use cfx_types::{
-    Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
+    Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U64,
 };
 use cfxcore::{
     consensus::pos_handler::PosVerifier, errors::Error as CoreError,
@@ -61,7 +61,7 @@ use network::{
     throttling::{self, THROTTLING_SERVICE},
     NetworkService, SessionDetails, UpdateNodeOperation,
 };
-use primitives::{Account, Action, Block, SignedTransaction, Transaction};
+use primitives::{Action, Block, SignedTransaction, Transaction};
 use storage_interface::DBReaderForPoW;
 
 fn grouped_txs<T, F>(
@@ -84,74 +84,6 @@ where F: Fn(Arc<SignedTransaction>) -> T {
     }
 
     addr_grouped_txs
-}
-
-pub fn check_balance_against_transaction(
-    user_account: Option<Account>, contract_account: Option<Account>,
-    is_sponsored: bool, gas_limit: U256, gas_price: U256, storage_limit: U256,
-) -> CheckBalanceAgainstTransactionResponse {
-    let sponsor_for_gas = contract_account
-        .as_ref()
-        .map(|a| a.sponsor_info.sponsor_for_gas)
-        .unwrap_or_default();
-
-    let gas_bound: U512 = contract_account
-        .as_ref()
-        .map(|a| a.sponsor_info.sponsor_gas_bound)
-        .unwrap_or_default()
-        .into();
-
-    let balance_for_gas: U512 = contract_account
-        .as_ref()
-        .map(|a| a.sponsor_info.sponsor_balance_for_gas)
-        .unwrap_or_default()
-        .into();
-
-    let sponsor_for_collateral = contract_account
-        .as_ref()
-        .map(|a| a.sponsor_info.sponsor_for_collateral)
-        .unwrap_or_default();
-
-    let balance_for_collateral: U512 = contract_account
-        .as_ref()
-        .map(|a| {
-            a.sponsor_info.sponsor_balance_for_collateral
-                + a.sponsor_info.unused_storage_points()
-        })
-        .unwrap_or_default()
-        .into();
-
-    let user_balance: U512 =
-        user_account.map(|a| a.balance).unwrap_or_default().into();
-
-    let gas_cost_in_drip = gas_limit.full_mul(gas_price);
-
-    let will_pay_tx_fee = !is_sponsored
-        || sponsor_for_gas.is_zero()
-        || (gas_cost_in_drip > gas_bound)
-        || (gas_cost_in_drip > balance_for_gas);
-
-    let storage_cost_in_drip =
-        storage_limit.full_mul(*DRIPS_PER_STORAGE_COLLATERAL_UNIT);
-
-    let will_pay_collateral = !is_sponsored
-        || sponsor_for_collateral.is_zero()
-        || (storage_cost_in_drip > balance_for_collateral);
-
-    let minimum_balance = match (will_pay_tx_fee, will_pay_collateral) {
-        (false, false) => 0.into(),
-        (true, false) => gas_cost_in_drip,
-        (false, true) => storage_cost_in_drip,
-        (true, true) => gas_cost_in_drip + storage_cost_in_drip,
-    };
-
-    let is_balance_enough = user_balance >= minimum_balance;
-
-    CheckBalanceAgainstTransactionResponse {
-        will_pay_tx_fee,
-        will_pay_collateral,
-        is_balance_enough,
-    }
 }
 
 pub struct RpcImpl {
@@ -363,7 +295,6 @@ impl RpcImpl {
         &self, hash: H256, include_txs: bool,
     ) -> CoreResult<Option<RpcBlock>> {
         let consensus_graph = self.consensus_graph();
-        let hash: H256 = hash.into();
         info!(
             "RPC Request: cfx_getBlockByHash hash={:?} include_txs={:?}",
             hash, include_txs
@@ -393,8 +324,6 @@ impl RpcImpl {
     ) -> CoreResult<RpcBlock> {
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
-        let block_hash: H256 = block_hash.into();
-        let pivot_hash: H256 = pivot_hash.into();
         let epoch_number = epoch_number.as_usize() as u64;
 
         info!(
@@ -1091,7 +1020,6 @@ impl RpcImpl {
         &self, hash: H256,
     ) -> JsonRpcResult<TxWithPoolInfo> {
         let mut ret = TxWithPoolInfo::default();
-        let hash: H256 = hash.into();
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
             ret.exist = true;
             if self.tx_pool.check_tx_packed_in_deferred_pool(&hash) {
@@ -1153,6 +1081,7 @@ impl RpcImpl {
     pub fn txpool_transaction_by_address_and_nonce(
         &self, address: RpcAddress, nonce: U256,
     ) -> CoreResult<Option<RpcTransaction>> {
+        self.check_address_network(address.network)?;
         let tx = self
             .tx_pool
             .get_transaction_by_address2nonce(
@@ -1455,14 +1384,4 @@ impl RpcImpl {
             pending_count: pending_count.into(),
         })
     }
-}
-
-/// Returns a eth_sign-compatible hash of data to sign.
-/// The data is prepended with special message to prevent
-/// malicious DApps from using the function to sign forged transactions.
-fn eth_data_hash(mut data: Vec<u8>) -> H256 {
-    let mut message_data =
-        format!("\x19Ethereum Signed Message:\n{}", data.len()).into_bytes();
-    message_data.append(&mut data);
-    keccak(message_data)
 }

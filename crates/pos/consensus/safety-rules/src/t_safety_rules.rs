@@ -11,7 +11,7 @@ use consensus_types::{
     vote_proposal::MaybeSignedVoteProposal,
 };
 use diem_types::{
-    epoch_change::EpochChangeProof, validator_config::ConsensusSignature,
+    epoch_state::EpochState, validator_config::ConsensusSignature,
 };
 
 /// Interface for SafetyRules
@@ -20,12 +20,9 @@ pub trait TSafetyRules {
     /// purposes. This does not include sensitive data like private keys.
     fn consensus_state(&mut self) -> Result<ConsensusState, Error>;
 
-    /// Initialize SafetyRules using an Epoch ending LedgerInfo, this should map
-    /// to what was provided in consensus_state. It will be used to
-    /// initialize the ValidatorSet. This uses a EpochChangeProof because
-    /// there's a possibility that consensus migrated to a new epoch but
-    /// SafetyRules did not.
-    fn initialize(&mut self, proof: &EpochChangeProof) -> Result<(), Error>;
+    /// Initialize SafetyRules with the given epoch state. Sets up the
+    /// validator set and signing keys for the epoch.
+    fn initialize(&mut self, epoch_state: &EpochState) -> Result<(), Error>;
 
     /// Attempts to vote for a given proposal following the voting rules.
     fn construct_and_sign_vote(

@@ -8,7 +8,11 @@ use cfx_rpc_eth_types::{
 };
 use cfx_rpc_utils::error::{
     errors::{EthApiError, RpcInvalidTransactionError},
-    jsonrpc_error_helpers::{geth_call_execution_error, invalid_input_rpc_err},
+    // jsonrpc_error_helpers::{geth_call_execution_error,
+    // invalid_input_rpc_err},
+    jsonrpsee_error_helpers::{
+        geth_call_execution_error, invalid_input_rpc_err,
+    },
 };
 use cfx_types::U256;
 use cfx_util_macros::bail;
@@ -17,7 +21,7 @@ use cfxcore::{
     errors::{Error as CoreError, Result as CoreResult},
     ConsensusGraph, SharedConsensusGraph,
 };
-use jsonrpc_core::Error as RpcError;
+use jsonrpsee::types::ErrorObjectOwned as RpcError;
 use primitives::EpochNumber;
 use rustc_hex::ToHex;
 use solidity_abi::string_revert_reason_decode;

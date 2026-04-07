@@ -19,9 +19,9 @@ diem-crypto = { workspace = true }
 diem-global-constants = { workspace = true }
 diem-infallible = { workspace = true }
 diem-logger = { workspace = true }
+diem-metrics-core = { workspace = true }
 diem-proptest-helpers = { workspace = true, optional = true }
 diem-secure-net = { workspace = true }
-diem-secure-push-metrics = { workspace = true }
 diem-secure-storage = { workspace = true }
 diem-temppath = { workspace = true }
 diem-types = { workspace = true }

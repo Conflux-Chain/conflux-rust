@@ -5,25 +5,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    counters,
-    logging::{self, LogEntry, LogEvent},
-    Error,
-};
+use crate::{counters, Error};
 use consensus_types::{common::Author, safety_data::SafetyData};
 use diem_crypto::{
     hash::CryptoHash, PrivateKey, SigningKey, ValidCryptoMaterial,
 };
 use diem_global_constants::{
-    CONSENSUS_KEY, EXECUTION_KEY, OWNER_ACCOUNT, SAFETY_DATA, WAYPOINT,
+    CONSENSUS_KEY, EXECUTION_KEY, OWNER_ACCOUNT, SAFETY_DATA,
 };
 use diem_logger::prelude::*;
 use diem_secure_storage::{CryptoStorage, KVStorage, OnDiskStorage, Storage};
-use diem_types::{
-    validator_config::{
-        ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
-    },
-    waypoint::Waypoint,
+use diem_types::validator_config::{
+    ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
 };
 use serde::Serialize;
 use std::{convert::TryFrom, fs};
@@ -50,15 +43,13 @@ impl PersistentSafetyStorage {
     /// that has no SafetyRules values set.
     pub fn initialize(
         mut internal_store: Storage, author: Author,
-        private_key: ConsensusPrivateKey, waypoint: Waypoint,
-        enable_cached_safety_data: bool,
+        private_key: ConsensusPrivateKey, enable_cached_safety_data: bool,
     ) -> Self {
         let geneisis_safety_data = SafetyData::new(1, 0, 0, None);
         let safety_data = Self::initialize_(
             &mut internal_store,
             geneisis_safety_data,
             author,
-            waypoint,
         )
         .expect("Unable to initialize backend storage");
 
@@ -130,7 +121,6 @@ impl PersistentSafetyStorage {
 
     fn initialize_(
         internal_store: &mut Storage, safety_data: SafetyData, author: Author,
-        waypoint: Waypoint,
     ) -> Result<SafetyData, Error> {
         // Attempting to re-initialize existing storage. This can happen in
         // environments like cluster test. Rather than be rigid here,
@@ -147,7 +137,6 @@ impl PersistentSafetyStorage {
 
         internal_store.set(SAFETY_DATA, safety_data.clone())?;
         internal_store.set(OWNER_ACCOUNT, author)?;
-        internal_store.set(WAYPOINT, waypoint)?;
         Ok(safety_data)
     }
 
@@ -220,22 +209,6 @@ impl PersistentSafetyStorage {
         }
     }
 
-    pub fn waypoint(&self) -> Result<Waypoint, Error> {
-        let _timer = counters::start_timer("get", WAYPOINT);
-        Ok(self.internal_store.get(WAYPOINT).map(|v| v.value)?)
-    }
-
-    pub fn set_waypoint(&mut self, waypoint: &Waypoint) -> Result<(), Error> {
-        let _timer = counters::start_timer("set", WAYPOINT);
-        self.internal_store.set(WAYPOINT, waypoint)?;
-        diem_info!(logging::SafetyLogSchema::new(
-            LogEntry::Waypoint,
-            LogEvent::Update
-        )
-        .waypoint(*waypoint));
-        Ok(())
-    }
-
     #[cfg(any(test, feature = "testing"))]
     pub fn internal_store(&mut self) -> &mut Storage {
         &mut self.internal_store
@@ -257,7 +230,6 @@ mod tests {
             storage,
             Author::random(),
             consensus_private_key,
-            Waypoint::default(),
             true,
         );
 

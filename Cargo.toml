@@ -67,15 +67,13 @@ members = [
     "crates/rpc/rpc-utils",
     "crates/rpc/rpc-builder",
     "crates/rpc/rpc-cfx-impl",
+    "crates/rpc/rpc-cfx-api",
     "crates/pos/common/bounded-executor",
     "crates/pos/common/crash-handler",
-    "crates/pos/common/fallible",
     "crates/pos/common/infallible",
     "crates/pos/common/logger",
     "crates/pos/common/metrics",
     "crates/pos/common/metrics-core",
-    "crates/pos/common/nibble",
-    "crates/pos/common/num-variants",
     "crates/pos/common/proptest-helpers",
     "crates/pos/common/short-hex-str",
     "crates/pos/common/subscription-service",
@@ -93,10 +91,8 @@ members = [
     "crates/pos/secure/storage",
     "crates/pos/storage/accumulator",
     "crates/pos/storage/cached-pos-ledger-db",
-    "crates/pos/storage/jellyfish-merkle",
     "crates/pos/storage/pos-ledger-db",
     "crates/pos/storage/schemadb",
-    "crates/pos/storage/scratchpad",
     "crates/pos/storage/state-view",
     "crates/pos/storage/storage-interface",
     "crates/pos/types/executor-types",
@@ -198,8 +194,9 @@ cfx-rpc-primitives = { path = "./crates/rpc/rpc-primitives" }
 cfx-rpc-cfx-types = { path = "./crates/rpc/rpc-cfx-types" }
 cfx-parity-trace-types = { path = "./crates/execution/parity-trace-types" }
 cfx-rpc-eth-api = { path = "./crates/rpc/rpc-eth-api" }
+cfx-rpc-cfx-api = { path = "./crates/rpc/rpc-cfx-api" }
 cfx-util-macros = { path = "./crates/util/util-macros" }
-cfx-rpc = { path = "./crates/rpc/rpc-eth-impl" }
+cfx-rpc-eth-impl = { path = "./crates/rpc/rpc-eth-impl" }
 cfx-rpc-utils = { path = "./crates/rpc/rpc-utils" }
 cfx-rpc-builder = { path = "./crates/rpc/rpc-builder" }
 cfx-rpc-cfx-impl = { path = "./crates/rpc/rpc-cfx-impl" }
@@ -209,13 +206,10 @@ bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 #diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
 channel = { path = "./crates/pos/common/channel" }
 crash-handler = { path = "./crates/pos/common/crash-handler" }
-fallible = { path = "./crates/pos/common/fallible" }
 diem-infallible = { path = "./crates/pos/common/infallible" }
 diem-logger = { path = "./crates/pos/common/logger" }
 diem-metrics = { path = "./crates/pos/common/metrics" }
 diem-metrics-core = { path = "./crates/pos/common/metrics-core" }
-diem-nibble = { path = "./crates/pos/common/nibble" }
-num-variants = { path = "./crates/pos/common/num-variants" }
 diem-proptest-helpers = { path = "./crates/pos/common/proptest-helpers" }
 short-hex-str = { path = "./crates/pos/common/short-hex-str" }
 subscription-service = { path = "./crates/pos/common/subscription-service" }
@@ -233,10 +227,8 @@ diem-secure-push-metrics = { path = "./crates/pos/secure/push-metrics" }
 diem-secure-storage = { path = "./crates/pos/secure/storage" }
 accumulator = { path = "./crates/pos/storage/accumulator" }
 cached-pos-ledger-db = { path = "./crates/pos/storage/cached-pos-ledger-db" }
-diem-jellyfish-merkle = { path = "./crates/pos/storage/jellyfish-merkle" }
 pos-ledger-db = { path = "./crates/pos/storage/pos-ledger-db" }
 schemadb = { path = "./crates/pos/storage/schemadb" }
-scratchpad = { path = "./crates/pos/storage/scratchpad" }
 diem-state-view = { path = "./crates/pos/storage/state-view" }
 storage-interface = { path = "./crates/pos/storage/storage-interface" }
 executor-types = { path = "./crates/pos/types/executor-types" }
@@ -477,7 +469,7 @@ sqlite3-sys = "0.12"
 kvdb = "0.13"
 influx_db_client = "0.5.1"
 # conflux forked crates
-rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "f42a47efa918ebccf1f49076c96051af67d9893f" }
+rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "b84f1c0f549059602c1d51d87d2c1b01e931e5fd" }
 
 [patch.crates-io]
 # use a forked version to fix a vulnerability(introduced by failure) in vrf-rs, can be removed after the upstream is fixed
