@@ -382,7 +382,7 @@ impl RpcImpl {
         .into();
         Self::check_address_network(address.network, &light)?;
 
-        // FIMXE:
+        // FIXME:
         //  We should get rid of the invalid_params_check when the
         //  error conversion is done within the light service methods.
         //  Same for all other usages here in this file.
@@ -439,7 +439,7 @@ impl RpcImpl {
         // decode tx so that we have its hash
         // this way we also avoid spamming peers with invalid txs
         let tx: TransactionWithSignature =
-            TransactionWithSignature::from_raw(&raw.clone())
+            TransactionWithSignature::from_raw(&raw)
                 .map_err(|e| format!("Failed to decode tx: {:?}", e))
                 .map_err(|e| invalid_params_msg(&e))?;
 
@@ -1076,7 +1076,7 @@ impl CfxRpcServer for LightCfxHandler {
     async fn epoch_number(
         &self, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<U256> {
-        self.cfx_impl.epoch_number(epoch_number).await
+        self.rpc_impl.epoch_number(epoch_number)
     }
 
     /// Returns balance of the given account.
