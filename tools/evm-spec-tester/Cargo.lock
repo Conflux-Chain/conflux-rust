@@ -1753,6 +1753,7 @@ dependencies = [
 name = "cfx-rpc-eth-impl"
 version = "3.0.0"
 dependencies = [
+ "alloy-primitives",
  "alloy-rpc-types-trace",
  "async-trait",
  "cfx-addr",
