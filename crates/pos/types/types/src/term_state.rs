@@ -1209,9 +1209,9 @@ impl RetireEvent {
         &self, staking_event: &StakingEvent,
     ) -> Result<bool> {
         match staking_event {
-            StakingEvent::Retire(addr_h256, _votes) => {
+            StakingEvent::Retire(addr_h256, votes) => {
                 let addr = AccountAddress::from_bytes(addr_h256)?;
-                Ok(self.node_id == addr)
+                Ok(self.node_id == addr && self.votes == *votes)
             }
             _ => Ok(false),
         }
