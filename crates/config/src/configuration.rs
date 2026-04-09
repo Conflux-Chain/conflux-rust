@@ -4,7 +4,7 @@
 
 use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 
-use cfx_rpc_builder::RpcModuleSelection;
+use cfx_rpc_builder::{CfxRpcModuleSelection, RpcModuleSelection};
 use lazy_static::*;
 use log::{error, warn};
 use parking_lot::RwLock;
@@ -207,8 +207,6 @@ build_config! {
         (cip166_transition_height, (Option<u64>), None)
         (osaka_opcode_transition_height, (Option<u64>), None)
 
-
-
         // Mining section.
         (mining_author, (Option<String>), None)
         (mining_type, (Option<String>), None)
@@ -219,6 +217,7 @@ build_config! {
         (pow_problem_window_size, (usize), 1)
 
         // Network section.
+        (core_space_rpc_use_old_impl, (bool), false) // This is a temporary flag for testing. It will be removed after the new rpc implementation is verified to be stable.
         (jsonrpc_local_tcp_port, (Option<u16>), None)
         (jsonrpc_local_http_port, (Option<u16>), None)
         (jsonrpc_local_ws_port, (Option<u16>), None)
@@ -455,6 +454,7 @@ build_config! {
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
         (public_evm_rpc_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
+        (public_cfx_rpc_apis, (CfxRpcModuleSelection), CfxRpcModuleSelection::Standard, CfxRpcModuleSelection::from_str)
         (single_mpt_space, (Option<Space>), None, Space::from_str)
     }
 }
@@ -1165,6 +1165,24 @@ impl Configuration {
             self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
+        )
+    }
+
+    pub fn cfx_http_config(&self) -> HttpConfiguration {
+        HttpConfiguration::new(
+            None,
+            self.raw_conf.jsonrpc_http_port,
+            self.raw_conf.jsonrpc_cors.clone(),
+            self.raw_conf.jsonrpc_http_keep_alive,
+            self.raw_conf.jsonrpc_http_threads,
+        )
+    }
+
+    pub fn cfx_ws_config(&self) -> WsConfiguration {
+        WsConfiguration::new(
+            None,
+            self.raw_conf.jsonrpc_ws_port,
+            self.raw_conf.jsonrpc_ws_max_payload_bytes,
         )
     }
 

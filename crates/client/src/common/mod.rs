@@ -71,7 +71,8 @@ use crate::{
             cfx::RpcImpl, common::RpcImpl as CommonRpcImpl,
             pubsub::PubSubClient,
         },
-        launch_async_rpc_servers, setup_debug_rpc_apis, setup_public_rpc_apis,
+        launch_async_rpc_servers, launch_cfx_async_rpc_servers,
+        setup_debug_rpc_apis, setup_public_rpc_apis,
     },
 };
 #[cfg(all(unix, feature = "jemalloc-prof"))]
@@ -523,6 +524,7 @@ pub fn initialize_not_light_node_modules(
         Arc<PosVerifier>,
         Arc<TokioRuntime>,
         Option<RpcServerHandle>,
+        Option<RpcServerHandle>,
         TaskManager,
     ),
     String,
@@ -664,6 +666,8 @@ pub fn initialize_not_light_node_modules(
         }
     }
 
+    let use_old_core_rpc = conf.raw_conf.core_space_rpc_use_old_impl;
+
     let rpc_impl = Arc::new(RpcImpl::new(
         consensus.clone(),
         sync.clone(),
@@ -675,64 +679,88 @@ pub fn initialize_not_light_node_modules(
         accounts,
     ));
 
-    let debug_rpc_http_server = super::rpc::start_http(
-        conf.local_http_config(),
-        setup_debug_rpc_apis(
-            common_impl.clone(),
-            rpc_impl.clone(),
-            pubsub.clone(),
-            &conf,
-        ),
-    )?;
+    // When using old impl, start V1 core space RPC servers (jsonrpc-core
+    // based). When using new impl, these are skipped and V2 async servers
+    // are started instead.
+    let (
+        debug_rpc_http_server,
+        rpc_http_server,
+        debug_rpc_tcp_server,
+        rpc_tcp_server,
+        debug_rpc_ws_server,
+        rpc_ws_server,
+    ) = if use_old_core_rpc {
+        let debug_rpc_http_server = super::rpc::start_http(
+            conf.local_http_config(),
+            setup_debug_rpc_apis(
+                common_impl.clone(),
+                rpc_impl.clone(),
+                pubsub.clone(),
+                &conf,
+            ),
+        )?;
 
-    let debug_rpc_tcp_server = super::rpc::start_tcp(
-        conf.local_tcp_config(),
-        setup_debug_rpc_apis(
-            common_impl.clone(),
-            rpc_impl.clone(),
-            pubsub.clone(),
-            &conf,
-        ),
-        RpcExtractor,
-    )?;
+        let debug_rpc_tcp_server = super::rpc::start_tcp(
+            conf.local_tcp_config(),
+            setup_debug_rpc_apis(
+                common_impl.clone(),
+                rpc_impl.clone(),
+                pubsub.clone(),
+                &conf,
+            ),
+            RpcExtractor,
+        )?;
 
-    let rpc_tcp_server = super::rpc::start_tcp(
-        conf.tcp_config(),
-        setup_public_rpc_apis(
-            common_impl.clone(),
-            rpc_impl.clone(),
-            pubsub.clone(),
-            &conf,
-        ),
-        RpcExtractor,
-    )?;
+        let rpc_tcp_server = super::rpc::start_tcp(
+            conf.tcp_config(),
+            setup_public_rpc_apis(
+                common_impl.clone(),
+                rpc_impl.clone(),
+                pubsub.clone(),
+                &conf,
+            ),
+            RpcExtractor,
+        )?;
 
-    let debug_rpc_ws_server = super::rpc::start_ws(
-        conf.local_ws_config(),
-        setup_public_rpc_apis(
-            common_impl.clone(),
-            rpc_impl.clone(),
-            pubsub.clone(),
-            &conf,
-        ),
-        RpcExtractor,
-    )?;
+        let debug_rpc_ws_server = super::rpc::start_ws(
+            conf.local_ws_config(),
+            setup_public_rpc_apis(
+                common_impl.clone(),
+                rpc_impl.clone(),
+                pubsub.clone(),
+                &conf,
+            ),
+            RpcExtractor,
+        )?;
 
-    let rpc_ws_server = super::rpc::start_ws(
-        conf.ws_config(),
-        setup_public_rpc_apis(
-            common_impl.clone(),
-            rpc_impl.clone(),
-            pubsub.clone(),
-            &conf,
-        ),
-        RpcExtractor,
-    )?;
+        let rpc_ws_server = super::rpc::start_ws(
+            conf.ws_config(),
+            setup_public_rpc_apis(
+                common_impl.clone(),
+                rpc_impl.clone(),
+                pubsub.clone(),
+                &conf,
+            ),
+            RpcExtractor,
+        )?;
 
-    let rpc_http_server = super::rpc::start_http(
-        conf.http_config(),
-        setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
-    )?;
+        let rpc_http_server = super::rpc::start_http(
+            conf.http_config(),
+            setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
+        )?;
+
+        (
+            debug_rpc_http_server,
+            rpc_http_server,
+            debug_rpc_tcp_server,
+            rpc_tcp_server,
+            debug_rpc_ws_server,
+            rpc_ws_server,
+        )
+    } else {
+        info!("Using new async core space RPC implementation");
+        (None, None, None, None, None, None)
+    };
 
     let task_manager = TaskManager::new(tokio_runtime.handle().clone());
     let task_executor = task_manager.executor();
@@ -746,6 +774,24 @@ pub fn initialize_not_light_node_modules(
             task_executor.clone(),
             conf,
         ))?;
+
+    // Start V2 async core space RPC servers when using the new
+    // implementation.
+    let cfx_rpc_server_handle = if !use_old_core_rpc {
+        tokio_runtime.block_on(launch_cfx_async_rpc_servers(
+            consensus.clone(),
+            sync.clone(),
+            txpool.clone(),
+            data_man.clone(),
+            network.clone(),
+            pos_verifier.clone(),
+            notifications.clone(),
+            task_executor.clone(),
+            conf,
+        ))?
+    } else {
+        None
+    };
 
     // start pprf server, which is used to serve the pprof data for heap
     // profiling
@@ -779,6 +825,7 @@ pub fn initialize_not_light_node_modules(
         pos_verifier,
         tokio_runtime,
         eth_rpc_server_handle,
+        cfx_rpc_server_handle,
         task_manager,
     ))
 }

@@ -36,6 +36,10 @@ pub struct FullClientExtraComponents {
     /// Handle to the started ETH RPC server. This is version 2 of the ETH RPC.
     /// Which use Rust async I/O
     pub eth_rpc_server_handle: Option<RpcServerHandle>,
+    /// Handle to the started CFX RPC server. This is version 2 of the core
+    /// space RPC. Which use Rust async I/O. Only active when
+    /// `core_space_rpc_use_old_impl` is false.
+    pub cfx_rpc_server_handle: Option<RpcServerHandle>,
     pub tokio_runtime: Arc<TokioRuntime>,
     pub task_manager: TaskManager,
 }
@@ -70,6 +74,7 @@ impl FullClient {
             pos_handler,
             tokio_runtime,
             eth_rpc_server_handle,
+            cfx_rpc_server_handle,
             task_manager,
         ) = initialize_not_light_node_modules(&mut conf, exit, NodeType::Full)?;
         Ok(Box::new(ClientComponents {
@@ -88,6 +93,7 @@ impl FullClient {
                 txpool,
                 pow,
                 eth_rpc_server_handle,
+                cfx_rpc_server_handle,
                 tokio_runtime,
                 task_manager,
             },
