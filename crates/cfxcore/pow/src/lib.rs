@@ -135,7 +135,8 @@ impl ProofOfWorkConfig {
                 test_mode,
                 use_octopus_in_test_mode,
                 mining_type: mining_type.parse().expect("Invalid mining type"),
-                initial_difficulty: INITIAL_DIFFICULTY,
+                initial_difficulty: initial_difficulty
+                    .unwrap_or(INITIAL_DIFFICULTY),
                 block_generation_period: TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
                 stratum_listen_addr,
                 stratum_port,
