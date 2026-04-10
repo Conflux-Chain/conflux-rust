@@ -34,12 +34,4 @@
 <a href=#34 id=34 data-nosnippet>34</a>    <span class="kw">fn </span>from(error: bcs::Error) -&gt; <span class="self">Self </span>{
 <a href=#35 id=35 data-nosnippet>35</a>        <span class="self">Self</span>::SerializationError(<span class="macro">format!</span>(<span class="string">"{}"</span>, error))
 <a href=#36 id=36 data-nosnippet>36</a>    }
-<a href=#37 id=37 data-nosnippet>37</a>}
-<a href=#38 id=38 data-nosnippet>38</a>
-<a href=#39 id=39 data-nosnippet>39</a><span class="kw">impl </span>From&lt;diem_secure_net::Error&gt; <span class="kw">for </span>Error {
-<a href=#40 id=40 data-nosnippet>40</a>    <span class="kw">fn </span>from(error: diem_secure_net::Error) -&gt; <span class="self">Self </span>{
-<a href=#41 id=41 data-nosnippet>41</a>        <span class="self">Self</span>::InternalError {
-<a href=#42 id=42 data-nosnippet>42</a>            error: <span class="macro">format!</span>(<span class="string">"{}"</span>, error),
-<a href=#43 id=43 data-nosnippet>43</a>        }
-<a href=#44 id=44 data-nosnippet>44</a>    }
-<a href=#45 id=45 data-nosnippet>45</a>}</code></pre></div></section></main></body></html>
+<a href=#37 id=37 data-nosnippet>37</a>}</code></pre></div></section></main></body></html>

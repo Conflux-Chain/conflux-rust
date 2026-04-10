@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Error"],"struct":["ConsensusState","PersistentSafetyStorage","Process","SafetyRules","SafetyRulesManager"],"trait":["TSafetyRules"]};
+window.SIDEBAR_ITEMS = {"enum":["Error"],"fn":["create_safety_rules"],"struct":["ConsensusState","PersistentSafetyStorage","SafetyRules"]};

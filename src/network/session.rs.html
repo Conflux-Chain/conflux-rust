@@ -847,100 +847,106 @@
 <a href=#847 id=847 data-nosnippet>847</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bytes, Vec&lt;Vec&lt;u8&gt;&gt;), Error&gt; {
 <a href=#848 id=848 data-nosnippet>848</a>        <span class="kw">let </span><span class="kw-2">mut </span>extensions = Vec::new();
 <a href=#849 id=849 data-nosnippet>849</a>        <span class="kw">while </span>has_extension {
-<a href=#850 id=850 data-nosnippet>850</a>            <span class="kw">let </span>extension_byte = data.split_off(data.len() - <span class="number">1</span>)[<span class="number">0</span>];
-<a href=#851 id=851 data-nosnippet>851</a>            <span class="kw">let </span>extension_len = (extension_byte &gt;&gt; <span class="number">1</span>) <span class="kw">as </span>usize;
-<a href=#852 id=852 data-nosnippet>852</a>            has_extension = (extension_byte &amp; <span class="number">1</span>) != <span class="number">0</span>;
-<a href=#853 id=853 data-nosnippet>853</a>            <span class="kw">if </span>data.len() &lt; extension_len {
-<a href=#854 id=854 data-nosnippet>854</a>                <span class="macro">debug!</span>(<span class="string">"failed to parse session packet, not enough bytes for extension."</span>);
-<a href=#855 id=855 data-nosnippet>855</a>                <span class="macro">bail!</span>(Error::BadProtocol);
-<a href=#856 id=856 data-nosnippet>856</a>            }
-<a href=#857 id=857 data-nosnippet>857</a>            extensions
-<a href=#858 id=858 data-nosnippet>858</a>                .push(data.split_off(data.len() - extension_len).to_vec());
-<a href=#859 id=859 data-nosnippet>859</a>        }
-<a href=#860 id=860 data-nosnippet>860</a>
-<a href=#861 id=861 data-nosnippet>861</a>        <span class="prelude-val">Ok</span>((data, extensions))
-<a href=#862 id=862 data-nosnippet>862</a>    }
-<a href=#863 id=863 data-nosnippet>863</a>}
-<a href=#864 id=864 data-nosnippet>864</a>
-<a href=#865 id=865 data-nosnippet>865</a><span class="kw">impl </span>fmt::Debug <span class="kw">for </span>SessionPacket {
-<a href=#866 id=866 data-nosnippet>866</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
-<a href=#867 id=867 data-nosnippet>867</a>        <span class="macro">write!</span>(
-<a href=#868 id=868 data-nosnippet>868</a>            f,
-<a href=#869 id=869 data-nosnippet>869</a>            <span class="string">"SessionPacket {{ id: {}, protocol: {:?}, date_len: {} }}"</span>,
-<a href=#870 id=870 data-nosnippet>870</a>            <span class="self">self</span>.id,
-<a href=#871 id=871 data-nosnippet>871</a>            <span class="self">self</span>.protocol,
-<a href=#872 id=872 data-nosnippet>872</a>            <span class="self">self</span>.data.len()
-<a href=#873 id=873 data-nosnippet>873</a>        )
-<a href=#874 id=874 data-nosnippet>874</a>    }
-<a href=#875 id=875 data-nosnippet>875</a>}
-<a href=#876 id=876 data-nosnippet>876</a>
-<a href=#877 id=877 data-nosnippet>877</a><span class="attr">#[cfg(test)]
-<a href=#878 id=878 data-nosnippet>878</a></span><span class="kw">mod </span>tests {
-<a href=#879 id=879 data-nosnippet>879</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#880 id=880 data-nosnippet>880</a>
-<a href=#881 id=881 data-nosnippet>881</a>    <span class="attr">#[test]
-<a href=#882 id=882 data-nosnippet>882</a>    </span><span class="kw">fn </span>test_packet_assemble() {
-<a href=#883 id=883 data-nosnippet>883</a>        <span class="kw">let </span>packet =
-<a href=#884 id=884 data-nosnippet>884</a>            SessionPacket::assemble(<span class="number">5</span>, PACKET_HEADER_VERSION, <span class="prelude-val">None</span>, <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">3</span>]);
-<a href=#885 id=885 data-nosnippet>885</a>        <span class="macro">assert_eq!</span>(packet, <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">5</span>]);
+<a href=#850 id=850 data-nosnippet>850</a>            <span class="kw">if </span>data.is_empty() {
+<a href=#851 id=851 data-nosnippet>851</a>                <span class="macro">debug!</span>(
+<a href=#852 id=852 data-nosnippet>852</a>                    <span class="string">"failed to parse session packet, extension data exhausted"
+<a href=#853 id=853 data-nosnippet>853</a>                </span>);
+<a href=#854 id=854 data-nosnippet>854</a>                <span class="macro">bail!</span>(Error::BadProtocol);
+<a href=#855 id=855 data-nosnippet>855</a>            }
+<a href=#856 id=856 data-nosnippet>856</a>            <span class="kw">let </span>extension_byte = data.split_off(data.len() - <span class="number">1</span>)[<span class="number">0</span>];
+<a href=#857 id=857 data-nosnippet>857</a>            <span class="kw">let </span>extension_len = (extension_byte &gt;&gt; <span class="number">1</span>) <span class="kw">as </span>usize;
+<a href=#858 id=858 data-nosnippet>858</a>            has_extension = (extension_byte &amp; <span class="number">1</span>) != <span class="number">0</span>;
+<a href=#859 id=859 data-nosnippet>859</a>            <span class="kw">if </span>data.len() &lt; extension_len {
+<a href=#860 id=860 data-nosnippet>860</a>                <span class="macro">debug!</span>(<span class="string">"failed to parse session packet, not enough bytes for extension."</span>);
+<a href=#861 id=861 data-nosnippet>861</a>                <span class="macro">bail!</span>(Error::BadProtocol);
+<a href=#862 id=862 data-nosnippet>862</a>            }
+<a href=#863 id=863 data-nosnippet>863</a>            extensions
+<a href=#864 id=864 data-nosnippet>864</a>                .push(data.split_off(data.len() - extension_len).to_vec());
+<a href=#865 id=865 data-nosnippet>865</a>        }
+<a href=#866 id=866 data-nosnippet>866</a>
+<a href=#867 id=867 data-nosnippet>867</a>        <span class="prelude-val">Ok</span>((data, extensions))
+<a href=#868 id=868 data-nosnippet>868</a>    }
+<a href=#869 id=869 data-nosnippet>869</a>}
+<a href=#870 id=870 data-nosnippet>870</a>
+<a href=#871 id=871 data-nosnippet>871</a><span class="kw">impl </span>fmt::Debug <span class="kw">for </span>SessionPacket {
+<a href=#872 id=872 data-nosnippet>872</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+<a href=#873 id=873 data-nosnippet>873</a>        <span class="macro">write!</span>(
+<a href=#874 id=874 data-nosnippet>874</a>            f,
+<a href=#875 id=875 data-nosnippet>875</a>            <span class="string">"SessionPacket {{ id: {}, protocol: {:?}, date_len: {} }}"</span>,
+<a href=#876 id=876 data-nosnippet>876</a>            <span class="self">self</span>.id,
+<a href=#877 id=877 data-nosnippet>877</a>            <span class="self">self</span>.protocol,
+<a href=#878 id=878 data-nosnippet>878</a>            <span class="self">self</span>.data.len()
+<a href=#879 id=879 data-nosnippet>879</a>        )
+<a href=#880 id=880 data-nosnippet>880</a>    }
+<a href=#881 id=881 data-nosnippet>881</a>}
+<a href=#882 id=882 data-nosnippet>882</a>
+<a href=#883 id=883 data-nosnippet>883</a><span class="attr">#[cfg(test)]
+<a href=#884 id=884 data-nosnippet>884</a></span><span class="kw">mod </span>tests {
+<a href=#885 id=885 data-nosnippet>885</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
 <a href=#886 id=886 data-nosnippet>886</a>
-<a href=#887 id=887 data-nosnippet>887</a>        <span class="kw">let </span>packet = SessionPacket::assemble(
-<a href=#888 id=888 data-nosnippet>888</a>            <span class="number">6</span>,
-<a href=#889 id=889 data-nosnippet>889</a>            PACKET_HEADER_VERSION,
-<a href=#890 id=890 data-nosnippet>890</a>            <span class="prelude-val">Some</span>([<span class="number">8</span>; <span class="number">3</span>]),
-<a href=#891 id=891 data-nosnippet>891</a>            <span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">4</span>],
-<a href=#892 id=892 data-nosnippet>892</a>        );
-<a href=#893 id=893 data-nosnippet>893</a>        <span class="macro">assert_eq!</span>(packet, <span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">4</span>, <span class="number">8</span>, <span class="number">8</span>, <span class="number">8</span>, <span class="number">1</span>, <span class="number">6</span>]);
-<a href=#894 id=894 data-nosnippet>894</a>    }
-<a href=#895 id=895 data-nosnippet>895</a>
-<a href=#896 id=896 data-nosnippet>896</a>    <span class="attr">#[test]
-<a href=#897 id=897 data-nosnippet>897</a>    </span><span class="kw">fn </span>test_packet_parse() {
-<a href=#898 id=898 data-nosnippet>898</a>        <span class="comment">// packet id missed
-<a href=#899 id=899 data-nosnippet>899</a>        </span><span class="macro">assert!</span>(SessionPacket::parse(<span class="macro">vec!</span>[].into()).is_err());
-<a href=#900 id=900 data-nosnippet>900</a>
-<a href=#901 id=901 data-nosnippet>901</a>        <span class="comment">// protocol flag missed
-<a href=#902 id=902 data-nosnippet>902</a>        </span><span class="macro">assert!</span>(SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">1</span>].into()).is_err());
-<a href=#903 id=903 data-nosnippet>903</a>
-<a href=#904 id=904 data-nosnippet>904</a>        <span class="comment">// protocol flag invalid
-<a href=#905 id=905 data-nosnippet>905</a>        </span><span class="macro">assert!</span>(SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">1</span>].into()).is_err());
+<a href=#887 id=887 data-nosnippet>887</a>    <span class="attr">#[test]
+<a href=#888 id=888 data-nosnippet>888</a>    </span><span class="kw">fn </span>test_packet_assemble() {
+<a href=#889 id=889 data-nosnippet>889</a>        <span class="kw">let </span>packet =
+<a href=#890 id=890 data-nosnippet>890</a>            SessionPacket::assemble(<span class="number">5</span>, PACKET_HEADER_VERSION, <span class="prelude-val">None</span>, <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">3</span>]);
+<a href=#891 id=891 data-nosnippet>891</a>        <span class="macro">assert_eq!</span>(packet, <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">3</span>, <span class="number">0</span>, <span class="number">5</span>]);
+<a href=#892 id=892 data-nosnippet>892</a>
+<a href=#893 id=893 data-nosnippet>893</a>        <span class="kw">let </span>packet = SessionPacket::assemble(
+<a href=#894 id=894 data-nosnippet>894</a>            <span class="number">6</span>,
+<a href=#895 id=895 data-nosnippet>895</a>            PACKET_HEADER_VERSION,
+<a href=#896 id=896 data-nosnippet>896</a>            <span class="prelude-val">Some</span>([<span class="number">8</span>; <span class="number">3</span>]),
+<a href=#897 id=897 data-nosnippet>897</a>            <span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">4</span>],
+<a href=#898 id=898 data-nosnippet>898</a>        );
+<a href=#899 id=899 data-nosnippet>899</a>        <span class="macro">assert_eq!</span>(packet, <span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">4</span>, <span class="number">8</span>, <span class="number">8</span>, <span class="number">8</span>, <span class="number">1</span>, <span class="number">6</span>]);
+<a href=#900 id=900 data-nosnippet>900</a>    }
+<a href=#901 id=901 data-nosnippet>901</a>
+<a href=#902 id=902 data-nosnippet>902</a>    <span class="attr">#[test]
+<a href=#903 id=903 data-nosnippet>903</a>    </span><span class="kw">fn </span>test_packet_parse() {
+<a href=#904 id=904 data-nosnippet>904</a>        <span class="comment">// packet id missed
+<a href=#905 id=905 data-nosnippet>905</a>        </span><span class="macro">assert!</span>(SessionPacket::parse(<span class="macro">vec!</span>[].into()).is_err());
 <a href=#906 id=906 data-nosnippet>906</a>
-<a href=#907 id=907 data-nosnippet>907</a>        <span class="comment">// user packet without protocol
-<a href=#908 id=908 data-nosnippet>908</a>        </span><span class="macro">assert!</span>(SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">0</span>, PACKET_USER].into()).is_err());
+<a href=#907 id=907 data-nosnippet>907</a>        <span class="comment">// protocol flag missed
+<a href=#908 id=908 data-nosnippet>908</a>        </span><span class="macro">assert!</span>(SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">1</span>].into()).is_err());
 <a href=#909 id=909 data-nosnippet>909</a>
-<a href=#910 id=910 data-nosnippet>910</a>        <span class="comment">// packet without protocol
-<a href=#911 id=911 data-nosnippet>911</a>        </span><span class="kw">let </span>packet = SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">20</span>].into()).unwrap();
-<a href=#912 id=912 data-nosnippet>912</a>        <span class="macro">assert_eq!</span>(
-<a href=#913 id=913 data-nosnippet>913</a>            packet,
-<a href=#914 id=914 data-nosnippet>914</a>            SessionPacket {
-<a href=#915 id=915 data-nosnippet>915</a>                id: <span class="number">20</span>,
-<a href=#916 id=916 data-nosnippet>916</a>                header_version: <span class="number">0</span>,
-<a href=#917 id=917 data-nosnippet>917</a>                protocol: <span class="prelude-val">None</span>,
-<a href=#918 id=918 data-nosnippet>918</a>                data: <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>].into(),
-<a href=#919 id=919 data-nosnippet>919</a>                extensions: <span class="macro">vec!</span>[],
-<a href=#920 id=920 data-nosnippet>920</a>            }
-<a href=#921 id=921 data-nosnippet>921</a>        );
-<a href=#922 id=922 data-nosnippet>922</a>
-<a href=#923 id=923 data-nosnippet>923</a>        <span class="comment">// non user packet with protocol
-<a href=#924 id=924 data-nosnippet>924</a>        </span><span class="macro">assert!</span>(SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">6</span>, <span class="number">6</span>, <span class="number">6</span>, <span class="number">1</span>, <span class="number">7</span>].into()).is_err());
-<a href=#925 id=925 data-nosnippet>925</a>
-<a href=#926 id=926 data-nosnippet>926</a>        <span class="comment">// user packet, but protocol length is not enough
-<a href=#927 id=927 data-nosnippet>927</a>        </span><span class="macro">assert!</span>(
-<a href=#928 id=928 data-nosnippet>928</a>            SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">6</span>, <span class="number">6</span>, <span class="number">1</span>, PACKET_USER].into()).is_err()
-<a href=#929 id=929 data-nosnippet>929</a>        );
-<a href=#930 id=930 data-nosnippet>930</a>
-<a href=#931 id=931 data-nosnippet>931</a>        <span class="comment">// user packet with protocol
-<a href=#932 id=932 data-nosnippet>932</a>        </span><span class="kw">let </span>packet =
-<a href=#933 id=933 data-nosnippet>933</a>            SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">9</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">1</span>, PACKET_USER].into())
-<a href=#934 id=934 data-nosnippet>934</a>                .unwrap();
-<a href=#935 id=935 data-nosnippet>935</a>        <span class="macro">assert_eq!</span>(
-<a href=#936 id=936 data-nosnippet>936</a>            packet,
-<a href=#937 id=937 data-nosnippet>937</a>            SessionPacket {
-<a href=#938 id=938 data-nosnippet>938</a>                id: PACKET_USER,
-<a href=#939 id=939 data-nosnippet>939</a>                header_version: <span class="number">0</span>,
-<a href=#940 id=940 data-nosnippet>940</a>                protocol: <span class="prelude-val">Some</span>([<span class="number">3</span>; <span class="number">3</span>]),
-<a href=#941 id=941 data-nosnippet>941</a>                data: <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">9</span>].into(),
-<a href=#942 id=942 data-nosnippet>942</a>                extensions: <span class="macro">vec!</span>[],
-<a href=#943 id=943 data-nosnippet>943</a>            }
-<a href=#944 id=944 data-nosnippet>944</a>        );
-<a href=#945 id=945 data-nosnippet>945</a>    }
-<a href=#946 id=946 data-nosnippet>946</a>}</code></pre></div></section></main></body></html>
+<a href=#910 id=910 data-nosnippet>910</a>        <span class="comment">// protocol flag invalid
+<a href=#911 id=911 data-nosnippet>911</a>        </span><span class="macro">assert!</span>(SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">2</span>, <span class="number">1</span>].into()).is_err());
+<a href=#912 id=912 data-nosnippet>912</a>
+<a href=#913 id=913 data-nosnippet>913</a>        <span class="comment">// user packet without protocol
+<a href=#914 id=914 data-nosnippet>914</a>        </span><span class="macro">assert!</span>(SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">0</span>, PACKET_USER].into()).is_err());
+<a href=#915 id=915 data-nosnippet>915</a>
+<a href=#916 id=916 data-nosnippet>916</a>        <span class="comment">// packet without protocol
+<a href=#917 id=917 data-nosnippet>917</a>        </span><span class="kw">let </span>packet = SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">0</span>, <span class="number">20</span>].into()).unwrap();
+<a href=#918 id=918 data-nosnippet>918</a>        <span class="macro">assert_eq!</span>(
+<a href=#919 id=919 data-nosnippet>919</a>            packet,
+<a href=#920 id=920 data-nosnippet>920</a>            SessionPacket {
+<a href=#921 id=921 data-nosnippet>921</a>                id: <span class="number">20</span>,
+<a href=#922 id=922 data-nosnippet>922</a>                header_version: <span class="number">0</span>,
+<a href=#923 id=923 data-nosnippet>923</a>                protocol: <span class="prelude-val">None</span>,
+<a href=#924 id=924 data-nosnippet>924</a>                data: <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>].into(),
+<a href=#925 id=925 data-nosnippet>925</a>                extensions: <span class="macro">vec!</span>[],
+<a href=#926 id=926 data-nosnippet>926</a>            }
+<a href=#927 id=927 data-nosnippet>927</a>        );
+<a href=#928 id=928 data-nosnippet>928</a>
+<a href=#929 id=929 data-nosnippet>929</a>        <span class="comment">// non user packet with protocol
+<a href=#930 id=930 data-nosnippet>930</a>        </span><span class="macro">assert!</span>(SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">6</span>, <span class="number">6</span>, <span class="number">6</span>, <span class="number">1</span>, <span class="number">7</span>].into()).is_err());
+<a href=#931 id=931 data-nosnippet>931</a>
+<a href=#932 id=932 data-nosnippet>932</a>        <span class="comment">// user packet, but protocol length is not enough
+<a href=#933 id=933 data-nosnippet>933</a>        </span><span class="macro">assert!</span>(
+<a href=#934 id=934 data-nosnippet>934</a>            SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">6</span>, <span class="number">6</span>, <span class="number">1</span>, PACKET_USER].into()).is_err()
+<a href=#935 id=935 data-nosnippet>935</a>        );
+<a href=#936 id=936 data-nosnippet>936</a>
+<a href=#937 id=937 data-nosnippet>937</a>        <span class="comment">// user packet with protocol
+<a href=#938 id=938 data-nosnippet>938</a>        </span><span class="kw">let </span>packet =
+<a href=#939 id=939 data-nosnippet>939</a>            SessionPacket::parse(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">9</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">3</span>, <span class="number">1</span>, PACKET_USER].into())
+<a href=#940 id=940 data-nosnippet>940</a>                .unwrap();
+<a href=#941 id=941 data-nosnippet>941</a>        <span class="macro">assert_eq!</span>(
+<a href=#942 id=942 data-nosnippet>942</a>            packet,
+<a href=#943 id=943 data-nosnippet>943</a>            SessionPacket {
+<a href=#944 id=944 data-nosnippet>944</a>                id: PACKET_USER,
+<a href=#945 id=945 data-nosnippet>945</a>                header_version: <span class="number">0</span>,
+<a href=#946 id=946 data-nosnippet>946</a>                protocol: <span class="prelude-val">Some</span>([<span class="number">3</span>; <span class="number">3</span>]),
+<a href=#947 id=947 data-nosnippet>947</a>                data: <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">9</span>].into(),
+<a href=#948 id=948 data-nosnippet>948</a>                extensions: <span class="macro">vec!</span>[],
+<a href=#949 id=949 data-nosnippet>949</a>            }
+<a href=#950 id=950 data-nosnippet>950</a>        );
+<a href=#951 id=951 data-nosnippet>951</a>    }
+<a href=#952 id=952 data-nosnippet>952</a>}</code></pre></div></section></main></body></html>

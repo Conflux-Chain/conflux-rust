@@ -1196,9 +1196,9 @@
 <a href=#1196 id=1196 data-nosnippet>1196</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, staking_event: <span class="kw-2">&amp;</span>StakingEvent,
 <a href=#1197 id=1197 data-nosnippet>1197</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
 <a href=#1198 id=1198 data-nosnippet>1198</a>        <span class="kw">match </span>staking_event {
-<a href=#1199 id=1199 data-nosnippet>1199</a>            StakingEvent::Retire(addr_h256, _votes) =&gt; {
+<a href=#1199 id=1199 data-nosnippet>1199</a>            StakingEvent::Retire(addr_h256, votes) =&gt; {
 <a href=#1200 id=1200 data-nosnippet>1200</a>                <span class="kw">let </span>addr = AccountAddress::from_bytes(addr_h256)<span class="question-mark">?</span>;
-<a href=#1201 id=1201 data-nosnippet>1201</a>                <span class="prelude-val">Ok</span>(<span class="self">self</span>.node_id == addr)
+<a href=#1201 id=1201 data-nosnippet>1201</a>                <span class="prelude-val">Ok</span>(<span class="self">self</span>.node_id == addr &amp;&amp; <span class="self">self</span>.votes == <span class="kw-2">*</span>votes)
 <a href=#1202 id=1202 data-nosnippet>1202</a>            }
 <a href=#1203 id=1203 data-nosnippet>1203</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>),
 <a href=#1204 id=1204 data-nosnippet>1204</a>        }
