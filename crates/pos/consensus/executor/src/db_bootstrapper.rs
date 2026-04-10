@@ -7,7 +7,7 @@
 
 #![forbid(unsafe_code)]
 
-use crate::{vm::VMExecutor, Executor};
+use crate::Executor;
 use anyhow::{format_err, Result};
 use cached_pos_ledger_db::CachedPosLedgerDB;
 use consensus_types::db::FakeLedgerBlockDB;
@@ -32,7 +32,7 @@ use storage_interface::{DbReaderWriter, TreeState};
 /// If the database has not been bootstrapped yet, commit the genesis
 /// transaction. Returns Ok(true) if committed, Ok(false) if already
 /// bootstrapped.
-pub fn maybe_bootstrap<V: VMExecutor>(
+pub fn maybe_bootstrap(
     db: &DbReaderWriter, genesis_txn: &Transaction,
     genesis_pivot_decision: Option<PivotBlockDecision>, initial_seed: Vec<u8>,
     initial_nodes: Vec<(NodeID, u64)>,
@@ -50,7 +50,7 @@ pub fn maybe_bootstrap<V: VMExecutor>(
         initial_nodes,
     );
 
-    let committer = calculate_genesis::<V>(
+    let committer = calculate_genesis(
         db,
         tree_state,
         genesis_txn,
@@ -63,14 +63,14 @@ pub fn maybe_bootstrap<V: VMExecutor>(
     Ok(true)
 }
 
-pub struct GenesisCommitter<V: VMExecutor> {
-    executor: Executor<V>,
+pub struct GenesisCommitter {
+    executor: Executor,
     ledger_info_with_sigs: LedgerInfoWithSignatures,
 }
 
-impl<V: VMExecutor> GenesisCommitter<V> {
+impl GenesisCommitter {
     pub fn new(
-        executor: Executor<V>, ledger_info_with_sigs: LedgerInfoWithSignatures,
+        executor: Executor, ledger_info_with_sigs: LedgerInfoWithSignatures,
     ) -> Result<Self> {
         Ok(Self {
             executor,
@@ -90,12 +90,12 @@ impl<V: VMExecutor> GenesisCommitter<V> {
     }
 }
 
-pub fn calculate_genesis<V: VMExecutor>(
+pub fn calculate_genesis(
     db: &DbReaderWriter, tree_state: TreeState, genesis_txn: &Transaction,
     genesis_pivot_decision: Option<PivotBlockDecision>, initial_seed: Vec<u8>,
     initial_nodes: Vec<(NodeID, u64)>,
     initial_committee: Vec<(AccountAddress, u64)>,
-) -> Result<GenesisCommitter<V>> {
+) -> Result<GenesisCommitter> {
     // DB bootstrapper works on either an empty transaction accumulator or an
     // existing block chain. In the very extreme and sad situation of losing
     // quorum among validators, we refer to the second use case said above.
@@ -108,7 +108,7 @@ pub fn calculate_genesis<V: VMExecutor>(
         initial_committee,
         genesis_pivot_decision.clone(),
     ));
-    let executor = Executor::<V>::new(
+    let executor = Executor::new(
         db_with_cache,
         // This will not be used in genesis execution.
         Arc::new(FakePowHandler {}),

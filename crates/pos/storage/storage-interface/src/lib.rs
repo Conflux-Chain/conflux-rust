@@ -8,7 +8,6 @@
 use anyhow::Result;
 use diem_crypto::{hash::SPARSE_MERKLE_PLACEHOLDER_HASH, HashValue};
 use diem_types::{
-    account_address::AccountAddress,
     committed_block::CommittedBlock,
     contract_event::ContractEvent,
     epoch_change::EpochChangeProof,
@@ -16,13 +15,10 @@ use diem_types::{
     ledger_info::{
         deserialize_ledger_info_unchecked, LedgerInfoWithSignatures,
     },
-    proof::{definition::LeafCount, AccumulatorConsistencyProof},
+    proof::definition::LeafCount,
     reward_distribution_event::RewardDistributionEventV2,
     term_state::PosState,
-    transaction::{
-        TransactionInfo, TransactionListWithProof, TransactionToCommit,
-        TransactionWithProof, Version,
-    },
+    transaction::{TransactionInfo, TransactionToCommit, Version},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -155,14 +151,6 @@ impl From<bcs::Error> for Error {
     }
 }
 
-impl From<diem_secure_net::Error> for Error {
-    fn from(error: diem_secure_net::Error) -> Self {
-        Self::ServiceError {
-            error: format!("{}", error),
-        }
-    }
-}
-
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Order {
     Ascending,
@@ -180,30 +168,11 @@ pub trait DbReader: Send + Sync {
         &self, start_epoch: u64, end_epoch: u64,
     ) -> Result<EpochChangeProof>;
 
-    /// See [`DiemDB::get_transactions`].
-    ///
-    /// [`DiemDB::get_transactions`]:
-    /// ../pos-ledger-db/struct.DiemDB.html#method.get_transactions
-    fn get_transactions(
-        &self, start_version: Version, batch_size: u64,
-        ledger_version: Version, fetch_events: bool,
-    ) -> Result<TransactionListWithProof>;
-
     /// See [`DiemDB::get_block_timestamp`].
     ///
     /// [`DiemDB::get_block_timestamp`]:
     /// ../pos-ledger-db/struct.DiemDB.html#method.get_block_timestamp
     fn get_block_timestamp(&self, version: u64) -> Result<u64>;
-
-    /// Gets the version of the last transaction committed before timestamp,
-    /// a committed block at or after the required timestamp must exist
-    /// (otherwise it's possible the next block committed as a timestamp
-    /// smaller than the one in the request).
-    fn get_last_version_before_timestamp(
-        &self, _timestamp: u64, _ledger_version: Version,
-    ) -> Result<Version> {
-        unimplemented!()
-    }
 
     /// Returns the latest ledger info.
     fn get_latest_ledger_info(&self) -> Result<LedgerInfoWithSignatures>;
@@ -228,26 +197,6 @@ pub trait DbReader: Send + Sync {
     fn get_startup_info(
         &self, need_pos_state: bool,
     ) -> Result<Option<StartupInfo>>;
-
-    fn get_txn_by_account(
-        &self, address: AccountAddress, seq_num: u64, ledger_version: Version,
-        fetch_events: bool,
-    ) -> Result<Option<TransactionWithProof>>;
-
-    /// Returns proof of new state for a given ledger info with signatures
-    /// relative to version known to client
-    fn get_state_proof_with_ledger_info(
-        &self, known_version: u64, ledger_info: LedgerInfoWithSignatures,
-    ) -> Result<(EpochChangeProof, AccumulatorConsistencyProof)>;
-
-    /// Returns proof of new state relative to version known to client
-    fn get_state_proof(
-        &self, known_version: u64,
-    ) -> Result<(
-        LedgerInfoWithSignatures,
-        EpochChangeProof,
-        AccumulatorConsistencyProof,
-    )>;
 
     /// Gets the latest TreeState no matter if db has been bootstrapped.
     /// Used by the Db-bootstrapper.
@@ -340,34 +289,6 @@ impl<D> From<D> for DbReaderWriter
 where D: 'static + DbReader + DbWriter
 {
     fn from(db: D) -> Self { Self::new(db) }
-}
-
-/// Network types for storage service
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum StorageRequest {
-    GetStartupInfoRequest,
-    SaveTransactionsRequest(Box<SaveTransactionsRequest>),
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
-pub struct SaveTransactionsRequest {
-    pub txns_to_commit: Vec<TransactionToCommit>,
-    pub first_version: Version,
-    pub ledger_info_with_signatures: Option<LedgerInfoWithSignatures>,
-}
-
-impl SaveTransactionsRequest {
-    /// Constructor.
-    pub fn new(
-        txns_to_commit: Vec<TransactionToCommit>, first_version: Version,
-        ledger_info_with_signatures: Option<LedgerInfoWithSignatures>,
-    ) -> Self {
-        SaveTransactionsRequest {
-            txns_to_commit,
-            first_version,
-            ledger_info_with_signatures,
-        }
-    }
 }
 
 pub trait DBReaderForPoW: Send + Sync + DbReader {

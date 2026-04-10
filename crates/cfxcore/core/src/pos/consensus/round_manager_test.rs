@@ -112,7 +112,13 @@ impl NodeSetup {
                 true,
             );
             let safety_rules_manager =
-                SafetyRulesManager::new_local(safety_storage, false, false);
+                SafetyRulesManager::new_local(
+                    safety_storage,
+                    false,
+                    false,
+                    None,
+                    Default::default(),
+                );
 
             nodes.push(Self::new(
                 playground,
@@ -938,7 +944,13 @@ fn safety_rules_crash() {
         );
 
         node.safety_rules_manager =
-            SafetyRulesManager::new_local(safety_storage, false, false);
+            SafetyRulesManager::new_local(
+                    safety_storage,
+                    false,
+                    false,
+                    None,
+                    Default::default(),
+                );
         let safety_rules = MetricsSafetyRules::new(
             node.safety_rules_manager.client(),
             node.storage.clone(),

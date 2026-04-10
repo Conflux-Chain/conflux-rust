@@ -74,8 +74,6 @@ members = [
     "crates/pos/common/logger",
     "crates/pos/common/metrics",
     "crates/pos/common/metrics-core",
-    "crates/pos/common/nibble",
-    "crates/pos/common/num-variants",
     "crates/pos/common/proptest-helpers",
     "crates/pos/common/short-hex-str",
     "crates/pos/common/subscription-service",
@@ -88,8 +86,6 @@ members = [
     "crates/pos/consensus/safety-rules",
     "crates/pos/crypto/crypto",
     "crates/pos/crypto/crypto-derive",
-    "crates/pos/secure/net",
-    "crates/pos/secure/push-metrics",
     "crates/pos/secure/storage",
     "crates/pos/storage/accumulator",
     "crates/pos/storage/cached-pos-ledger-db",
@@ -212,8 +208,6 @@ diem-infallible = { path = "./crates/pos/common/infallible" }
 diem-logger = { path = "./crates/pos/common/logger" }
 diem-metrics = { path = "./crates/pos/common/metrics" }
 diem-metrics-core = { path = "./crates/pos/common/metrics-core" }
-diem-nibble = { path = "./crates/pos/common/nibble" }
-num-variants = { path = "./crates/pos/common/num-variants" }
 diem-proptest-helpers = { path = "./crates/pos/common/proptest-helpers" }
 short-hex-str = { path = "./crates/pos/common/short-hex-str" }
 subscription-service = { path = "./crates/pos/common/subscription-service" }
@@ -226,8 +220,6 @@ executor = { path = "./crates/pos/consensus/executor" }
 safety-rules = { path = "./crates/pos/consensus/safety-rules" }
 diem-crypto = { path = "./crates/pos/crypto/crypto" }
 diem-crypto-derive = { path = "./crates/pos/crypto/crypto-derive" }
-diem-secure-net = { path = "./crates/pos/secure/net" }
-diem-secure-push-metrics = { path = "./crates/pos/secure/push-metrics" }
 diem-secure-storage = { path = "./crates/pos/secure/storage" }
 accumulator = { path = "./crates/pos/storage/accumulator" }
 cached-pos-ledger-db = { path = "./crates/pos/storage/cached-pos-ledger-db" }
@@ -472,7 +464,7 @@ sqlite3-sys = "0.12"
 kvdb = "0.13"
 influx_db_client = "0.5.1"
 # conflux forked crates
-rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "b84f1c0f549059602c1d51d87d2c1b01e931e5fd" }
+rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "d0cd089bc092ec77b65a5262d453848f57abe3c3" }
 
 [patch.crates-io]
 # use a forked version to fix a vulnerability(introduced by failure) in vrf-rs, can be removed after the upstream is fixed

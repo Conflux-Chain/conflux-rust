@@ -277,8 +277,6 @@ allow-git = [
     "https://github.com/paritytech/rust-secp256k1.git",
     "https://github.com/paritytech/rust-ctrlc.git",
 
-    # librocksdb_sys -> lz4-sys
-    "https://github.com/busyjay/lz4-rs.git?branch=adjust-build",
     # librocksdb_sys -> snappy-sys
     "https://github.com/busyjay/rust-snappy.git?branch=static-link",
 

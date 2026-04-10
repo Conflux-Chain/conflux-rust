@@ -32,7 +32,6 @@ diem-infallible = { workspace = true }
 diem-proptest-helpers = { workspace = true, optional = true }
 diem-temppath = { workspace = true, optional = true }
 diem-types = { workspace = true }
-num-variants = { workspace = true }
 schemadb = { workspace = true }
 storage-interface = { workspace = true }
 

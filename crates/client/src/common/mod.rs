@@ -655,12 +655,9 @@ pub fn initialize_not_light_node_modules(
         }
         if pow_config.enable_mining() {
             let bg = blockgen.clone();
-            thread::Builder::new()
-                .name("mining".into())
-                .spawn(move || {
-                    bg.mine();
-                })
-                .expect("Mining thread spawn error");
+            tokio_runtime.spawn(async move {
+                bg.mine().await;
+            });
         }
     }
 

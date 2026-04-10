@@ -89,14 +89,14 @@ impl BlockGenerator {
         BlockGeneratorTestApi::new(self.clone())
     }
 
-    pub fn mine(self: &Arc<Self>) {
+    pub async fn mine(self: &Arc<Self>) {
         let miner_type = if self.pow_config.use_stratum() {
             miner::MinerType::Stratum
         } else {
             miner::MinerType::Cpu(1)
         };
 
-        let (miner, solution_rx) = miner::spawn(self.clone(), miner_type);
+        let (miner, solution_rx) = miner::spawn(self.clone(), miner_type).await;
 
         MiningSession::new(&*self, &*miner, solution_rx).run();
     }

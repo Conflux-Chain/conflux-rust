@@ -10,7 +10,7 @@ use crate::pos::mempool::shared_mempool::{
     types::{CommitNotification, ConsensusRequest},
 };
 use anyhow::Error;
-use diem_config::{config::PeerNetworkId, network_id::NetworkId};
+use diem_config::network_id::{NetworkId, PeerNetworkId};
 use diem_crypto::HashValue;
 use diem_logger::Schema;
 use diem_types::{

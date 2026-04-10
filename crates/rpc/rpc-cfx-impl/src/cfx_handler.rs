@@ -145,8 +145,10 @@ impl CfxHandler {
     fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     fn check_address_network(&self, network: Network) -> RpcResult<()> {
-        check_rpc_address_network(Some(network), &self.network_type)
-            .map_err(|e| into_rpc_err(e.to_string()))
+        invalid_params_check(
+            "address",
+            check_rpc_address_network(Some(network), &self.network_type),
+        )
     }
 
     fn get_epoch_number_with_pivot_check(

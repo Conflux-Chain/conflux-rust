@@ -9,9 +9,8 @@ use crate::{
     account_address::AccountAddress,
     chain_id::ChainId,
     transaction::{
-        metadata, GovernanceRole, RawTransaction, Script, SignedTransaction,
-        Transaction, TransactionInfo, TransactionListWithProof,
-        TransactionPayload, TransactionWithProof,
+        RawTransaction, RetirePayload, SignedTransaction, Transaction,
+        TransactionInfo, TransactionPayload, TransactionWithProof,
     },
 };
 use bcs::test_helpers::assert_canonical_encode_decode;
@@ -28,9 +27,12 @@ fn test_invalid_signature() {
     let sig = private_key.sign_arbitrary_message(&message[..]);
     let sig_bytes = bcs::to_bytes(&sig).unwrap();
     let txn: SignedTransaction = SignedTransaction::new(
-        RawTransaction::new_script(
+        RawTransaction::new(
             AccountAddress::random(),
-            Script::new(vec![], vec![], vec![]),
+            TransactionPayload::Retire(RetirePayload {
+                node_id: AccountAddress::random(),
+                votes: 0,
+            }),
             0,
             ChainId::test(),
         ),
@@ -39,52 +41,6 @@ fn test_invalid_signature() {
     );
     txn.check_signature()
         .expect_err("signature checking should fail");
-}
-
-#[test]
-fn test_role_ordering() {
-    use GovernanceRole::*;
-    assert!(DiemRoot.priority() > TreasuryCompliance.priority());
-    assert!(DiemRoot.priority() > Validator.priority());
-    assert!(DiemRoot.priority() > ValidatorOperator.priority());
-    assert!(DiemRoot.priority() > DesignatedDealer.priority());
-
-    assert!(TreasuryCompliance.priority() > Validator.priority());
-    assert!(TreasuryCompliance.priority() > ValidatorOperator.priority());
-    assert!(TreasuryCompliance.priority() > DesignatedDealer.priority());
-
-    assert!(Validator.priority() == ValidatorOperator.priority());
-    assert!(Validator.priority() == DesignatedDealer.priority());
-}
-
-#[test]
-fn test_general_metadata_constructor_and_setters() {
-    let raw_to_subaddr = b"to_subaddr".to_vec();
-    let to_subaddress = Some(raw_to_subaddr.clone());
-    let raw_from_subaddr = b"from_subaddr".to_vec();
-    let from_subaddress = Some(raw_from_subaddr.clone());
-    let referenced_event = Some(1337);
-    let general_metadata = metadata::GeneralMetadataV0::new(
-        to_subaddress,
-        from_subaddress,
-        referenced_event,
-    );
-
-    assert!(
-        general_metadata
-            .to_subaddress()
-            .as_ref()
-            .expect("incorrect to_subaddress")
-            == &raw_to_subaddr
-    );
-    assert!(
-        general_metadata
-            .from_subaddress()
-            .as_ref()
-            .expect("incorrect from suabbdress")
-            == &raw_from_subaddr
-    );
-    assert!(general_metadata.referenced_event() == &referenced_event);
 }
 
 proptest! {
@@ -120,16 +76,9 @@ proptest! {
 #![proptest_config(ProptestConfig::with_cases(10))]
 
 #[test]
-fn transaction_list_with_proof_bcs_roundtrip(txn_list in any::<TransactionListWithProof>()) {
-    assert_canonical_encode_decode(txn_list);
-}
-
-
-#[test]
 fn transaction_bcs_roundtrip(txn in any::<Transaction>()) {
     assert_canonical_encode_decode(txn);
 }
-
 
 #[test]
 fn transaction_with_proof_bcs_roundtrip(txn_with_proof in any::<TransactionWithProof>()) {

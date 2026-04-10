@@ -5,12 +5,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod account;
 pub mod addresses;
-pub mod coins;
-pub mod diem;
 
-pub use account::*;
 pub use addresses::*;
-pub use coins::*;
-pub use diem::*;

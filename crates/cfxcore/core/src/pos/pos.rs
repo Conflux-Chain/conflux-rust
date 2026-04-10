@@ -41,7 +41,7 @@ use diem_types::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     PeerId,
 };
-use executor::{db_bootstrapper::maybe_bootstrap, vm::PosVM};
+use executor::db_bootstrapper::maybe_bootstrap;
 use futures::{
     channel::{
         mpsc::{self, channel},
@@ -209,7 +209,7 @@ pub fn setup_pos_environment(
 
     // If the DB hasn't been bootstrapped yet, commit genesis.
     if let Some(genesis) = get_genesis_txn(&node_config) {
-        maybe_bootstrap::<PosVM>(
+        maybe_bootstrap(
             &db_rw,
             genesis,
             Some(PivotBlockDecision {

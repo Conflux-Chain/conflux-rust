@@ -336,11 +336,6 @@ def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000, har
         'dir': os.path.join(datadir, 'pos_db', 'db'),
     }
     validator_config['consensus'] = {
-        'safety_rules': {
-            'service': {
-                'type': "local",
-            }
-        },
         'round_initial_timeout_ms': pos_round_time_ms,
     }
     if hardcoded_epoch_committee is not None:

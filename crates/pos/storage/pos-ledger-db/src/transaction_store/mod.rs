@@ -18,7 +18,6 @@ use crate::{
 };
 use anyhow::Result;
 use diem_types::{
-    account_address::AccountAddress,
     block_metadata::BlockMetadata,
     transaction::{Transaction, Version},
 };
@@ -32,24 +31,6 @@ pub(crate) struct TransactionStore {
 
 impl TransactionStore {
     pub fn new(db: Arc<DB>) -> Self { Self { db } }
-
-    /// Gets the version of a transaction by the sender `address` and
-    /// `sequence_number`.
-    pub fn lookup_transaction_by_account(
-        &self, address: AccountAddress, sequence_number: u64,
-        ledger_version: Version,
-    ) -> Result<Option<Version>> {
-        if let Some(version) = self
-            .db
-            .get::<TransactionByAccountSchema>(&(address, sequence_number))?
-        {
-            if version <= ledger_version {
-                return Ok(Some(version));
-            }
-        }
-
-        Ok(None)
-    }
 
     /// Get signed transaction given `version`
     pub fn get_transaction(&self, version: Version) -> Result<Transaction> {
