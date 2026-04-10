@@ -19,15 +19,13 @@ use crate::pos::{
 };
 use anyhow::Result;
 use cached_pos_ledger_db::CachedPosLedgerDB;
-use channel::diem_channel::Receiver;
 use diem_config::config::MempoolConfig;
 use diem_crypto::HashValue;
 use diem_infallible::{Mutex, RwLock};
 use diem_types::{
     account_address::AccountAddress, mempool_status::MempoolStatus,
-    on_chain_config::OnChainConfigPayload, term_state::PosState,
-    transaction::SignedTransaction, validator_verifier::ValidatorVerifier,
-    vm_status::DiscardedVMStatus,
+    term_state::PosState, transaction::SignedTransaction,
+    validator_verifier::ValidatorVerifier, vm_status::DiscardedVMStatus,
 };
 use futures::{
     channel::{
@@ -39,7 +37,6 @@ use futures::{
 };
 use network::node_table::NodeId;
 use std::{fmt, pin::Pin, sync::Arc, task::Waker, time::Instant};
-use subscription_service::ReconfigSubscription;
 use tokio::runtime::Handle;
 
 /// Struct that owns all dependencies required by shared mempool routines.
@@ -271,13 +268,3 @@ pub type MempoolClientSender = mpsc::Sender<(
     SignedTransaction,
     oneshot::Sender<Result<SubmissionStatus>>,
 )>;
-
-/// The mempool reconfig subscription no longer subscribes to any specific
-/// on-chain configs. Previously it subscribed to `DiemVersion` and `VMConfig`,
-/// but those Diem config types were dead code in Conflux PoS (commented out
-/// of `ON_CHAIN_CONFIG_REGISTRY` and never populated) so removing them has
-/// no behavioral effect.
-pub fn gen_mempool_reconfig_subscription(
-) -> (ReconfigSubscription, Receiver<(), OnChainConfigPayload>) {
-    ReconfigSubscription::subscribe_all("mempool", vec![], vec![])
-}

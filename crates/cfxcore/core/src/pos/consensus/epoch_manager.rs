@@ -38,7 +38,6 @@ use crate::pos::{
     protocol::network_sender::NetworkSender,
 };
 use anyhow::{anyhow, bail, ensure, Context};
-use channel::diem_channel;
 use consensus_types::{
     common::{Author, Round},
     epoch_retrieval::EpochRetrievalRequest,
@@ -53,7 +52,6 @@ use diem_types::{
     block_info::PivotBlockDecision,
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
-    on_chain_config::{OnChainConfigPayload, ValidatorSet},
     transaction::{SignedTransaction, TransactionPayload},
 };
 use futures::{
@@ -112,7 +110,6 @@ pub struct EpochManager {
     storage: Arc<dyn PersistentLivenessStorage>,
     safety_rules: Arc<RwLock<SafetyRules>>,
     processor: Option<RoundProcessor>,
-    reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     // Conflux PoW handler
     pow_handler: Arc<dyn PowInterface>,
     election_control: Arc<AtomicBool>,
@@ -135,7 +132,6 @@ impl EpochManager {
         txn_manager: Arc<dyn TxnManager>,
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
-        reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
         pow_handler: Arc<dyn PowInterface>,
         author: AccountAddress,
         tx_sender: mpsc::Sender<(
@@ -162,7 +158,6 @@ impl EpochManager {
             storage,
             safety_rules: Arc::new(RwLock::new(safety_rules)),
             processor: None,
-            reconfig_events,
             pow_handler,
             election_control: Arc::new(AtomicBool::new(true)),
             tx_sender,
@@ -341,7 +336,6 @@ impl EpochManager {
         //         ledger_info
         //     ))?;
         for ledger_info in proof.get_all_ledger_infos() {
-            let mut new_epoch = false;
             match self.processor_mut() {
                 RoundProcessor::Recovery(_) => {
                     bail!("start_new_epoch for Recovery processor");
@@ -351,7 +345,9 @@ impl EpochManager {
                         == p.epoch_state().epoch
                     {
                         p.sync_to_ledger_info(&ledger_info, peer_id).await?;
-                        new_epoch = true;
+                        let epoch_state = self.latest_epoch_state();
+                        self.start_processor_with_epoch_state(epoch_state)
+                            .await;
                     } else {
                         diem_error!(
                             "Unexpected epoch change: me={} get={}",
@@ -361,12 +357,18 @@ impl EpochManager {
                     }
                 }
             }
-            if new_epoch {
-                monitor!("reconfig", self.expect_new_epoch().await);
-            }
         }
 
         Ok(())
+    }
+
+    /// Load the newest `EpochState` from the persisted PoS state.
+    fn latest_epoch_state(&self) -> EpochState {
+        self.storage
+            .pos_ledger_db()
+            .get_latest_pos_state()
+            .epoch_state()
+            .clone()
     }
 
     async fn start_round_manager(
@@ -505,27 +507,13 @@ impl EpochManager {
         diem_info!(epoch = epoch, "SyncProcessor started");
     }
 
-    async fn start_processor(&mut self, payload: OnChainConfigPayload) {
-        let epoch_state: EpochState = payload.get().unwrap_or_else(|_| {
-            let validator_set: ValidatorSet = payload.get().unwrap();
-            EpochState::new(
-                payload.epoch(),
-                (&validator_set).into(),
-                // genesis pivot decision
-                self.storage
-                    .pos_ledger_db()
-                    .get_latest_ledger_info()
-                    .expect("non-empty ledger info")
-                    .ledger_info()
-                    .pivot_decision()
-                    .unwrap()
-                    .block_hash
-                    .as_bytes()
-                    .to_vec(),
-            )
-        });
-        diem_debug!("start_processor: epoch_state={:?}", epoch_state);
-
+    async fn start_processor_with_epoch_state(
+        &mut self, epoch_state: EpochState,
+    ) {
+        diem_debug!(
+            "start_processor_with_epoch_state: epoch_state={:?}",
+            epoch_state
+        );
         match self.storage.start() {
             LivenessStorageData::RecoveryData(initial_data) => {
                 self.start_round_manager(initial_data, epoch_state).await
@@ -739,17 +727,6 @@ impl EpochManager {
         }
     }
 
-    async fn expect_new_epoch(&mut self) {
-        diem_debug!("expect_new_epoch: start");
-        if let Some(payload) = self.reconfig_events.next().await {
-            diem_debug!("expect_new_epoch: receive event!");
-            self.start_processor(payload).await;
-            diem_debug!("expect_new_epoch: processor started!");
-        } else {
-            diem_error!("Reconfig sender dropped, unable to start new epoch.");
-        }
-    }
-
     pub async fn start(
         mut self, mut round_timeout_sender_rx: channel::Receiver<(u64, Round)>,
         mut proposal_timeout_sender_rx: channel::Receiver<(u64, Round)>,
@@ -758,8 +735,8 @@ impl EpochManager {
         mut test_command_receiver: channel::Receiver<TestCommand>,
         stopped: Arc<AtomicBool>,
     ) {
-        // initial start of the processor
-        self.expect_new_epoch().await;
+        self.start_processor_with_epoch_state(self.latest_epoch_state())
+            .await;
         diem_debug!("EpochManager main_loop starts");
         loop {
             if stopped.load(AtomicOrdering::SeqCst) {

@@ -13,24 +13,20 @@ use crate::pos::mempool::{
     counters,
     logging::{LogEntry, LogEvent, LogSchema},
     network::MempoolSyncMsg,
-    shared_mempool::{
-        transaction_validator::TransactionValidator,
-        types::{
-            notify_subscribers, ScheduledBroadcast, SharedMempool,
-            SharedMempoolNotification, SubmissionStatusBundle,
-        },
+    shared_mempool::types::{
+        notify_subscribers, ScheduledBroadcast, SharedMempool,
+        SharedMempoolNotification, SubmissionStatusBundle,
     },
     CommitNotification, CommitResponse, CommittedTransaction, ConsensusRequest,
     ConsensusResponse, SubmissionStatus,
 };
 use anyhow::Result;
 use cached_pos_ledger_db::CachedPosLedgerDB;
-use diem_infallible::{Mutex, RwLock};
+use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_metrics::HistogramTimer;
 use diem_types::{
     mempool_status::{MempoolStatus, MempoolStatusCode},
-    on_chain_config::OnChainConfigPayload,
     transaction::SignedTransaction,
 };
 use futures::{channel::oneshot, stream::FuturesUnordered};
@@ -334,7 +330,7 @@ fn log_txn_process_results(
 // intra-node communication handlers //
 // ================================= //
 
-pub(crate) async fn process_state_sync_request(
+pub(crate) async fn process_committed_transactions(
     mempool: Arc<Mutex<CoreMempool>>, req: CommitNotification,
 ) {
     let start_time = Instant::now();
@@ -469,25 +465,4 @@ async fn commit_txns(
             block_timestamp_usecs,
         ));
     }
-}
-
-/// Processes on-chain reconfiguration notification.
-pub(crate) async fn process_config_update(
-    config_update: OnChainConfigPayload,
-    _validator: Arc<RwLock<TransactionValidator>>,
-) {
-    diem_trace!(LogSchema::event_log(
-        LogEntry::ReconfigUpdate,
-        LogEvent::Process
-    )
-    .reconfig_update(config_update.clone()));
-
-    /*if let Err(e) = validator.write().restart(config_update) {
-        counters::VM_RECONFIG_UPDATE_FAIL_COUNT.inc();
-        diem_error!(LogSchema::event_log(
-            LogEntry::ReconfigUpdate,
-            LogEvent::VMUpdateFail
-        )
-        .error(&e));
-    }*/
 }
