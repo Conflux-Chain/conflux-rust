@@ -35,18 +35,37 @@ mod transaction_status;
 pub mod tx_pool;
 pub mod vote_params_info;
 
+pub use account::Account;
 pub use address::RpcAddress;
+pub use blame_info::BlameInfo;
 pub use block::{Block, BlockTransactions, Header};
 pub use chain_meta::ChainStaticMeta;
+pub use consensus_graph_states::*;
 pub use epoch_number::EpochNumber;
 pub use fee_history::CfxFeeHistory;
 pub use fee_history_cache_entry::FeeHistoryCacheEntry;
-pub use filter::CfxRpcLogFilter;
+pub use filter::{CfxRpcLogFilter, *};
 pub use log::Log;
 pub use phantom_block::PhantomBlock;
+pub use pos_economics::PoSEconomics;
 pub use receipt::Receipt;
+pub use reward_info::RewardInfo;
 pub use rpc_impl_configuration::RpcImplConfiguration;
+pub use sponsor_info::SponsorInfo;
+pub use stat_on_gas_load::*;
+pub use status::Status;
+pub use storage_collateral_info::StorageCollateralInfo;
+pub use sync_graph_states::*;
+pub use token_supply_info::TokenSupplyInfo;
+pub use trace::{LocalizedBlockTrace, LocalizedTrace};
+pub use trace_filter::TraceFilter;
 pub use transaction::Transaction;
+pub use transaction_request::*;
 pub use transaction_status::{PendingReason, TransactionStatus};
+pub use tx_pool::*;
+pub use vote_params_info::VoteParamsInfo;
+
+pub use cfx_rpc_primitives::Bytes;
+pub use primitives::BlockHashOrEpochNumber;
 
 pub use subscriber_id::{random, SubId};

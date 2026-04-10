@@ -9,7 +9,7 @@ use cfx_types::U256;
 use primitives::SponsorInfo as PrimitiveSponsorInfo;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SponsorInfo {
     /// This is the address of the sponsor for gas cost of the contract.

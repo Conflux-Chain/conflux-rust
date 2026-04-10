@@ -42,11 +42,7 @@ fn to_blocks_to_commit(
                 let mut cs = ChangeSet::new();
 
                 let txn_hash = txn_to_commit.transaction().hash();
-                let state_root_hash = db.state_store.put_account_state_sets(
-                    vec![txn_to_commit.account_states().clone()],
-                    cur_ver,
-                    &mut cs,
-                )?[0];
+                let state_root_hash = Default::default();
                 let event_root_hash = db.event_store.put_events(
                     cur_ver,
                     txn_to_commit.events(),
@@ -156,18 +152,4 @@ pub fn arb_blocks_to_commit(
         2,  /* max_txn_per_block */
         10, /* max_blocks */
     )
-}
-
-pub fn arb_mock_genesis(
-) -> impl Strategy<Value = (TransactionToCommit, LedgerInfoWithSignatures)> {
-    arb_blocks_to_commit_impl(
-        1, /* num_accounts */
-        1, /* max_txn_per_block */
-        1, /* max_blocks */
-    )
-    .prop_map(|blocks| {
-        let (block, ledger_info_with_sigs) = &blocks[0];
-
-        (block[0].clone(), ledger_info_with_sigs.clone())
-    })
 }

@@ -5,7 +5,7 @@
 use cfx_types::{H256, U64};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ConsensusGraphBlockState {
     pub block_hash: H256,
@@ -15,7 +15,7 @@ pub struct ConsensusGraphBlockState {
     pub adaptive: bool,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ConsensusGraphBlockExecutionState {
     pub block_hash: H256,
@@ -25,7 +25,7 @@ pub struct ConsensusGraphBlockExecutionState {
     pub state_valid: bool,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 /// This struct maintains some inner state of consensus graph.
 pub struct ConsensusGraphStates {

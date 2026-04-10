@@ -11,10 +11,12 @@ use diem_config::config::NodeConfig;
 use diem_crypto::{ed25519::Ed25519PrivateKey, PrivateKey, Uniform};
 use diem_types::{
     account_address::AccountAddress,
-    account_config::XUS_NAME,
     chain_id::ChainId,
     mempool_status::MempoolStatusCode,
-    transaction::{GovernanceRole, RawTransaction, Script, SignedTransaction},
+    transaction::{
+        GovernanceRole, RawTransaction, RetirePayload, SignedTransaction,
+        TransactionPayload,
+    },
 };
 use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, SeedableRng};
@@ -75,9 +77,12 @@ impl TestTransaction {
     fn make_signed_transaction_impl(
         &self, max_gas_amount: u64, exp_timestamp_secs: u64,
     ) -> SignedTransaction {
-        let raw_txn = RawTransaction::new_script(
+        let raw_txn = RawTransaction::new(
             TestTransaction::get_address(self.address),
-            Script::new(vec![], vec![], vec![]),
+            TransactionPayload::Retire(RetirePayload {
+                node_id: TestTransaction::get_address(self.address),
+                votes: 0,
+            }),
             exp_timestamp_secs,
             ChainId::test(),
         );

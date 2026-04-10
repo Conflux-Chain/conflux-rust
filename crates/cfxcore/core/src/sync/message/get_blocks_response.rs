@@ -151,8 +151,10 @@ impl Decodable for GetBlocksWithPublicResponse {
 
         for i in 0..rlp_blocks.item_count()? {
             let rlp_block = rlp_blocks.at(i)?;
-            let block = Block::decode_with_tx_public(&rlp_block)
-                .expect("Wrong block rlp format!");
+            let block =
+                Block::decode_with_tx_public(&rlp_block).map_err(|_| {
+                    DecoderError::Custom("invalid block rlp in response")
+                })?;
             blocks.push(block);
         }
 

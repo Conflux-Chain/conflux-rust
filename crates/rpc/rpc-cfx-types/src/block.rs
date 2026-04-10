@@ -4,9 +4,10 @@
 
 use crate::{RpcAddress, Transaction};
 use cfx_rpc_primitives::Bytes;
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
 use cfx_types::{H160, H256, U256, U64};
 use cfx_util_macros::bail;
-use jsonrpc_core::Error as RpcError;
+use jsonrpsee::types::ErrorObjectOwned;
 use primitives::{Block as PrimitiveBlock, BlockHeaderBuilder};
 use serde::{
     de::{Deserializer, Error, Unexpected},
@@ -17,7 +18,7 @@ use std::{convert::TryInto, sync::Arc};
 
 use primitives::pos::PosBlockId;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum BlockTransactions {
     /// Only hashes
     Hashes(Vec<H256>),
@@ -71,7 +72,7 @@ impl<'a> Deserialize<'a> for BlockTransactions {
     }
 }
 
-#[derive(PartialEq, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
     /// Hash of the block
@@ -130,16 +131,16 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn into_primitive(self) -> Result<PrimitiveBlock, RpcError> {
+    pub fn into_primitive(self) -> Result<PrimitiveBlock, ErrorObjectOwned> {
         let miner: H160 = match self.miner.try_into() {
             Ok(m) => m,
-            Err(_) => bail!(RpcError::invalid_params(
+            Err(_) => bail!(invalid_params_msg(
                 "Invalid params: expected a valid base32-encoded Conflux address",
             )),
         };
 
         match self.transactions {
-            BlockTransactions::Hashes(_) => Err(RpcError::invalid_params(
+            BlockTransactions::Hashes(_) => Err(invalid_params_msg(
                 "Invalid params: expected a array of transaction objects.",
             )),
             BlockTransactions::Full(vec) => Ok(PrimitiveBlock::new(
@@ -172,7 +173,7 @@ impl Block {
                     let mut transactions = Vec::new();
                     for tx in vec.into_iter() {
                         let signed_tx = tx.into_signed().map_err(|e| {
-                            RpcError::invalid_params(format!("Invalid params: failed to convert from a rpc transaction to signed transaction {:?}", e))
+                            invalid_params_msg(&format!("Invalid params: failed to convert from a rpc transaction to signed transaction {:?}", e))
                         })?;
                         transactions.push(Arc::new(signed_tx));
                     }

@@ -15,14 +15,14 @@ use cfx_parameters::{
     RATIO_BASE_TEN,
 };
 use cfx_rpc_primitives::Bytes;
-use cfx_rpc_utils::error::jsonrpc_error_helpers::{
-    invalid_params, invalid_params_check,
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::{
+    invalid_params, invalid_params_check, invalid_params_msg,
 };
 use cfx_types::{Address, AddressSpaceUtil, U256, U64};
 use cfx_util_macros::bail;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
-use jsonrpc_core::Error as RpcError;
+use jsonrpsee::types::ErrorObjectOwned;
 use primitives::{
     transaction::{
         Action, Cip1559Transaction, Cip2930Transaction, NativeTransaction,
@@ -69,7 +69,7 @@ pub struct TransactionRequest {
     pub epoch_height: Option<U256>,
 }
 
-#[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Default, PartialEq, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct EstimateGasAndCollateralResponse {
     /// The recommended gas_limit.
@@ -80,7 +80,7 @@ pub struct EstimateGasAndCollateralResponse {
     pub storage_collateralized: U64,
 }
 
-#[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Default, PartialEq, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckBalanceAgainstTransactionResponse {
     /// Whether the account should pay transaction fee by self.
@@ -94,7 +94,7 @@ pub struct CheckBalanceAgainstTransactionResponse {
 impl TransactionRequest {
     pub fn check_rpc_address_network(
         &self, param_name: &str, expected: &Network,
-    ) -> Result<(), RpcError> {
+    ) -> Result<(), ErrorObjectOwned> {
         let rpc_request_network = invalid_params_check(
             param_name,
             check_two_rpc_address_network_match(
@@ -226,13 +226,16 @@ impl TransactionRequest {
 
     pub fn sign_call(
         self, epoch_height: u64, chain_id: u32, max_gas: Option<U256>,
-    ) -> Result<SignedTransaction, RpcError> {
+    ) -> Result<SignedTransaction, ErrorObjectOwned> {
         let max_gas = max_gas.unwrap_or(DEFAULT_CFX_GAS_CALL_REQUEST.into());
         let gas = self.gas.unwrap_or(max_gas);
         if gas > max_gas {
             bail!(invalid_params(
                 "gas",
-                format!("specified gas is larger than max gas {:?}", max_gas)
+                Some(format!(
+                    "specified gas is larger than max gas {:?}",
+                    max_gas
+                ))
             ))
         }
         let transaction_type = self.transaction_type();
@@ -296,9 +299,10 @@ impl TransactionRequest {
             }),
             // TODO(7702): support 7702 transaction
             x => {
-                return Err(
-                    invalid_params("Unrecognized transaction type", x).into()
-                );
+                return Err(invalid_params_msg(&format!(
+                    "Unrecognized transaction type: {}",
+                    x
+                )));
             }
         };
 

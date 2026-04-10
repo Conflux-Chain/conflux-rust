@@ -4,11 +4,40 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-use crate::config::{PeerRole, RoleType};
+use crate::config::RoleType;
 use diem_types::PeerId;
 use serde::{Deserialize, Serialize, Serializer};
 use short_hex_str::AsShortHexStr;
 use std::{cmp::Ordering, fmt};
+
+/// Represents the Role that a peer plays in the network ecosystem rather than
+/// the type of node.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+)]
+pub enum PeerRole {
+    Validator = 0,
+    PreferredUpstream,
+    Upstream,
+    ValidatorFullNode,
+    Downstream,
+    Known,
+    Unknown,
+}
+
+impl Default for PeerRole {
+    /// Default to least trusted
+    fn default() -> Self { PeerRole::Unknown }
+}
 
 /// A grouping of common information between all networking code for logging.
 /// This should greatly reduce the groupings between these given everywhere, and
@@ -253,6 +282,51 @@ impl NetworkId {
     ) -> std::result::Result<S::Ok, S::Error>
     where S: Serializer {
         self.as_str().serialize(serializer)
+    }
+}
+
+/// Identifier of a node, represented as (network_id, peer_id)
+#[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct PeerNetworkId(pub NodeNetworkId, pub PeerId);
+
+impl PeerNetworkId {
+    pub fn network_id(&self) -> NodeNetworkId { self.0.clone() }
+
+    pub fn raw_network_id(&self) -> NetworkId { self.0.network_id() }
+
+    pub fn peer_id(&self) -> PeerId { self.1 }
+
+    #[cfg(any(test, feature = "fuzzing"))]
+    pub fn random() -> Self {
+        Self(
+            NodeNetworkId::new(NetworkId::default(), 0),
+            PeerId::random(),
+        )
+    }
+
+    #[cfg(any(test, feature = "fuzzing"))]
+    pub fn random_validator() -> Self {
+        Self(
+            NodeNetworkId::new(NetworkId::Validator, 0),
+            PeerId::random(),
+        )
+    }
+}
+
+impl fmt::Debug for PeerNetworkId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl fmt::Display for PeerNetworkId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "PeerId:{}, NodeNetworkId:({})",
+            self.peer_id().short_str(),
+            self.raw_network_id()
+        )
     }
 }
 

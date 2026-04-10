@@ -11,15 +11,9 @@ use crate::{DBReaderForPoW, DbReader, StartupInfo, TreeState};
 use anyhow::Result;
 use diem_crypto::HashValue;
 use diem_types::{
-    account_address::AccountAddress,
-    account_state_blob::{AccountStateBlob, AccountStateWithProof},
-    committed_block::CommittedBlock,
-    contract_event::ContractEvent,
-    epoch_change::EpochChangeProof,
-    ledger_info::LedgerInfoWithSignatures,
-    proof::{AccumulatorConsistencyProof, SparseMerkleProof},
+    committed_block::CommittedBlock, contract_event::ContractEvent,
+    epoch_change::EpochChangeProof, ledger_info::LedgerInfoWithSignatures,
     reward_distribution_event::RewardDistributionEventV2,
-    transaction::{TransactionListWithProof, TransactionWithProof, Version},
 };
 
 /// This is a mock of the dbreader in tests.
@@ -32,20 +26,7 @@ impl DbReader for MockDbReader {
         unimplemented!()
     }
 
-    fn get_transactions(
-        &self, _start_version: Version, _batch_size: u64,
-        _ledger_version: Version, _fetch_events: bool,
-    ) -> Result<TransactionListWithProof> {
-        unimplemented!()
-    }
-
     fn get_block_timestamp(&self, _version: u64) -> Result<u64> {
-        unimplemented!()
-    }
-
-    fn get_latest_account_state(
-        &self, _address: AccountAddress,
-    ) -> Result<Option<AccountStateBlob>> {
         unimplemented!()
     }
 
@@ -57,49 +38,6 @@ impl DbReader for MockDbReader {
     fn get_startup_info(
         &self, _need_pos_state: bool,
     ) -> Result<Option<StartupInfo>> {
-        unimplemented!()
-    }
-
-    fn get_txn_by_account(
-        &self, _address: AccountAddress, _seq_num: u64,
-        _ledger_version: Version, _fetch_events: bool,
-    ) -> Result<Option<TransactionWithProof>> {
-        unimplemented!()
-    }
-
-    fn get_state_proof_with_ledger_info(
-        &self, _known_version: u64, _ledger_info: LedgerInfoWithSignatures,
-    ) -> Result<(EpochChangeProof, AccumulatorConsistencyProof)> {
-        unimplemented!()
-    }
-
-    fn get_state_proof(
-        &self, _known_version: u64,
-    ) -> Result<(
-        LedgerInfoWithSignatures,
-        EpochChangeProof,
-        AccumulatorConsistencyProof,
-    )> {
-        unimplemented!()
-    }
-
-    fn get_account_state_with_proof(
-        &self, _address: AccountAddress, _version: Version,
-        _ledger_version: Version,
-    ) -> Result<AccountStateWithProof> {
-        unimplemented!()
-    }
-
-    fn get_account_state_with_proof_by_version(
-        &self, _address: AccountAddress, _version: Version,
-    ) -> Result<(
-        Option<AccountStateBlob>,
-        SparseMerkleProof<AccountStateBlob>,
-    )> {
-        unimplemented!()
-    }
-
-    fn get_latest_state_root(&self) -> Result<(Version, HashValue)> {
         unimplemented!()
     }
 

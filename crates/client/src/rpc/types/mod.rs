@@ -3,43 +3,39 @@
 // See http://www.gnu.org/licenses/
 
 pub mod cfx;
-mod constants;
 
-pub use self::{
-    cfx::{
-        address::{self, check_two_rpc_address_network_match, RpcAddress},
-        blame_info::BlameInfo,
-        block::{Block, BlockTransactions, Header},
-        consensus_graph_states::{
-            ConsensusGraphBlockExecutionState, ConsensusGraphBlockState,
-            ConsensusGraphStates,
-        },
-        epoch_number::{BlockHashOrEpochNumber, EpochNumber},
-        filter::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, RevertTo},
-        log::Log,
-        pos_economics::PoSEconomics,
-        pubsub,
-        receipt::Receipt,
-        reward_info::RewardInfo,
-        stat_on_gas_load::StatOnGasLoad,
-        status::Status,
-        storage_collateral_info::StorageCollateralInfo,
-        sync_graph_states::{SyncGraphBlockState, SyncGraphStates},
-        token_supply_info::TokenSupplyInfo,
-        transaction::{PackedOrExecuted, Transaction},
-        transaction_request::{
-            self, CheckBalanceAgainstTransactionResponse,
-            EstimateGasAndCollateralResponse, TransactionRequest,
-            DEFAULT_CFX_GAS_CALL_REQUEST,
-        },
-        tx_pool::{
-            AccountPendingInfo, AccountPendingTransactions,
-            TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,
-        },
-        vote_params_info::VoteParamsInfo,
-        Account, CfxFeeHistory, SponsorInfo,
+pub use self::cfx::{
+    address::{self, check_two_rpc_address_network_match, RpcAddress},
+    blame_info::BlameInfo,
+    block::{Block, BlockTransactions, Header},
+    consensus_graph_states::{
+        ConsensusGraphBlockExecutionState, ConsensusGraphBlockState,
+        ConsensusGraphStates,
     },
-    constants::MAX_GAS_CALL_REQUEST,
+    epoch_number::{BlockHashOrEpochNumber, EpochNumber},
+    filter::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, RevertTo},
+    log::Log,
+    pos_economics::PoSEconomics,
+    pubsub,
+    receipt::Receipt,
+    reward_info::RewardInfo,
+    stat_on_gas_load::StatOnGasLoad,
+    status::Status,
+    storage_collateral_info::StorageCollateralInfo,
+    sync_graph_states::{SyncGraphBlockState, SyncGraphStates},
+    token_supply_info::TokenSupplyInfo,
+    transaction::{PackedOrExecuted, Transaction},
+    transaction_request::{
+        self, CheckBalanceAgainstTransactionResponse,
+        EstimateGasAndCollateralResponse, TransactionRequest,
+        DEFAULT_CFX_GAS_CALL_REQUEST,
+    },
+    tx_pool::{
+        AccountPendingInfo, AccountPendingTransactions,
+        TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,
+    },
+    vote_params_info::VoteParamsInfo,
+    Account, CfxFeeHistory, SponsorInfo,
 };
 pub use cfx_rpc_cfx_types::{
     pos,

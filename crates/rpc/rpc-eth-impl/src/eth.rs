@@ -19,8 +19,15 @@ use cfx_rpc_eth_types::{
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::{
     error::{
-        errors::*, jsonrpc_error_helpers::*,
-        jsonrpsee_error_helpers::internal_error as jsonrpsee_internal_error,
+        errors::{EthApiError, RpcInvalidTransactionError, RpcPoolError},
+        jsonrpc_error_helpers::{
+            geth_call_execution_error, request_rejected_in_catch_up_mode,
+            unknown_block,
+        },
+        jsonrpsee_error_helpers::{
+            internal_error, internal_error_with_data, invalid_input_rpc_err,
+            invalid_params, invalid_params_rpc_err,
+        },
     },
     helpers::SpawnBlocking,
 };
@@ -37,8 +44,7 @@ use cfxcore::{
     SharedTransactionPool,
 };
 use cfxcore_errors::ProviderBlockError;
-use jsonrpc_core::Error as RpcError;
-use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
+use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned as RpcError};
 use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action, EpochNumber,
     StorageKey, StorageValue, TransactionStatus, TransactionWithSignature,
@@ -314,21 +320,21 @@ impl EthApi {
         &self, b: &PhantomBlock, idx: usize, prior_log_index: &mut usize,
     ) -> CoreResult<Receipt> {
         if b.transactions.len() != b.receipts.len() {
-            return Err(internal_error(
+            return Err(internal_error_with_data(
                 "Inconsistent state: transactions and receipts length mismatch",
             )
             .into());
         }
 
         if b.transactions.len() != b.errors.len() {
-            return Err(internal_error(
+            return Err(internal_error_with_data(
                 "Inconsistent state: transactions and errors length mismatch",
             )
             .into());
         }
 
         if idx >= b.transactions.len() {
-            return Err(internal_error(
+            return Err(internal_error_with_data(
                 "Inconsistent state: tx index out of bound",
             )
             .into());
@@ -338,7 +344,7 @@ impl EthApi {
         let receipt = &b.receipts[idx];
 
         if receipt.logs.iter().any(|l| l.space != Space::Ethereum) {
-            return Err(internal_error(
+            return Err(internal_error_with_data(
                 "Inconsistent state: native tx in phantom block",
             )
             .into());
@@ -548,7 +554,7 @@ impl EthApi {
         let epoch_num = EpochNumber::LatestState;
         match consensus_graph.get_height_from_epoch_number(epoch_num.into()) {
             Ok(height) => Ok(height.into()),
-            Err(e) => Err(RpcError::invalid_params(e).into()),
+            Err(e) => Err(invalid_params_rpc_err(e, None::<()>).into()),
         }
     }
 
@@ -620,7 +626,7 @@ impl EthApi {
                         .get_phantom_block_by_hash(
                             &hash, false, /* include_traces */
                         )
-                        .map_err(RpcError::invalid_params)?
+                        .map_err(|e| invalid_params_rpc_err(e, None::<()>))?
                 }
                 _ => {
                     match self.consensus_graph().get_phantom_block_by_number(
@@ -631,7 +637,10 @@ impl EthApi {
                         Ok(pb) => pb,
                         Err(e) => match e {
                             ProviderBlockError::Common(e) => {
-                                return Err(RpcError::invalid_params(e).into());
+                                return Err(invalid_params_rpc_err(
+                                    e, None::<()>,
+                                )
+                                .into());
                             }
                             ProviderBlockError::EpochNumberTooLarge => None,
                         },
@@ -794,7 +803,7 @@ impl EthApi {
         let newest_height: u64 = self
             .consensus_graph()
             .get_height_from_epoch_number(epoch_num)
-            .map_err(RpcError::invalid_params)?;
+            .map_err(|e| invalid_params_rpc_err(e, None::<()>))?;
 
         if newest_block == BlockNumber::Latest {
             let fetch_block_by_hash = |height| {
@@ -803,7 +812,7 @@ impl EthApi {
 
             let latest_block = self
                 .fetch_block_by_height(newest_height)
-                .map_err(|e| internal_rpc_err(e.to_string()))?;
+                .map_err(|e| internal_error_with_data(e.to_string()))?;
 
             self.fee_history_cache
                 .update_to_latest_block(
@@ -812,7 +821,7 @@ impl EthApi {
                     block_count.as_u64(),
                     fetch_block_by_hash,
                 )
-                .map_err(|e| internal_rpc_err(e.to_string()))?;
+                .map_err(|e| internal_error_with_data(e.to_string()))?;
         }
 
         let mut fee_history = FeeHistory::new();
@@ -834,7 +843,7 @@ impl EthApi {
                 let height = end_block - i as u64;
                 let block = self
                     .fetch_block_by_height(height)
-                    .map_err(RpcError::invalid_params)?;
+                    .map_err(|e| invalid_params_rpc_err(e, None::<()>))?;
 
                 // Internal error happens only if the fetch header has
                 // inconsistent block height
@@ -845,7 +854,7 @@ impl EthApi {
                         &block.pivot_header,
                         block.transactions.iter().map(|x| &**x),
                     )
-                    .map_err(|_| RpcError::internal_error())?;
+                    .map_err(|_| internal_error())?;
             } else {
                 fee_history
                     .push_front_entry(&entry.unwrap(), &reward_percentiles)
@@ -898,7 +907,7 @@ impl EthApi {
                 None,
                 false, /* include_traces */
             )
-            .map_err(RpcError::invalid_params)?;
+            .map_err(|e| invalid_params_rpc_err(e, None::<()>))?;
 
         let phantom_block = match maybe_block {
             None => return Ok(self.get_tx_from_txpool(hash)),
@@ -958,7 +967,7 @@ impl EthApi {
                 None,
                 false, /* include_traces */
             )
-            .map_err(RpcError::invalid_params)?;
+            .map_err(|e| invalid_params_rpc_err(e, None::<()>))?;
 
         let phantom_block = match maybe_block {
             None => return Ok(None),
@@ -1005,7 +1014,7 @@ impl EthApi {
         // If the results does not fit into `max_limit`, report an error
         if let Some(max_limit) = self.config.get_logs_filter_max_limit {
             if logs.len() > max_limit {
-                bail!(invalid_params("filter", format!("This query results in too many logs, max limitation is {}, please use a smaller block range", max_limit)));
+                bail!(invalid_params("filter", Some(format!("This query results in too many logs, max limitation is {}, please use a smaller block range", max_limit))));
             }
         }
 
@@ -1073,7 +1082,7 @@ impl SpawnBlocking for EthApi {
 impl EthApi {
     pub fn async_transaction_by_hash(
         &self, hash: H256,
-    ) -> impl Future<Output = Result<Option<Transaction>, ErrorObjectOwned>> + Send
+    ) -> impl Future<Output = Result<Option<Transaction>, RpcError>> + Send
     {
         let self_clone = self.clone();
         async move {
@@ -1207,7 +1216,7 @@ impl EthApiServer for EthApi {
         &self, hash: H256,
     ) -> RpcResult<Option<Bytes>> {
         let _ = hash;
-        Err(jsonrpsee_internal_error("Not implemented"))
+        Err(internal_error_with_data("Not implemented"))
     }
 
     /// Returns the information about a transaction requested by transaction
@@ -1224,7 +1233,7 @@ impl EthApiServer for EthApi {
         &self, hash: H256, index: Index,
     ) -> RpcResult<Option<Bytes>> {
         let _ = (hash, index);
-        Err(jsonrpsee_internal_error("Not implemented"))
+        Err(internal_error_with_data("Not implemented"))
     }
 
     /// Returns information about a transaction by block hash and transaction
@@ -1243,7 +1252,7 @@ impl EthApiServer for EthApi {
         &self, number: BlockNumberOrTag, index: Index,
     ) -> RpcResult<Option<Bytes>> {
         let _ = (number, index);
-        Err(jsonrpsee_internal_error("Not implemented"))
+        Err(internal_error_with_data("Not implemented"))
     }
 
     /// Returns information about a transaction by block number and transaction
@@ -1261,7 +1270,7 @@ impl EthApiServer for EthApi {
         &self, address: Address, nonce: U64,
     ) -> RpcResult<Option<Transaction>> {
         let _ = (address, nonce);
-        Err(jsonrpsee_internal_error("Not implemented"))
+        Err(internal_error_with_data("Not implemented"))
     }
 
     /// Returns the receipt of a transaction by transaction hash.
@@ -1310,13 +1319,13 @@ impl EthApiServer for EthApi {
         &self, hash: BlockNumberOrTag,
     ) -> RpcResult<Option<Header>> {
         let _ = hash;
-        Err(jsonrpsee_internal_error("Not implemented"))
+        Err(internal_error_with_data("Not implemented"))
     }
 
     /// Returns the block's header at given hash.
     async fn header_by_hash(&self, hash: H256) -> RpcResult<Option<Header>> {
         let _ = hash;
-        Err(jsonrpsee_internal_error("Not implemented"))
+        Err(internal_error_with_data("Not implemented"))
     }
 
     /// `eth_simulateV1` executes an arbitrary number of transactions on top of
@@ -1327,7 +1336,7 @@ impl EthApiServer for EthApi {
     ) -> RpcResult<Vec<SimulatedBlock>> {
         let _ = block_number;
         let _ = opts;
-        Err(jsonrpsee_internal_error("Not implemented"))
+        Err(internal_error_with_data("Not implemented"))
     }
 
     /// Executes a new message call immediately without creating a transaction
@@ -1356,7 +1365,7 @@ impl EthApiServer for EthApi {
         let _ = bundle;
         let _ = state_context;
         let _ = state_override;
-        Err(jsonrpsee_internal_error("Not implemented"))
+        Err(internal_error_with_data("Not implemented"))
     }
 
     /// Generates an access list for a transaction.
@@ -1380,7 +1389,7 @@ impl EthApiServer for EthApi {
     ) -> RpcResult<AccessListResult> {
         let _ = block_number;
         let _ = request;
-        Err(jsonrpsee_internal_error("Not implemented"))
+        Err(internal_error_with_data("Not implemented"))
     }
 
     /// Generates and returns an estimate of how much gas is necessary to allow
@@ -1477,7 +1486,7 @@ impl EthApiServer for EthApi {
         &self, request: TransactionRequest,
     ) -> RpcResult<H256> {
         let _ = request;
-        Err(jsonrpsee_internal_error("Not implemented"))
+        Err(internal_error_with_data("Not implemented"))
     }
 
     /// Sends signed transaction, returning its hash.
@@ -1513,7 +1522,7 @@ impl EthApiServer for EthApi {
     /// + len(message) + message))).
     async fn sign(&self, address: Address, message: Bytes) -> RpcResult<Bytes> {
         let _ = (address, message);
-        Err(jsonrpsee_internal_error("Not implemented"))
+        Err(internal_error_with_data("Not implemented"))
     }
 
     /// Signs a transaction that can be submitted to the network at a later time
@@ -1522,7 +1531,7 @@ impl EthApiServer for EthApi {
         &self, transaction: TransactionRequest,
     ) -> RpcResult<Bytes> {
         let _ = transaction;
-        Err(jsonrpsee_internal_error("Not implemented"))
+        Err(internal_error_with_data("Not implemented"))
     }
 
     async fn logs(&self, filter: Filter) -> RpcResult<Vec<Log>> {

@@ -54,60 +54,6 @@ proptest! {
     }
 
     #[test]
-    fn test_get_transaction_iter(
-        universe in any_with::<AccountInfoUniverse>(3),
-        gens in vec(
-            (any::<Index>(), any::<SignatureCheckedTransactionGen>()),
-            1..10
-        ),
-    ) {
-        let tmp_dir = TempPath::new();
-        let db = PosLedgerDB::new_for_test(&tmp_dir);
-        let store = &db.transaction_store;
-        let txns = init_store(universe, gens, &store);
-
-        let total_num_txns = txns.len();
-
-        let actual = store
-            .get_transaction_iter(0, total_num_txns)
-            .unwrap()
-            .collect::<Result<Vec<_>>>()
-            .unwrap();
-        prop_assert_eq!(actual, txns.clone());
-
-        let actual = store
-            .get_transaction_iter(0, total_num_txns + 1)
-            .unwrap()
-            .collect::<Result<Vec<_>>>()
-            .unwrap();
-        prop_assert_eq!(actual, txns.clone());
-
-        let actual = store
-            .get_transaction_iter(0, 0)
-            .unwrap()
-            .collect::<Result<Vec<_>>>()
-            .unwrap();
-        prop_assert!(actual.is_empty());
-
-        if total_num_txns > 0 {
-            let actual = store
-                .get_transaction_iter(0, total_num_txns - 1)
-                .unwrap()
-                .collect::<Result<Vec<_>>>()
-                .unwrap();
-            prop_assert_eq!(
-                actual,
-                txns
-                    .into_iter()
-                    .take(total_num_txns as usize - 1)
-                    .collect::<Vec<_>>()
-            );
-        }
-
-        prop_assert!(store.get_transaction_iter(10, usize::max_value()).is_err());
-    }
-
-    #[test]
     fn test_get_block_metadata(
         txns in vec(
             prop_oneof![

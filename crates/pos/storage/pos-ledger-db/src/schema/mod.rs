@@ -21,16 +21,12 @@ pub(crate) mod committed_block_by_view;
 pub(crate) mod epoch_by_version;
 pub(crate) mod event;
 pub(crate) mod event_accumulator;
-pub(crate) mod event_by_key;
 pub(crate) mod event_by_version;
-pub(crate) mod jellyfish_merkle_node;
-pub(crate) mod ledger_counters;
 pub(crate) mod ledger_info;
 pub(crate) mod ledger_info_by_block;
 pub(crate) mod ledger_info_by_voted_block;
 pub(crate) mod pos_state;
 pub(crate) mod reward_event;
-pub(crate) mod stale_node_index;
 pub(crate) mod transaction;
 pub(crate) mod transaction_accumulator;
 pub(crate) mod transaction_by_account;
@@ -38,9 +34,12 @@ pub(crate) mod transaction_info;
 
 pub const EPOCH_BY_VERSION_CF_NAME: ColumnFamilyName = "epoch_by_version";
 pub const EVENT_ACCUMULATOR_CF_NAME: ColumnFamilyName = "event_accumulator";
-pub const EVENT_BY_KEY_CF_NAME: ColumnFamilyName = "event_by_key";
 pub const EVENT_BY_VERSION_CF_NAME: ColumnFamilyName = "event_by_version";
 pub const EVENT_CF_NAME: ColumnFamilyName = "event";
+// These CF names are kept for backward compatibility with existing RocksDB
+// instances. The column families still need to be listed to open the DB,
+// even though no code reads/writes them anymore.
+pub const EVENT_BY_KEY_CF_NAME: ColumnFamilyName = "event_by_key";
 pub const JELLYFISH_MERKLE_NODE_CF_NAME: ColumnFamilyName =
     "jellyfish_merkle_node";
 pub const LEDGER_COUNTERS_CF_NAME: ColumnFamilyName = "ledger_counters";
@@ -73,16 +72,6 @@ fn ensure_slice_len_eq(data: &[u8], len: usize) -> Result<()> {
     Ok(())
 }
 
-fn ensure_slice_len_gt(data: &[u8], len: usize) -> Result<()> {
-    ensure!(
-        data.len() > len,
-        "Unexpected data len {}, expected to be greater than {}.",
-        data.len(),
-        len,
-    );
-    Ok(())
-}
-
 #[cfg(feature = "fuzzing")]
 pub mod fuzzing {
     use schemadb::schema::{KeyCodec, Schema, ValueCodec};
@@ -106,24 +95,11 @@ pub mod fuzzing {
                 super::event_accumulator::EventAccumulatorSchema,
                 data
             );
-            decode_key_value!(super::event_by_key::EventByKeySchema, data);
             decode_key_value!(
                 super::event_by_version::EventByVersionSchema,
                 data
             );
-            decode_key_value!(
-                super::jellyfish_merkle_node::JellyfishMerkleNodeSchema,
-                data
-            );
-            decode_key_value!(
-                super::ledger_counters::LedgerCountersSchema,
-                data
-            );
             decode_key_value!(super::ledger_info::LedgerInfoSchema, data);
-            decode_key_value!(
-                super::stale_node_index::StaleNodeIndexSchema,
-                data
-            );
             decode_key_value!(super::transaction::TransactionSchema, data);
             decode_key_value!(
                 super::transaction_accumulator::TransactionAccumulatorSchema,

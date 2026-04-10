@@ -8,10 +8,11 @@ use cfx_rpc_cfx_types::{
     RpcAddress,
 };
 use cfx_rpc_primitives::Bytes;
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::internal_error;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use cfx_util_macros::bail;
 use cfx_vm_types::{CallType, CreateType};
-use jsonrpc_core::Error as JsonRpcError;
+use jsonrpsee::types::ErrorObjectOwned;
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use std::{collections::HashMap, convert::TryFrom, fmt};
 
@@ -228,10 +229,10 @@ impl Serialize for LocalizedTrace {
 impl LocalizedTrace {
     pub fn set_result(
         &mut self, result: Option<VmAction>,
-    ) -> Result<(), JsonRpcError> {
+    ) -> Result<(), ErrorObjectOwned> {
         if !matches!(self.result, ActionResult::None) {
             // One action matches exactly one result.
-            bail!(JsonRpcError::internal_error());
+            bail!(internal_error());
         }
         if result.is_none() {
             // If the result is None, it means the action has no result.
@@ -242,7 +243,7 @@ impl LocalizedTrace {
         match result {
             VmAction::CallResult(call_result) => {
                 if !matches!(self.action, Action::Call(_)) {
-                    bail!(JsonRpcError::internal_error());
+                    bail!(internal_error());
                 }
                 let gas =
                     self.action.gas().expect("call action should have gas");
@@ -266,7 +267,7 @@ impl LocalizedTrace {
             }
             VmAction::CreateResult(create_result) => {
                 if !matches!(self.action, Action::Create(_)) {
-                    bail!(JsonRpcError::internal_error());
+                    bail!(internal_error());
                 }
                 // FIXME(lpl): Check if `return_data` is `code`.
                 let gas =
@@ -290,7 +291,7 @@ impl LocalizedTrace {
                     _ => {}
                 }
             }
-            _ => bail!(JsonRpcError::internal_error()),
+            _ => bail!(internal_error()),
         }
         Ok(())
     }
@@ -425,7 +426,7 @@ impl LocalizedSetAuthTrace {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct EpochTrace {
     cfx_traces: Vec<CfxLocalizedTrace>,

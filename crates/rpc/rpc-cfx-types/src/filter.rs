@@ -4,9 +4,10 @@
 
 use crate::{EpochNumber, Log, RpcAddress};
 use cfx_rpc_primitives::{maybe_vec_into, VariadicValue};
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
 use cfx_types::{Space, H256, U256, U64};
 use cfx_util_macros::bail;
-use jsonrpc_core::Error as RpcError; // TODO replace with jsonrpsee error
+use jsonrpsee::types::ErrorObjectOwned;
 use primitives::filter::{LogFilter as PrimitiveFilter, LogFilterParams};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
@@ -49,8 +50,22 @@ pub struct CfxRpcLogFilter {
     pub topics: Option<Vec<VariadicValue<H256>>>,
 }
 
+impl Default for CfxRpcLogFilter {
+    fn default() -> Self {
+        Self {
+            from_epoch: Some(EpochNumber::LatestCheckpoint),
+            to_epoch: Some(EpochNumber::LatestState),
+            from_block: None,
+            to_block: None,
+            block_hashes: None,
+            address: None,
+            topics: None,
+        }
+    }
+}
+
 impl CfxRpcLogFilter {
-    pub fn into_primitive(self) -> Result<PrimitiveFilter, RpcError> {
+    pub fn into_primitive(self) -> Result<PrimitiveFilter, ErrorObjectOwned> {
         // from_epoch, to_epoch
         let from_epoch = self
             .from_epoch
@@ -70,8 +85,8 @@ impl CfxRpcLogFilter {
 
         // block_hashes
         match self.block_hashes {
-            Some(ref bhs) if bhs.len() > FILTER_BLOCK_HASH_LIMIT => return Err(RpcError::invalid_params(
-                format!("filter.block_hashes can contain up to {} hashes; {} were provided.", FILTER_BLOCK_HASH_LIMIT, bhs.len())
+            Some(ref bhs) if bhs.len() > FILTER_BLOCK_HASH_LIMIT => return Err(invalid_params_msg(
+                &format!("filter.block_hashes can contain up to {} hashes; {} were provided.", FILTER_BLOCK_HASH_LIMIT, bhs.len())
             )),
             _ => {}
         }
@@ -81,7 +96,7 @@ impl CfxRpcLogFilter {
         // topics
         match self.topics {
             Some(ref ts) if ts.len() > 4 => {
-                return Err(RpcError::invalid_params(format!(
+                return Err(invalid_params_msg(&format!(
                     "filter.topics can contain up to 4 topics; {} were provided.",
                     ts.len()
                 )))
@@ -166,8 +181,8 @@ impl CfxRpcLogFilter {
 
             // any other case is considered an error
             _ => {
-                bail!(RpcError::invalid_params(
-                    format!("Filter must provide one of the following: (1) an epoch range through `fromEpoch` and `toEpoch`, (2) a block number range through `fromBlock` and `toBlock`, (3) a set of block hashes through `blockHashes`")
+                bail!(invalid_params_msg(
+                    &format!("Filter must provide one of the following: (1) an epoch range through `fromEpoch` and `toEpoch`, (2) a block number range through `fromBlock` and `toBlock`, (3) a set of block hashes through `blockHashes`")
                 ));
             }
         }
@@ -197,7 +212,7 @@ impl Serialize for CfxFilterLog {
 }
 
 /// Results of the filter_changes RPC.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum CfxFilterChanges {
     /// New logs.
     Logs(Vec<CfxFilterLog>),

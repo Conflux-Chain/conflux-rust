@@ -16,8 +16,10 @@ use crate::{
 };
 use channel::{diem_channel, message_queues::QueueStyle};
 use diem_config::{
-    config::{NodeConfig, PeerNetworkId, PeerRole, RoleType},
-    network_id::{NetworkContext, NetworkId, NodeNetworkId},
+    config::{NodeConfig, RoleType},
+    network_id::{
+        NetworkContext, NetworkId, NodeNetworkId, PeerNetworkId, PeerRole,
+    },
 };
 use diem_infallible::{Mutex, MutexGuard, RwLock};
 use diem_types::{

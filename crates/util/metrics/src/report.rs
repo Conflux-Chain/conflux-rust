@@ -7,7 +7,7 @@ use crate::{
     gauge::{Gauge, GaugeUsize},
     histogram::Histogram,
     meter::{Meter, StandardMeter},
-    metrics::is_enabled,
+    metrics::{is_enabled, is_stopped},
     registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
 };
 use lazy_static::lazy_static;
@@ -37,10 +37,16 @@ pub fn report_async<R: 'static + Reporter>(reporter: R, interval: Duration) {
     }
 
     thread::spawn(move || loop {
+        if is_stopped() {
+            return;
+        }
         // sleep random time on different nodes to reduce competition.
         thread::sleep(
             interval.mul_f64(0.5 + rand::rng().random_range(0.0..1.0)),
         );
+        if is_stopped() {
+            return;
+        }
 
         let start = Instant::now();
 

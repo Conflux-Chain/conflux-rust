@@ -21,12 +21,8 @@ pub enum Error {
     IncorrectPreferredRound(u64, u64),
     #[error("Unable to verify that the new tree extends the parent: {0}")]
     InvalidAccumulatorExtension(String),
-    #[error("Invalid EpochChangeProof: {0}")]
-    InvalidEpochChangeProof(String),
     #[error("Internal error: {0}")]
     InternalError(String),
-    #[error("No next_epoch_state specified in the provided Ledger Info")]
-    InvalidLedgerInfo,
     #[error("Invalid proposal: {0}")]
     InvalidProposal(String),
     #[error("Invalid QC: {0}")]
@@ -52,12 +48,6 @@ pub enum Error {
 impl From<bcs::Error> for Error {
     fn from(error: bcs::Error) -> Self {
         Self::SerializationError(format!("{}", error))
-    }
-}
-
-impl From<diem_secure_net::Error> for Error {
-    fn from(error: diem_secure_net::Error) -> Self {
-        Self::InternalError(error.to_string())
     }
 }
 

@@ -5,7 +5,7 @@
 use cfx_types::{H256, U256, U64};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncGraphBlockState {
     pub block_hash: H256,
@@ -16,7 +16,7 @@ pub struct SyncGraphBlockState {
     pub adaptive: bool,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 /// This struct maintains some inner state of synchronization graph.
 pub struct SyncGraphStates {

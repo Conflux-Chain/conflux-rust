@@ -2,7 +2,7 @@ use cfx_types::U256;
 use serde::Serialize;
 use std::collections::VecDeque;
 
-#[derive(Serialize, Debug, Default)]
+#[derive(Serialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CfxFeeHistory {
     /// Oldest epoch

@@ -386,6 +386,13 @@ impl From<RpcInvalidTransactionError> for JsonRpcError {
     }
 }
 
+impl From<RpcInvalidTransactionError> for ErrorObjectOwned {
+    fn from(e: RpcInvalidTransactionError) -> Self {
+        let err = JsonRpcError::from(e);
+        ErrorObjectOwned::owned(err.code.code() as i32, err.message, err.data)
+    }
+}
+
 /// Error thrown when both `data` and `input` fields are set and not equal.
 #[derive(Debug, Default, thiserror::Error)]
 #[error("both \"data\" and \"input\" are set and not equal. Please use \"input\" to pass transaction call data")]

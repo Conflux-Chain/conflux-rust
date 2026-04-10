@@ -12,7 +12,6 @@ use crate::{
     error::Error,
     logging::{LogEntry, LogEvent, SafetyLogSchema},
     persistent_safety_storage::PersistentSafetyStorage,
-    t_safety_rules::TSafetyRules,
 };
 use consensus_types::{
     block::Block,
@@ -34,13 +33,9 @@ use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
     block_info::BlockInfo,
-    epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     ledger_info::LedgerInfo,
-    validator_config::{
-        ConsensusPublicKey, ConsensusSignature, ConsensusVRFPrivateKey,
-    },
-    waypoint::Waypoint,
+    validator_config::{ConsensusSignature, ConsensusVRFPrivateKey},
 };
 use log::error;
 use serde::Serialize;
@@ -51,7 +46,6 @@ const SAFETY_STORAGE_SAVE_SUFFIX: &str = "json.save";
 /// @TODO consider a cache of verified QCs to cut down on verification costs
 pub struct SafetyRules {
     persistent_storage: PersistentSafetyStorage,
-    execution_public_key: Option<ConsensusPublicKey>,
     export_consensus_key: bool,
     validator_signer: Option<ConfigurableValidatorSigner>,
     epoch_state: Option<EpochState>,
@@ -63,11 +57,10 @@ impl SafetyRules {
     /// storage and the consensus private keys
     pub fn new(
         persistent_storage: PersistentSafetyStorage,
-        _verify_vote_proposal_signature: bool, export_consensus_key: bool,
+        export_consensus_key: bool,
         vrf_private_key: Option<ConsensusVRFPrivateKey>,
         author: AccountAddress,
     ) -> Self {
-        let execution_public_key = None;
         if let Ok(storage_author) = persistent_storage.author() {
             if storage_author != author {
                 // TODO: After we allow non-voting nodes to not have a pos key,
@@ -79,19 +72,8 @@ impl SafetyRules {
                 error!("author in secure_storage does not match PoS keys!");
             }
         }
-        /*
-            if verify_vote_proposal_signature {
-            None
-        Some(
-            persistent_storage
-                .execution_public_key()
-                .expect("Unable to retrieve execution public key"),
-        } else {
-            None
-        )*/
         Self {
             persistent_storage,
-            execution_public_key,
             export_consensus_key,
             validator_signer: None,
             epoch_state: None,
@@ -134,7 +116,6 @@ impl SafetyRules {
             .map_err(|e| Error::InvalidAccumulatorExtension(e.to_string()))?;
         Ok(VoteData::new(
             proposed_block.gen_block_info(
-                // TODO(lpl): Remove state tree.
                 Default::default(),
                 new_tree.version(),
                 vote_proposal.next_epoch_state().cloned(),
@@ -271,47 +252,26 @@ impl SafetyRules {
     // logging and metrics
 
     fn guarded_consensus_state(&mut self) -> Result<ConsensusState, Error> {
-        let waypoint = self.persistent_storage.waypoint()?;
         let safety_data = self.persistent_storage.safety_data()?;
 
         diem_info!(SafetyLogSchema::new(LogEntry::State, LogEvent::Update)
             .author(self.persistent_storage.author()?)
             .epoch(safety_data.epoch)
             .last_voted_round(safety_data.last_voted_round)
-            .preferred_round(safety_data.preferred_round)
-            .waypoint(waypoint));
+            .preferred_round(safety_data.preferred_round));
 
         Ok(ConsensusState::new(
             self.persistent_storage.safety_data()?,
-            self.persistent_storage.waypoint()?,
             self.signer().is_ok(),
         ))
     }
 
     fn guarded_initialize(
-        &mut self, proof: &EpochChangeProof,
+        &mut self, epoch_state: &EpochState,
     ) -> Result<(), Error> {
-        let waypoint = self.persistent_storage.waypoint()?;
-        let last_li = proof
-            .verify(&waypoint)
-            .map_err(|e| Error::InvalidEpochChangeProof(format!("{}", e)))?;
-        let ledger_info = last_li.ledger_info();
-        let epoch_state = ledger_info
-            .next_epoch_state()
-            .cloned()
-            .ok_or(Error::InvalidLedgerInfo)?;
-
         let current_epoch = self.persistent_storage.safety_data()?.epoch;
+
         if current_epoch < epoch_state.epoch {
-            // This is ordered specifically to avoid configuration issues:
-            // * First set the waypoint to lock in the minimum restarting point,
-            // * set the round information,
-            // * finally, set the epoch information because once the epoch is
-            //   set, this `if`
-            // statement cannot be re-entered.
-            let waypoint = &Waypoint::new_epoch_boundary(ledger_info)
-                .map_err(|error| Error::InternalError(error.to_string()))?;
-            self.persistent_storage.set_waypoint(waypoint)?;
             self.persistent_storage.set_safety_data(SafetyData::new(
                 epoch_state.epoch,
                 0,
@@ -408,15 +368,6 @@ impl SafetyRules {
         self.signer()?;
 
         let vote_proposal = &maybe_signed_vote_proposal.vote_proposal;
-        let execution_signature = maybe_signed_vote_proposal.signature.as_ref();
-
-        if let Some(public_key) = self.execution_public_key.as_ref() {
-            execution_signature
-                .ok_or(Error::VoteProposalSignatureNotFound)?
-                .verify(vote_proposal, public_key)
-                .map_err(|error| Error::InternalError(error.to_string()))?;
-        }
-
         let proposed_block = vote_proposal.block();
         let mut safety_data = self.persistent_storage.safety_data()?;
 
@@ -538,20 +489,20 @@ impl SafetyRules {
         self.persistent_storage
             .save_to_suffix(SAFETY_STORAGE_SAVE_SUFFIX)
     }
-}
 
-impl TSafetyRules for SafetyRules {
-    fn consensus_state(&mut self) -> Result<ConsensusState, Error> {
+    pub fn consensus_state(&mut self) -> Result<ConsensusState, Error> {
         let cb = || self.guarded_consensus_state();
         run_and_log(cb, |log| log, LogEntry::ConsensusState)
     }
 
-    fn initialize(&mut self, proof: &EpochChangeProof) -> Result<(), Error> {
-        let cb = || self.guarded_initialize(proof);
+    pub fn initialize(
+        &mut self, epoch_state: &EpochState,
+    ) -> Result<(), Error> {
+        let cb = || self.guarded_initialize(epoch_state);
         run_and_log(cb, |log| log, LogEntry::Initialize)
     }
 
-    fn construct_and_sign_vote(
+    pub fn construct_and_sign_vote(
         &mut self, maybe_signed_vote_proposal: &MaybeSignedVoteProposal,
     ) -> Result<Vote, Error> {
         let round = maybe_signed_vote_proposal.vote_proposal.block().round();
@@ -560,13 +511,15 @@ impl TSafetyRules for SafetyRules {
         run_and_log(cb, |log| log.round(round), LogEntry::ConstructAndSignVote)
     }
 
-    fn sign_proposal(&mut self, block_data: BlockData) -> Result<Block, Error> {
+    pub fn sign_proposal(
+        &mut self, block_data: BlockData,
+    ) -> Result<Block, Error> {
         let round = block_data.round();
         let cb = || self.guarded_sign_proposal(block_data);
         run_and_log(cb, |log| log.round(round), LogEntry::SignProposal)
     }
 
-    fn sign_timeout(
+    pub fn sign_timeout(
         &mut self, timeout: &Timeout,
     ) -> Result<ConsensusSignature, Error> {
         let cb = || self.guarded_sign_timeout(timeout);

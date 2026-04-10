@@ -11,10 +11,7 @@
 use crate::{
     access_path::AccessPath,
     account_address::AccountAddress,
-    transaction::{
-        ChangeSet, Script, TransactionArgument, TransactionPayload,
-        WriteSetPayload,
-    },
+    transaction::{ChangeSet, TransactionPayload, WriteSetPayload},
     write_set::{WriteOp, WriteSet, WriteSetMut},
 };
 use bcs::to_bytes;
@@ -60,71 +57,6 @@ fn test_account_address_canonical_serialization_example() {
         0xca, 0x82, 0x0b, 0xf9, 0x30, 0x5e, 0xb9, 0x7d, 0x0d, 0x78, 0x4f, 0x71,
         0xb3, 0x95, 0x54, 0x57, 0xCA, 0x82, 0x0B, 0xF9, 0x30, 0x5E, 0xB9, 0x7D,
         0x0D, 0x78, 0x4F, 0x71, 0xB3, 0x95, 0x54, 0x57,
-    ];
-
-    let actual_output = to_bytes(&input).unwrap();
-    assert_eq!(expected_output, actual_output);
-}
-
-#[test]
-fn test_program_canonical_serialization_example() {
-    let input = get_common_program();
-
-    let expected_output: Vec<u8> = vec![
-        0x04, 0x6D, 0x6F, 0x76, 0x65, 0x00, 0x01, 0x01, 0xEF, 0xBE, 0xAD, 0xDE,
-        0x0D, 0xD0, 0xFE, 0xCA,
-    ];
-
-    let actual_output = to_bytes(&input).unwrap();
-    assert_eq!(expected_output, actual_output);
-}
-
-#[test]
-fn test_transaction_argument_address_canonical_serialization_example() {
-    let input = TransactionArgument::Address(AccountAddress::new([
-        0x2c, 0x25, 0x99, 0x17, 0x85, 0x34, 0x3b, 0x23, 0xae, 0x07, 0x3a, 0x50,
-        0xe5, 0xfd, 0x80, 0x9a, 0x2c, 0x25, 0x99, 0x17, 0x85, 0x34, 0x3b, 0x23,
-        0xae, 0x07, 0x3a, 0x50, 0xe5, 0xfd, 0x80, 0x9a,
-    ]));
-
-    let expected_output: Vec<u8> = vec![
-        0x03, 0x2C, 0x25, 0x99, 0x17, 0x85, 0x34, 0x3B, 0x23, 0xAE, 0x07, 0x3A,
-        0x50, 0xE5, 0xFD, 0x80, 0x9A, 0x2c, 0x25, 0x99, 0x17, 0x85, 0x34, 0x3b,
-        0x23, 0xae, 0x07, 0x3a, 0x50, 0xe5, 0xfd, 0x80, 0x9a,
-    ];
-
-    let actual_output = to_bytes(&input).unwrap();
-
-    assert_eq!(expected_output, actual_output);
-}
-
-#[test]
-fn test_transaction_argument_byte_array_canonical_serialization_example() {
-    let input = TransactionArgument::U8Vector(vec![0xCA, 0xFE, 0xD0, 0x0D]);
-
-    let expected_output: Vec<u8> = vec![0x04, 0x04, 0xCA, 0xFE, 0xD0, 0x0D];
-
-    let actual_output = to_bytes(&input).unwrap();
-    assert_eq!(expected_output, actual_output);
-}
-
-#[test]
-fn test_transaction_argument_u64_canonical_serialization_example() {
-    let input = TransactionArgument::U64(9_213_671_392_124_193_148);
-    let expected_output: Vec<u8> =
-        vec![0x01, 0x7C, 0xC9, 0xBD, 0xA4, 0x50, 0x89, 0xDD, 0x7F];
-
-    let actual_output = to_bytes(&input).unwrap();
-    assert_eq!(expected_output, actual_output);
-}
-
-#[test]
-fn test_transaction_payload_with_a_program_canonical_serialization_example() {
-    let input = TransactionPayload::Script(get_common_program());
-
-    let expected_output = vec![
-        0x01, 0x04, 0x6D, 0x6F, 0x76, 0x65, 0x00, 0x01, 0x01, 0xEF, 0xBE, 0xAD,
-        0xDE, 0x0D, 0xD0, 0xFE, 0xCA,
     ];
 
     let actual_output = to_bytes(&input).unwrap();
@@ -188,14 +120,6 @@ fn test_write_set_canonical_serialization_example() {
     ];
     let actual_output = to_bytes(&input).unwrap();
     assert_eq!(expected_output, actual_output);
-}
-
-fn get_common_program() -> Script {
-    Script::new(
-        b"move".to_vec(),
-        vec![],
-        vec![TransactionArgument::U64(0xcafe_d00d_dead_beef)],
-    )
 }
 
 fn get_common_write_set() -> WriteSet {

@@ -24,6 +24,7 @@ use cfx_executor::{
     internal_contract::storage_point_prop,
 };
 use cfx_rpc_eth_types::Transaction as EthTransaction;
+use cfx_rpc_utils::error::jsonrpc_error_helpers::error_object_owned_to_jsonrpc_error;
 use cfx_statedb::{
     global_params::{
         AccumulateInterestRate, BaseFeeProp, DistributablePoSInterest,
@@ -587,7 +588,8 @@ impl RpcImpl {
         tx.check_rpc_address_network(
             "tx",
             self.sync.network.get_network_type(),
-        )?;
+        )
+        .map_err(error_object_owned_to_jsonrpc_error)?;
 
         if tx.nonce.is_none() {
             let nonce = consensus_graph.next_nonce(
@@ -1179,7 +1181,9 @@ impl RpcImpl {
         let consensus_graph = self.consensus_graph();
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
-        let filter: LogFilter = filter.into_primitive()?;
+        let filter: LogFilter = filter
+            .into_primitive()
+            .map_err(error_object_owned_to_jsonrpc_error)?;
 
         let logs = consensus_graph
             .logs(filter)?
@@ -1481,11 +1485,13 @@ impl RpcImpl {
         let epoch_height = consensus_graph
             .get_height_from_epoch_number(epoch.clone().into())?;
         let chain_id = consensus_graph.best_chain_id();
-        let signed_tx = request.sign_call(
-            epoch_height,
-            chain_id.in_native_space(),
-            self.config.max_estimation_gas_limit,
-        )?;
+        let signed_tx = request
+            .sign_call(
+                epoch_height,
+                chain_id.in_native_space(),
+                self.config.max_estimation_gas_limit,
+            )
+            .map_err(error_object_owned_to_jsonrpc_error)?;
         trace!("call tx {:?}", signed_tx);
 
         consensus_graph.call_virtual(

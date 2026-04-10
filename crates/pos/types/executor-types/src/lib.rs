@@ -7,57 +7,29 @@
 
 #![forbid(unsafe_code)]
 
-use std::{cmp::max, collections::HashMap, sync::Arc};
+use std::{cmp::max, sync::Arc};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use diem_crypto::{
-    hash::{TransactionAccumulatorHasher, SPARSE_MERKLE_PLACEHOLDER_HASH},
-    HashValue,
-};
+use diem_crypto::{hash::TransactionAccumulatorHasher, HashValue};
 use diem_types::{
-    account_state_blob::AccountStateBlob,
     block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
     proof::{accumulator::InMemoryAccumulator, AccumulatorExtensionProof},
     term_state::PosState,
-    transaction::{
-        Transaction, TransactionInfo, TransactionListWithProof,
-        TransactionStatus, Version,
-    },
+    transaction::{Transaction, TransactionStatus, Version},
     validator_config::ConsensusSignature,
 };
 pub use error::Error;
-use scratchpad::ProofRead;
 use storage_interface::TreeState;
 
 pub use self::processed_vm_output::{ProcessedVMOutput, TransactionData};
 
 mod error;
 mod processed_vm_output;
-
-type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
-type SparseMerkleTree = scratchpad::SparseMerkleTree<AccountStateBlob>;
-
-pub trait ChunkExecutor: Send {
-    /// Verifies the transactions based on the provided proofs and ledger info.
-    /// If the transactions are valid, executes them and commits immediately
-    /// if execution results match the proofs. Returns a vector of
-    /// reconfiguration events in the chunk
-    fn execute_and_commit_chunk(
-        &self,
-        txn_list_with_proof: TransactionListWithProof,
-        // Target LI that has been verified independently: the proofs are
-        // relative to this version.
-        verified_target_li: LedgerInfoWithSignatures,
-        // An optional end of epoch LedgerInfo. We do not allow chunks that end
-        // epoch without carrying any epoch change LI.
-        epoch_change_li: Option<LedgerInfoWithSignatures>,
-    ) -> Result<Vec<ContractEvent>>;
-}
 
 pub trait BlockExecutor: Send {
     /// Get the latest committed block id
@@ -87,15 +59,6 @@ pub trait BlockExecutor: Send {
         &self, block_ids: Vec<HashValue>,
         ledger_info_with_sigs: LedgerInfoWithSignatures,
     ) -> Result<(Vec<Transaction>, Vec<ContractEvent>), Error>;
-}
-
-pub trait TransactionReplayer: Send {
-    fn replay_chunk(
-        &self, first_version: Version, txns: Vec<Transaction>,
-        txn_infos: Vec<TransactionInfo>,
-    ) -> Result<()>;
-
-    fn expecting_version(&self) -> Version;
 }
 
 /// A structure that summarizes the result of the execution needed for consensus
@@ -223,19 +186,12 @@ impl StateComputeResult {
     }
 }
 
-/// A wrapper of the in-memory state sparse merkle tree and the transaction
-/// accumulator that represent a specific state collectively. Usually it is a
-/// state after executing a block.
+/// A wrapper of the transaction accumulator and PoS state that represent a
+/// specific blockchain state collectively. Usually it is a state after
+/// executing a block.
 #[derive(Clone, Debug)]
 pub struct ExecutedTrees {
-    /// The in-memory Sparse Merkle Tree representing a specific state after
-    /// execution. If this tree is presenting the latest committed state, it
-    /// will have a single Subtree node (or Empty node) whose hash equals
-    /// the root hash of the newest Sparse Merkle Tree in storage.
-    state_tree: Arc<SparseMerkleTree>,
-
-    /// The in-memory Merkle Accumulator representing a blockchain state
-    /// consistent with the `state_tree`.
+    /// The in-memory Merkle Accumulator representing the blockchain state.
     transaction_accumulator:
         Arc<InMemoryAccumulator<TransactionAccumulatorHasher>>,
 
@@ -245,10 +201,8 @@ pub struct ExecutedTrees {
 impl From<TreeState> for ExecutedTrees {
     fn from(tree_state: TreeState) -> Self {
         ExecutedTrees::new(
-            tree_state.account_state_root_hash,
             tree_state.ledger_frozen_subtree_hashes,
             tree_state.num_transactions,
-            // TODO(lpl): Ensure this is not used.
             PosState::new_empty(),
         )
     }
@@ -259,7 +213,6 @@ impl ExecutedTrees {
         tree_state: TreeState, pos_state: PosState,
     ) -> Self {
         ExecutedTrees::new(
-            tree_state.account_state_root_hash,
             tree_state.ledger_frozen_subtree_hashes,
             tree_state.num_transactions,
             pos_state,
@@ -267,20 +220,16 @@ impl ExecutedTrees {
     }
 
     pub fn new_copy(
-        state_tree: Arc<SparseMerkleTree>,
         transaction_accumulator: Arc<
             InMemoryAccumulator<TransactionAccumulatorHasher>,
         >,
         pos_state: PosState,
     ) -> Self {
         Self {
-            state_tree,
             transaction_accumulator,
             pos_state,
         }
     }
-
-    pub fn state_tree(&self) -> &Arc<SparseMerkleTree> { &self.state_tree }
 
     pub fn pos_state(&self) -> &PosState { &self.pos_state }
 
@@ -297,15 +246,11 @@ impl ExecutedTrees {
 
     pub fn state_id(&self) -> HashValue { self.txn_accumulator().root_hash() }
 
-    pub fn state_root(&self) -> HashValue { self.state_tree().root_hash() }
-
     pub fn new(
-        state_root_hash: HashValue,
         frozen_subtrees_in_accumulator: Vec<HashValue>,
         num_leaves_in_accumulator: u64, pos_state: PosState,
     ) -> ExecutedTrees {
         ExecutedTrees {
-            state_tree: Arc::new(SparseMerkleTree::new(state_root_hash)),
             transaction_accumulator: Arc::new(
                 InMemoryAccumulator::new(
                     frozen_subtrees_in_accumulator,
@@ -318,33 +263,10 @@ impl ExecutedTrees {
     }
 
     pub fn new_empty() -> ExecutedTrees {
-        Self::new(
-            *SPARSE_MERKLE_PLACEHOLDER_HASH,
-            vec![],
-            0,
-            PosState::new_empty(),
-        )
+        Self::new(vec![], 0, PosState::new_empty())
     }
 
     pub fn set_pos_state_skipped(&mut self, skipped: bool) {
         self.pos_state.set_skipped(skipped)
-    }
-}
-
-pub struct ProofReader {
-    account_to_proof: HashMap<HashValue, SparseMerkleProof>,
-}
-
-impl ProofReader {
-    pub fn new(
-        account_to_proof: HashMap<HashValue, SparseMerkleProof>,
-    ) -> Self {
-        ProofReader { account_to_proof }
-    }
-}
-
-impl ProofRead<AccountStateBlob> for ProofReader {
-    fn get_proof(&self, key: HashValue) -> Option<&SparseMerkleProof> {
-        self.account_to_proof.get(&key)
     }
 }
