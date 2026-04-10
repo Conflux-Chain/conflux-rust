@@ -596,6 +596,7 @@ impl NetworkServiceInner {
         };
 
         let nodes_path = config.config_path.clone();
+        let own_node_id = *keys.public();
 
         let mut inner = NetworkServiceInner {
             metadata: HostMetadata {
@@ -616,6 +617,7 @@ impl NetworkServiceInner {
                 FIRST_SESSION,
                 MAX_SESSIONS,
                 config.max_incoming_peers,
+                own_node_id,
                 &config.session_ip_limit_config,
                 Some(pos_pub_keys),
             ),

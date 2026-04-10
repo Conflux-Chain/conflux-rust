@@ -304,14 +304,6 @@ impl Session {
                 // For ingress session, update the node id in `SessionManager`
                 let token_to_disconnect = self.update_ingress_node_id(host)?;
 
-                let token_to_disconnect = match token_to_disconnect {
-                    Some(token) => Some((
-                        token,
-                        String::from("Remove old session from the same node"),
-                    )),
-                    None => None,
-                };
-
                 // Handle Hello packet to exchange protocols
                 let rlp = Rlp::new(&packet.data);
                 let pos_public_key = self.read_hello(&rlp, host)?;
@@ -348,10 +340,16 @@ impl Session {
         }
     }
 
-    /// Update node Id in `SessionManager` for ingress session.
+    /// Update node Id in `SessionManager` for ingress session and apply
+    /// the network-layer simultaneous-dial tie-breaker. Returns the
+    /// optional `(token, reason)` pair the caller should pass to
+    /// `kill_connection_by_token`, or `None` if no kill is needed. If
+    /// the tie-breaker decides this new ingress should lose, this
+    /// function sends a DISCONNECT to the remote and returns `Err` —
+    /// the caller's existing error path then kills our own session.
     fn update_ingress_node_id(
         &mut self, host: &NetworkServiceInner,
-    ) -> Result<Option<usize>, Error> {
+    ) -> Result<Option<(usize, String)>, Error> {
         // ignore egress session
         if self.metadata.originated {
             return Ok(None);
@@ -363,15 +361,39 @@ impl Session {
             .id
             .expect("should have node id after handshake");
 
-        host.sessions.update_ingress_node_id(token, &node_id)
+        let result = host
+            .sessions
+            .update_ingress_node_id(token, &node_id)
             .map_err(|reason| {
                 debug!(
                     "failed to update node id of ingress session, reason = {:?}, session = {:?}",
                     reason, self
                 );
-
                 self.send_disconnect(DisconnectReason::UpdateNodeIdFailed)
-            })
+            })?;
+
+        match result {
+            crate::session_manager::UpdateIngressResult::Inserted => Ok(None),
+            crate::session_manager::UpdateIngressResult::Replaced(old) => {
+                Ok(Some((
+                    old,
+                    String::from("Remove old session from the same node"),
+                )))
+            }
+            crate::session_manager::UpdateIngressResult::DropNew => {
+                // Lost the simultaneous-dial tie-breaker. Send a
+                // DISCONNECT to the remote and propagate as Err so the
+                // caller (`session_readable`) kills our own session via
+                // its standard error path.
+                debug!(
+                    "lost simultaneous-dial tie-break, dropping new ingress session = {:?}",
+                    self
+                );
+                Err(self.send_disconnect(DisconnectReason::Custom(
+                    "simultaneous dial: drop new connection".into(),
+                )))
+            }
+        }
     }
 
     /// Read Hello packet to exchange the supported protocols, and set the
