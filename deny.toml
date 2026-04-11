@@ -82,6 +82,9 @@ ignore = [
     "RUSTSEC-2020-0016",
     # instant unmaintained; pulled by parking_lot 0.11 via jsonrpc + prometheus 0.12.
     "RUSTSEC-2024-0384",
+    # rand unsoundness triggered only when a custom log::Log implementation
+    # calls rand::rng() during a reseed; our Writer impls do not touch rand.
+    "RUSTSEC-2026-0097",
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
