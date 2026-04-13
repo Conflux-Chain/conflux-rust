@@ -2324,8 +2324,7 @@ fn test_tload() {
 
     assert!(apply_state);
 
-    let mut key = [0u8; 32];
-    U256::from(2).to_big_endian(&mut key);
+    let key = U256::from(2).to_big_endian();
     assert_eq!(
         state
             .storage_at(&contract_address_with_space, &key)

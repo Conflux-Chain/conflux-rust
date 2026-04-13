@@ -84,7 +84,7 @@ pub trait Context {
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> Result<()>;
 
     /// Returns a value for given key.
-    fn transient_storage_at(&self, key: &Vec<u8>) -> Result<U256>;
+    fn transient_storage_at(&self, key: &[u8]) -> Result<U256>;
 
     /// Stores a value for given key.
     fn transient_set_storage(
