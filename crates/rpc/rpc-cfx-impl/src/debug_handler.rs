@@ -4,10 +4,8 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use cfx_addr::Network;
 use cfx_rpc_cfx_api::DebugRpcServer;
 use cfx_rpc_cfx_types::{
-    address::check_rpc_address_network,
     consensus_graph_states::{
         ConsensusGraphBlockExecutionState, ConsensusGraphBlockState,
     },
@@ -19,23 +17,23 @@ use cfx_rpc_eth_types::{Transaction as EthTransaction, WrapTransaction};
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::{
     internal_error_with_data, invalid_params_rpc_err,
 };
-use cfx_types::{Address, AddressSpaceUtil, Space, H256, U64};
+use cfx_types::{Space, H256, U64};
 use cfx_util_macros::bail;
 use cfxcore::{
-    block_data_manager::{BlockDataManager, BlockExecutionResult},
-    state_exposer::STATE_EXPOSER,
-    ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
-    SharedTransactionPool,
+    block_data_manager::BlockExecutionResult,
+    consensus::pos_handler::PosVerifier, state_exposer::STATE_EXPOSER,
+    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
+use cfxcore_accounts::AccountProvider;
 use jsonrpsee::core::RpcResult;
 use log::debug;
 use network::{
     node_table::{Node, NodeId},
-    throttling::{self, THROTTLING_SERVICE},
-    NetworkService, SessionDetails, UpdateNodeOperation,
+    throttling, NetworkService, SessionDetails, UpdateNodeOperation,
 };
+use parking_lot::{Condvar, Mutex};
 use primitives::{
-    Action, Block, EpochNumber as PrimitiveEpochNumber, SignedTransaction,
+    Block, EpochNumber as PrimitiveEpochNumber, SignedTransaction,
     TransactionIndex, TransactionStatus,
 };
 
@@ -43,46 +41,36 @@ use cfx_rpc_cfx_types::{
     receipt::Receipt as RpcReceipt, transaction::PackedOrExecuted,
 };
 
-use crate::common::grouped_txs;
+use crate::common::CommonRpcImpl;
 
 pub struct DebugHandler {
-    tx_pool: SharedTransactionPool,
-    consensus: SharedConsensusGraph,
-    data_man: Arc<BlockDataManager>,
+    common: CommonRpcImpl,
     sync: SharedSynchronizationService,
-    network: Arc<NetworkService>,
-    network_type: Network,
 }
 
 impl DebugHandler {
     pub fn new(
         tx_pool: SharedTransactionPool, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, network: Arc<NetworkService>,
+        accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
+        exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Self {
-        let data_man = consensus.data_manager().clone();
-        let network_type = *network.get_network_type();
-        DebugHandler {
-            tx_pool,
+        let common = CommonRpcImpl::new(
+            exit,
             consensus,
-            data_man,
-            sync,
             network,
-            network_type,
-        }
-    }
-
-    fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
-
-    fn check_address_network(&self, address: &RpcAddress) -> RpcResult<()> {
-        check_rpc_address_network(Some(address.network), &self.network_type)
-            .map_err(|e| invalid_params_rpc_err(e.to_string(), None::<bool>))
+            tx_pool,
+            accounts,
+            pos_verifier,
+        );
+        DebugHandler { common, sync }
     }
 
     fn get_block_epoch_number(&self, h: &H256) -> Option<u64> {
-        if let Some(e) = self.consensus.get_block_epoch_number(h) {
+        if let Some(e) = self.common.consensus.get_block_epoch_number(h) {
             return Some(e);
         }
-        self.data_man.block_epoch_number(h)
+        self.common.data_man.block_epoch_number(h)
     }
 
     fn get_transactions(
@@ -100,8 +88,10 @@ impl DebugHandler {
     fn get_transactions_for_block(
         &self, b: &Arc<Block>, pivot: &Arc<Block>, epoch_number: u64,
     ) -> RpcResult<Vec<WrapTransaction>> {
-        let exec_info =
-            self.data_man.block_execution_result_by_hash_with_epoch(
+        let exec_info = self
+            .common
+            .data_man
+            .block_execution_result_by_hash_with_epoch(
                 &b.hash(),
                 &pivot.hash(),
                 false,
@@ -124,7 +114,7 @@ impl DebugHandler {
     fn get_transactions_for_non_executed_block(
         &self, b: &Arc<Block>, pivot: &Arc<Block>,
     ) -> Result<Vec<WrapTransaction>, String> {
-        let network = self.network_type;
+        let network = *self.common.network.get_network_type();
 
         let mut eth_transaction_idx = 0u64;
         let mut make_eth_wrap_tx = |tx: &Arc<SignedTransaction>| {
@@ -162,8 +152,9 @@ impl DebugHandler {
         &self, b: &Arc<Block>, pivot: &Arc<Block>, epoch_number: u64,
         execution_result: BlockExecutionResult,
     ) -> Result<Vec<WrapTransaction>, String> {
-        let network = self.network_type;
-        let maybe_state_root = self.data_man.get_executed_state_root(&b.hash());
+        let network = *self.common.network.get_network_type();
+        let maybe_state_root =
+            self.common.data_man.get_executed_state_root(&b.hash());
         let block_receipts = &execution_result.block_receipts.receipts;
 
         let mut eth_transaction_idx = 0u64;
@@ -257,39 +248,7 @@ impl DebugRpcServer for DebugHandler {
     ) -> RpcResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     > {
-        let address: Option<Address> = match address {
-            None => None,
-            Some(addr) => {
-                self.check_address_network(&addr)?;
-                Some(addr.into())
-            }
-        };
-
-        let (ready_txs, deferred_txs) = self
-            .tx_pool
-            .content(address.map(AddressSpaceUtil::with_native_space));
-
-        let converter = |tx: Arc<SignedTransaction>| -> String {
-            let to = match tx.action() {
-                Action::Create => "<Create contract>".into(),
-                Action::Call(addr) => format!("{:?}", addr),
-            };
-            format!(
-                "{}: {:?} drip + {:?} gas * {:?} drip",
-                to,
-                tx.value(),
-                tx.gas(),
-                tx.gas_price()
-            )
-        };
-
-        let mut ret: BTreeMap<
-            String,
-            BTreeMap<String, BTreeMap<usize, Vec<String>>>,
-        > = BTreeMap::new();
-        ret.insert("ready".into(), grouped_txs(ready_txs, converter));
-        ret.insert("deferred".into(), grouped_txs(deferred_txs, converter));
-        Ok(ret)
+        self.common.txpool_inspect(address)
     }
 
     fn txpool_content(
@@ -300,88 +259,35 @@ impl DebugRpcServer for DebugHandler {
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
         >,
     > {
-        let address: Option<Address> = match address {
-            None => None,
-            Some(addr) => {
-                self.check_address_network(&addr)?;
-                Some(addr.into())
-            }
-        };
-
-        let (ready_txs, deferred_txs) = self
-            .tx_pool
-            .content(address.map(AddressSpaceUtil::with_native_space));
-
-        let network = self.network_type;
-        let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
-            RpcTransaction::from_signed(&tx, None, network)
-                .expect("transaction conversion with correct network id should not fail")
-        };
-
-        let mut ret: BTreeMap<
-            String,
-            BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
-        > = BTreeMap::new();
-        ret.insert("ready".into(), grouped_txs(ready_txs, converter));
-        ret.insert("deferred".into(), grouped_txs(deferred_txs, converter));
-        Ok(ret)
+        self.common.txpool_content(address)
     }
 
     fn txpool_get_account_transactions(
         &self, address: RpcAddress,
     ) -> RpcResult<Vec<RpcTransaction>> {
-        self.check_address_network(&address)?;
-        let (ready_txs, deferred_txs) = self
-            .tx_pool
-            .content(Some(Address::from(address).with_native_space()));
-        let network = self.network_type;
-        let converter = |tx: &Arc<SignedTransaction>| {
-            RpcTransaction::from_signed(tx, None, network)
-        };
-        let result = ready_txs
-            .iter()
-            .map(converter)
-            .chain(deferred_txs.iter().map(converter))
-            .collect::<Result<_, _>>()
-            .map_err(|e| internal_error_with_data(e))?;
-        Ok(result)
+        self.common.txpool_get_account_transactions(address)
     }
 
-    fn txpool_clear(&self) -> RpcResult<()> {
-        self.tx_pool.clear_tx_pool();
-        Ok(())
-    }
+    fn txpool_clear(&self) -> RpcResult<()> { self.common.txpool_clear() }
 
     fn net_throttling(&self) -> RpcResult<throttling::Service> {
-        Ok(THROTTLING_SERVICE.read().clone())
+        self.common.net_throttling()
     }
 
     fn net_node(&self, node_id: NodeId) -> RpcResult<Option<(String, Node)>> {
-        match self.network.get_node(&node_id) {
-            None => Ok(None),
-            Some((trusted, node)) => {
-                if trusted {
-                    Ok(Some(("trusted".into(), node)))
-                } else {
-                    Ok(Some(("untrusted".into(), node)))
-                }
-            }
-        }
+        self.common.net_node(node_id)
     }
 
     fn net_disconnect_node(
         &self, id: NodeId, op: Option<UpdateNodeOperation>,
     ) -> RpcResult<bool> {
-        Ok(self.network.disconnect_node(&id, op))
+        self.common.net_disconnect_node(id, op)
     }
 
     fn net_sessions(
         &self, node_id: Option<NodeId>,
     ) -> RpcResult<Vec<SessionDetails>> {
-        match self.network.get_detailed_sessions(node_id) {
-            None => Ok(Vec::new()),
-            Some(sessions) => Ok(sessions),
-        }
+        self.common.net_sessions(node_id)
     }
 
     fn current_sync_phase(&self) -> RpcResult<String> {
@@ -451,8 +357,8 @@ impl DebugRpcServer for DebugHandler {
             )
         };
 
-        let machine = self.tx_pool.machine();
-        let consensus = self.consensus_graph();
+        let machine = self.common.tx_pool.machine();
+        let consensus = self.common.consensus_graph();
 
         let mut epoch_number = match last_epoch {
             EpochNumber::Earliest => {
@@ -586,6 +492,7 @@ impl DebugRpcServer for DebugHandler {
         debug!("debug_getTransactionsByEpoch {}", epoch_number);
 
         let block_hashes = self
+            .common
             .consensus
             .get_block_hashes_by_epoch(PrimitiveEpochNumber::Number(
                 epoch_number.as_u64(),
@@ -598,6 +505,7 @@ impl DebugRpcServer for DebugHandler {
             })?;
 
         let blocks = self
+            .common
             .data_man
             .blocks_by_hash_list(&block_hashes, false)
             .ok_or_else(|| {
@@ -631,6 +539,7 @@ impl DebugRpcServer for DebugHandler {
             })?;
 
         let block_hashes = self
+            .common
             .consensus
             .get_block_hashes_by_epoch(PrimitiveEpochNumber::Number(
                 epoch_number,
@@ -643,6 +552,7 @@ impl DebugRpcServer for DebugHandler {
             })?;
 
         let blocks = self
+            .common
             .data_man
             .blocks_by_hash_list(&block_hashes, false)
             .ok_or_else(|| {
@@ -661,7 +571,7 @@ impl DebugRpcServer for DebugHandler {
 
         let target_blocks: Vec<Arc<Block>> = blocks
             .iter()
-            .filter(|b| b.hash() == block_hash)
+            .filter(|b: &&Arc<Block>| b.hash() == block_hash)
             .cloned()
             .collect();
 
