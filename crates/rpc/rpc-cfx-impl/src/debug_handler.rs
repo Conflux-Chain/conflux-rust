@@ -43,6 +43,8 @@ use cfx_rpc_cfx_types::{
     receipt::Receipt as RpcReceipt, transaction::PackedOrExecuted,
 };
 
+use crate::common::grouped_txs;
+
 pub struct DebugHandler {
     tx_pool: SharedTransactionPool,
     consensus: SharedConsensusGraph,
@@ -247,25 +249,6 @@ impl DebugHandler {
         }
         Ok(res)
     }
-}
-
-fn grouped_txs<T, F>(
-    txs: Vec<Arc<SignedTransaction>>, converter: F,
-) -> BTreeMap<String, BTreeMap<usize, Vec<T>>>
-where F: Fn(Arc<SignedTransaction>) -> T {
-    let mut addr_grouped_txs: BTreeMap<String, BTreeMap<usize, Vec<T>>> =
-        BTreeMap::new();
-
-    for tx in txs {
-        let addr = format!("{:?}", tx.sender());
-        let addr_entry =
-            addr_grouped_txs.entry(addr).or_insert_with(BTreeMap::new);
-        let nonce = tx.nonce().as_usize();
-        let nonce_entry = addr_entry.entry(nonce).or_insert_with(Vec::new);
-        nonce_entry.push(converter(tx));
-    }
-
-    addr_grouped_txs
 }
 
 impl DebugRpcServer for DebugHandler {

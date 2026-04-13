@@ -58,8 +58,8 @@ use rlp::Encodable;
 
 use crate::{
     check_balance_against_transaction,
+    common::CommonRpcImpl,
     helpers::{build_block, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT},
-    CfxHandler, DebugHandler, TestHandler,
 };
 
 fn into_rpc_err<E>(e: E) -> ErrorObjectOwned
@@ -1051,11 +1051,11 @@ async fn fetch_block_for_fee_history(
 
 pub struct LightCfxHandler {
     rpc_impl: Arc<RpcImpl>,
-    cfx_impl: Arc<CfxHandler>,
+    cfx_impl: Arc<CommonRpcImpl>,
 }
 
 impl LightCfxHandler {
-    pub fn new(rpc_impl: Arc<RpcImpl>, cfx_impl: Arc<CfxHandler>) -> Self {
+    pub fn new(rpc_impl: Arc<RpcImpl>, cfx_impl: Arc<CommonRpcImpl>) -> Self {
         LightCfxHandler { rpc_impl, cfx_impl }
     }
 }
@@ -1195,7 +1195,7 @@ impl CfxRpcServer for LightCfxHandler {
 
     /// Returns best block hash.
     async fn best_block_hash(&self) -> RpcResult<H256> {
-        self.cfx_impl.best_block_hash().await
+        self.cfx_impl.best_block_hash()
     }
 
     /// Returns the nonce should be filled in next sending transaction from
@@ -1276,7 +1276,7 @@ impl CfxRpcServer for LightCfxHandler {
     async fn skipped_blocks_by_epoch(
         &self, epoch_number: EpochNumber,
     ) -> RpcResult<Vec<H256>> {
-        self.cfx_impl.skipped_blocks_by_epoch(epoch_number).await
+        self.cfx_impl.skipped_blocks_by_epoch(epoch_number)
     }
 
     async fn transaction_receipt(
@@ -1316,11 +1316,11 @@ impl CfxRpcServer for LightCfxHandler {
     async fn confirmation_risk_by_hash(
         &self, block_hash: H256,
     ) -> RpcResult<Option<U256>> {
-        self.cfx_impl.confirmation_risk_by_hash(block_hash).await
+        self.cfx_impl.confirmation_risk_by_hash(block_hash)
     }
 
     async fn get_status(&self) -> RpcResult<RpcStatus> {
-        self.cfx_impl.get_status().await
+        self.cfx_impl.get_status()
     }
 
     /// Returns block reward information in an epoch
@@ -1332,7 +1332,7 @@ impl CfxRpcServer for LightCfxHandler {
 
     /// Return the client version as a string
     async fn get_client_version(&self) -> RpcResult<String> {
-        self.cfx_impl.get_client_version().await
+        self.cfx_impl.get_client_version()
     }
 
     /// Return information about total token supply.
@@ -1378,26 +1378,24 @@ impl CfxDebugRpcServer for LightCfxHandler {
 
     /// Returns accounts list.
     async fn accounts(&self) -> RpcResult<Vec<RpcAddress>> {
-        self.cfx_impl.accounts().await
+        self.cfx_impl.accounts()
     }
 
     /// Create a new account
     async fn new_account(&self, password: String) -> RpcResult<RpcAddress> {
-        self.cfx_impl.new_account(password).await
+        self.cfx_impl.new_account(password)
     }
 
     /// Unlock an account
     async fn unlock_account(
         &self, address: RpcAddress, password: String, duration: Option<U128>,
     ) -> RpcResult<bool> {
-        self.cfx_impl
-            .unlock_account(address, password, duration)
-            .await
+        self.cfx_impl.unlock_account(address, password, duration)
     }
 
     /// Lock an account
     async fn lock_account(&self, address: RpcAddress) -> RpcResult<bool> {
-        self.cfx_impl.lock_account(address).await
+        self.cfx_impl.lock_account(address)
     }
 
     fn sign(
@@ -1436,11 +1434,11 @@ impl CfxDebugRpcServer for LightCfxHandler {
 }
 
 pub struct LightTestHandler {
-    test_impl: Arc<TestHandler>,
+    test_impl: Arc<CommonRpcImpl>,
 }
 
 impl LightTestHandler {
-    pub fn new(test_handler: Arc<TestHandler>) -> Self {
+    pub fn new(test_handler: Arc<CommonRpcImpl>) -> Self {
         LightTestHandler {
             test_impl: test_handler,
         }
@@ -1629,11 +1627,11 @@ impl TestRpcServer for LightTestHandler {
 }
 
 pub struct LightDebugHandler {
-    debug_impl: Arc<DebugHandler>,
+    debug_impl: Arc<CommonRpcImpl>,
 }
 
 impl LightDebugHandler {
-    pub fn new(debug_impl: Arc<DebugHandler>) -> Self {
+    pub fn new(debug_impl: Arc<CommonRpcImpl>) -> Self {
         LightDebugHandler { debug_impl }
     }
 }
