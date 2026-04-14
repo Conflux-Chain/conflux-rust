@@ -68,35 +68,76 @@ mod tests {
     use super::*;
 
     fn encode<T: Encodable>(v: &T) -> Vec<u8> { rlp::encode(v).to_vec() }
-
     fn decode<T: Decodable>(bytes: &[u8]) -> Result<T, DecoderError> {
         rlp::decode(bytes)
     }
 
-    // The core invariant: wrappers produce byte-identical output to the
-    // current rlp 0.4 native `bool`, so swapping them in preserves the wire
-    // format and consensus hashes.
+    // Absolute byte assertions, covering every payload length the RLP
+    // decoder can deliver: 0 bytes, 1 byte (all 256 values), and ≥2 bytes.
+
     #[test]
-    fn wrappers_match_rlp_04_bool_encoding() {
-        assert_eq!(encode(&StrictBool(false)), encode(&false));
-        assert_eq!(encode(&StrictBool(true)), encode(&true));
-        assert_eq!(encode(&CompatBool(false)), encode(&false));
-        assert_eq!(encode(&CompatBool(true)), encode(&true));
+    fn encode_bytes() {
+        assert_eq!(encode(&StrictBool(false)), vec![0x00]);
+        assert_eq!(encode(&StrictBool(true)), vec![0x01]);
+        assert_eq!(encode(&CompatBool(false)), vec![0x00]);
+        assert_eq!(encode(&CompatBool(true)), vec![0x01]);
     }
 
     #[test]
-    fn strict_bool_rejects_non_canonical() {
-        assert_eq!(decode::<StrictBool>(&[0x00]).unwrap(), StrictBool(false));
-        assert_eq!(decode::<StrictBool>(&[0x01]).unwrap(), StrictBool(true));
+    fn decode_empty_payload() {
+        // RLP `0x80` decodes to an empty byte string.
         assert!(decode::<StrictBool>(&[0x80]).is_err());
-        assert!(decode::<StrictBool>(&[0x02]).is_err());
+        assert_eq!(decode::<CompatBool>(&[0x80]).unwrap(), CompatBool(false));
     }
 
     #[test]
-    fn compat_bool_accepts_legacy_and_phase2() {
-        assert_eq!(decode::<CompatBool>(&[0x00]).unwrap(), CompatBool(false));
-        assert_eq!(decode::<CompatBool>(&[0x01]).unwrap(), CompatBool(true));
-        assert_eq!(decode::<CompatBool>(&[0x80]).unwrap(), CompatBool(false));
-        assert!(decode::<CompatBool>(&[0x02]).is_err());
+    fn decode_all_single_byte_payloads() {
+        for byte in 0u8..=0xff {
+            // 1-byte string: self-encoded if `byte < 0x80`, else prefixed
+            // with the 0x81 length marker.
+            let rlp: Vec<u8> = if byte < 0x80 {
+                vec![byte]
+            } else {
+                vec![0x81, byte]
+            };
+            let strict = decode::<StrictBool>(&rlp);
+            let compat = decode::<CompatBool>(&rlp);
+            match byte {
+                0 => {
+                    assert_eq!(strict.unwrap(), StrictBool(false));
+                    assert_eq!(compat.unwrap(), CompatBool(false));
+                }
+                1 => {
+                    assert_eq!(strict.unwrap(), StrictBool(true));
+                    assert_eq!(compat.unwrap(), CompatBool(true));
+                }
+                _ => {
+                    assert!(strict.is_err(), "StrictBool byte {:#04x}", byte);
+                    assert!(compat.is_err(), "CompatBool byte {:#04x}", byte);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn decode_multi_byte_payloads_rejected() {
+        assert!(decode::<StrictBool>(&[0x82, 0xab, 0xcd]).is_err());
+        assert!(decode::<CompatBool>(&[0x82, 0xab, 0xcd]).is_err());
+        assert!(decode::<StrictBool>(&[0x83, 0x01, 0x02, 0x03]).is_err());
+        assert!(decode::<CompatBool>(&[0x83, 0x01, 0x02, 0x03]).is_err());
+    }
+
+    #[test]
+    fn round_trip() {
+        for v in [false, true] {
+            assert_eq!(
+                decode::<StrictBool>(&encode(&StrictBool(v))).unwrap().0,
+                v
+            );
+            assert_eq!(
+                decode::<CompatBool>(&encode(&CompatBool(v))).unwrap().0,
+                v
+            );
+        }
     }
 }
