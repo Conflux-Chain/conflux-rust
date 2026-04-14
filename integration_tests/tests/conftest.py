@@ -13,6 +13,8 @@ TMP_DIR = None
 PORT_MIN = 11000
 PORT_MAX = 65535
 PORT_RANGE = 100
+# if os.cpu_count() is not available, use 6 as default
+MAX_WORKER_COUNT = os.cpu_count() or 6
 
 # pytest hook to add options
 def pytest_addoption(parser):
@@ -152,7 +154,22 @@ def network(framework_class: Type[ConfluxTestFramework], port_min: int, addition
 def port_min(worker_id: str) -> int:
     # worker_id is "master" or "gw0", "gw1", etc.
     index = int(worker_id.split("gw")[1]) if "gw" in worker_id else 0
+    if index >= MAX_WORKER_COUNT:
+        raise ValueError(
+            f"You are using too pytest workers more than {MAX_WORKER_COUNT}. Please run `pytest integration_tests/tests -n <number> --dist loadscope` where <number> is less than {MAX_WORKER_COUNT}."
+        )
     return PORT_MIN + index * PORT_RANGE
+
+# in certain tests, we need to test 
+@pytest.fixture(scope="module")
+def module_internal_port_min(worker_id: str) -> int:
+    # worker_id is "master" or "gw0", "gw1", etc.
+    index = int(worker_id.split("gw")[1]) if "gw" in worker_id else 0
+    if index >= MAX_WORKER_COUNT:
+        raise ValueError(
+            f"You are using too pytest workers more than {MAX_WORKER_COUNT}. Please run pytest w -n <number> where <number> is less than {MAX_WORKER_COUNT}."
+        )
+    return PORT_MIN + (index + MAX_WORKER_COUNT) * PORT_RANGE
 
 @pytest.fixture(scope="module")
 def additional_secrets():
