@@ -363,6 +363,12 @@ impl EpochManager {
     }
 
     /// Load the newest `EpochState` from the persisted PoS state.
+    ///
+    /// Must only be called after a commit has returned. Relies on
+    /// `LedgerStore::put_pos_state` having refreshed the `latest_pos_state`
+    /// cache for the just-committed block — see its invariant comment for
+    /// why that refresh is guaranteed (BFT commit serialisation + strict
+    /// monotonicity of `current_view`).
     fn latest_epoch_state(&self) -> EpochState {
         self.storage
             .pos_ledger_db()
