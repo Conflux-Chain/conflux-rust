@@ -32,6 +32,7 @@ rand = { workspace = true }
 rand_chacha = { workspace = true }
 random-crash = { workspace = true }
 rlp = { workspace = true }
+rlp-bool = { workspace = true }
 rlp_derive = { workspace = true }
 rustc-hex = { workspace = true }
 serde = { workspace = true, features = ["rc"] }

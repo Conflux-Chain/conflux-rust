@@ -18,6 +18,7 @@ malloc_size_of_derive = { workspace = true }
 cfx-bytes = { workspace = true }
 cfx-types = { workspace = true }
 rlp = { workspace = true }
+rlp-bool = { workspace = true }
 rlp_derive = { workspace = true }
 primitives = { workspace = true }
 cfx-internal-common = { workspace = true }

@@ -1,0 +1,10 @@
+[package]
+name = "rlp-bool"
+version = "0.1.0"
+edition = "2021"
+license-file.workspace = true
+
+[dependencies]
+rlp = { workspace = true }
+malloc_size_of = { workspace = true }
+malloc_size_of_derive = { workspace = true }

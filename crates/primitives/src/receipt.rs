@@ -6,6 +6,7 @@ use crate::log_entry::LogEntry;
 use cfx_types::{Address, Bloom, Space, U256, U64};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_bool::StrictBool;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 pub const TRANSACTION_OUTCOME_SUCCESS: u8 = 0;
@@ -119,11 +120,11 @@ impl Encodable for Receipt {
         s.begin_list(length)
             .append(&self.accumulated_gas_used)
             .append(&self.gas_fee)
-            .append(&self.gas_sponsor_paid)
+            .append(&StrictBool(self.gas_sponsor_paid))
             .append(&self.log_bloom)
             .append_list(&self.logs)
             .append(&self.outcome_status)
-            .append(&self.storage_sponsor_paid)
+            .append(&StrictBool(self.storage_sponsor_paid))
             .append_list(&self.storage_collateralized)
             .append_list(&self.storage_released);
         if let Some(burnt_gas_fee) = self.burnt_gas_fee {
@@ -141,11 +142,11 @@ impl Decodable for Receipt {
         Ok(Receipt {
             accumulated_gas_used: rlp.val_at(0)?,
             gas_fee: rlp.val_at(1)?,
-            gas_sponsor_paid: rlp.val_at(2)?,
+            gas_sponsor_paid: rlp.val_at::<StrictBool>(2)?.0,
             log_bloom: rlp.val_at(3)?,
             logs: rlp.list_at(4)?,
             outcome_status: rlp.val_at(5)?,
-            storage_sponsor_paid: rlp.val_at(6)?,
+            storage_sponsor_paid: rlp.val_at::<StrictBool>(6)?.0,
             storage_collateralized: rlp.list_at(7)?,
             storage_released: rlp.list_at(8)?,
             burnt_gas_fee: if item_count == 9 {
