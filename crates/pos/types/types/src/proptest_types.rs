@@ -6,7 +6,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    access_path::AccessPath,
     account_address::{self, AccountAddress},
     block_info::{BlockInfo, Round},
     block_metadata::BlockMetadata,
@@ -17,9 +16,9 @@ use crate::{
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
     on_chain_config::ValidatorSet,
     transaction::{
-        ChangeSet, RawTransaction, SignatureCheckedTransaction,
-        SignedTransaction, Transaction, TransactionPayload, TransactionStatus,
-        TransactionToCommit, Version, WriteSetPayload,
+        RawTransaction, SignatureCheckedTransaction, SignedTransaction,
+        Transaction, TransactionPayload, TransactionStatus,
+        TransactionToCommit, Version,
     },
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
@@ -28,7 +27,6 @@ use crate::{
     validator_info::ValidatorInfo,
     validator_signer::ValidatorSigner,
     vm_status::{KeptVMStatus, VMStatus},
-    write_set::{WriteOp, WriteSet, WriteSetMut},
 };
 use diem_crypto::{bls, ec_vrf, test_utils::KeyPair, traits::*, HashValue};
 use proptest::{
@@ -42,76 +40,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     iter::Iterator,
 };
-
-impl WriteOp {
-    pub fn value_strategy() -> impl Strategy<Value = Self> {
-        vec(any::<u8>(), 0..64).prop_map(WriteOp::Value)
-    }
-
-    pub fn deletion_strategy() -> impl Strategy<Value = Self> {
-        Just(WriteOp::Deletion)
-    }
-}
-
-impl Arbitrary for WriteOp {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: ()) -> Self::Strategy {
-        prop_oneof![Self::deletion_strategy(), Self::value_strategy()].boxed()
-    }
-}
-
-impl WriteSet {
-    fn genesis_strategy() -> impl Strategy<Value = Self> {
-        vec((any::<AccessPath>(), WriteOp::value_strategy()), 0..64).prop_map(
-            |write_set| {
-                let write_set_mut = WriteSetMut::new(write_set);
-                write_set_mut
-                    .freeze()
-                    .expect("generated write sets should always be valid")
-            },
-        )
-    }
-}
-
-impl Arbitrary for WriteSetPayload {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: ()) -> Self::Strategy {
-        any::<ChangeSet>().prop_map(WriteSetPayload::Direct).boxed()
-    }
-}
-
-impl Arbitrary for WriteSet {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: ()) -> Self::Strategy {
-        // XXX there's no checking for repeated access paths here, nor in
-        // write_set. Is that important? Not sure.
-        vec((any::<AccessPath>(), any::<WriteOp>()), 0..64)
-            .prop_map(|write_set| {
-                let write_set_mut = WriteSetMut::new(write_set);
-                write_set_mut
-                    .freeze()
-                    .expect("generated write sets should always be valid")
-            })
-            .boxed()
-    }
-}
-
-impl Arbitrary for ChangeSet {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: ()) -> Self::Strategy {
-        (any::<WriteSet>(), vec(any::<ContractEvent>(), 0..10))
-            .prop_map(|(ws, events)| ChangeSet::new(ws, events))
-            .boxed()
-    }
-}
 
 #[derive(Debug)]
 struct AccountInfo {
@@ -333,21 +261,6 @@ impl Arbitrary for RawTransaction {
 }
 
 impl SignatureCheckedTransaction {
-    pub fn genesis_strategy(
-        keypair_strategy: impl Strategy<
-            Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
-        >,
-        vrf_keypair_strategy: impl Strategy<
-            Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
-        >,
-    ) -> impl Strategy<Value = Self> {
-        Self::strategy_impl(
-            keypair_strategy,
-            vrf_keypair_strategy,
-            TransactionPayload::genesis_strategy(),
-        )
-    }
-
     fn strategy_impl(
         keypair_strategy: impl Strategy<
             Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
@@ -424,26 +337,6 @@ impl Arbitrary for SignedTransaction {
     }
 }
 
-impl TransactionPayload {
-    pub fn write_set_strategy() -> impl Strategy<Value = Self> {
-        any::<WriteSet>().prop_map(|ws| {
-            TransactionPayload::WriteSet(WriteSetPayload::Direct(
-                ChangeSet::new(ws, vec![]),
-            ))
-        })
-    }
-
-    /// Similar to `write_set_strategy` except generates a valid write set for
-    /// the genesis block.
-    pub fn genesis_strategy() -> impl Strategy<Value = Self> {
-        WriteSet::genesis_strategy().prop_map(|ws| {
-            TransactionPayload::WriteSet(WriteSetPayload::Direct(
-                ChangeSet::new(ws, vec![]),
-            ))
-        })
-    }
-}
-
 prop_compose! {
     fn arb_transaction_status()(vm_status in any::<VMStatus>()) -> TransactionStatus {
         vm_status.into()
@@ -469,8 +362,18 @@ impl Arbitrary for TransactionPayload {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;
 
+    // Only the legacy placeholder variants are generated: the active
+    // Conflux PoS payloads (Election, Retire, …) lack `Arbitrary` impls.
+    // Covering all four `_Legacy*` variants at least exercises the BCS
+    // variant-index stability they exist to protect.
     fn arbitrary_with(_args: ()) -> Self::Strategy {
-        Self::write_set_strategy().boxed()
+        prop_oneof![
+            Just(TransactionPayload::_LegacyWriteSet),
+            Just(TransactionPayload::_LegacyScript),
+            Just(TransactionPayload::_LegacyModule),
+            Just(TransactionPayload::_LegacyScriptFunction),
+        ]
+        .boxed()
     }
 }
 

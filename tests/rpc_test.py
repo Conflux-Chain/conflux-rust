@@ -4,6 +4,8 @@ import time
 import os
 import types
 import shutil
+from pathlib import Path
+
 from eth_utils import decode_hex
 
 from conflux.messages import GetBlockHeaders, GET_BLOCK_HEADERS_RESPONSE
@@ -65,16 +67,18 @@ class RpcTest(ConfluxTestFramework):
                     self._test_class(name, obj)
 
     def _test_class(self, class_name, class_type):
-        # TODO Clean old nodes
-        # Setup a clean node to run each test
         self.stop_nodes()
         for i in range(len(self.nodes)):
             datadir = get_datadir_path(self.options.tmpdir, i)
             shutil.rmtree(datadir)
-        old_pos_files = ["initial_nodes.json", "genesis_file", "public_key"]
-        for f in old_pos_files:
-            os.remove(os.path.join(self.options.tmpdir, f))
-        shutil.rmtree(os.path.join(self.options.tmpdir, "private_keys"))
+        # Remove PoS artifacts created by set_node_pos_config. ignore_errors /
+        # missing_ok keep this test resilient to future PoS file renames.
+        for f in ("initial_nodes.json", "public_key"):
+            Path(self.options.tmpdir, f).unlink(missing_ok=True)
+        shutil.rmtree(
+            os.path.join(self.options.tmpdir, "private_keys"),
+            ignore_errors=True,
+        )
         self.nodes = []
         self.add_nodes(1)
         node_index = len(self.nodes) - 1

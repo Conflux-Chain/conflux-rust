@@ -71,7 +71,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "once_cell",
  "version_check",
- "zerocopy 0.7.32",
+ "zerocopy",
 ]
 
 [[package]]
@@ -245,12 +245,12 @@ dependencies = [
  "keccak-asm",
  "paste",
  "proptest",
- "rand 0.9.0",
+ "rand 0.9.3",
  "ruint",
  "rustc-hash 2.1.1",
  "serde",
  "sha3",
- "tiny-keccak 2.0.2",
+ "tiny-keccak",
 ]
 
 [[package]]
@@ -381,7 +381,7 @@ dependencies = [
  "quote",
  "syn 2.0.111",
  "syn-solidity",
- "tiny-keccak 2.0.2",
+ "tiny-keccak",
 ]
 
 [[package]]
@@ -880,13 +880,14 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "attohttpc"
-version = "0.10.1"
+version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baf13118df3e3dce4b5ac930641343b91b656e4e72c8f8325838b01a4b1c9d45"
+checksum = "fdb8867f378f33f78a811a8eb9bf108ad99430d7aad43315dd9319c827ef6247"
 dependencies = [
  "http 0.2.9",
  "log",
  "url",
+ "wildmatch",
 ]
 
 [[package]]
@@ -1145,7 +1146,7 @@ dependencies = [
  "metrics",
  "parking_lot 0.12.1",
  "primitives",
- "rand 0.9.0",
+ "rand 0.9.3",
  "txgen",
 ]
 
@@ -1414,7 +1415,7 @@ dependencies = [
  "network",
  "parking_lot 0.12.1",
  "primitives",
- "rand 0.9.0",
+ "rand 0.9.3",
  "toml 0.8.19",
  "txgen",
 ]
@@ -1430,14 +1431,14 @@ dependencies = [
  "digest 0.10.7",
  "hmac 0.12.1",
  "lazy_static",
- "parity-secp256k1",
  "pbkdf2 0.12.2",
  "ripemd",
  "scrypt 0.11.0",
+ "secp256k1 0.30.0",
  "sha2 0.10.9",
  "subtle",
  "thiserror 2.0.18",
- "tiny-keccak 2.0.2",
+ "tiny-keccak",
  "typenum",
 ]
 
@@ -1514,7 +1515,7 @@ dependencies = [
  "solidity-abi",
  "solidity-abi-derive",
  "substrate-bn",
- "tiny-keccak 2.0.2",
+ "tiny-keccak",
  "typemap-ors",
 ]
 
@@ -1559,7 +1560,7 @@ dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
  "primitives",
- "rand 0.9.0",
+ "rand 0.9.3",
  "rand_xorshift 0.4.0",
  "treap-map",
  "typenum",
@@ -1610,7 +1611,7 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-types",
  "log",
- "rand 0.9.0",
+ "rand 0.9.3",
  "serde",
  "strum 0.26.3",
  "thiserror 2.0.18",
@@ -1708,7 +1709,7 @@ dependencies = [
  "once_cell",
  "parity-version",
  "primitives",
- "rand 0.7.3",
+ "rand 0.9.3",
  "rustc-hex",
  "serde",
  "serde_derive",
@@ -1871,7 +1872,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "primitives",
  "rlp 0.4.6",
- "tiny-keccak 2.0.2",
+ "tiny-keccak",
 ]
 
 [[package]]
@@ -1900,7 +1901,7 @@ dependencies = [
  "memoffset",
  "parking_lot 0.12.1",
  "primitives",
- "rand 0.9.0",
+ "rand 0.9.3",
  "rand_chacha 0.9.0",
  "random-crash",
  "rlp 0.4.6",
@@ -1941,7 +1942,7 @@ dependencies = [
 name = "cfx-types"
 version = "0.2.0"
 dependencies = [
- "ethereum-types 0.9.2",
+ "ethereum-types",
  "hex",
  "keccak-hash",
  "rlp 0.4.6",
@@ -2073,7 +2074,7 @@ dependencies = [
  "primitives",
  "priority-send-queue",
  "rand 0.8.5",
- "rand 0.9.0",
+ "rand 0.9.3",
  "rand_xorshift 0.4.0",
  "rangetools",
  "rayon",
@@ -2099,7 +2100,7 @@ dependencies = [
  "thiserror 2.0.18",
  "threadpool",
  "throttling",
- "tiny-keccak 2.0.2",
+ "tiny-keccak",
  "tokio",
  "tokio-stream",
  "toml 0.8.19",
@@ -2178,14 +2179,13 @@ dependencies = [
  "log",
  "malloc_size_of",
  "malloc_size_of_derive",
- "parity-secp256k1",
  "parity-wordlist",
- "rand 0.7.3",
  "rustc-hex",
+ "secp256k1 0.30.0",
  "serde",
  "sha2 0.10.9",
  "thiserror 2.0.18",
- "tiny-keccak 2.0.2",
+ "tiny-keccak",
  "zeroize",
 ]
 
@@ -2201,7 +2201,7 @@ dependencies = [
  "log",
  "parity-wordlist",
  "parking_lot 0.12.1",
- "rand 0.9.0",
+ "rand 0.9.3",
  "rustc-hex",
  "serde",
  "serde_derive",
@@ -2882,7 +2882,7 @@ dependencies = [
  "serde_bytes",
  "static_assertions",
  "thiserror 1.0.63",
- "tiny-keccak 2.0.2",
+ "tiny-keccak",
  "vrf",
 ]
 
@@ -3018,7 +3018,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "thiserror 1.0.63",
- "tiny-keccak 2.0.2",
+ "tiny-keccak",
 ]
 
 [[package]]
@@ -3044,11 +3044,10 @@ dependencies = [
 
 [[package]]
 name = "dir"
-version = "0.1.2"
-source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=09da4dfeecd754df2034d4e71a260277aaaf9783#09da4dfeecd754df2034d4e71a260277aaaf9783"
+version = "0.1.3"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=08d6a6df3caa0a169177e22a7d082ce97b2830ae#08d6a6df3caa0a169177e22a7d082ce97b2830ae"
 dependencies = [
  "app_dirs",
- "ethereum-types 0.8.0",
  "home 0.3.4",
 ]
 
@@ -3293,19 +3292,6 @@ dependencies = [
 
 [[package]]
 name = "ethbloom"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32cfe1c169414b709cf28aa30c74060bdb830a03a8ba473314d079ac79d80a5f"
-dependencies = [
- "crunchy",
- "fixed-hash 0.5.2",
- "impl-rlp",
- "impl-serde 0.2.3",
- "tiny-keccak 1.5.0",
-]
-
-[[package]]
-name = "ethbloom"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71a6567e6fd35589fea0c63b94b4cf2e55573e413901bdbe60ab15cf0e25e5df"
@@ -3313,8 +3299,8 @@ dependencies = [
  "crunchy",
  "fixed-hash 0.6.1",
  "impl-rlp",
- "impl-serde 0.3.2",
- "tiny-keccak 2.0.2",
+ "impl-serde",
+ "tiny-keccak",
 ]
 
 [[package]]
@@ -3325,28 +3311,14 @@ checksum = "e957efe1e627f8ec4e253660615fd9fe3736e10026197740b8b4b26c812be2e9"
 
 [[package]]
 name = "ethereum-types"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba744248e3553a393143d5ebb68939fc3a4ec0c22a269682535f5ffe7fed728c"
-dependencies = [
- "ethbloom 0.8.1",
- "fixed-hash 0.5.2",
- "impl-rlp",
- "impl-serde 0.2.3",
- "primitive-types 0.6.2",
- "uint 0.8.5",
-]
-
-[[package]]
-name = "ethereum-types"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "473aecff686bd8e7b9db0165cbbb53562376b39bf35b427f0c60446a9e1634b0"
 dependencies = [
- "ethbloom 0.9.2",
+ "ethbloom",
  "fixed-hash 0.6.1",
  "impl-rlp",
- "impl-serde 0.3.2",
+ "impl-serde",
  "primitive-types 0.7.3",
  "uint 0.8.5",
 ]
@@ -3479,18 +3451,6 @@ dependencies = [
  "bitvec 1.0.1",
  "rand_core 0.6.4",
  "subtle",
-]
-
-[[package]]
-name = "fixed-hash"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3367952ceb191f4ab95dd5685dc163ac539e36202f9fcfd0cb22f9f9c542fefc"
-dependencies = [
- "byteorder",
- "rand 0.7.3",
- "rustc-hex",
- "static_assertions",
 ]
 
 [[package]]
@@ -4349,12 +4309,13 @@ dependencies = [
 
 [[package]]
 name = "igd"
-version = "0.10.2"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5bab3d4e7e5b7e564770440ee64b6ae9fd227434ea8f2845ed5b5859d7ca652"
+checksum = "556b5a75cd4adb7c4ea21c64af1c48cefb2ce7d43dc4352c720a1fe47c21f355"
 dependencies = [
  "attohttpc",
- "rand 0.7.3",
+ "log",
+ "rand 0.8.5",
  "url",
  "xmltree",
 ]
@@ -4384,15 +4345,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f7a72f11830b52333f36e3b09a288333888bf54380fd0ac0790a3c31ab0f3c5"
 dependencies = [
  "rlp 0.4.6",
-]
-
-[[package]]
-name = "impl-serde"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58e3cae7e99c7ff5a995da2cf78dd0a5383740eda71d98cf7b1910c301ac69b8"
-dependencies = [
- "serde",
 ]
 
 [[package]]
@@ -4715,7 +4667,7 @@ dependencies = [
  "jsonrpsee-types",
  "parking_lot 0.12.1",
  "pin-project",
- "rand 0.9.0",
+ "rand 0.9.3",
  "rustc-hash 2.1.1",
  "serde",
  "serde_json",
@@ -4847,7 +4799,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f58a51ef3df9398cf2434bea8d4eb61fb748d0feb1571f87388579a120a4c8f"
 dependencies = [
  "primitive-types 0.7.3",
- "tiny-keccak 2.0.2",
+ "tiny-keccak",
 ]
 
 [[package]]
@@ -4877,9 +4829,9 @@ dependencies = [
 
 [[package]]
 name = "lazy_static"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 dependencies = [
  "spin",
 ]
@@ -4957,7 +4909,7 @@ checksum = "348108ab3fba42ec82ff6e9564fc4ca0247bdccdc68dd8af9764bbc79c3c8ffb"
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=d0cd089bc092ec77b65a5262d453848f57abe3c3#d0cd089bc092ec77b65a5262d453848f57abe3c3"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=672b02bc21874a5e91705f3642dac3614a7a8f9e#672b02bc21874a5e91705f3642dac3614a7a8f9e"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -4974,7 +4926,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=d0cd089bc092ec77b65a5262d453848f57abe3c3#d0cd089bc092ec77b65a5262d453848f57abe3c3"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=672b02bc21874a5e91705f3642dac3614a7a8f9e#672b02bc21874a5e91705f3642dac3614a7a8f9e"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -5014,7 +4966,7 @@ version = "0.1.0"
 dependencies = [
  "malloc_size_of",
  "parking_lot 0.12.1",
- "rand 0.9.0",
+ "rand 0.9.3",
 ]
 
 [[package]]
@@ -5078,7 +5030,7 @@ dependencies = [
  "log-mdc",
  "mock_instant",
  "parking_lot 0.12.1",
- "rand 0.9.0",
+ "rand 0.9.3",
  "serde",
  "serde-value",
  "serde_json",
@@ -5206,7 +5158,7 @@ dependencies = [
  "lazy_static",
  "log",
  "parking_lot 0.12.1",
- "rand 0.9.0",
+ "rand 0.9.3",
  "serde",
  "timer",
  "tokio",
@@ -5359,7 +5311,7 @@ dependencies = [
  "parity-path",
  "parking_lot 0.12.1",
  "priority-send-queue",
- "rand 0.9.0",
+ "rand 0.9.3",
  "rlp 0.4.6",
  "rlp-derive",
  "serde",
@@ -5704,17 +5656,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "parity-secp256k1"
-version = "0.7.0"
-source = "git+https://github.com/paritytech/rust-secp256k1.git#d05fd8e152f8d110b587906e3d854196b086e42a"
-dependencies = [
- "arrayvec 0.5.2",
- "cc",
- "cfg-if 0.1.10",
- "rand 0.7.3",
-]
-
-[[package]]
 name = "parity-version"
 version = "3.3.3"
 dependencies = [
@@ -5725,12 +5666,11 @@ dependencies = [
 
 [[package]]
 name = "parity-wordlist"
-version = "1.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f45ab1896c154f80a23f22aa81134b881e18b8fb7ff106abe67ae53a161d54a0"
+version = "1.4.0"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=08d6a6df3caa0a169177e22a7d082ce97b2830ae#08d6a6df3caa0a169177e22a7d082ce97b2830ae"
 dependencies = [
  "lazy_static",
- "rand 0.7.3",
+ "rand 0.9.3",
 ]
 
 [[package]]
@@ -6119,19 +6059,6 @@ dependencies = [
 
 [[package]]
 name = "primitive-types"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4336f4f5d5524fa60bcbd6fe626f9223d8142a50e7053e979acdf0da41ab975"
-dependencies = [
- "fixed-hash 0.5.2",
- "impl-codec 0.4.2",
- "impl-rlp",
- "impl-serde 0.3.2",
- "uint 0.8.5",
-]
-
-[[package]]
-name = "primitive-types"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7dd39dcacf71411ba488570da7bbc89b717225e46478b30ba99b92db6b149809"
@@ -6139,7 +6066,7 @@ dependencies = [
  "fixed-hash 0.6.1",
  "impl-codec 0.4.2",
  "impl-rlp",
- "impl-serde 0.3.2",
+ "impl-serde",
  "uint 0.8.5",
 ]
 
@@ -6169,7 +6096,7 @@ dependencies = [
  "log",
  "malloc_size_of",
  "once_cell",
- "rand 0.9.0",
+ "rand 0.9.3",
  "rlp 0.4.6",
  "rlp-derive",
  "serde",
@@ -6325,14 +6252,13 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.9.0"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94"
+checksum = "7ec095654a25171c2124e9e3393a930bddbffdc939556c914957a4c3e0a87166"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
  "serde",
- "zerocopy 0.8.24",
 ]
 
 [[package]]
@@ -6427,7 +6353,7 @@ dependencies = [
  "lazy_static",
  "log",
  "parking_lot 0.12.1",
- "rand 0.9.0",
+ "rand 0.9.3",
 ]
 
 [[package]]
@@ -6810,7 +6736,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=d0cd089bc092ec77b65a5262d453848f57abe3c3#d0cd089bc092ec77b65a5262d453848f57abe3c3"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=672b02bc21874a5e91705f3642dac3614a7a8f9e#672b02bc21874a5e91705f3642dac3614a7a8f9e"
 dependencies = [
  "libc",
  "librocksdb_sys",
@@ -6854,7 +6780,7 @@ dependencies = [
  "primitive-types 0.12.2",
  "proptest",
  "rand 0.8.5",
- "rand 0.9.0",
+ "rand 0.9.3",
  "rlp 0.5.2",
  "ruint-macro",
  "serde_core",
@@ -7176,7 +7102,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c3c81b43dc2d8877c216a3fccf76677ee1ebccd429566d3e67447290d0c42b2"
 dependencies = [
  "bitcoin_hashes",
- "rand 0.9.0",
+ "rand 0.9.3",
  "secp256k1-sys 0.11.0",
 ]
 
@@ -7702,9 +7628,9 @@ dependencies = [
 
 [[package]]
 name = "spin"
-version = "0.5.2"
+version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
+checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
 name = "spki"
@@ -8103,15 +8029,6 @@ dependencies = [
 
 [[package]]
 name = "tiny-keccak"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d8a021c69bb74a44ccedb824a046447e2c84a01df9e5c20779750acb38e11b2"
-dependencies = [
- "crunchy",
-]
-
-[[package]]
-name = "tiny-keccak"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
@@ -8395,7 +8312,7 @@ version = "0.1.0"
 dependencies = [
  "malloc_size_of",
  "primitives",
- "rand 0.9.0",
+ "rand 0.9.3",
  "rand_xorshift 0.4.0",
 ]
 
@@ -8419,7 +8336,7 @@ dependencies = [
  "metrics",
  "parking_lot 0.12.1",
  "primitives",
- "rand 0.9.0",
+ "rand 0.9.3",
  "rlp 0.4.6",
  "rustc-hex",
  "secret-store",
@@ -8479,7 +8396,7 @@ checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
 [[package]]
 name = "unexpected"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=09da4dfeecd754df2034d4e71a260277aaaf9783#09da4dfeecd754df2034d4e71a260277aaaf9783"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=08d6a6df3caa0a169177e22a7d082ce97b2830ae#08d6a6df3caa0a169177e22a7d082ce97b2830ae"
 
 [[package]]
 name = "unicase"
@@ -8788,6 +8705,12 @@ checksum = "ee3e3b5f5e80bc89f30ce8d0343bf4e5f12341c51f3e26cbeecbc7c85443e85b"
 dependencies = [
  "rustls-pki-types",
 ]
+
+[[package]]
+name = "wildmatch"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f44b95f62d34113cf558c93511ac93027e03e9c29a60dd0fd70e6e025c7270a"
 
 [[package]]
 name = "winapi"
@@ -9223,16 +9146,7 @@ version = "0.7.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74d4d3961e53fa4c9a25a8637fc2bfaf2595b3d3ae34875568a5cf64787716be"
 dependencies = [
- "zerocopy-derive 0.7.32",
-]
-
-[[package]]
-name = "zerocopy"
-version = "0.8.24"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2586fea28e186957ef732a5f8b3be2da217d65c5969d4b1e17f973ebbe876879"
-dependencies = [
- "zerocopy-derive 0.8.24",
+ "zerocopy-derive",
 ]
 
 [[package]]
@@ -9240,17 +9154,6 @@ name = "zerocopy-derive"
 version = "0.7.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ce1b18ccd8e73a9321186f97e46f9f04b778851177567b1975109d26a08d2a6"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.111",
-]
-
-[[package]]
-name = "zerocopy-derive"
-version = "0.8.24"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a996a8f63c5c4448cd959ac1bab0aaa3306ccfd060472f85943ee0750f0169be"
 dependencies = [
  "proc-macro2",
  "quote",

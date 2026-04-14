@@ -15,7 +15,7 @@ use diem_types::{
         DisputePayload, ElectionPayload, RegisterPayload, RetirePayload,
         SignatureCheckedTransaction, SignedTransaction, Transaction,
         TransactionOutput, TransactionPayload, TransactionStatus,
-        UpdateVotingPowerPayload, WriteSetPayload,
+        UpdateVotingPowerPayload,
     },
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
@@ -42,8 +42,8 @@ impl PosVM {
                     let spec = Spec { catch_up_mode };
                     Self::process_user_transaction(state_view, &tx, &spec)?
                 }
-                Transaction::GenesisTransaction(change_set) => {
-                    Self::process_genesis_transaction(&change_set)?
+                Transaction::GenesisTransaction(events) => {
+                    Self::process_genesis_transaction(events)?
                 }
             };
             vm_outputs.push(output);
@@ -99,9 +99,6 @@ impl PosVM {
         spec: &Spec,
     ) -> Result<TransactionOutput, VMStatus> {
         let events = match tx.payload() {
-            TransactionPayload::WriteSet(WriteSetPayload::Direct(
-                change_set,
-            )) => change_set.events().to_vec(),
             TransactionPayload::Election(election_payload) => {
                 election_payload.execute(state_view, tx, spec)?
             }
@@ -127,10 +124,9 @@ impl PosVM {
     }
 
     fn process_genesis_transaction(
-        write_set: &WriteSetPayload,
+        events: Vec<ContractEvent>,
     ) -> Result<TransactionOutput, VMStatus> {
-        let WriteSetPayload::Direct(change_set) = write_set;
-        Ok(Self::gen_output(change_set.events().to_vec()))
+        Ok(Self::gen_output(events))
     }
 
     fn gen_output(events: Vec<ContractEvent>) -> TransactionOutput {

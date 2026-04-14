@@ -13,10 +13,7 @@ use super::PosLedgerDB;
 use crate::{
     change_set::ChangeSet,
     errors::DiemDbError,
-    schema::{
-        event::EventSchema, event_accumulator::EventAccumulatorSchema,
-        event_by_version::EventByVersionSchema,
-    },
+    schema::{event::EventSchema, event_accumulator::EventAccumulatorSchema},
 };
 use accumulator::{HashReader, MerkleAccumulator};
 use anyhow::{ensure, format_err, Result};
@@ -134,10 +131,6 @@ impl EventStore {
         events.iter().enumerate().try_for_each::<_, Result<_>>(
             |(idx, event)| {
                 cs.batch.put::<EventSchema>(&(version, idx as u64), event)?;
-                cs.batch.put::<EventByVersionSchema>(
-                    &(*event.key(), version),
-                    &(idx as u64),
-                )?;
                 Ok(())
             },
         )?;
