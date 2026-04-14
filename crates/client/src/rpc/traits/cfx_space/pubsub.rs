@@ -18,8 +18,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+//! Cfx PUB-SUB rpc interface.
 use crate::rpc::types::pubsub;
-///! Cfx PUB-SUB rpc interface.
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed, SubscriptionId};

@@ -7,7 +7,7 @@ use crate::{
     gauge::{Gauge, GaugeUsize},
     histogram::Histogram,
     meter::{Meter, StandardMeter},
-    metrics::is_enabled,
+    metrics::{is_enabled, is_stopped},
     registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
 };
 use lazy_static::lazy_static;
@@ -37,10 +37,16 @@ pub fn report_async<R: 'static + Reporter>(reporter: R, interval: Duration) {
     }
 
     thread::spawn(move || loop {
+        if is_stopped() {
+            return;
+        }
         // sleep random time on different nodes to reduce competition.
         thread::sleep(
             interval.mul_f64(0.5 + rand::rng().random_range(0.0..1.0)),
         );
+        if is_stopped() {
+            return;
+        }
 
         let start = Instant::now();
 
@@ -136,25 +142,27 @@ impl Reportable for StandardMeter {
     fn get_value(&self) -> String {
         let snapshot = self.snapshot();
         format!(
-            "{{count: {}, m1: {:.2}, m5: {:.2}, m15: {:.2}, mean: {:.2}}}",
+            "{{count: {}, m1: {:.2}, m5: {:.2}, m15: {:.2}, mean: {:.2}, m0: {:.2}}}",
             snapshot.count(),
             snapshot.rate1(),
             snapshot.rate5(),
             snapshot.rate15(),
-            snapshot.rate_mean()
+            snapshot.rate_mean(),
+            snapshot.rate_m0()
         )
     }
 
     fn get_value_with_group(&self, name: &String) -> String {
         let snapshot = self.snapshot();
         format!(
-            "{0}.count: {1}, {0}.m1: {2:.2}, {0}.m5: {3:.2}, {0}.m15: {4:.2}, {0}.mean: {5:.2}",
+            "{0}.count: {1}, {0}.m1: {2:.2}, {0}.m5: {3:.2}, {0}.m15: {4:.2}, {0}.mean: {5:.2}, {0}.m0: {6:.2}",
             name,
             snapshot.count(),
             snapshot.rate1(),
             snapshot.rate5(),
             snapshot.rate15(),
-            snapshot.rate_mean()
+            snapshot.rate_mean(),
+            snapshot.rate_m0()
         )
     }
 }

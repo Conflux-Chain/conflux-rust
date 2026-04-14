@@ -205,11 +205,15 @@ impl ExtendedKeyPair {
 // https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 mod derivation {
     use super::{Derivation, Label};
-    use crate::{keccak, math::curve_order, SECP256K1};
+    use crate::math::{curve_order, pubkey_to_public, public_to_pubkey};
+    use cfx_crypto::crypto::keccak::Keccak256;
     use cfx_types::{BigEndianHash, H256, H512, U256, U512};
-    use parity_crypto::hmac;
-    use secp256k1::key::{PublicKey, SecretKey};
+    use hmac::{Hmac, Mac};
+    use secp256k1::{PublicKey, SecretKey, SECP256K1};
+    use sha2::Sha512;
     use std::convert::TryInto;
+
+    type HmacSha512 = Hmac<Sha512>;
 
     #[derive(Debug)]
     pub enum Error {
@@ -246,8 +250,10 @@ mod derivation {
         let private: U256 = private_key.into_uint();
 
         // produces 512-bit derived hmac (I)
-        let skey = hmac::SigKey::sha512(chain_code.as_bytes());
-        let i_512 = hmac::sign(&skey, &data[..]);
+        let mut skey = HmacSha512::new_from_slice(chain_code.as_bytes())
+            .expect("HmacSha512 failed");
+        skey.update(data);
+        let i_512 = skey.finalize().into_bytes().to_vec();
 
         // left most 256 bits are later added to original private key
         let hmac_key: U256 = H256::from_slice(&i_512[0..32]).into_uint();
@@ -267,12 +273,10 @@ mod derivation {
     where T: Label {
         let mut data = vec![0u8; 33 + T::len()];
 
-        let sec_private =
-            SecretKey::from_slice(&SECP256K1, private_key.as_bytes())
-                .expect("Caller should provide valid private key");
-        let sec_public = PublicKey::from_secret_key(&SECP256K1, &sec_private)
+        let sec_private = SecretKey::from_slice(private_key.as_bytes())
             .expect("Caller should provide valid private key");
-        let public_serialized = sec_public.serialize_vec(&SECP256K1, true);
+        let sec_public = PublicKey::from_secret_key(SECP256K1, &sec_private);
+        let public_serialized = sec_public.serialize();
 
         // curve point (compressed public key) --  index
         //             0.33                    --  33..end
@@ -323,12 +327,9 @@ mod derivation {
             }
         };
 
-        let mut public_sec_raw = [0u8; 65];
-        public_sec_raw[0] = 4;
-        public_sec_raw[1..65].copy_from_slice(public_key.as_bytes());
-        let public_sec = PublicKey::from_slice(&SECP256K1, &public_sec_raw)
-            .map_err(|_| Error::InvalidPoint)?;
-        let public_serialized = public_sec.serialize_vec(&SECP256K1, true);
+        let public_sec =
+            public_to_pubkey(&public_key).map_err(|_| Error::InvalidPoint)?;
+        let public_serialized = public_sec.serialize();
 
         let mut data = vec![0u8; 33 + T::len()];
         // curve point (compressed public key) --  index
@@ -337,8 +338,10 @@ mod derivation {
         index.store(&mut data[33..(33 + T::len())]);
 
         // HMAC512SHA produces [derived private(256); new chain code(256)]
-        let skey = hmac::SigKey::sha512(chain_code.as_bytes());
-        let i_512 = hmac::sign(&skey, &data[..]);
+        let mut skey = HmacSha512::new_from_slice(chain_code.as_bytes())
+            .expect("HmacSha512 failed");
+        skey.update(data.as_slice());
+        let i_512 = skey.finalize().into_bytes().to_vec();
 
         let new_private = H256::from_slice(&i_512[0..32]);
         let new_chain_code = H256::from_slice(&i_512[32..64]);
@@ -348,23 +351,20 @@ mod derivation {
         if curve_order() <= new_private.into_uint() {
             return Err(Error::MissingIndex);
         }
-        let new_private_sec = SecretKey::from_slice(&SECP256K1, new_private.as_bytes())
+        let new_private_sec = SecretKey::from_slice(new_private.as_bytes())
 			.expect("Private key belongs to the field [0..CURVE_ORDER) (checked above); So initializing can never fail; qed");
-        let mut new_public =
-            PublicKey::from_secret_key(&SECP256K1, &new_private_sec)
-                .expect("Valid private key produces valid public key");
+        let new_public =
+            PublicKey::from_secret_key(SECP256K1, &new_private_sec);
 
         // Adding two points on the elliptic curves (combining two public keys)
-        new_public
-            .add_assign(&SECP256K1, &public_sec)
+        let combined = new_public
+            .combine(&public_sec)
             .expect("Addition of two valid points produce valid point");
 
-        let serialized = new_public.serialize_vec(&SECP256K1, false);
-
-        Ok((H512::from_slice(&serialized[1..65]), new_chain_code))
+        Ok((pubkey_to_public(&combined), new_chain_code))
     }
 
-    fn sha3(slc: &[u8]) -> H256 { keccak::Keccak256::keccak256(slc).into() }
+    fn sha3(slc: &[u8]) -> H256 { slc.keccak256().into() }
 
     pub fn chain_code(secret: H256) -> H256 {
         // 10,000 rounds of sha3
@@ -376,17 +376,18 @@ mod derivation {
     }
 
     pub fn point(secret: H256) -> Result<H512, Error> {
-        let sec = SecretKey::from_slice(&SECP256K1, secret.as_bytes())
+        let sec = SecretKey::from_slice(secret.as_bytes())
             .map_err(|_| Error::InvalidPoint)?;
-        let public_sec = PublicKey::from_secret_key(&SECP256K1, &sec)
-            .map_err(|_| Error::InvalidPoint)?;
-        let serialized = public_sec.serialize_vec(&SECP256K1, false);
-        Ok(H512::from_slice(&serialized[1..65]))
+        Ok(pubkey_to_public(&PublicKey::from_secret_key(
+            SECP256K1, &sec,
+        )))
     }
 
     pub fn seed_pair(seed: &[u8]) -> (H256, H256) {
-        let skey = hmac::SigKey::sha512(b"Bitcoin seed");
-        let i_512 = hmac::sign(&skey, seed);
+        let mut skey = HmacSha512::new_from_slice(b"Bitcoin seed")
+            .expect("HmacSha512 failed");
+        skey.update(seed);
+        let i_512 = skey.finalize().into_bytes().to_vec();
 
         let master_key = H256::from_slice(&i_512[0..32]);
         let chain_code = H256::from_slice(&i_512[32..64]);

@@ -11,17 +11,7 @@
 //! Used for node restarts, network partitions, full node syncs
 
 pub mod bootstrapper;
-pub mod chunk_request;
-pub mod chunk_response;
 pub mod client;
 pub mod coordinator;
-mod counters;
-pub mod error;
 pub mod executor_proxy;
 mod logging;
-pub mod network;
-//mod request_manager;
-pub mod shared_components;
-
-#[cfg(any(feature = "fuzzing", test))]
-pub mod fuzzing;

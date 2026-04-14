@@ -19,7 +19,7 @@ use diem_types::{
     account_address::AccountAddress, on_chain_config::OnChainConfigPayload,
     transaction::SignedTransaction,
 };
-use executor::{vm::PosVM, Executor};
+use executor::Executor;
 use storage_interface::DbReader;
 
 use crate::pos::{
@@ -74,7 +74,7 @@ pub fn start_consensus(
         runtime.handle().clone(),
         consensus_db.clone(),
     ));
-    let executor = Box::new(Executor::<PosVM>::new(
+    let executor = Box::new(Executor::new(
         db_with_cache,
         pow_handler.clone(),
         consensus_db.clone() as Arc<dyn LedgerBlockRW>,

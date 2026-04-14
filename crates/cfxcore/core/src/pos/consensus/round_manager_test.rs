@@ -41,14 +41,13 @@ use consensus_types::{
     timeout_certificate::TimeoutCertificate,
     vote_msg::VoteMsg,
 };
-use diem_crypto::{ed25519::Ed25519PrivateKey, HashValue, Uniform};
+use diem_crypto::{HashValue, Uniform};
 use diem_secure_storage::Storage;
 use diem_types::{
     epoch_state::EpochState,
-    ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
+    ledger_info::LedgerInfoWithSignatures,
     validator_signer::ValidatorSigner,
     validator_verifier::random_validator_verifier,
-    waypoint::Waypoint,
 };
 use futures::{
     channel::{mpsc, oneshot},
@@ -101,12 +100,6 @@ impl NodeSetup {
         let (signers, validators) =
             random_validator_verifier(num_nodes, None, false);
         let proposer_author = signers[0].author();
-        let validator_set = (&validators).into();
-        let waypoint = Waypoint::new_epoch_boundary(&LedgerInfo::mock_genesis(
-            Some(validator_set),
-        ))
-        .unwrap();
-
         let mut nodes = vec![];
         for (id, signer) in signers.iter().take(num_nodes).enumerate() {
             let (initial_data, storage) =
@@ -116,12 +109,16 @@ impl NodeSetup {
                 Storage::from(diem_secure_storage::InMemoryStorage::new()),
                 signer.author(),
                 signer.private_key().clone(),
-                Ed25519PrivateKey::generate_for_testing(),
-                waypoint,
                 true,
             );
             let safety_rules_manager =
-                SafetyRulesManager::new_local(safety_storage, false, false);
+                SafetyRulesManager::new_local(
+                    safety_storage,
+                    false,
+                    false,
+                    None,
+                    Default::default(),
+                );
 
             nodes.push(Self::new(
                 playground,
@@ -943,13 +940,17 @@ fn safety_rules_crash() {
             Storage::from(diem_secure_storage::InMemoryStorage::new()),
             node.signer.author(),
             node.signer.private_key().clone(),
-            Ed25519PrivateKey::generate_for_testing(),
-            node.round_manager.consensus_state().waypoint(),
             true,
         );
 
         node.safety_rules_manager =
-            SafetyRulesManager::new_local(safety_storage, false, false);
+            SafetyRulesManager::new_local(
+                    safety_storage,
+                    false,
+                    false,
+                    None,
+                    Default::default(),
+                );
         let safety_rules = MetricsSafetyRules::new(
             node.safety_rules_manager.client(),
             node.storage.clone(),

@@ -333,9 +333,6 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
 
 
 def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000, hardcoded_epoch_committee=None):
-    waypoint_path = os.path.join(dirname, 'waypoint_config')
-    genesis_path = os.path.join(dirname, 'genesis_file')
-    waypoint = open(waypoint_path, 'r').readlines()[0].strip()
     private_keys_dir = os.path.join(dirname, "private_keys")
     datadir = get_datadir_path(dirname, n)
     if not os.path.isdir(datadir):
@@ -347,22 +344,11 @@ def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000, har
     validator_config['base'] = {
         'data_dir': os.path.join(datadir, 'pos_db'),
         'role': 'validator',
-        'waypoint': {
-            'from_config': waypoint,
-        }
-    }
-    validator_config['execution'] = {
-        'genesis_file_location': genesis_path,
     }
     validator_config['storage'] = {
         'dir': os.path.join(datadir, 'pos_db', 'db'),
     }
     validator_config['consensus'] = {
-        'safety_rules': {
-            'service': {
-                'type': "local",
-            }
-        },
         'round_initial_timeout_ms': pos_round_time_ms,
     }
     if hardcoded_epoch_committee is not None:

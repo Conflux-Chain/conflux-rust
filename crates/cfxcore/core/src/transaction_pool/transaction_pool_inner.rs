@@ -275,7 +275,7 @@ impl TransactionPoolInner {
                 .remove_lowest_nonce(&victim_address)
                 .unwrap();
             let to_remove_tx = tx_with_ready_info.get_arc_tx().clone();
-            debug!(
+            trace!(
                 "txpool::collect_garbage removed tx {:?} sender={:?} nonce={:?} new_tx={:?}",
                 to_remove_tx.hash(),
                 victim_address,
@@ -600,7 +600,7 @@ impl TransactionPoolInner {
         let (nonce, balance) =
             self.get_and_update_nonce_and_balance_from_storage(addr, state)?;
         self.recalculate_readiness(addr, nonce, balance);
-        debug!(
+        trace!(
             "txpool::recalculate_readiness_with_state addr={:?} nonce={:?} balance={:?}",
             addr,
             nonce,
@@ -617,7 +617,7 @@ impl TransactionPoolInner {
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
         match &ret {
-            Some(tx) => debug!(
+            Some(tx) => trace!(
                 "txpool::recalculate_readiness addr={:?} state_nonce={:?} ready_nonce={:?} ready_hash={:?} balance={:?}",
                 addr,
                 nonce,
@@ -625,7 +625,7 @@ impl TransactionPoolInner {
                 tx.hash(),
                 balance
             ),
-            None => debug!(
+            None => trace!(
                 "txpool::recalculate_readiness addr={:?} state_nonce={:?} no_ready_tx balance={:?}",
                 addr,
                 nonce,

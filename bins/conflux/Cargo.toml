@@ -42,6 +42,7 @@ bls-signatures = { workspace = true }
 cfx-executor = { workspace = true }
 cfx-execute-helper = { workspace = true }
 cfx-mallocator-utils = { workspace = true }
+libc = { workspace = true }
 
 # [target.'cfg(not(target_env = "msvc"))'.dependencies]
 # tikv-jemallocator = { workspace = true }

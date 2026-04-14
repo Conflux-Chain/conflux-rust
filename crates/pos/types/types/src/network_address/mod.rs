@@ -5,14 +5,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    account_address::AccountAddress,
-    network_address::encrypted::{EncNetworkAddress, Key, KeyVersion},
-};
-use diem_crypto::{
-    traits::{CryptoMaterialError, ValidCryptoMaterialStringExt},
-    x25519,
-};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest::{collection::vec, prelude::*};
 #[cfg(any(test, feature = "fuzzing"))]
@@ -29,90 +21,14 @@ use std::{
 };
 use thiserror::Error;
 
-pub mod encrypted;
-
 const MAX_DNS_NAME_SIZE: usize = 255;
 
-/// ## Overview
+/// A Diem `NetworkAddress` represented as a stack of protocols.
 ///
-/// Diem `NetworkAddress` is a compact, efficient, self-describing and
-/// future-proof network address represented as a stack of protocols.
-/// Essentially libp2p's [multiaddr] but using [`bcs`] to describe the binary
-/// format.
+/// Most addresses look like: `/ip4/<addr>/tcp/<port>/ln-handshake/<version>`
 ///
-/// Most validators will advertise a network address like:
-///
-/// `/dns/example.com/tcp/6180/ln-noise-ik/<x25519-pubkey>/ln-handshake/1`
-///
-/// Unpacking, the above effectively means:
-///
-/// 1. Resolve the DNS name "example.com" to an ip address, `addr`.
-/// 2. Open a TCP connection to `(addr, 6180)`.
-/// 3. Perform a Noise IK handshake and assume the peer's static pubkey is
-///    `<x25519-pubkey>`. After this step, we will have a secure, authenticated
-///    connection with the peer.
-/// 4. Perform a DiemNet version negotiation handshake (version 1).
-///
-/// ## Self-describing, Upgradable
-///
-/// One key concept behind `NetworkAddress` is that it is fully self-describing,
-/// which allows us to easily "pre-negotiate" protocols while also allowing for
-/// future upgrades. For example, it is generally unsafe to negotiate a secure
-/// transport in-band. Instead, with `NetworkAddress` we can advertise (via
-/// discovery) the specific secure transport protocol and public key that we
-/// support (and even advertise multiple incompatible versions). When a peer
-/// wishes to establish a connection with us, they already know which secure
-/// transport protocol to use; in this sense, the secure transport protocol is
-/// "pre-negotiated" by the dialier selecting which advertised protocol to use.
-///
-/// Each network address is encoded with the length of the encoded
-/// `NetworkAddress` and then the serialized protocol slices to allow for
-/// transparent upgradeability. For example, if the current software cannot
-/// decode a `NetworkAddress` within a `Vec<NetworkAddress>` it can still decode
-/// the underlying `Vec<u8>` and retrieve the remaining `Vec<NetworkAddress>`.
-///
-/// ## Transport
-///
-/// In addition, `NetworkAddress` is integrated with the DiemNet concept of a
-/// [`Transport`], which takes a `NetworkAddress` when dialing and peels off
-/// [`Protocol`]s to establish a connection and perform initial handshakes.
-/// Similarly, the [`Transport`] takes `NetworkAddress` to listen on, which
-/// tells it what protocols to expect on the socket.
-///
-/// ## Example
-///
-/// An example of a serialized `NetworkAddress`:
-///
-/// ```rust
-/// // human-readable format:
-/// //
-/// //   "/ip4/10.0.0.16/tcp/80"
-/// //
-/// // serialized NetworkAddress:
-/// //
-/// //      [ 09 02 00 0a 00 00 10 05 80 00 ]
-/// //          \  \  \  \           \  \
-/// //           \  \  \  \           \  '-- u16 tcp port
-/// //            \  \  \  \           '-- uvarint protocol id for /tcp
-/// //             \  \  \  '-- u32 ipv4 address
-/// //              \  \  '-- uvarint protocol id for /ip4
-/// //               \  '-- uvarint number of protocols
-/// //                '-- length of encoded network address
-///
-/// use bcs;
-/// use diem_types::network_address::NetworkAddress;
-/// use std::{convert::TryFrom, str::FromStr};
-///
-/// let addr = NetworkAddress::from_str("/ip4/10.0.0.16/tcp/80").unwrap();
-/// let actual_ser_addr = bcs::to_bytes(&addr).unwrap();
-///
-/// let expected_ser_addr: Vec<u8> = [9, 2, 0, 10, 0, 0, 16, 5, 80, 0].to_vec();
-///
-/// assert_eq!(expected_ser_addr, actual_ser_addr);
-/// ```
-///
-/// [multiaddr]: https://multiformats.io/multiaddr/
-/// [`Transport`]: ../netcore/transport/trait.Transport.html
+/// The Noise IK protocol and x25519 key exchange (from Diem's P2P layer) have
+/// been removed — Conflux uses its own P2P networking.
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct NetworkAddress(Vec<Protocol>);
 
@@ -127,32 +43,10 @@ pub enum Protocol {
     Dns6(DnsName),
     Tcp(u16),
     Memory(u16),
-    // human-readable x25519::PublicKey is lower-case hex encoded
-    NoiseIK(x25519::PublicKey),
-    // TODO(philiphayes): use actual handshake::MessagingProtocolVersion. we
-    // probably need to move network wire into its own crate to avoid circular
-    // dependency b/w network and types.
     Handshake(u8),
 }
 
-/// A minimally parsed DNS name. We don't really do any checking other than
-/// enforcing:
-///
-/// 1. it is not an empty string
-/// 2. it is not larger than 255 bytes
-/// 3. it does not contain any forward slash '/' characters
-///
-/// From the [DNS name syntax RFC](https://tools.ietf.org/html/rfc2181#page-13),
-/// the standard rules are:
-///
-/// 1. the total size <= 255 bytes
-/// 2. each label <= 63 bytes
-/// 3. any binary string is valid
-///
-/// So the restrictions we're adding are (1) no '/' characters and (2) the name
-/// is a valid unicode string. We do this because '/' characters are already our
-/// protocol delimiter and Rust's [`std::net::ToSocketAddrs`] API requires a
-/// `&str`.
+/// A minimally parsed DNS name.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize)]
 pub struct DnsName(String);
 
@@ -171,9 +65,6 @@ pub enum ParseError {
     #[error("error parsing integer: {0}")]
     ParseIntError(#[from] num::ParseIntError),
 
-    #[error("error parsing x25519 public key: {0}")]
-    ParseX25519PubkeyError(#[from] CryptoMaterialError),
-
     #[error("network address cannot be empty")]
     EmptyProtocolString,
 
@@ -188,12 +79,6 @@ pub enum ParseError {
 
     #[error("dns name is too long: len: {0} bytes, max len: 255 bytes")]
     DnsNameTooLong(usize),
-
-    #[error("error decrypting network address")]
-    DecryptError,
-
-    #[error("bcs error: {0}")]
-    BCSError(#[from] bcs::Error),
 }
 
 #[derive(Error, Debug)]
@@ -219,78 +104,6 @@ impl NetworkAddress {
         self
     }
 
-    /// See [`EncNetworkAddress::encrypt`].
-    pub fn encrypt(
-        self, shared_val_netaddr_key: &Key, key_version: KeyVersion,
-        account: &AccountAddress, seq_num: u64, addr_idx: u32,
-    ) -> Result<EncNetworkAddress, ParseError> {
-        EncNetworkAddress::encrypt(
-            self,
-            shared_val_netaddr_key,
-            key_version,
-            account,
-            seq_num,
-            addr_idx,
-        )
-    }
-
-    /// Given a base `NetworkAddress`, append production protocols and
-    /// return the modified `NetworkAddress`.
-    ///
-    /// ### Example
-    ///
-    /// ```rust
-    /// use diem_crypto::{traits::ValidCryptoMaterialStringExt, x25519};
-    /// use diem_types::network_address::NetworkAddress;
-    /// use std::str::FromStr;
-    ///
-    /// let pubkey_str = "080e287879c918794170e258bfaddd75acac5b3e350419044655e4983a487120";
-    /// let pubkey = x25519::PublicKey::from_encoded_string(pubkey_str).unwrap();
-    /// let addr = NetworkAddress::from_str("/dns/example.com/tcp/6180").unwrap();
-    /// let addr = addr.append_prod_protos(pubkey, 0);
-    /// assert_eq!(
-    ///     addr.to_string(),
-    ///     "/dns/example.com/tcp/6180/ln-noise-ik/080e287879c918794170e258bfaddd75acac5b3e350419044655e4983a487120/ln-handshake/0",
-    /// );
-    /// ```
-    // TODO(philiphayes): use handshake version enum
-    pub fn append_prod_protos(
-        self, network_pubkey: x25519::PublicKey, handshake_version: u8,
-    ) -> Self {
-        self.push(Protocol::NoiseIK(network_pubkey))
-            .push(Protocol::Handshake(handshake_version))
-    }
-
-    /// Check that a `NetworkAddress` looks like a typical DiemNet address with
-    /// associated protocols.
-    ///
-    /// "typical" DiemNet addresses begin with a transport protocol:
-    ///
-    /// `"/ip4/<addr>/tcp/<port>"` or
-    /// `"/ip6/<addr>/tcp/<port>"` or
-    /// `"/dns4/<domain>/tcp/<port>"` or
-    /// `"/dns6/<domain>/tcp/<port>"` or
-    /// `"/dns/<domain>/tcp/<port>"` or
-    /// cfg!(test) `"/memory/<port>"`
-    ///
-    /// followed by transport upgrade handshake protocols:
-    ///
-    /// `"/ln-noise-ik/<pubkey>/ln-handshake/<version>"`
-    ///
-    /// ### Example
-    ///
-    /// ```rust
-    /// use diem_types::network_address::NetworkAddress;
-    /// use std::str::FromStr;
-    ///
-    /// let addr_str = "/ip4/1.2.3.4/tcp/6180/ln-noise-ik/080e287879c918794170e258bfaddd75acac5b3e350419044655e4983a487120/ln-handshake/0";
-    /// let addr = NetworkAddress::from_str(addr_str).unwrap();
-    /// assert!(addr.is_diemnet_addr());
-    /// ```
-    pub fn is_diemnet_addr(&self) -> bool {
-        parse_diemnet_protos(self.as_slice()).is_some()
-    }
-
     /// Retrieves the IP address from the network address
     pub fn find_ip_addr(&self) -> Option<IpAddr> {
         self.0.iter().find_map(|proto| match proto {
@@ -298,31 +111,6 @@ impl NetworkAddress {
             Protocol::Ip6(addr) => Some(IpAddr::V6(*addr)),
             _ => None,
         })
-    }
-
-    /// A temporary, hacky function to parse out the first
-    /// `/ln-noise-ik/<pubkey>` from a `NetworkAddress`. We can remove this
-    /// soon, when we move to the interim "monolithic" transport model.
-    pub fn find_noise_proto(&self) -> Option<x25519::PublicKey> {
-        self.0.iter().find_map(|proto| match proto {
-            Protocol::NoiseIK(pubkey) => Some(*pubkey),
-            _ => None,
-        })
-    }
-
-    /// A function to rotate public keys for `NoiseIK` protocols
-    pub fn rotate_noise_public_key(
-        &mut self, to_replace: &x25519::PublicKey,
-        new_public_key: &x25519::PublicKey,
-    ) {
-        for protocol in self.0.iter_mut() {
-            // Replace the public key in any Noise protocols that match the key
-            if let Protocol::NoiseIK(public_key) = protocol {
-                if public_key == to_replace {
-                    *protocol = Protocol::NoiseIK(*new_public_key);
-                }
-            }
-        }
     }
 
     #[cfg(any(test, feature = "fuzzing"))]
@@ -471,44 +259,6 @@ impl Arbitrary for NetworkAddress {
     }
 }
 
-#[cfg(any(test, feature = "fuzzing"))]
-pub fn arb_diemnet_addr() -> impl Strategy<Value = NetworkAddress> {
-    let arb_transport_protos = prop_oneof![
-        any::<u16>().prop_map(|port| vec![Protocol::Memory(port)]),
-        any::<(Ipv4Addr, u16)>().prop_map(|(addr, port)| vec![
-            Protocol::Ip4(addr),
-            Protocol::Tcp(port)
-        ]),
-        any::<(Ipv6Addr, u16)>().prop_map(|(addr, port)| vec![
-            Protocol::Ip6(addr),
-            Protocol::Tcp(port)
-        ]),
-        any::<(DnsName, u16)>().prop_map(|(name, port)| vec![
-            Protocol::Dns(name),
-            Protocol::Tcp(port)
-        ]),
-        any::<(DnsName, u16)>().prop_map(|(name, port)| vec![
-            Protocol::Dns4(name),
-            Protocol::Tcp(port)
-        ]),
-        any::<(DnsName, u16)>().prop_map(|(name, port)| vec![
-            Protocol::Dns6(name),
-            Protocol::Tcp(port)
-        ]),
-    ];
-    let arb_diemnet_protos =
-        any::<(x25519::PublicKey, u8)>().prop_map(|(pubkey, hs)| {
-            vec![Protocol::NoiseIK(pubkey), Protocol::Handshake(hs)]
-        });
-
-    (arb_transport_protos, arb_diemnet_protos).prop_map(
-        |(mut transport_protos, mut diemnet_protos)| {
-            transport_protos.append(&mut diemnet_protos);
-            NetworkAddress::new(transport_protos)
-        },
-    )
-}
-
 //////////////
 // Protocol //
 //////////////
@@ -524,13 +274,6 @@ impl fmt::Display for Protocol {
             Dns6(domain) => write!(f, "/dns6/{}", domain),
             Tcp(port) => write!(f, "/tcp/{}", port),
             Memory(port) => write!(f, "/memory/{}", port),
-            NoiseIK(pubkey) => write!(
-                f,
-                "/ln-noise-ik/{}",
-                pubkey
-                    .to_encoded_string()
-                    .expect("ValidCryptoMaterialStringExt::to_encoded_string is infallible")
-            ),
             Handshake(version) => write!(f, "/ln-handshake/{}", version),
         }
     }
@@ -559,11 +302,6 @@ impl Protocol {
             "dns6" => Protocol::Dns6(parse_one(args)?),
             "tcp" => Protocol::Tcp(parse_one(args)?),
             "memory" => Protocol::Memory(parse_one(args)?),
-            "ln-noise-ik" => {
-                Protocol::NoiseIK(x25519::PublicKey::from_encoded_string(
-                    args.next().ok_or(ParseError::UnexpectedEnd)?,
-                )?)
-            }
             "ln-handshake" => Protocol::Handshake(parse_one(args)?),
             unknown => {
                 return Err(ParseError::UnknownProtocolType(
@@ -649,13 +387,7 @@ impl Arbitrary for DnsName {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-        // generate arbitrary unicode strings
-        // + without '/'
-        // + without control characters (so we can print them easily)
-        // + between 1-255 bytes in length
         r"[^/\pC]{1,255}"
-            // need this filter b/c the number of unicode characters does not
-            // necessarily equal the number of bytes.
             .prop_filter_map("string too long", |s| {
                 if s.as_bytes().len() > MAX_DNS_NAME_SIZE {
                     None
@@ -761,17 +493,6 @@ pub fn parse_tcp(protos: &[Protocol]) -> Option<((String, u16), &[Protocol])> {
     }
 }
 
-/// parse the `&[Protocol]` into the `"/ln-noise-ik/<pubkey>"` prefix and
-/// unparsed `&[Protocol]` suffix.
-pub fn parse_noise_ik(
-    protos: &[Protocol],
-) -> Option<(&x25519::PublicKey, &[Protocol])> {
-    match protos.split_first() {
-        Some((Protocol::NoiseIK(pubkey), suffix)) => Some((pubkey, suffix)),
-        _ => None,
-    }
-}
-
 /// parse the `&[Protocol]` into the `"/ln-handshake/<version>"` prefix and
 /// unparsed `&[Protocol]` suffix.
 pub fn parse_handshake(protos: &[Protocol]) -> Option<(u8, &[Protocol])> {
@@ -783,46 +504,6 @@ pub fn parse_handshake(protos: &[Protocol]) -> Option<(u8, &[Protocol])> {
     }
 }
 
-/// parse canonical diemnet protocols
-///
-/// See: [`NetworkAddress::is_diemnet_addr`]
-fn parse_diemnet_protos(protos: &[Protocol]) -> Option<&[Protocol]> {
-    // parse base transport layer
-    // ---
-    // parse_ip_tcp
-    // <or> parse_dns_tcp
-    // <or> cfg!(test) parse_memory
-
-    let transport_suffix = parse_ip_tcp(protos)
-        .map(|x| x.1)
-        .or_else(|| parse_dns_tcp(protos).map(|x| x.1))
-        .or_else(|| {
-            if cfg!(test) {
-                parse_memory(protos).map(|x| x.1)
-            } else {
-                None
-            }
-        })?;
-
-    // parse authentication layer
-    // ---
-    // parse_noise_ik
-
-    let auth_suffix = parse_noise_ik(transport_suffix).map(|x| x.1)?;
-
-    // parse handshake layer
-
-    let handshake_suffix = parse_handshake(auth_suffix).map(|x| x.1)?;
-
-    // ensure no trailing protos after handshake
-
-    if handshake_suffix.is_empty() {
-        Some(protos)
-    } else {
-        None
-    }
-}
-
 ///////////
 // Tests //
 ///////////
@@ -830,7 +511,6 @@ fn parse_diemnet_protos(protos: &[Protocol]) -> Option<&[Protocol]> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use anyhow::format_err;
     use bcs::test_helpers::assert_canonical_encode_decode;
 
     #[test]
@@ -843,15 +523,6 @@ mod test {
     #[test]
     fn test_network_address_parse_success() {
         use super::Protocol::*;
-
-        let pubkey_str =
-            "080e287879c918794170e258bfaddd75acac5b3e350419044655e4983a487120";
-        let pubkey =
-            x25519::PublicKey::from_encoded_string(pubkey_str).unwrap();
-        let noise_addr_str = format!(
-            "/dns/example.com/tcp/1234/ln-noise-ik/{}/ln-handshake/5",
-            pubkey_str
-        );
 
         let test_cases = [
             (
@@ -881,27 +552,10 @@ mod test {
                 "/dns/example.com/tcp/80",
                 vec![Dns(DnsName("example.com".to_owned())), Tcp(80)],
             ),
-            (
-                &noise_addr_str,
-                vec![
-                    Dns(DnsName("example.com".to_owned())),
-                    Tcp(1234),
-                    NoiseIK(pubkey),
-                    Handshake(5),
-                ],
-            ),
         ];
 
         for (addr_str, expected_address) in &test_cases {
-            let actual_address = NetworkAddress::from_str(addr_str)
-                .map_err(|err| {
-                    format_err!(
-                        "failed to parse: input: '{}', err: {}",
-                        addr_str,
-                        err
-                    )
-                })
-                .unwrap();
+            let actual_address = NetworkAddress::from_str(addr_str).unwrap();
             let expected_address =
                 NetworkAddress::new(expected_address.clone());
             assert_eq!(actual_address, expected_address);
@@ -1024,36 +678,6 @@ mod test {
     }
 
     #[test]
-    fn test_parse_noise_ik() {
-        let pubkey_str =
-            "080e287879c918794170e258bfaddd75acac5b3e350419044655e4983a487120";
-        let pubkey =
-            x25519::PublicKey::from_encoded_string(pubkey_str).unwrap();
-        let addr =
-            NetworkAddress::from_str(&format!("/ln-noise-ik/{}", pubkey_str))
-                .unwrap();
-        let expected_suffix: &[Protocol] = &[];
-        assert_eq!(
-            parse_noise_ik(addr.as_slice()).unwrap(),
-            (&pubkey, expected_suffix)
-        );
-
-        let addr = NetworkAddress::from_str(&format!(
-            "/ln-noise-ik/{}/tcp/999",
-            pubkey_str
-        ))
-        .unwrap();
-        let expected_suffix: &[Protocol] = &[Protocol::Tcp(999)];
-        assert_eq!(
-            parse_noise_ik(addr.as_slice()).unwrap(),
-            (&pubkey, expected_suffix)
-        );
-
-        let addr = NetworkAddress::from_str("/tcp/999/memory/123").unwrap();
-        assert_eq!(None, parse_noise_ik(addr.as_slice()));
-    }
-
-    #[test]
     fn test_parse_handshake() {
         let addr = NetworkAddress::from_str("/ln-handshake/0").unwrap();
         let expected_suffix: &[Protocol] = &[];
@@ -1084,21 +708,6 @@ mod test {
             let addr_str = addr.to_string();
             let addr_parsed = NetworkAddress::from_str(&addr_str).unwrap();
             assert_eq!(addr, addr_parsed);
-        }
-
-        #[test]
-        fn test_is_diemnet_addr(addr in arb_diemnet_addr()) {
-            assert!(addr.is_diemnet_addr(), "addr.is_diemnet_addr() = false; addr: '{}'", addr);
-        }
-
-        #[test]
-        fn test_is_not_diemnet_addr_with_trailing(
-            addr in arb_diemnet_addr(),
-            addr_suffix in any::<NetworkAddress>(),
-        ) {
-            // A valid DiemNet addr w/ unexpected trailing protocols should not parse.
-            let addr = addr.extend_from_slice(addr_suffix.as_slice());
-            assert!(!addr.is_diemnet_addr(), "addr.is_diemnet_addr() = true; addr: '{}'", addr);
         }
     }
 }

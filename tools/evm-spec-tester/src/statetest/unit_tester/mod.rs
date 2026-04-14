@@ -7,6 +7,7 @@ use super::{
     error::{TestError, TestErrorKind},
     utils::extract_155_chain_id_from_raw_tx,
 };
+use cfx_config::Configuration;
 use cfx_executor::{
     executive::{ExecutionOutcome, ExecutiveContext, TransactOptions},
     machine::Machine,
@@ -16,19 +17,25 @@ use cfx_vm_types::Env;
 use cfxcore::verification::VerificationConfig;
 use eest_types::{SpecId, SpecName, StateTest, StateTestUnit};
 use primitives::SignedTransaction;
+use std::sync::Arc;
 
 pub struct UnitTester {
     path: String,
     name: String,
     unit: StateTestUnit,
+    config: Arc<Configuration>,
 }
 
 impl UnitTester {
-    pub fn new(path: &String, name: String, unit: StateTestUnit) -> Self {
+    pub fn new(
+        path: &String, name: String, unit: StateTestUnit,
+        config: Arc<Configuration>,
+    ) -> Self {
         UnitTester {
             path: path.clone(),
             name,
             unit,
+            config,
         }
     }
 
@@ -40,10 +47,7 @@ impl UnitTester {
         }
     }
 
-    pub fn run(
-        &self, machine: &Machine, verification: &VerificationConfig,
-        matches: Option<&str>,
-    ) -> Result<usize, TestError> {
+    pub fn run(&self, matches: Option<&str>) -> Result<usize, TestError> {
         if !matches.map_or(true, |pat| {
             format!("{}::{}", &self.path, &self.name).contains(pat)
         }) {
@@ -60,6 +64,9 @@ impl UnitTester {
             return Ok(0);
         };
 
+        let (machine, verification) =
+            pre_transact::make_machine_verify_conf(self.config.clone(), spec);
+
         let mut transact_cnt = 0;
         // running each test
         for single_test in tests.iter() {
@@ -69,7 +76,7 @@ impl UnitTester {
             if matches.is_some() {
                 info!("Running item with spec {:?}", spec);
             }
-            self.execute_single_test(single_test, machine, verification)?;
+            self.execute_single_test(single_test, &machine, &verification)?;
             transact_cnt += 1;
         }
 
@@ -168,7 +175,7 @@ fn pick_spec<'a, T>(
     specs
         .filter_map(|spec| {
             let spec_id = spec.0.to_spec_id();
-            if spec_id <= SpecId::PRAGUE {
+            if spec_id <= SpecId::OSAKA {
                 Some((spec, spec_id))
             } else {
                 None

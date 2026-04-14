@@ -13,14 +13,13 @@ edition = "2018"
 if-addrs = "0.14.0"
 rand = "0.8.3"
 serde = { version = "1.0.124", features = ["rc"], default-features = false }
-serde_yaml = "0.8" # deprecated
+yaml_serde = "0.10.3"
 thiserror = "1.0.24"
 
 bcs = "0.1.2"
 diem-crypto = { workspace = true }
 diem-global-constants = { workspace = true }
 diem-logger = { workspace = true }
-diem-network-address-encryption = { workspace = true }
 diem-secure-storage = { workspace = true }
 diem-temppath = { workspace = true }
 diem-types = { workspace = true }

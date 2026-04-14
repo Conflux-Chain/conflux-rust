@@ -1,25 +1,22 @@
 ---
 id: storage
-title: Storage
-custom_edit_url: https://github.com/diem/diem/edit/main/storage/README.md
+title: PoS Storage
 ---
 
-
 The storage module provides reliable and efficient persistent storage for the
-entire set of data on the Diem Blockchain, as well as the necessary data used
-internally by Diem Core.
+Conflux PoS chain, adapted from the Diem blockchain storage layer.
 
 ## Overview
 
 The storage module is designed to serve two primary purposes:
 
-1. Persist the blockchain data, specifically the transactions and their outputs
-   that have been agreed by validators via consensus protocol.
+1. Persist the PoS chain data, specifically the transactions and their outputs
+   that have been agreed by validators via the consensus protocol.
 2. Provide a response with Merkle proofs to any query that asks for a part of the
    blockchain data. A client can easily verify the integrity of the response if
    they have obtained the correct root hash.
 
-The Diem Blockchain can be viewed as a Merkle tree consisting of the following
+The PoS ledger can be viewed as a Merkle tree consisting of the following
 components:
 
 ![data](data.png)
@@ -70,9 +67,9 @@ key-value pairs in RocksDB are byte arrays, there is a wrapper on top of RocksDB
 to deal with the serialization of keys and values. This wrapper enforces that all data in and
 out of the DB is structured according to predefined schemas.
 
-The core module that implements the main functionalities is called *DiemDB*.
+The core module that implements the main functionalities is called *PosLedgerDB*.
 While we use a single RocksDB instance to store the entire set of data, related
-data are grouped into logical stores &mdash; for example, ledger store, state store,
+data are grouped into logical stores — for example, ledger store, state store,
 and transaction store, etc.
 
 For the sparse Merkle tree that represents ledger state, we optimize the disk
@@ -85,13 +82,12 @@ Patricia tree.
 ## How is this module organized?
 ```
     storage
-          └── accumulator      # Implementation of Merkle accumulator.
-          └── diemdb          # Implementation of DiemDB.
-          └── schemadb         # Schematized wrapper on top of RocksDB.
-          └── scratchpad       # In-memory representation of Diem core data structures used by execution.
-          └── jellyfish-merkle # Implementation of sparse Merkle tree.
-          └── state_view       # An abstraction layer representing a snapshot of state where the Move VM reads data.
-          └── storage_client   # A Rust wrapper on top of GRPC clients.
-          └── storage_proto    # All interfaces provided by the storage module.
-          └── storage_service  # Storage module as a GRPC service.
+          └── accumulator          # Implementation of Merkle accumulator.
+          └── cached-pos-ledger-db # Caching layer for PosLedgerDB.
+          └── pos-ledger-db        # Core PoS ledger database implementation.
+          └── schemadb             # Schematized wrapper on top of RocksDB.
+          └── scratchpad           # In-memory representation of core data structures used by execution.
+          └── jellyfish-merkle     # Implementation of sparse Merkle tree.
+          └── state-view           # An abstraction layer representing a snapshot of state.
+          └── storage-interface    # Trait definitions for storage operations.
 ```

@@ -14,7 +14,10 @@ use crate::pos::mempool::{
         types::{notify_subscribers, SharedMempool, SharedMempoolNotification},
     },
 };
-use diem_config::config::{MempoolConfig, PeerRole, RoleType};
+use diem_config::{
+    config::{MempoolConfig, RoleType},
+    network_id::PeerRole,
+};
 use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::transaction::SignedTransaction;

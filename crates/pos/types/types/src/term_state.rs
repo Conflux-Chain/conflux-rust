@@ -644,7 +644,7 @@ impl PosState {
         let node = match self.node_map.get(&node_id.addr) {
             Some(node) => node,
             None => {
-                return Some(DiscardedVMStatus::ELECTION_NON_EXISITENT_NODE);
+                return Some(DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE);
             }
         };
 
@@ -652,7 +652,7 @@ impl PosState {
             .get_starting_view_for_term(election_tx.target_term)
         {
             None => {
-                return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN)
+                return Some(DiscardedVMStatus::ELECTION_TARGET_TERM_NOT_OPEN)
             }
             Some(v) => v,
         };
@@ -666,7 +666,7 @@ impl PosState {
             <= self.current_view
                 + POS_STATE_CONFIG.election_term_end_round(self.current_view)
         {
-            return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN);
+            return Some(DiscardedVMStatus::ELECTION_TARGET_TERM_NOT_OPEN);
         }
         None
     }
@@ -1209,9 +1209,9 @@ impl RetireEvent {
         &self, staking_event: &StakingEvent,
     ) -> Result<bool> {
         match staking_event {
-            StakingEvent::Retire(addr_h256, _votes) => {
+            StakingEvent::Retire(addr_h256, votes) => {
                 let addr = AccountAddress::from_bytes(addr_h256)?;
-                Ok(self.node_id == addr)
+                Ok(self.node_id == addr && self.votes == *votes)
             }
             _ => Ok(false),
         }

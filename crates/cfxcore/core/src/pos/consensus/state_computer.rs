@@ -103,29 +103,13 @@ impl StateComputer for ExecutionProxy {
     }
 
     /// Synchronize to a commit that not present locally.
+    /// State sync via chunk execution has been removed; this is now a no-op.
     async fn sync_to(
         &self, _target: LedgerInfoWithSignatures,
     ) -> Result<(), StateSyncError> {
         fail_point!("consensus::sync_to", |_| {
             Err(anyhow::anyhow!("Injected error in sync_to").into())
         });
-        // Here to start to do state synchronization where ChunkExecutor inside
-        // will process chunks and commit to Storage. However, after
-        // block execution and commitments, the sync state of
-        // ChunkExecutor may be not up to date so it is required to
-        // reset the cache of ChunkExecutor in State Sync when requested
-        // to sync.
-        //let res = monitor!("sync_to",
-        // self.synchronizer.sync_to(target).await); Similarily, after
-        // the state synchronization, we have to reset the
-        // cache of BlockExecutor to guarantee the latest committed
-        // state is up to date.
-        // self.executor.reset()?;
-
-        /*res.map_err(|error| {
-            let anyhow_error: anyhow::Error = error.into();
-            anyhow_error.into()
-        })*/
         Ok(())
     }
 }

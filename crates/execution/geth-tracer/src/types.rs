@@ -37,9 +37,8 @@ use cfx_types::{Space, H256};
 use cfx_vm_types::CallType as CfxCallType;
 use primitives::{block::BlockHeight, BlockNumber};
 
-use revm_interpreter::{
-    opcode, CallContext, CallScheme, CreateScheme, InstructionResult, OpCode,
-};
+use revm_bytecode::{opcode, OpCode};
+use revm_interpreter::{CallScheme, CreateScheme, InstructionResult};
 use std::collections::VecDeque;
 
 /// A trace of a call.
@@ -84,9 +83,7 @@ pub struct CallTrace {
     /// The gas limit of the call
     pub gas_limit: u64,
     /// The status of the trace's call
-    pub status: InstructionResult,
-    /// call context of the runtime
-    pub call_context: Option<Box<CallContext>>,
+    pub status: Option<InstructionResult>,
     /// Opcode-level execution steps
     pub steps: Vec<CallTraceStep>,
 }
@@ -95,51 +92,24 @@ impl CallTrace {
     /// Returns true if the status code is an error or revert, See
     /// [InstructionResult::Revert]
     #[inline]
-    pub const fn is_error(&self) -> bool { !self.status.is_ok() }
+    pub const fn is_error(&self) -> bool {
+        let Some(status) = self.status else {
+            return false;
+        };
+        !status.is_ok()
+    }
 
-    /// Returns true if the status code is a revert
+    /// Returns true if the status code is a revert.
     #[inline]
-    pub fn is_revert(&self) -> bool { self.status == InstructionResult::Revert }
+    pub fn is_revert(&self) -> bool {
+        self.status
+            .is_some_and(|status| status == InstructionResult::Revert)
+    }
 
     /// Returns the error message if it is an erroneous result.
     pub(crate) fn as_error_msg(&self, kind: TraceStyle) -> Option<String> {
-        // See also <https://github.com/ethereum/go-ethereum/blob/34d507215951fb3f4a5983b65e127577989a6db8/eth/tracers/native/call_flat.go#L39-L55>
-        self.is_error().then(|| match self.status {
-            InstructionResult::Revert => if kind.is_parity() {
-                "Reverted"
-            } else {
-                "execution reverted"
-            }
-            .to_string(),
-            InstructionResult::OutOfGas | InstructionResult::MemoryOOG => {
-                if kind.is_parity() {
-                    "Out of gas"
-                } else {
-                    "out of gas"
-                }
-                .to_string()
-            }
-            InstructionResult::OpcodeNotFound => if kind.is_parity() {
-                "Bad instruction"
-            } else {
-                "invalid opcode"
-            }
-            .to_string(),
-            InstructionResult::StackOverflow => "Out of stack".to_string(),
-            InstructionResult::InvalidJump => if kind.is_parity() {
-                "Bad jump destination"
-            } else {
-                "invalid jump destination"
-            }
-            .to_string(),
-            InstructionResult::PrecompileError => if kind.is_parity() {
-                "Built-in failed"
-            } else {
-                "precompiled failed"
-            }
-            .to_string(),
-            status => format!("{:?}", status),
-        })
+        self.status
+            .and_then(|status| utils::fmt_error_msg(status, kind))
     }
 }
 
@@ -222,7 +192,9 @@ impl CallTraceNode {
 
     /// Returns the status of the call
     #[inline]
-    pub const fn status(&self) -> InstructionResult { self.trace.status }
+    pub const fn status(&self) -> Option<InstructionResult> {
+        self.trace.status
+    }
 
     /// Returns true if the call was a selfdestruct
     ///
@@ -294,6 +266,8 @@ impl CallTraceNode {
                     address: Some(self.execution_address()),
                     topics: Some(log.topics().to_vec()),
                     data: Some(log.data.clone()),
+                    index: None,
+                    position: None,
                 })
                 .collect();
         }
@@ -383,6 +357,7 @@ impl From<CreateScheme> for CallKind {
         match create {
             CreateScheme::Create => Self::Create,
             CreateScheme::Create2 { .. } => Self::Create2,
+            CreateScheme::Custom { .. } => unreachable!(), /* conflux do not support custom create scheme */
         }
     }
 }
@@ -456,7 +431,7 @@ pub struct CallTraceStep {
     /// Final status of the step
     ///
     /// This is set after the step was executed.
-    pub status: InstructionResult,
+    pub status: Option<InstructionResult>,
 }
 
 // === impl CallTraceStep ===
@@ -473,7 +448,7 @@ impl CallTraceStep {
             error: self.as_error(),
             gas: self.gas_remaining,
             gas_cost: self.gas_cost,
-            op: self.op.to_string(),
+            op: self.op.as_str().into(),
             pc: self.pc as u64,
             refund_counter: (self.gas_refund_counter > 0)
                 .then_some(self.gas_refund_counter),
@@ -526,7 +501,10 @@ impl CallTraceStep {
     // [InstructionResult::Revert]
     #[inline]
     pub(crate) const fn is_error(&self) -> bool {
-        self.status as u8 >= InstructionResult::Revert as u8
+        let Some(status) = self.status else {
+            return false;
+        };
+        status.is_error()
     }
 
     /// Returns the error message if it is an erroneous result.

@@ -20,9 +20,7 @@
 
 //! A map of subscribers.
 
-use cfx_rpc_cfx_types::random;
 pub use cfx_rpc_cfx_types::SubId as Id;
-use cfx_types::H64;
 use jsonrpc_pubsub::{
     typed::{Sink, Subscriber},
     SubscriptionId,
@@ -31,24 +29,19 @@ use log::{debug, trace};
 use std::{collections::HashMap, ops};
 
 pub struct Subscribers<T> {
-    rand: random::Rng,
     subscriptions: HashMap<Id, T>,
 }
 
 impl<T> Default for Subscribers<T> {
     fn default() -> Self {
         Subscribers {
-            rand: random::new(),
             subscriptions: HashMap::new(),
         }
     }
 }
 
 impl<T> Subscribers<T> {
-    pub fn next_id(&mut self) -> Id {
-        let data = H64::random_using(&mut self.rand);
-        Id::new(data)
-    }
+    pub fn next_id(&mut self) -> Id { Id::next() }
 
     /// Insert new subscription and return assigned id.
     #[allow(dead_code)]

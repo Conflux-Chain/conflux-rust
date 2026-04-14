@@ -202,7 +202,6 @@ impl PosHandler {
             ),
             consensus_key: Some(self.conf.bls_key.clone()),
             execution_key: Some(self.conf.bls_key.clone()),
-            waypoint: Some(pos_config.base.waypoint.waypoint()),
         });
         pos_config.consensus.safety_rules.vrf_private_key =
             Some(self.conf.vrf_key.clone());

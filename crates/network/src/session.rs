@@ -678,7 +678,7 @@ impl fmt::Debug for Session {
 }
 
 /// User friendly session information that used for Debug RPC.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionDetails {
     pub originated: bool,
@@ -847,6 +847,12 @@ impl SessionPacket {
     ) -> Result<(Bytes, Vec<Vec<u8>>), Error> {
         let mut extensions = Vec::new();
         while has_extension {
+            if data.is_empty() {
+                debug!(
+                    "failed to parse session packet, extension data exhausted"
+                );
+                bail!(Error::BadProtocol);
+            }
             let extension_byte = data.split_off(data.len() - 1)[0];
             let extension_len = (extension_byte >> 1) as usize;
             has_extension = (extension_byte & 1) != 0;

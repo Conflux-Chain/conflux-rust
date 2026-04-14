@@ -4,13 +4,12 @@
 
 use crate::rpc::types::{pos::Block as PosBlock, BlameInfo, Block, Bytes};
 use cfx_types::{H256, U256, U64};
-use cfxcore::PeerInfo;
 use diem_types::{
     account_address::AccountAddress, transaction::TransactionPayload,
 };
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
-use network::node_table::NodeId;
+use network::{node_table::NodeId, PeerInfo};
 use std::net::SocketAddr;
 
 #[rpc(server)]

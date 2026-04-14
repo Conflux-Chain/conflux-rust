@@ -8,7 +8,6 @@
 use crate::Error;
 use consensus_types::common::{Author, Round};
 use diem_logger::Schema;
-use diem_types::waypoint::Waypoint;
 use serde::Serialize;
 
 #[derive(Schema)]
@@ -21,7 +20,6 @@ pub struct SafetyLogSchema<'a> {
     epoch: Option<u64>,
     #[schema(display)]
     error: Option<&'a Error>,
-    waypoint: Option<Waypoint>,
     author: Option<Author>,
 }
 
@@ -35,7 +33,6 @@ impl<'a> SafetyLogSchema<'a> {
             last_voted_round: None,
             epoch: None,
             error: None,
-            waypoint: None,
             author: None,
         }
     }
@@ -54,7 +51,6 @@ pub enum LogEntry {
     SignProposal,
     SignTimeout,
     State,
-    Waypoint,
 }
 
 impl LogEntry {
@@ -70,7 +66,6 @@ impl LogEntry {
             LogEntry::SignProposal => "sign_proposal",
             LogEntry::SignTimeout => "sign_timeout",
             LogEntry::State => "state",
-            LogEntry::Waypoint => "waypoint",
         }
     }
 }

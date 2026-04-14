@@ -22,7 +22,6 @@ mod epoch_manager;
 mod error;
 mod liveness;
 mod logging;
-mod metrics_safety_rules;
 pub(crate) mod network;
 #[cfg(test)]
 mod network_tests;
@@ -33,8 +32,6 @@ mod state_computer;
 mod state_replication;
 #[cfg(any(test, feature = "fuzzing"))]
 mod test_utils;
-#[cfg(test)]
-mod twins;
 mod txn_manager;
 mod util;
 

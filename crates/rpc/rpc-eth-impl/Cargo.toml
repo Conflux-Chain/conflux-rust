@@ -1,5 +1,5 @@
 [package]
-name = "cfx-rpc"
+name = "cfx-rpc-eth-impl"
 edition = "2021"
 version.workspace = true
 authors.workspace = true
@@ -28,7 +28,6 @@ geth-tracer = { workspace = true }
 cfx-rpc-utils = { workspace = true }
 parking_lot = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
-jsonrpc-core = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfx-statedb = { workspace = true }
 cfx-executor = { workspace = true }

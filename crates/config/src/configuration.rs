@@ -190,6 +190,7 @@ build_config! {
         (base_fee_burn_transition_number, (Option<u64>), Some(14400))
         (base_fee_burn_transition_height, (Option<u64>), Some(7200))
         (cip1559_transition_height, (Option<u64>), None)
+        (cip130_transition_height, (Option<u64>), None)
         (cancun_opcodes_transition_number, (Option<u64>), None)
         (min_native_base_price, (Option<u64>), None)
         (min_eth_base_price, (Option<u64>), None)
@@ -202,6 +203,10 @@ build_config! {
         (cip145_fix_transition_height, (Option<u64>), None)
         // For test only
         (align_evm_transition_height, (u64), u64::MAX)
+        // V3.1
+        (cip166_transition_height, (Option<u64>), None)
+        (osaka_opcode_transition_height, (Option<u64>), None)
+
 
 
         // Mining section.
@@ -454,7 +459,7 @@ build_config! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Configuration {
     pub raw_conf: RawConfiguration,
 }
@@ -1514,6 +1519,11 @@ impl Configuration {
             .cip1559_transition_height
             .or(self.raw_conf.base_fee_burn_transition_height)
             .unwrap_or(non_genesis_default_transition_time);
+        params.transition_heights.cip130 = self
+            .raw_conf
+            .cip130_transition_height
+            .or(self.raw_conf.base_fee_burn_transition_height)
+            .unwrap_or(default_transition_time);
         params.transition_numbers.cancun_opcodes = self
             .raw_conf
             .cancun_opcodes_transition_number
@@ -1535,7 +1545,7 @@ impl Configuration {
             .unwrap_or(default_transition_time);
 
         //
-        // 7702 hardfork (V2.6)
+        // 7702 hardfork (V3.0)
         //
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
@@ -1552,6 +1562,15 @@ impl Configuration {
         }
         params.transition_heights.align_evm =
             self.raw_conf.align_evm_transition_height;
+
+        // hardfork (V3.1)
+        set_conf!(
+            self.raw_conf.osaka_opcode_transition_height.unwrap_or(default_transition_time);
+            params.transition_heights => { cip166 }
+        );
+        if let Some(x) = self.raw_conf.cip166_transition_height {
+            params.transition_heights.cip166 = x;
+        }
     }
 }
 

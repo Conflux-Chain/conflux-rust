@@ -21,11 +21,13 @@ alloy-rpc-types = { workspace = true }
 serde_json = { workspace = true }
 alloy-sol-types = { workspace = true }
 revm-primitives = { workspace = true }
+revm-context-interface = { workspace = true }
 thiserror = { workspace = true }
 jsonrpsee-core = { workspace = true }
-futures.workspace = true
-tokio.workspace = true
+futures = { workspace = true }
+tokio = { workspace = true }
 cfx-tasks = { workspace = true }
+serde = { workspace = true }
 
 [features]
 accounts = []

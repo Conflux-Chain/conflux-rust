@@ -31,8 +31,7 @@ use crate::{
 };
 
 use cached_pos_ledger_db::CachedPosLedgerDB;
-use consensus_types::db::FakeLedgerBlockDB;
-use diem_config::{config::NodeConfig, utils::get_genesis_txn};
+use diem_config::config::NodeConfig;
 use diem_logger::{prelude::*, Writer};
 use diem_types::{
     account_address::{from_consensus_public_key, AccountAddress},
@@ -42,8 +41,7 @@ use diem_types::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     PeerId,
 };
-use executor::{db_bootstrapper::maybe_bootstrap, vm::PosVM, Executor};
-use executor_types::ChunkExecutor;
+use executor::db_bootstrapper::maybe_bootstrap;
 use futures::{
     channel::{
         mpsc::{self, channel},
@@ -53,7 +51,6 @@ use futures::{
 };
 use network::NetworkService;
 use pos_ledger_db::PosLedgerDB;
-use pow_types::FakePowHandler;
 use std::{
     boxed::Box,
     fs,
@@ -172,14 +169,6 @@ fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
     );
 }
 
-fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
-    Box::new(Executor::<PosVM>::new(
-        Arc::new(CachedPosLedgerDB::new(db)),
-        Arc::new(FakePowHandler {}),
-        Arc::new(FakeLedgerBlockDB {}),
-    ))
-}
-
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     protocol_config: ProtocolConfiguration,
@@ -218,43 +207,30 @@ pub fn setup_pos_environment(
         .expect("DB should open."),
     );
 
-    let genesis_waypoint = node_config.base.waypoint.genesis_waypoint();
-    // if there's genesis txn and waypoint, commit it if the result matches.
-    if let Some(genesis) = get_genesis_txn(&node_config) {
-        maybe_bootstrap::<PosVM>(
-            &db_rw,
-            genesis,
-            genesis_waypoint,
-            Some(PivotBlockDecision {
-                block_hash: protocol_config.pos_genesis_pivot_decision,
-                height: 0,
-            }),
-            pos_genesis_state.initial_seed.as_bytes().to_vec(),
-            pos_genesis_state
-                .initial_nodes
-                .into_iter()
-                .map(|node| {
-                    (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
-                })
-                .collect(),
-            pos_genesis_state.initial_committee,
-        )
-        .expect("Db-bootstrapper should not fail.");
-    } else {
-        panic!("Genesis txn not provided.");
-    }
+    // If the DB hasn't been bootstrapped yet, commit genesis.
+    maybe_bootstrap(
+        &db_rw,
+        Some(PivotBlockDecision {
+            block_hash: protocol_config.pos_genesis_pivot_decision,
+            height: 0,
+        }),
+        pos_genesis_state.initial_seed.as_bytes().to_vec(),
+        pos_genesis_state
+            .initial_nodes
+            .into_iter()
+            .map(|node| {
+                (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
+            })
+            .collect(),
+        pos_genesis_state.initial_committee,
+    )
+    .expect("Db-bootstrapper should not fail.");
 
     debug!(
         "Storage service started in {} ms",
         instant.elapsed().as_millis()
     );
 
-    instant = Instant::now();
-    let chunk_executor = setup_chunk_executor(db_rw.clone());
-    debug!(
-        "ChunkExecutor setup in {} ms",
-        instant.elapsed().as_millis()
-    );
     let mut reconfig_subscriptions = vec![];
 
     let (mempool_reconfig_subscription, mempool_reconfig_events) =
@@ -273,9 +249,7 @@ pub fn setup_pos_environment(
     let state_sync_bootstrapper = StateSyncBootstrapper::bootstrap(
         state_sync_to_mempool_sender,
         Arc::clone(&db_rw.reader),
-        chunk_executor,
         node_config,
-        genesis_waypoint,
         reconfig_subscriptions,
     );
 

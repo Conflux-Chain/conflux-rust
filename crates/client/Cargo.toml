@@ -48,6 +48,7 @@ tempfile = { workspace = true }
 rustc-hex = { workspace = true }
 threadpool = { workspace = true }
 metrics = { workspace = true }
+diem-metrics = { workspace = true }
 delegate = { workspace = true }
 itertools = { workspace = true }
 order-stat = { workspace = true }
@@ -68,9 +69,10 @@ alloy-rpc-types-trace = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-cfx-impl = { workspace = true }
+cfx-rpc-cfx-api = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 cfx-util-macros = { workspace = true }
-cfx-rpc = { workspace = true }
+cfx-rpc-eth-impl = { workspace = true }
 cfx-rpc-utils = { workspace = true }
 cfx-rpc-builder = { workspace = true }
 jsonrpsee = { workspace = true }

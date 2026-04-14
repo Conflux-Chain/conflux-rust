@@ -18,6 +18,11 @@ from test_framework.util import wait_until
 
 
 class FilterForkTest(DefaultConfluxTestFramework):
+    """Core Space variant of the eSpace "after_fork" filter test.
+
+    Same scenario but uses cfx_newBlockFilter / cfx_getFilterChanges.
+    """
+
     def set_test_params(self):
         self.num_nodes = 4
         self.conf_parameters["log_level"] = '"trace"'
@@ -32,7 +37,7 @@ class FilterForkTest(DefaultConfluxTestFramework):
         self.conf_parameters["timer_chain_beta"] = "20"
         self.conf_parameters["dev_snapshot_epoch_count"] = "25"
         self.conf_parameters["anticone_penalty_ratio"] = "10"
-        # No auto timeout.
+        # Disable auto PoS timeout so we control rounds manually.
         self.pos_parameters["round_time_ms"] = 1000000000
 
     async def run_async(self):
@@ -40,7 +45,7 @@ class FilterForkTest(DefaultConfluxTestFramework):
         for node in self.nodes:
             clients.append(RpcClient(node))
 
-        # Initialize pos_consensus_blocks
+        # Initialize PoS consensus with 4 manual rounds.
         for _ in range(4):
             for client in clients:
                 client.pos_proposal_timeout()
@@ -51,13 +56,11 @@ class FilterForkTest(DefaultConfluxTestFramework):
         wait_until(lambda: clients[0].pos_status() is not None)
         wait_until(lambda: clients[0].pos_status()["latestCommitted"] is not None)
 
-        # create filter
         filter = self.nodes[0].cfx_newBlockFilter()
 
         blocks = clients[0].generate_empty_blocks(4)
         last_block = blocks[-1]
 
-        # query block
         filter_blocks = self.nodes[0].cfx_getFilterChanges(filter)
         assert_equal(len(filter_blocks), 0)
 
@@ -65,14 +68,20 @@ class FilterForkTest(DefaultConfluxTestFramework):
         filter_blocks = self.nodes[0].cfx_getFilterChanges(filter)
         assert_equal(len(filter_blocks), 6)
 
-        # create fork
+        # Create a fork: 26 blocks from last_block (height ~14).
+        # The fork outweighs the main chain continuation (6 blocks),
+        # so GHAST selects it as the new pivot chain.
         for _ in range(26):
             last_block = clients[0].generate_block_with_parent(last_block)
             blocks.append(last_block)
 
+        # Extend on the fork tip. Pivot chain becomes:
+        # genesis -> h14 -> fork(h15-h40) -> ... -> ~h311.
         chain_len = 270
         blocks.extend(clients[0].generate_empty_blocks(chain_len + 1))
         sync_blocks(self.nodes)
+
+        # Force PoS finalization at a height after the fork point (~14).
         pivot_decision_height = (
             (300 - int(self.conf_parameters["pos_pivot_decision_defer_epoch_count"]))
             // 60
@@ -89,10 +98,10 @@ class FilterForkTest(DefaultConfluxTestFramework):
             )
         time.sleep(1)
 
+        # Commit the pivot decision via 4 PoS rounds.
         for i in range(4):
             for client in clients:
                 client.pos_proposal_timeout()
-            # Wait for proposal processing
             time.sleep(0.5)
             for client in clients:
                 client.pos_new_round_timeout()
@@ -105,6 +114,8 @@ class FilterForkTest(DefaultConfluxTestFramework):
         )
         assert_equal(clients[0].epoch_number("latest_finalized"), pivot_decision_height)
 
+        # Verify the filter returns correct blocks along the final
+        # pivot chain, including the fork blocks.
         filter_blocks = self.nodes[0].cfx_getFilterChanges(filter)
         assert_equal(len(filter_blocks), 303)
         idx = len(blocks) - 5

@@ -6,12 +6,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    account_config, on_chain_config::OnChainConfig,
+    account_config, event::EventKey, on_chain_config::OnChainConfig,
     validator_info::ValidatorInfo,
 };
-use anyhow::Result;
-
-use crate::event::EventKey;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
@@ -69,16 +66,4 @@ impl IntoIterator for ValidatorSet {
     type Item = ValidatorInfo;
 
     fn into_iter(self) -> Self::IntoIter { self.payload.into_iter() }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NextValidatorSetProposal {
-    pub this_membership_id: u64,
-    pub next_validator_set: ValidatorSet,
-}
-
-impl NextValidatorSetProposal {
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        bcs::from_bytes(bytes).map_err(Into::into)
-    }
 }
