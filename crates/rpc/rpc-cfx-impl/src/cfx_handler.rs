@@ -288,7 +288,6 @@ impl CfxHandler {
             tx_index,
             prior_gas_used,
             Some(exec_info.epoch_number),
-            exec_info.block_receipts.block_number,
             exec_info.pivot_header.base_price(),
             exec_info.maybe_state_root.clone(),
             tx_exec_error_msg,
@@ -408,6 +407,7 @@ impl CfxHandler {
             has_gas_price: request.has_gas_price(),
             has_nonce: request.nonce.is_some(),
             has_storage_limit: request.storage_limit.is_some(),
+            collect_access_list: false,
         };
 
         let epoch_height = consensus_graph
@@ -1224,7 +1224,7 @@ impl CfxRpcServer for CfxHandler {
                 None => PackedOrExecuted::Packed(tx_index),
                 Some(MaybeExecutedTxExtraInfo {
                     receipt,
-                    block_number,
+                    block_number: _,
                     prior_gas_used,
                     tx_exec_error_msg,
                 }) => {
@@ -1250,7 +1250,6 @@ impl CfxRpcServer for CfxHandler {
                             tx_index,
                             prior_gas_used,
                             epoch_number,
-                            block_number,
                             maybe_base_price,
                             maybe_state_root,
                             tx_exec_error_msg,
