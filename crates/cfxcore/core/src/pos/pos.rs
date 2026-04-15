@@ -31,7 +31,7 @@ use crate::{
 };
 
 use cached_pos_ledger_db::CachedPosLedgerDB;
-use diem_config::{config::NodeConfig, utils::get_genesis_txn};
+use diem_config::config::NodeConfig;
 use diem_logger::{prelude::*, Writer};
 use diem_types::{
     account_address::{from_consensus_public_key, AccountAddress},
@@ -208,28 +208,23 @@ pub fn setup_pos_environment(
     );
 
     // If the DB hasn't been bootstrapped yet, commit genesis.
-    if let Some(genesis) = get_genesis_txn(&node_config) {
-        maybe_bootstrap(
-            &db_rw,
-            genesis,
-            Some(PivotBlockDecision {
-                block_hash: protocol_config.pos_genesis_pivot_decision,
-                height: 0,
-            }),
-            pos_genesis_state.initial_seed.as_bytes().to_vec(),
-            pos_genesis_state
-                .initial_nodes
-                .into_iter()
-                .map(|node| {
-                    (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
-                })
-                .collect(),
-            pos_genesis_state.initial_committee,
-        )
-        .expect("Db-bootstrapper should not fail.");
-    } else {
-        panic!("Genesis txn not provided.");
-    }
+    maybe_bootstrap(
+        &db_rw,
+        Some(PivotBlockDecision {
+            block_hash: protocol_config.pos_genesis_pivot_decision,
+            height: 0,
+        }),
+        pos_genesis_state.initial_seed.as_bytes().to_vec(),
+        pos_genesis_state
+            .initial_nodes
+            .into_iter()
+            .map(|node| {
+                (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
+            })
+            .collect(),
+        pos_genesis_state.initial_committee,
+    )
+    .expect("Db-bootstrapper should not fail.");
 
     debug!(
         "Storage service started in {} ms",

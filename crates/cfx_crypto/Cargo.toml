@@ -8,7 +8,7 @@ license-file.workspace = true
 
 [dependencies]
 cfx-types = { workspace = true }
-parity-secp256k1 = { workspace = true }
+secp256k1 = { workspace = true }
 lazy_static = { workspace = true }
 thiserror = { workspace = true }
 aes = { workspace = true }

@@ -82,6 +82,18 @@ ignore = [
     "RUSTSEC-2020-0016",
     # instant unmaintained; pulled by parking_lot 0.11 via jsonrpc + prometheus 0.12.
     "RUSTSEC-2024-0384",
+    # rand 0.7/0.8 unsound `ThreadRng` reseed-in-custom-logger
+    # (RUSTSEC-2026-0097). The 0.9.x code path is patched here by bumping
+    # workspace rand to 0.9.3. rand 0.7.3 and 0.8.5 still appear in
+    # Cargo.lock via external transitive deps that cannot be upgraded
+    # without upstream work (fixed-hash, jsonrpc-pubsub, parity-secp256k1,
+    # parity-ws for 0.7.x; ark-std, alloy-rpc-types, proptest, revm,
+    # substrate-bn for 0.8.x) and first-party pos/diem-crypto plus cfx_key
+    # bound to the unmaintained parity-secp256k1 fork. The exploit requires
+    # a custom log::Log impl that calls rand::thread_rng() inside its log
+    # method and triggers a reseed there, which this repo does not do.
+    # Follow-ups will migrate pos/diem-crypto and replace parity-secp256k1.
+    { id = "RUSTSEC-2026-0097", reason = "rand 0.9 patched; 0.7/0.8 forced by transitive deps and upstream pins; vulnerable code path not reachable here." },
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.

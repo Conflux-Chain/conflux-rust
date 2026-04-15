@@ -9,12 +9,8 @@
 //! signed transactions.
 
 use crate::{
-    change_set::ChangeSet,
-    errors::DiemDbError,
-    schema::{
-        transaction::TransactionSchema,
-        transaction_by_account::TransactionByAccountSchema,
-    },
+    change_set::ChangeSet, errors::DiemDbError,
+    schema::transaction::TransactionSchema,
 };
 use anyhow::Result;
 use diem_types::{
@@ -46,6 +42,13 @@ impl TransactionStore {
     pub fn get_block_metadata(
         &self, version: Version,
     ) -> Result<Option<(Version, BlockMetadata)>> {
+        // Version 0 is always the genesis transaction, which carries no
+        // block metadata. Short-circuit without deserializing: pre-cleanup
+        // DBs hold a `WriteSetPayload`-based genesis record that would fail
+        // to decode against the post-PR Transaction enum.
+        if version == 0 {
+            return Ok(None);
+        }
         // Maximum TPS from benchmark is around 1000.
         const MAX_VERSIONS_TO_SEARCH: usize = 1000 * 3;
 
@@ -75,15 +78,7 @@ impl TransactionStore {
     pub fn put_transaction(
         &self, version: Version, transaction: &Transaction, cs: &mut ChangeSet,
     ) -> Result<()> {
-        if let Transaction::UserTransaction(txn) = transaction {
-            // TODO(lpl): Find a proper way to keep account-related info.
-            cs.batch.put::<TransactionByAccountSchema>(
-                &(txn.sender(), 0),
-                &version,
-            )?;
-        }
         cs.batch.put::<TransactionSchema>(&version, &transaction)?;
-
         Ok(())
     }
 }

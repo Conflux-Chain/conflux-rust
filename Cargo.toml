@@ -121,9 +121,6 @@ edition = "2021"
 [profile.test]
 debug-assertions = true
 
-[profile.test.package]
-parity-secp256k1 = { opt-level = 3 }
-
 [profile.bench]
 debug-assertions = true
 overflow-checks = true
@@ -333,7 +330,7 @@ bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", 
     "blst",
 ] }
 blst = "0.3"
-#secp256k1 = "0.30.0"
+secp256k1 = { version = "0.30", features = ["recovery", "global-context", "rand"] }
 #rustls = "0.21"
 hashbrown = "0.7"
 vrf = "0.2"
@@ -353,7 +350,8 @@ ripemd = "0.1.3"
 clap = "4"
 
 # rand & rng
-rand = "0.9"
+# 0.9.3 is the patched version for RUSTSEC-2026-0097.
+rand = "0.9.3"
 rand_xorshift = "0.4"
 rand_chacha = "0.9"
 
@@ -387,7 +385,7 @@ siphasher = "0.3"
 natpmp = "0.2"
 enum-map = "0.4.0"
 #enum-map-derive = "0.4.0"
-igd = "0.10"
+igd = "0.12"
 ipnetwork = "0.12.6"
 edit-distance = "2"
 zeroize = "1"
@@ -441,13 +439,12 @@ duration-str = "0.17"
 # parity crates
 rlp = "0.4.0"
 rlp_derive = { package = "rlp-derive", version = "0.2.0" }
-panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
-dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
-unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
+panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
+dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
+unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 ethereum-types = "0.9"
-parity-wordlist = "1.3.0"
+parity-wordlist = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 parity-path = "0.1"
-parity-secp256k1 = { git = "https://github.com/paritytech/rust-secp256k1.git" }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev = "b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
 substrate-bn = { git = "https://github.com/paritytech/bn", rev = "63f8c587356a67b33c7396af98e065b66fca5dda", default-features = false }
 ethcore-bytes = "0.1.1"
@@ -464,7 +461,7 @@ sqlite3-sys = "0.12"
 kvdb = "0.13"
 influx_db_client = "0.5.1"
 # conflux forked crates
-rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "d0cd089bc092ec77b65a5262d453848f57abe3c3" }
+rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "672b02bc21874a5e91705f3642dac3614a7a8f9e" }
 
 [patch.crates-io]
 # use a forked version to fix a vulnerability(introduced by failure) in vrf-rs, can be removed after the upstream is fixed

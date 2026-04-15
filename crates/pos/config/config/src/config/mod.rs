@@ -21,8 +21,6 @@ mod consensus_config;
 pub use consensus_config::*;
 mod error;
 pub use error::*;
-mod execution_config;
-pub use execution_config::*;
 mod logger_config;
 pub use logger_config::*;
 mod metrics_config;
@@ -51,8 +49,6 @@ pub struct NodeConfig {
     pub base: BaseConfig,
     #[serde(default)]
     pub consensus: ConsensusConfig,
-    #[serde(default)]
-    pub execution: ExecutionConfig,
     #[serde(default)]
     pub logger: LoggerConfig,
     #[serde(default)]
@@ -137,7 +133,6 @@ impl NodeConfig {
     pub fn set_data_dir(&mut self, data_dir: PathBuf) {
         self.base.data_dir = data_dir.clone();
         self.consensus.set_data_dir(data_dir.clone());
-        self.execution.set_data_dir(data_dir.clone());
         self.metrics.set_data_dir(data_dir.clone());
         self.storage.set_data_dir(data_dir);
     }
@@ -147,21 +142,13 @@ impl NodeConfig {
     /// Paths used in the config are either absolute or relative to the config
     /// location
     pub fn load<P: AsRef<Path>>(input_path: P) -> Result<Self, Error> {
-        let mut config = Self::load_config(&input_path)?;
-
-        let input_dir = RootPath::new(input_path);
-        config.execution.load(&input_dir)?;
-
+        let config = Self::load_config(&input_path)?;
         Ok(config)
     }
 
     pub fn save<P: AsRef<Path>>(
         &mut self, output_path: P,
     ) -> Result<(), Error> {
-        let output_dir = RootPath::new(&output_path);
-        self.execution.save(&output_dir)?;
-        // This must be last as calling save on subconfigs may change their
-        // fields
         self.save_config(&output_path)?;
         Ok(())
     }
