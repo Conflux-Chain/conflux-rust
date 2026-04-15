@@ -7,11 +7,12 @@ mod vm_factory;
 use super::builtin::Builtin;
 use crate::{
     builtin::{
-        build_bls12_builtin_map, builtin_factory, AltBn128PairingPricer,
-        Blake2FPricer, IfPricer, Linear, ModexpPricer, StaticPlan,
+        build_bls12_builtin_map, builtin_factory, ActivateAt,
+        AltBn128PairingPricer, Blake2FPricer, IfPricer, Linear, ModexpPricer,
+        StaticPlan,
     },
     internal_contract::InternalContractMap,
-    spec::CommonParams,
+    spec::{CommonParams, TransitionsBlockNumber, TransitionsEpochHeight},
 };
 use cfx_types::{Address, AddressWithSpace, Space, H256};
 use cfx_vm_types::Spec;
@@ -20,6 +21,32 @@ use std::{collections::BTreeMap, sync::Arc};
 
 pub use vm_factory::VmFactory;
 pub type SpecCreationRules = dyn Fn(&mut Spec, BlockNumber) + Sync + Send;
+
+/// Extension trait for `TransitionsBlockNumber`: produces
+/// `ActivateAt::ByBlockNumber` via a field-selector closure. The closure
+/// type-checks against `&TransitionsBlockNumber`, so passing a field from
+/// `TransitionsEpochHeight` is a compile error.
+trait ActivateByNumbers {
+    fn activate_at(&self, f: impl Fn(&Self) -> u64) -> ActivateAt;
+}
+impl ActivateByNumbers for TransitionsBlockNumber {
+    fn activate_at(&self, f: impl Fn(&Self) -> u64) -> ActivateAt {
+        ActivateAt::ByBlockNumber(f(self))
+    }
+}
+
+/// Extension trait for `TransitionsEpochHeight`: produces
+/// `ActivateAt::ByEpochHeight` via a field-selector closure. The closure
+/// type-checks against `&TransitionsEpochHeight`, so passing a field from
+/// `TransitionsBlockNumber` is a compile error.
+trait ActivateByHeights {
+    fn activate_at(&self, f: impl Fn(&Self) -> u64) -> ActivateAt;
+}
+impl ActivateByHeights for TransitionsEpochHeight {
+    fn activate_at(&self, f: impl Fn(&Self) -> u64) -> ActivateAt {
+        ActivateAt::ByEpochHeight(f(self))
+    }
+}
 
 pub struct Machine {
     params: CommonParams,
@@ -64,13 +91,14 @@ impl Machine {
 
     pub fn builtin(
         &self, address: &AddressWithSpace, block_number: BlockNumber,
+        epoch_height: u64,
     ) -> Option<&Builtin> {
         let builtins = match address.space {
             Space::Native => &self.builtins,
             Space::Ethereum => &self.builtins_evm,
         };
         builtins.get(&address.address).and_then(|b| {
-            if b.is_active(block_number) {
+            if b.is_active(block_number, epoch_height) {
                 Some(b)
             } else {
                 None
@@ -130,7 +158,7 @@ fn new_builtin_map(
                 Space::Native => builtin_factory("ecrecover"),
                 Space::Ethereum => builtin_factory("ecrecover_evm"),
             },
-            0,
+            ActivateAt::GENESIS,
         ),
     );
     btree.insert(
@@ -138,7 +166,7 @@ fn new_builtin_map(
         Builtin::new(
             Box::new(StaticPlan(Linear::new(60, 12))),
             builtin_factory("sha256"),
-            0,
+            ActivateAt::GENESIS,
         ),
     );
     btree.insert(
@@ -146,7 +174,7 @@ fn new_builtin_map(
         Builtin::new(
             Box::new(StaticPlan(Linear::new(600, 120))),
             builtin_factory("ripemd160"),
-            0,
+            ActivateAt::GENESIS,
         ),
     );
     btree.insert(
@@ -154,7 +182,7 @@ fn new_builtin_map(
         Builtin::new(
             Box::new(StaticPlan(Linear::new(15, 3))),
             builtin_factory("identity"),
-            0,
+            ActivateAt::GENESIS,
         ),
     );
 
@@ -169,7 +197,7 @@ fn new_builtin_map(
         Builtin::new(
             Box::new(mod_exp_pricer),
             builtin_factory("modexp"),
-            params.transition_numbers.cip62,
+            params.transition_numbers.activate_at(|t| t.cip62),
         ),
     );
 
@@ -184,7 +212,7 @@ fn new_builtin_map(
         Builtin::new(
             Box::new(bn_add_pricer),
             builtin_factory("alt_bn128_add"),
-            params.transition_numbers.cip62,
+            params.transition_numbers.activate_at(|t| t.cip62),
         ),
     );
 
@@ -199,7 +227,7 @@ fn new_builtin_map(
         Builtin::new(
             Box::new(bn_mul_pricer),
             builtin_factory("alt_bn128_mul"),
-            params.transition_numbers.cip62,
+            params.transition_numbers.activate_at(|t| t.cip62),
         ),
     );
 
@@ -214,7 +242,7 @@ fn new_builtin_map(
         Builtin::new(
             Box::new(bn_pair_pricer),
             builtin_factory("alt_bn128_pairing"),
-            params.transition_numbers.cip62,
+            params.transition_numbers.activate_at(|t| t.cip62),
         ),
     );
     btree.insert(
@@ -222,7 +250,7 @@ fn new_builtin_map(
         Builtin::new(
             Box::new(StaticPlan(Blake2FPricer::new(1))),
             builtin_factory("blake2_f"),
-            params.transition_numbers.cip92,
+            params.transition_numbers.activate_at(|t| t.cip92),
         ),
     );
     btree.insert(
@@ -230,7 +258,7 @@ fn new_builtin_map(
         Builtin::new(
             Box::new(StaticPlan(Linear::new(50000, 0))),
             builtin_factory("kzg_point_eval"),
-            params.transition_numbers.cip144,
+            params.transition_numbers.activate_at(|t| t.cip144),
         ),
     );
     for (address, price_plan, bls12_impl) in build_bls12_builtin_map() {
@@ -239,7 +267,7 @@ fn new_builtin_map(
             Builtin::new(
                 price_plan,
                 bls12_impl,
-                params.transition_heights.eip2537,
+                params.transition_heights.activate_at(|t| t.eip2537),
             ),
         );
     }
