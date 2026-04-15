@@ -23,16 +23,20 @@
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">pub use </span>utils::<span class="kw-2">*</span>;
 <a href=#24 id=24 data-nosnippet>24</a>
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">pub mod </span>address_util;
-<a href=#26 id=26 data-nosnippet>26</a>
-<a href=#27 id=27 data-nosnippet>27</a><span class="kw">pub mod </span>space_util;
-<a href=#28 id=28 data-nosnippet>28</a><span class="kw">pub use </span>space_util::AddressSpaceUtil;
-<a href=#29 id=29 data-nosnippet>29</a>
-<a href=#30 id=30 data-nosnippet>30</a><span class="kw">pub mod </span>contract_address;
-<a href=#31 id=31 data-nosnippet>31</a><span class="kw">pub use </span>contract_address::{cal_contract_address, CreateContractAddressType};
-<a href=#32 id=32 data-nosnippet>32</a>
-<a href=#33 id=33 data-nosnippet>33</a><span class="doccomment">/// The KECCAK hash of an empty bloom filter (0x00 * 256)
-<a href=#34 id=34 data-nosnippet>34</a></span><span class="kw">pub const </span>KECCAK_EMPTY_BLOOM: H256 = H256([
-<a href=#35 id=35 data-nosnippet>35</a>    <span class="number">0xd3</span>, <span class="number">0x97</span>, <span class="number">0xb3</span>, <span class="number">0xb0</span>, <span class="number">0x43</span>, <span class="number">0xd8</span>, <span class="number">0x7f</span>, <span class="number">0xcd</span>, <span class="number">0x6f</span>, <span class="number">0xad</span>, <span class="number">0x12</span>, <span class="number">0x91</span>,
-<a href=#36 id=36 data-nosnippet>36</a>    <span class="number">0xff</span>, <span class="number">0x0b</span>, <span class="number">0xfd</span>, <span class="number">0x16</span>, <span class="number">0x40</span>, <span class="number">0x1c</span>, <span class="number">0x27</span>, <span class="number">0x48</span>, <span class="number">0x96</span>, <span class="number">0xd8</span>, <span class="number">0xc6</span>, <span class="number">0x3a</span>,
-<a href=#37 id=37 data-nosnippet>37</a>    <span class="number">0x92</span>, <span class="number">0x37</span>, <span class="number">0x27</span>, <span class="number">0xf0</span>, <span class="number">0x77</span>, <span class="number">0xb8</span>, <span class="number">0xe0</span>, <span class="number">0xb5</span>,
-<a href=#38 id=38 data-nosnippet>38</a>]);</code></pre></div></section></main></body></html>
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">pub use </span>address_util::AddressUtil;
+<a href=#27 id=27 data-nosnippet>27</a>
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">pub mod </span>space_util;
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">pub use </span>space_util::AddressSpaceUtil;
+<a href=#30 id=30 data-nosnippet>30</a>
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">pub mod </span>contract_address;
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">pub use </span>contract_address::{
+<a href=#33 id=33 data-nosnippet>33</a>    cal_contract_address, cal_contract_address_with_space,
+<a href=#34 id=34 data-nosnippet>34</a>    CreateContractAddressType,
+<a href=#35 id=35 data-nosnippet>35</a>};
+<a href=#36 id=36 data-nosnippet>36</a>
+<a href=#37 id=37 data-nosnippet>37</a><span class="doccomment">/// The KECCAK hash of an empty bloom filter (0x00 * 256)
+<a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">pub const </span>KECCAK_EMPTY_BLOOM: H256 = H256([
+<a href=#39 id=39 data-nosnippet>39</a>    <span class="number">0xd3</span>, <span class="number">0x97</span>, <span class="number">0xb3</span>, <span class="number">0xb0</span>, <span class="number">0x43</span>, <span class="number">0xd8</span>, <span class="number">0x7f</span>, <span class="number">0xcd</span>, <span class="number">0x6f</span>, <span class="number">0xad</span>, <span class="number">0x12</span>, <span class="number">0x91</span>,
+<a href=#40 id=40 data-nosnippet>40</a>    <span class="number">0xff</span>, <span class="number">0x0b</span>, <span class="number">0xfd</span>, <span class="number">0x16</span>, <span class="number">0x40</span>, <span class="number">0x1c</span>, <span class="number">0x27</span>, <span class="number">0x48</span>, <span class="number">0x96</span>, <span class="number">0xd8</span>, <span class="number">0xc6</span>, <span class="number">0x3a</span>,
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="number">0x92</span>, <span class="number">0x37</span>, <span class="number">0x27</span>, <span class="number">0xf0</span>, <span class="number">0x77</span>, <span class="number">0xb8</span>, <span class="number">0xe0</span>, <span class="number">0xb5</span>,
+<a href=#42 id=42 data-nosnippet>42</a>]);</code></pre></div></section></main></body></html>

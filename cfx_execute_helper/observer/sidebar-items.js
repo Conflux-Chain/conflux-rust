@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["exec_tracer","gasman"],"struct":["Observer"]};
+window.SIDEBAR_ITEMS = {"mod":["access_list","exec_tracer","gasman"],"struct":["Observer"]};

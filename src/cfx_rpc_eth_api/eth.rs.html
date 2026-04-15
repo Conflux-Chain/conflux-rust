@@ -231,135 +231,136 @@
 <a href=#231 id=231 data-nosnippet>231</a>    </span><span class="attr">#[method(name = <span class="string">"createAccessList"</span>)]
 <a href=#232 id=232 data-nosnippet>232</a>    </span><span class="kw">async fn </span>create_access_list(
 <a href=#233 id=233 data-nosnippet>233</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
-<a href=#234 id=234 data-nosnippet>234</a>    ) -&gt; RpcResult&lt;AccessListResult&gt;;
-<a href=#235 id=235 data-nosnippet>235</a>
-<a href=#236 id=236 data-nosnippet>236</a>    <span class="doccomment">/// Generates and returns an estimate of how much gas is necessary to allow
-<a href=#237 id=237 data-nosnippet>237</a>    /// the transaction to complete.
-<a href=#238 id=238 data-nosnippet>238</a>    </span><span class="attr">#[method(name = <span class="string">"estimateGas"</span>)]
-<a href=#239 id=239 data-nosnippet>239</a>    </span><span class="kw">async fn </span>estimate_gas(
-<a href=#240 id=240 data-nosnippet>240</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
-<a href=#241 id=241 data-nosnippet>241</a>        state_override: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
-<a href=#242 id=242 data-nosnippet>242</a>    ) -&gt; RpcResult&lt;U256&gt;;
-<a href=#243 id=243 data-nosnippet>243</a>
-<a href=#244 id=244 data-nosnippet>244</a>    <span class="doccomment">/// Returns the current price per gas in wei.
-<a href=#245 id=245 data-nosnippet>245</a>    </span><span class="attr">#[method(name = <span class="string">"gasPrice"</span>)]
-<a href=#246 id=246 data-nosnippet>246</a>    </span><span class="kw">async fn </span>gas_price(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RpcResult&lt;U256&gt;;
-<a href=#247 id=247 data-nosnippet>247</a>
-<a href=#248 id=248 data-nosnippet>248</a>    <span class="doccomment">/// Returns the account details by specifying an address and a block
-<a href=#249 id=249 data-nosnippet>249</a>    /// number/tag
-<a href=#250 id=250 data-nosnippet>250</a>    </span><span class="comment">// #[method(name = "getAccount")]
-<a href=#251 id=251 data-nosnippet>251</a>    // async fn get_account(
-<a href=#252 id=252 data-nosnippet>252</a>    //     &amp;self,
-<a href=#253 id=253 data-nosnippet>253</a>    //     address: Address,
-<a href=#254 id=254 data-nosnippet>254</a>    //     block: BlockId,
-<a href=#255 id=255 data-nosnippet>255</a>    // ) -&gt; RpcResult&lt;Option&lt;reth_rpc_types::Account&gt;&gt;;
-<a href=#256 id=256 data-nosnippet>256</a>
-<a href=#257 id=257 data-nosnippet>257</a>    </span><span class="doccomment">/// Introduced in EIP-1559, returns suggestion for the priority for dynamic
-<a href=#258 id=258 data-nosnippet>258</a>    /// fee transactions.
-<a href=#259 id=259 data-nosnippet>259</a>    </span><span class="attr">#[method(name = <span class="string">"maxPriorityFeePerGas"</span>)]
-<a href=#260 id=260 data-nosnippet>260</a>    </span><span class="kw">async fn </span>max_priority_fee_per_gas(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RpcResult&lt;U256&gt;;
-<a href=#261 id=261 data-nosnippet>261</a>
-<a href=#262 id=262 data-nosnippet>262</a>    <span class="doccomment">/// Introduced in EIP-4844, returns the current blob base fee in wei.
-<a href=#263 id=263 data-nosnippet>263</a>    </span><span class="comment">// #[method(name = "blobBaseFee")]
-<a href=#264 id=264 data-nosnippet>264</a>    // async fn blob_base_fee(&amp;self) -&gt; RpcResult&lt;U256&gt;;
-<a href=#265 id=265 data-nosnippet>265</a>
-<a href=#266 id=266 data-nosnippet>266</a>    </span><span class="doccomment">/// Returns the Transaction fee history
-<a href=#267 id=267 data-nosnippet>267</a>    ///
-<a href=#268 id=268 data-nosnippet>268</a>    /// Introduced in EIP-1559 for getting information on the appropriate
-<a href=#269 id=269 data-nosnippet>269</a>    /// priority fee to use.
-<a href=#270 id=270 data-nosnippet>270</a>    ///
-<a href=#271 id=271 data-nosnippet>271</a>    /// Returns transaction base fee per gas and effective priority fee per gas
-<a href=#272 id=272 data-nosnippet>272</a>    /// for the requested/supported block range. The returned Fee history
-<a href=#273 id=273 data-nosnippet>273</a>    /// for the returned block range can be a subsection of the requested
-<a href=#274 id=274 data-nosnippet>274</a>    /// range if not all blocks are available.
-<a href=#275 id=275 data-nosnippet>275</a>    </span><span class="attr">#[method(name = <span class="string">"feeHistory"</span>)]
-<a href=#276 id=276 data-nosnippet>276</a>    </span><span class="kw">async fn </span>fee_history(
-<a href=#277 id=277 data-nosnippet>277</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block_count: U64, newest_block: BlockNumberOrTag,
-<a href=#278 id=278 data-nosnippet>278</a>        reward_percentiles: <span class="prelude-ty">Option</span>&lt;Vec&lt;f64&gt;&gt;,
-<a href=#279 id=279 data-nosnippet>279</a>    ) -&gt; RpcResult&lt;FeeHistory&gt;;
-<a href=#280 id=280 data-nosnippet>280</a>
-<a href=#281 id=281 data-nosnippet>281</a>    <span class="doccomment">/// Returns whether the client is actively mining new blocks.
-<a href=#282 id=282 data-nosnippet>282</a>    </span><span class="attr">#[method(name = <span class="string">"mining"</span>)]
-<a href=#283 id=283 data-nosnippet>283</a>    </span><span class="kw">async fn </span>is_mining(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RpcResult&lt;bool&gt;;
-<a href=#284 id=284 data-nosnippet>284</a>
-<a href=#285 id=285 data-nosnippet>285</a>    <span class="doccomment">/// Returns the number of hashes per second that the node is mining with.
-<a href=#286 id=286 data-nosnippet>286</a>    </span><span class="attr">#[method(name = <span class="string">"hashrate"</span>)]
-<a href=#287 id=287 data-nosnippet>287</a>    </span><span class="kw">async fn </span>hashrate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RpcResult&lt;U256&gt;;
-<a href=#288 id=288 data-nosnippet>288</a>
-<a href=#289 id=289 data-nosnippet>289</a>    <span class="doccomment">/// Returns the hash of the current block, the seedHash, and the boundary
-<a href=#290 id=290 data-nosnippet>290</a>    /// condition to be met (“target”)
-<a href=#291 id=291 data-nosnippet>291</a>    </span><span class="comment">// #[method(name = "getWork")]
-<a href=#292 id=292 data-nosnippet>292</a>    // async fn get_work(&amp;self) -&gt; RpcResult&lt;Work&gt;;
-<a href=#293 id=293 data-nosnippet>293</a>
-<a href=#294 id=294 data-nosnippet>294</a>    </span><span class="doccomment">/// Used for submitting mining hashrate.
-<a href=#295 id=295 data-nosnippet>295</a>    ///
-<a href=#296 id=296 data-nosnippet>296</a>    /// Can be used for remote miners to submit their hash rate.
-<a href=#297 id=297 data-nosnippet>297</a>    /// It accepts the miner hash rate and an identifier which must be unique
-<a href=#298 id=298 data-nosnippet>298</a>    /// between nodes. Returns `true` if the block was successfully
-<a href=#299 id=299 data-nosnippet>299</a>    /// submitted, `false` otherwise.
-<a href=#300 id=300 data-nosnippet>300</a>    </span><span class="attr">#[method(name = <span class="string">"submitHashrate"</span>)]
-<a href=#301 id=301 data-nosnippet>301</a>    </span><span class="kw">async fn </span>submit_hashrate(
-<a href=#302 id=302 data-nosnippet>302</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, hashrate: U256, id: H256,
-<a href=#303 id=303 data-nosnippet>303</a>    ) -&gt; RpcResult&lt;bool&gt;;
-<a href=#304 id=304 data-nosnippet>304</a>
-<a href=#305 id=305 data-nosnippet>305</a>    <span class="doccomment">/// Used for submitting a proof-of-work solution.
-<a href=#306 id=306 data-nosnippet>306</a>    </span><span class="attr">#[method(name = <span class="string">"submitWork"</span>)]
-<a href=#307 id=307 data-nosnippet>307</a>    </span><span class="kw">async fn </span>submit_work(
-<a href=#308 id=308 data-nosnippet>308</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, nonce: H64, pow_hash: H256, mix_digest: H256,
-<a href=#309 id=309 data-nosnippet>309</a>    ) -&gt; RpcResult&lt;bool&gt;;
-<a href=#310 id=310 data-nosnippet>310</a>
-<a href=#311 id=311 data-nosnippet>311</a>    <span class="doccomment">/// Sends transaction; will block waiting for signer to return the
-<a href=#312 id=312 data-nosnippet>312</a>    /// transaction hash.
-<a href=#313 id=313 data-nosnippet>313</a>    </span><span class="attr">#[method(name = <span class="string">"sendTransaction"</span>)]
-<a href=#314 id=314 data-nosnippet>314</a>    </span><span class="kw">async fn </span>send_transaction(
-<a href=#315 id=315 data-nosnippet>315</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest,
-<a href=#316 id=316 data-nosnippet>316</a>    ) -&gt; RpcResult&lt;H256&gt;;
-<a href=#317 id=317 data-nosnippet>317</a>
-<a href=#318 id=318 data-nosnippet>318</a>    <span class="doccomment">/// Sends signed transaction, returning its hash.
-<a href=#319 id=319 data-nosnippet>319</a>    </span><span class="attr">#[method(name = <span class="string">"sendRawTransaction"</span>)]
-<a href=#320 id=320 data-nosnippet>320</a>    </span><span class="kw">async fn </span>send_raw_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, bytes: Bytes) -&gt; RpcResult&lt;H256&gt;;
-<a href=#321 id=321 data-nosnippet>321</a>
-<a href=#322 id=322 data-nosnippet>322</a>    <span class="doccomment">/// @alias of `eth_sendRawTransaction`.
-<a href=#323 id=323 data-nosnippet>323</a>    </span><span class="attr">#[method(name = <span class="string">"submitTransaction"</span>)]
-<a href=#324 id=324 data-nosnippet>324</a>    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Bytes) -&gt; RpcResult&lt;H256&gt;;
-<a href=#325 id=325 data-nosnippet>325</a>
-<a href=#326 id=326 data-nosnippet>326</a>    <span class="doccomment">/// Returns an Ethereum specific signature with:
-<a href=#327 id=327 data-nosnippet>327</a>    /// sign(keccak256("\x19Ethereum Signed Message:\n"
-<a href=#328 id=328 data-nosnippet>328</a>    /// + len(message) + message))).
-<a href=#329 id=329 data-nosnippet>329</a>    </span><span class="attr">#[method(name = <span class="string">"sign"</span>)]
-<a href=#330 id=330 data-nosnippet>330</a>    </span><span class="kw">async fn </span>sign(<span class="kw-2">&amp;</span><span class="self">self</span>, address: Address, message: Bytes) -&gt; RpcResult&lt;Bytes&gt;;
-<a href=#331 id=331 data-nosnippet>331</a>
-<a href=#332 id=332 data-nosnippet>332</a>    <span class="doccomment">/// Signs a transaction that can be submitted to the network at a later time
-<a href=#333 id=333 data-nosnippet>333</a>    /// using with `sendRawTransaction.`
-<a href=#334 id=334 data-nosnippet>334</a>    </span><span class="attr">#[method(name = <span class="string">"signTransaction"</span>)]
-<a href=#335 id=335 data-nosnippet>335</a>    </span><span class="kw">async fn </span>sign_transaction(
-<a href=#336 id=336 data-nosnippet>336</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, transaction: TransactionRequest,
-<a href=#337 id=337 data-nosnippet>337</a>    ) -&gt; RpcResult&lt;Bytes&gt;;
-<a href=#338 id=338 data-nosnippet>338</a>
-<a href=#339 id=339 data-nosnippet>339</a>    <span class="comment">// Signs data via [EIP-712](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md).
-<a href=#340 id=340 data-nosnippet>340</a>    // #[method(name = "signTypedData")]
-<a href=#341 id=341 data-nosnippet>341</a>    // async fn sign_typed_data(&amp;self, address: Address, data: TypedData) -&gt;
-<a href=#342 id=342 data-nosnippet>342</a>    // RpcResult&lt;Bytes&gt;;
-<a href=#343 id=343 data-nosnippet>343</a>
-<a href=#344 id=344 data-nosnippet>344</a>    // Returns the account and storage values of the specified account including
-<a href=#345 id=345 data-nosnippet>345</a>    // the Merkle-proof. This call can be used to verify that the data you
-<a href=#346 id=346 data-nosnippet>346</a>    // are pulling from is not tampered with.
-<a href=#347 id=347 data-nosnippet>347</a>
-<a href=#348 id=348 data-nosnippet>348</a>    // #[method(name = "getProof")]
-<a href=#349 id=349 data-nosnippet>349</a>    // async fn get_proof(
-<a href=#350 id=350 data-nosnippet>350</a>    //     &amp;self,
-<a href=#351 id=351 data-nosnippet>351</a>    //     address: Address,
-<a href=#352 id=352 data-nosnippet>352</a>    //     keys: Vec&lt;JsonStorageKey&gt;,
-<a href=#353 id=353 data-nosnippet>353</a>    //     block_number: Option&lt;BlockId&gt;,
-<a href=#354 id=354 data-nosnippet>354</a>    // ) -&gt; RpcResult&lt;EIP1186AccountProofResponse&gt;;
-<a href=#355 id=355 data-nosnippet>355</a>
-<a href=#356 id=356 data-nosnippet>356</a>    </span><span class="doccomment">/// Returns logs matching given filter object.
-<a href=#357 id=357 data-nosnippet>357</a>    </span><span class="attr">#[method(name = <span class="string">"getLogs"</span>)]
-<a href=#358 id=358 data-nosnippet>358</a>    </span><span class="kw">async fn </span>logs(<span class="kw-2">&amp;</span><span class="self">self</span>, filter: Filter) -&gt; RpcResult&lt;Vec&lt;Log&gt;&gt;;
-<a href=#359 id=359 data-nosnippet>359</a>
-<a href=#360 id=360 data-nosnippet>360</a>    <span class="attr">#[method(name = <span class="string">"getAccountPendingTransactions"</span>)]
-<a href=#361 id=361 data-nosnippet>361</a>    </span><span class="kw">async fn </span>account_pending_transactions(
-<a href=#362 id=362 data-nosnippet>362</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, address: Address, maybe_start_nonce: <span class="prelude-ty">Option</span>&lt;U256&gt;,
-<a href=#363 id=363 data-nosnippet>363</a>        maybe_limit: <span class="prelude-ty">Option</span>&lt;U64&gt;,
-<a href=#364 id=364 data-nosnippet>364</a>    ) -&gt; RpcResult&lt;AccountPendingTransactions&gt;;
-<a href=#365 id=365 data-nosnippet>365</a>}</code></pre></div></section></main></body></html>
+<a href=#234 id=234 data-nosnippet>234</a>        state_override: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
+<a href=#235 id=235 data-nosnippet>235</a>    ) -&gt; RpcResult&lt;AccessListResult&gt;;
+<a href=#236 id=236 data-nosnippet>236</a>
+<a href=#237 id=237 data-nosnippet>237</a>    <span class="doccomment">/// Generates and returns an estimate of how much gas is necessary to allow
+<a href=#238 id=238 data-nosnippet>238</a>    /// the transaction to complete.
+<a href=#239 id=239 data-nosnippet>239</a>    </span><span class="attr">#[method(name = <span class="string">"estimateGas"</span>)]
+<a href=#240 id=240 data-nosnippet>240</a>    </span><span class="kw">async fn </span>estimate_gas(
+<a href=#241 id=241 data-nosnippet>241</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
+<a href=#242 id=242 data-nosnippet>242</a>        state_override: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
+<a href=#243 id=243 data-nosnippet>243</a>    ) -&gt; RpcResult&lt;U256&gt;;
+<a href=#244 id=244 data-nosnippet>244</a>
+<a href=#245 id=245 data-nosnippet>245</a>    <span class="doccomment">/// Returns the current price per gas in wei.
+<a href=#246 id=246 data-nosnippet>246</a>    </span><span class="attr">#[method(name = <span class="string">"gasPrice"</span>)]
+<a href=#247 id=247 data-nosnippet>247</a>    </span><span class="kw">async fn </span>gas_price(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RpcResult&lt;U256&gt;;
+<a href=#248 id=248 data-nosnippet>248</a>
+<a href=#249 id=249 data-nosnippet>249</a>    <span class="doccomment">/// Returns the account details by specifying an address and a block
+<a href=#250 id=250 data-nosnippet>250</a>    /// number/tag
+<a href=#251 id=251 data-nosnippet>251</a>    </span><span class="comment">// #[method(name = "getAccount")]
+<a href=#252 id=252 data-nosnippet>252</a>    // async fn get_account(
+<a href=#253 id=253 data-nosnippet>253</a>    //     &amp;self,
+<a href=#254 id=254 data-nosnippet>254</a>    //     address: Address,
+<a href=#255 id=255 data-nosnippet>255</a>    //     block: BlockId,
+<a href=#256 id=256 data-nosnippet>256</a>    // ) -&gt; RpcResult&lt;Option&lt;reth_rpc_types::Account&gt;&gt;;
+<a href=#257 id=257 data-nosnippet>257</a>
+<a href=#258 id=258 data-nosnippet>258</a>    </span><span class="doccomment">/// Introduced in EIP-1559, returns suggestion for the priority for dynamic
+<a href=#259 id=259 data-nosnippet>259</a>    /// fee transactions.
+<a href=#260 id=260 data-nosnippet>260</a>    </span><span class="attr">#[method(name = <span class="string">"maxPriorityFeePerGas"</span>)]
+<a href=#261 id=261 data-nosnippet>261</a>    </span><span class="kw">async fn </span>max_priority_fee_per_gas(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RpcResult&lt;U256&gt;;
+<a href=#262 id=262 data-nosnippet>262</a>
+<a href=#263 id=263 data-nosnippet>263</a>    <span class="doccomment">/// Introduced in EIP-4844, returns the current blob base fee in wei.
+<a href=#264 id=264 data-nosnippet>264</a>    </span><span class="comment">// #[method(name = "blobBaseFee")]
+<a href=#265 id=265 data-nosnippet>265</a>    // async fn blob_base_fee(&amp;self) -&gt; RpcResult&lt;U256&gt;;
+<a href=#266 id=266 data-nosnippet>266</a>
+<a href=#267 id=267 data-nosnippet>267</a>    </span><span class="doccomment">/// Returns the Transaction fee history
+<a href=#268 id=268 data-nosnippet>268</a>    ///
+<a href=#269 id=269 data-nosnippet>269</a>    /// Introduced in EIP-1559 for getting information on the appropriate
+<a href=#270 id=270 data-nosnippet>270</a>    /// priority fee to use.
+<a href=#271 id=271 data-nosnippet>271</a>    ///
+<a href=#272 id=272 data-nosnippet>272</a>    /// Returns transaction base fee per gas and effective priority fee per gas
+<a href=#273 id=273 data-nosnippet>273</a>    /// for the requested/supported block range. The returned Fee history
+<a href=#274 id=274 data-nosnippet>274</a>    /// for the returned block range can be a subsection of the requested
+<a href=#275 id=275 data-nosnippet>275</a>    /// range if not all blocks are available.
+<a href=#276 id=276 data-nosnippet>276</a>    </span><span class="attr">#[method(name = <span class="string">"feeHistory"</span>)]
+<a href=#277 id=277 data-nosnippet>277</a>    </span><span class="kw">async fn </span>fee_history(
+<a href=#278 id=278 data-nosnippet>278</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block_count: U64, newest_block: BlockNumberOrTag,
+<a href=#279 id=279 data-nosnippet>279</a>        reward_percentiles: <span class="prelude-ty">Option</span>&lt;Vec&lt;f64&gt;&gt;,
+<a href=#280 id=280 data-nosnippet>280</a>    ) -&gt; RpcResult&lt;FeeHistory&gt;;
+<a href=#281 id=281 data-nosnippet>281</a>
+<a href=#282 id=282 data-nosnippet>282</a>    <span class="doccomment">/// Returns whether the client is actively mining new blocks.
+<a href=#283 id=283 data-nosnippet>283</a>    </span><span class="attr">#[method(name = <span class="string">"mining"</span>)]
+<a href=#284 id=284 data-nosnippet>284</a>    </span><span class="kw">async fn </span>is_mining(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RpcResult&lt;bool&gt;;
+<a href=#285 id=285 data-nosnippet>285</a>
+<a href=#286 id=286 data-nosnippet>286</a>    <span class="doccomment">/// Returns the number of hashes per second that the node is mining with.
+<a href=#287 id=287 data-nosnippet>287</a>    </span><span class="attr">#[method(name = <span class="string">"hashrate"</span>)]
+<a href=#288 id=288 data-nosnippet>288</a>    </span><span class="kw">async fn </span>hashrate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RpcResult&lt;U256&gt;;
+<a href=#289 id=289 data-nosnippet>289</a>
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="doccomment">/// Returns the hash of the current block, the seedHash, and the boundary
+<a href=#291 id=291 data-nosnippet>291</a>    /// condition to be met (“target”)
+<a href=#292 id=292 data-nosnippet>292</a>    </span><span class="comment">// #[method(name = "getWork")]
+<a href=#293 id=293 data-nosnippet>293</a>    // async fn get_work(&amp;self) -&gt; RpcResult&lt;Work&gt;;
+<a href=#294 id=294 data-nosnippet>294</a>
+<a href=#295 id=295 data-nosnippet>295</a>    </span><span class="doccomment">/// Used for submitting mining hashrate.
+<a href=#296 id=296 data-nosnippet>296</a>    ///
+<a href=#297 id=297 data-nosnippet>297</a>    /// Can be used for remote miners to submit their hash rate.
+<a href=#298 id=298 data-nosnippet>298</a>    /// It accepts the miner hash rate and an identifier which must be unique
+<a href=#299 id=299 data-nosnippet>299</a>    /// between nodes. Returns `true` if the block was successfully
+<a href=#300 id=300 data-nosnippet>300</a>    /// submitted, `false` otherwise.
+<a href=#301 id=301 data-nosnippet>301</a>    </span><span class="attr">#[method(name = <span class="string">"submitHashrate"</span>)]
+<a href=#302 id=302 data-nosnippet>302</a>    </span><span class="kw">async fn </span>submit_hashrate(
+<a href=#303 id=303 data-nosnippet>303</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, hashrate: U256, id: H256,
+<a href=#304 id=304 data-nosnippet>304</a>    ) -&gt; RpcResult&lt;bool&gt;;
+<a href=#305 id=305 data-nosnippet>305</a>
+<a href=#306 id=306 data-nosnippet>306</a>    <span class="doccomment">/// Used for submitting a proof-of-work solution.
+<a href=#307 id=307 data-nosnippet>307</a>    </span><span class="attr">#[method(name = <span class="string">"submitWork"</span>)]
+<a href=#308 id=308 data-nosnippet>308</a>    </span><span class="kw">async fn </span>submit_work(
+<a href=#309 id=309 data-nosnippet>309</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, nonce: H64, pow_hash: H256, mix_digest: H256,
+<a href=#310 id=310 data-nosnippet>310</a>    ) -&gt; RpcResult&lt;bool&gt;;
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a>    <span class="doccomment">/// Sends transaction; will block waiting for signer to return the
+<a href=#313 id=313 data-nosnippet>313</a>    /// transaction hash.
+<a href=#314 id=314 data-nosnippet>314</a>    </span><span class="attr">#[method(name = <span class="string">"sendTransaction"</span>)]
+<a href=#315 id=315 data-nosnippet>315</a>    </span><span class="kw">async fn </span>send_transaction(
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest,
+<a href=#317 id=317 data-nosnippet>317</a>    ) -&gt; RpcResult&lt;H256&gt;;
+<a href=#318 id=318 data-nosnippet>318</a>
+<a href=#319 id=319 data-nosnippet>319</a>    <span class="doccomment">/// Sends signed transaction, returning its hash.
+<a href=#320 id=320 data-nosnippet>320</a>    </span><span class="attr">#[method(name = <span class="string">"sendRawTransaction"</span>)]
+<a href=#321 id=321 data-nosnippet>321</a>    </span><span class="kw">async fn </span>send_raw_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, bytes: Bytes) -&gt; RpcResult&lt;H256&gt;;
+<a href=#322 id=322 data-nosnippet>322</a>
+<a href=#323 id=323 data-nosnippet>323</a>    <span class="doccomment">/// @alias of `eth_sendRawTransaction`.
+<a href=#324 id=324 data-nosnippet>324</a>    </span><span class="attr">#[method(name = <span class="string">"submitTransaction"</span>)]
+<a href=#325 id=325 data-nosnippet>325</a>    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Bytes) -&gt; RpcResult&lt;H256&gt;;
+<a href=#326 id=326 data-nosnippet>326</a>
+<a href=#327 id=327 data-nosnippet>327</a>    <span class="doccomment">/// Returns an Ethereum specific signature with:
+<a href=#328 id=328 data-nosnippet>328</a>    /// sign(keccak256("\x19Ethereum Signed Message:\n"
+<a href=#329 id=329 data-nosnippet>329</a>    /// + len(message) + message))).
+<a href=#330 id=330 data-nosnippet>330</a>    </span><span class="attr">#[method(name = <span class="string">"sign"</span>)]
+<a href=#331 id=331 data-nosnippet>331</a>    </span><span class="kw">async fn </span>sign(<span class="kw-2">&amp;</span><span class="self">self</span>, address: Address, message: Bytes) -&gt; RpcResult&lt;Bytes&gt;;
+<a href=#332 id=332 data-nosnippet>332</a>
+<a href=#333 id=333 data-nosnippet>333</a>    <span class="doccomment">/// Signs a transaction that can be submitted to the network at a later time
+<a href=#334 id=334 data-nosnippet>334</a>    /// using with `sendRawTransaction.`
+<a href=#335 id=335 data-nosnippet>335</a>    </span><span class="attr">#[method(name = <span class="string">"signTransaction"</span>)]
+<a href=#336 id=336 data-nosnippet>336</a>    </span><span class="kw">async fn </span>sign_transaction(
+<a href=#337 id=337 data-nosnippet>337</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, transaction: TransactionRequest,
+<a href=#338 id=338 data-nosnippet>338</a>    ) -&gt; RpcResult&lt;Bytes&gt;;
+<a href=#339 id=339 data-nosnippet>339</a>
+<a href=#340 id=340 data-nosnippet>340</a>    <span class="comment">// Signs data via [EIP-712](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-712.md).
+<a href=#341 id=341 data-nosnippet>341</a>    // #[method(name = "signTypedData")]
+<a href=#342 id=342 data-nosnippet>342</a>    // async fn sign_typed_data(&amp;self, address: Address, data: TypedData) -&gt;
+<a href=#343 id=343 data-nosnippet>343</a>    // RpcResult&lt;Bytes&gt;;
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a>    // Returns the account and storage values of the specified account including
+<a href=#346 id=346 data-nosnippet>346</a>    // the Merkle-proof. This call can be used to verify that the data you
+<a href=#347 id=347 data-nosnippet>347</a>    // are pulling from is not tampered with.
+<a href=#348 id=348 data-nosnippet>348</a>
+<a href=#349 id=349 data-nosnippet>349</a>    // #[method(name = "getProof")]
+<a href=#350 id=350 data-nosnippet>350</a>    // async fn get_proof(
+<a href=#351 id=351 data-nosnippet>351</a>    //     &amp;self,
+<a href=#352 id=352 data-nosnippet>352</a>    //     address: Address,
+<a href=#353 id=353 data-nosnippet>353</a>    //     keys: Vec&lt;JsonStorageKey&gt;,
+<a href=#354 id=354 data-nosnippet>354</a>    //     block_number: Option&lt;BlockId&gt;,
+<a href=#355 id=355 data-nosnippet>355</a>    // ) -&gt; RpcResult&lt;EIP1186AccountProofResponse&gt;;
+<a href=#356 id=356 data-nosnippet>356</a>
+<a href=#357 id=357 data-nosnippet>357</a>    </span><span class="doccomment">/// Returns logs matching given filter object.
+<a href=#358 id=358 data-nosnippet>358</a>    </span><span class="attr">#[method(name = <span class="string">"getLogs"</span>)]
+<a href=#359 id=359 data-nosnippet>359</a>    </span><span class="kw">async fn </span>logs(<span class="kw-2">&amp;</span><span class="self">self</span>, filter: Filter) -&gt; RpcResult&lt;Vec&lt;Log&gt;&gt;;
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a>    <span class="attr">#[method(name = <span class="string">"getAccountPendingTransactions"</span>)]
+<a href=#362 id=362 data-nosnippet>362</a>    </span><span class="kw">async fn </span>account_pending_transactions(
+<a href=#363 id=363 data-nosnippet>363</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, address: Address, maybe_start_nonce: <span class="prelude-ty">Option</span>&lt;U256&gt;,
+<a href=#364 id=364 data-nosnippet>364</a>        maybe_limit: <span class="prelude-ty">Option</span>&lt;U64&gt;,
+<a href=#365 id=365 data-nosnippet>365</a>    ) -&gt; RpcResult&lt;AccountPendingTransactions&gt;;
+<a href=#366 id=366 data-nosnippet>366</a>}</code></pre></div></section></main></body></html>

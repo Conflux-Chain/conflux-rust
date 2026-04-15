@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["GasLimitEstimation","GasMan"]};
+window.SIDEBAR_ITEMS = {"struct":["GasLimitEstimationKey","GasMan"]};

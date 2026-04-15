@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CreateContractAddressType"],"fn":["cal_contract_address"]};
+window.SIDEBAR_ITEMS = {"enum":["CreateContractAddressType"],"fn":["cal_contract_address","cal_contract_address_with_space"]};
