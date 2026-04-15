@@ -6,7 +6,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    access_path::AccessPath,
     account_address::{self, AccountAddress},
     block_info::{BlockInfo, Round},
     block_metadata::BlockMetadata,
@@ -16,12 +15,10 @@ use crate::{
     event::{EventHandle, EventKey},
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
     on_chain_config::ValidatorSet,
-    proof::TransactionListProof,
     transaction::{
-        ChangeSet, Module, RawTransaction, Script, SignatureCheckedTransaction,
-        SignedTransaction, Transaction, TransactionArgument,
-        TransactionListWithProof, TransactionPayload, TransactionStatus,
-        TransactionToCommit, Version, WriteSetPayload,
+        RawTransaction, SignatureCheckedTransaction, SignedTransaction,
+        Transaction, TransactionPayload, TransactionStatus,
+        TransactionToCommit, Version,
     },
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
@@ -30,13 +27,10 @@ use crate::{
     validator_info::ValidatorInfo,
     validator_signer::ValidatorSigner,
     vm_status::{KeptVMStatus, VMStatus},
-    write_set::{WriteOp, WriteSet, WriteSetMut},
 };
 use diem_crypto::{bls, ec_vrf, test_utils::KeyPair, traits::*, HashValue};
-use move_core_types::language_storage::TypeTag;
 use proptest::{
     collection::{vec, SizeRange},
-    option,
     prelude::*,
     sample::Index,
 };
@@ -46,76 +40,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     iter::Iterator,
 };
-
-impl WriteOp {
-    pub fn value_strategy() -> impl Strategy<Value = Self> {
-        vec(any::<u8>(), 0..64).prop_map(WriteOp::Value)
-    }
-
-    pub fn deletion_strategy() -> impl Strategy<Value = Self> {
-        Just(WriteOp::Deletion)
-    }
-}
-
-impl Arbitrary for WriteOp {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: ()) -> Self::Strategy {
-        prop_oneof![Self::deletion_strategy(), Self::value_strategy()].boxed()
-    }
-}
-
-impl WriteSet {
-    fn genesis_strategy() -> impl Strategy<Value = Self> {
-        vec((any::<AccessPath>(), WriteOp::value_strategy()), 0..64).prop_map(
-            |write_set| {
-                let write_set_mut = WriteSetMut::new(write_set);
-                write_set_mut
-                    .freeze()
-                    .expect("generated write sets should always be valid")
-            },
-        )
-    }
-}
-
-impl Arbitrary for WriteSetPayload {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: ()) -> Self::Strategy {
-        any::<ChangeSet>().prop_map(WriteSetPayload::Direct).boxed()
-    }
-}
-
-impl Arbitrary for WriteSet {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: ()) -> Self::Strategy {
-        // XXX there's no checking for repeated access paths here, nor in
-        // write_set. Is that important? Not sure.
-        vec((any::<AccessPath>(), any::<WriteOp>()), 0..64)
-            .prop_map(|write_set| {
-                let write_set_mut = WriteSetMut::new(write_set);
-                write_set_mut
-                    .freeze()
-                    .expect("generated write sets should always be valid")
-            })
-            .boxed()
-    }
-}
-
-impl Arbitrary for ChangeSet {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: ()) -> Self::Strategy {
-        (any::<WriteSet>(), vec(any::<ContractEvent>(), 0..10))
-            .prop_map(|(ws, events)| ChangeSet::new(ws, events))
-            .boxed()
-    }
-}
 
 #[derive(Debug)]
 struct AccountInfo {
@@ -320,66 +244,7 @@ fn new_raw_transaction(
     expiration_time_secs: u64,
 ) -> RawTransaction {
     let chain_id = ChainId::test();
-    match payload {
-        TransactionPayload::Module(module) => RawTransaction::new_module(
-            sender,
-            module,
-            expiration_time_secs,
-            chain_id,
-        ),
-        TransactionPayload::Script(script) => RawTransaction::new_script(
-            sender,
-            script,
-            expiration_time_secs,
-            chain_id,
-        ),
-        TransactionPayload::ScriptFunction(script_fn) => {
-            RawTransaction::new_script_function(
-                sender,
-                script_fn,
-                expiration_time_secs,
-                chain_id,
-            )
-        }
-        TransactionPayload::WriteSet(_) => {
-            // WriteSet transactions are only used for genesis, not for
-            // user transactions. Generate a no-op script instead.
-            RawTransaction::new_script(
-                sender,
-                Script::new(vec![], vec![], vec![]),
-                expiration_time_secs,
-                chain_id,
-            )
-        }
-        TransactionPayload::Election(election_payload) => {
-            RawTransaction::new_election(sender, election_payload, chain_id)
-        }
-        TransactionPayload::Retire(retire_payload) => {
-            RawTransaction::new_retire(sender, retire_payload)
-        }
-        TransactionPayload::Register(register_payload) => RawTransaction::new(
-            sender,
-            TransactionPayload::Register(register_payload),
-            0,
-            chain_id,
-        ),
-        TransactionPayload::UpdateVotingPower(update_voting_power_payload) => {
-            RawTransaction::new(
-                sender,
-                TransactionPayload::UpdateVotingPower(
-                    update_voting_power_payload,
-                ),
-                0,
-                chain_id,
-            )
-        }
-        TransactionPayload::PivotDecision(pivot_decision) => {
-            RawTransaction::new_pivot_decision(sender, pivot_decision, chain_id)
-        }
-        TransactionPayload::Dispute(dispute_payload) => {
-            RawTransaction::new_dispute(sender, dispute_payload)
-        }
-    }
+    RawTransaction::new(sender, payload, expiration_time_secs, chain_id)
 }
 
 impl Arbitrary for RawTransaction {
@@ -396,21 +261,6 @@ impl Arbitrary for RawTransaction {
 }
 
 impl SignatureCheckedTransaction {
-    pub fn genesis_strategy(
-        keypair_strategy: impl Strategy<
-            Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
-        >,
-        vrf_keypair_strategy: impl Strategy<
-            Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
-        >,
-    ) -> impl Strategy<Value = Self> {
-        Self::strategy_impl(
-            keypair_strategy,
-            vrf_keypair_strategy,
-            TransactionPayload::genesis_strategy(),
-        )
-    }
-
     fn strategy_impl(
         keypair_strategy: impl Strategy<
             Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
@@ -487,34 +337,6 @@ impl Arbitrary for SignedTransaction {
     }
 }
 
-impl TransactionPayload {
-    pub fn script_strategy() -> impl Strategy<Value = Self> {
-        any::<Script>().prop_map(TransactionPayload::Script)
-    }
-
-    pub fn module_strategy() -> impl Strategy<Value = Self> {
-        any::<Module>().prop_map(TransactionPayload::Module)
-    }
-
-    pub fn write_set_strategy() -> impl Strategy<Value = Self> {
-        any::<WriteSet>().prop_map(|ws| {
-            TransactionPayload::WriteSet(WriteSetPayload::Direct(
-                ChangeSet::new(ws, vec![]),
-            ))
-        })
-    }
-
-    /// Similar to `write_set_strategy` except generates a valid write set for
-    /// the genesis block.
-    pub fn genesis_strategy() -> impl Strategy<Value = Self> {
-        WriteSet::genesis_strategy().prop_map(|ws| {
-            TransactionPayload::WriteSet(WriteSetPayload::Direct(
-                ChangeSet::new(ws, vec![]),
-            ))
-        })
-    }
-}
-
 prop_compose! {
     fn arb_transaction_status()(vm_status in any::<VMStatus>()) -> TransactionStatus {
         vm_status.into()
@@ -540,45 +362,18 @@ impl Arbitrary for TransactionPayload {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;
 
+    // Only the legacy placeholder variants are generated: the active
+    // Conflux PoS payloads (Election, Retire, …) lack `Arbitrary` impls.
+    // Covering all four `_Legacy*` variants at least exercises the BCS
+    // variant-index stability they exist to protect.
     fn arbitrary_with(_args: ()) -> Self::Strategy {
-        // Most transactions in practice will be programs, but other parts of
-        // the system should at least not choke on write set strategies
-        // so introduce them with decent probability. The figures below
-        // are probability weights.
         prop_oneof![
-            4 => Self::script_strategy(),
-            1 => Self::module_strategy(),
-            1 => Self::write_set_strategy(),
+            Just(TransactionPayload::_LegacyWriteSet),
+            Just(TransactionPayload::_LegacyScript),
+            Just(TransactionPayload::_LegacyModule),
+            Just(TransactionPayload::_LegacyScriptFunction),
         ]
         .boxed()
-    }
-}
-
-impl Arbitrary for Script {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: ()) -> Self::Strategy {
-        // XXX This should eventually be an actually valid program, maybe?
-        // The vector sizes are picked out of thin air.
-        (
-            vec(any::<u8>(), 0..100),
-            vec(any::<TypeTag>(), 0..4),
-            vec(any::<TransactionArgument>(), 0..10),
-        )
-            .prop_map(|(code, ty_args, args)| Script::new(code, ty_args, args))
-            .boxed()
-    }
-}
-
-impl Arbitrary for Module {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: ()) -> Self::Strategy {
-        // XXX How should we generate random modules?
-        // The vector sizes are picked out of thin air.
-        vec(any::<u8>(), 0..100).prop_map(Module::new).boxed()
     }
 }
 
@@ -766,61 +561,6 @@ impl Arbitrary for TransactionToCommitGen {
                 }
             })
             .boxed()
-    }
-}
-
-fn arb_transaction_list_with_proof(
-) -> impl Strategy<Value = TransactionListWithProof> {
-    (
-        vec(
-            (
-                any::<SignedTransaction>(),
-                vec(any::<ContractEvent>(), 0..10),
-            ),
-            0..10,
-        ),
-        any::<TransactionListProof>(),
-    )
-        .prop_flat_map(|(transaction_and_events, proof)| {
-            let transactions: Vec<_> = transaction_and_events
-                .clone()
-                .into_iter()
-                .map(|(transaction, _event)| {
-                    Transaction::UserTransaction(transaction)
-                })
-                .collect();
-            let events: Vec<_> = transaction_and_events
-                .into_iter()
-                .map(|(_transaction, event)| event)
-                .collect();
-
-            (
-                Just(transactions.clone()),
-                option::of(Just(events)),
-                if transactions.is_empty() {
-                    Just(None).boxed()
-                } else {
-                    any::<Version>().prop_map(Some).boxed()
-                },
-                Just(proof),
-            )
-        })
-        .prop_map(|(transactions, events, first_txn_version, proof)| {
-            TransactionListWithProof::new(
-                transactions,
-                events,
-                first_txn_version,
-                proof,
-            )
-        })
-}
-
-impl Arbitrary for TransactionListWithProof {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-        arb_transaction_list_with_proof().boxed()
     }
 }
 

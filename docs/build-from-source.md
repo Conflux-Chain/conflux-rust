@@ -122,11 +122,6 @@ Note: when compiling a crate and you receive errors, it is in most cases due to 
 ```shell
 cargo clean && cargo update
 ```
-When compiling on Linux, by default `cc` is linked to `gcc`. You may need to export the `CC` environment variable to point to `clang`:
-
-```shell
-CC=clang CXX=clang++ cargo build --release
-```
 
 To start running a Conflux full node, you can follow the instructions at [Running Conflux Full Node](https://doc.confluxnetwork.org/docs/general/run-a-node/).
 

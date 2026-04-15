@@ -15,19 +15,14 @@ use diem_crypto::{
 };
 use diem_types::{
     account_address::AccountAddress,
-    contract_event::ContractEvent,
-    on_chain_config::{new_epoch_event_key, ValidatorSet},
     term_state::{
         pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
         NodeID, TERM_LIST_LEN,
     },
-    transaction::{ChangeSet, Transaction, WriteSetPayload},
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
-        ConsensusVRFPublicKey, ValidatorConfig,
+        ConsensusVRFPublicKey,
     },
-    validator_info::ValidatorInfo,
-    write_set::WriteSet,
 };
 use rand_08::{rngs::StdRng, SeedableRng};
 use rustc_hex::FromHexError;
@@ -131,35 +126,6 @@ fn main() {
             process::exit(1);
         }
     }
-}
-
-fn generate_genesis_from_public_keys(public_keys: Vec<(NodeID, u64)>) {
-    let genesis_path = PathBuf::from("./genesis_file");
-    let mut genesis_file = File::create(&genesis_path).unwrap();
-
-    let mut validators = Vec::new();
-    for (node_id, voting_power) in public_keys {
-        let validator_config = ValidatorConfig::new(
-            node_id.public_key,
-            Some(node_id.vrf_public_key),
-            vec![],
-            vec![],
-        );
-        validators.push(ValidatorInfo::new(
-            node_id.addr,
-            voting_power,
-            validator_config,
-        ));
-    }
-    let validator_set = ValidatorSet::new(validators);
-    let validator_set_bytes = bcs::to_bytes(&validator_set).unwrap();
-    let contract_event =
-        ContractEvent::new(new_epoch_event_key(), validator_set_bytes);
-    let change_set = ChangeSet::new(WriteSet::default(), vec![contract_event]);
-    let write_set_paylod = WriteSetPayload::Direct(change_set);
-    let genesis_transaction = Transaction::GenesisTransaction(write_set_paylod);
-    let genesis_bytes = bcs::to_bytes(&genesis_transaction).unwrap();
-    genesis_file.write_all(&genesis_bytes).unwrap();
 }
 
 fn elect_genesis_committee(
@@ -292,7 +258,6 @@ fn execute(command: clap::Command) -> Result<String, Error> {
                     initial_seed,
                 },
             );
-            generate_genesis_from_public_keys(initial_committee);
             Ok("Ok".into())
         }
 
@@ -356,7 +321,6 @@ fn execute(command: clap::Command) -> Result<String, Error> {
                     initial_seed,
                 },
             );
-            generate_genesis_from_public_keys(initial_committee);
             Ok("Ok".into())
         }
 

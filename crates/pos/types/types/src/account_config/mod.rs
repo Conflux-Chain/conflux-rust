@@ -9,7 +9,7 @@ pub mod constants;
 
 pub use constants::*;
 
-use move_core_types::account_address::AccountAddress;
+use crate::account_address::AccountAddress;
 
 pub fn pivot_chain_select_address() -> AccountAddress {
     AccountAddress::from_hex_literal("0x1D9")

@@ -67,6 +67,7 @@ impl KeyPairGenerator for Brain {
 #[cfg(test)]
 mod tests {
     use crate::{Brain, KeyPairGenerator};
+    use std::str::FromStr;
 
     #[test]
     fn test_brain() {
@@ -74,5 +75,31 @@ mod tests {
         let first_keypair = Brain::new(words.clone()).generate().unwrap();
         let second_keypair = Brain::new(words).generate().unwrap();
         assert_eq!(first_keypair.secret(), second_keypair.secret());
+    }
+
+    // Brain-wallet compatibility guard for the parity-wordlist swap
+    // (paritytech/wordlist -> Conflux-Chain/conflux-parity-deps fork at
+    // rand 0.9). If the 7530-word dictionary ever drifts, or if the brain
+    // key-derivation (keccak chain -> secret) changes, this test fails and
+    // anyone's previously-generated brain wallets would become unrecoverable.
+    #[test]
+    fn brain_wallet_compat_fixed_phrase() {
+        // All twelve words are taken from the original parity-wordlist
+        // dictionary, so validate_phrase must accept the phrase.
+        let phrase = "abacus abdomen ability able abnormal absence \
+                      absolute abstract accent accurate accustom acorn"
+            .to_owned();
+        Brain::validate_phrase(&phrase, 12)
+            .expect("phrase is all dictionary words");
+
+        // Derivation is deterministic (double-keccak chain until the address
+        // has the 0x10 type nibble), so a hardcoded secret pins both the
+        // hash path and the dictionary-word inputs.
+        let kp = Brain::new(phrase).generate().unwrap();
+        let expected = crate::Secret::from_str(
+            "0ae3b9521d5bc321284646b6b7ed286223d6630b5092ec795a9ca31884a81442",
+        )
+        .unwrap();
+        assert_eq!(kp.secret(), &expected);
     }
 }

@@ -5,10 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    persistent_safety_storage::PersistentSafetyStorage,
-    serializer::SerializerService, SafetyRules, TSafetyRules,
-};
+use crate::{persistent_safety_storage::PersistentSafetyStorage, SafetyRules};
 use consensus_types::{
     block::Block,
     common::{Payload, Round},
@@ -243,7 +240,7 @@ pub fn test_safety_rules() -> SafetyRules {
     let (epoch_state, _) = make_genesis(&signer);
 
     let mut safety_rules =
-        SafetyRules::new(storage, true, false, None, Default::default());
+        SafetyRules::new(storage, false, None, Default::default());
     safety_rules.initialize(&epoch_state).unwrap();
     safety_rules
 }
@@ -253,11 +250,5 @@ pub fn test_safety_rules() -> SafetyRules {
 pub fn test_safety_rules_uninitialized() -> SafetyRules {
     let signer = ValidatorSigner::from_int(0);
     let storage = test_storage(&signer);
-    SafetyRules::new(storage, true, false, None, Default::default())
-}
-
-/// Returns a simple serializer for testing purposes.
-pub fn test_serializer() -> SerializerService {
-    let safety_rules = test_safety_rules();
-    SerializerService::new(safety_rules)
+    SafetyRules::new(storage, false, None, Default::default())
 }

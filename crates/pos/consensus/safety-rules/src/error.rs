@@ -51,12 +51,6 @@ impl From<bcs::Error> for Error {
     }
 }
 
-impl From<diem_secure_net::Error> for Error {
-    fn from(error: diem_secure_net::Error) -> Self {
-        Self::InternalError(error.to_string())
-    }
-}
-
 impl From<diem_secure_storage::Error> for Error {
     fn from(error: diem_secure_storage::Error) -> Self {
         match error {

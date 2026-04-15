@@ -26,8 +26,13 @@ pub struct TransactSettings {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ChargeCollateral {
+    /// Charge normal collateral.
     Normal,
+    /// Estimate collateral which would be charged to the sender.
+    /// This mode does not actually charge the sender.
     EstimateSender,
+    /// Estimate collateral which would be charged to the sponsor.
+    /// This mode does not actually charge the sponsor.
     EstimateSponsor,
 }
 

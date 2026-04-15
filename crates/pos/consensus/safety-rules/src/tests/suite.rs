@@ -5,7 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{test_utils, Error, SafetyRules, TSafetyRules};
+use crate::{test_utils, Error, SafetyRules};
 use consensus_types::{
     block::block_test_utils::random_payload, common::Round,
     quorum_cert::QuorumCert, timeout::Timeout,
@@ -54,11 +54,8 @@ fn make_proposal_with_parent(
 }
 
 pub type Callback = Box<
-    dyn Fn(/* prevent cargo format failing */) -> (
-        Box<dyn TSafetyRules + Send + Sync>,
-        ValidatorSigner,
-        Option<BLSPrivateKey>,
-    ),
+    dyn Fn(/* prevent cargo format failing */)
+        -> (SafetyRules, ValidatorSigner, Option<BLSPrivateKey>),
 >;
 
 pub fn run_test_suite(safety_rules: &Callback) {
@@ -831,13 +828,8 @@ fn test_reconcile_key(_safety_rules: &Callback) {
 
     let new_pub_key =
         storage.internal_store().rotate_key(CONSENSUS_KEY).unwrap();
-    let mut safety_rules = Box::new(SafetyRules::new(
-        storage,
-        false,
-        false,
-        None,
-        Default::default(),
-    ));
+    let mut safety_rules =
+        Box::new(SafetyRules::new(storage, false, None, Default::default()));
 
     let (epoch_state, genesis_qc) = test_utils::make_genesis(&signer);
     let round = genesis_qc.certified_block().round();

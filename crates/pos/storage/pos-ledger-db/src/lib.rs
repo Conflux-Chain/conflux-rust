@@ -33,18 +33,13 @@ use diem_crypto::hash::{
 };
 use diem_logger::prelude::*;
 use diem_types::{
-    account_address::AccountAddress,
     committed_block::CommittedBlock,
     contract_event::ContractEvent,
     epoch_change::EpochChangeProof,
     ledger_info::LedgerInfoWithSignatures,
-    proof::{AccumulatorConsistencyProof, TransactionListProof},
     reward_distribution_event::RewardDistributionEventV2,
     term_state::PosState,
-    transaction::{
-        Transaction, TransactionInfo, TransactionListWithProof,
-        TransactionToCommit, TransactionWithProof, Version,
-    },
+    transaction::{Transaction, TransactionInfo, TransactionToCommit, Version},
 };
 #[cfg(feature = "fuzzing")]
 pub use diemdb_test::test_save_blocks_impl;
@@ -57,7 +52,6 @@ use storage_interface::{
 
 use crate::{
     change_set::{ChangeSet, SealedChangeSet},
-    errors::DiemDbError,
     event_store::EventStore,
     ledger_store::LedgerStore,
     metrics::{
@@ -87,8 +81,6 @@ mod transaction_store;
 #[cfg(any(test, feature = "fuzzing"))]
 #[allow(dead_code)]
 mod diemdb_test;
-
-const MAX_LIMIT: u64 = 1000;
 
 // TODO: Either implement an iteration API to allow a very old client to loop
 // through a long history or guarantee that there is always a recent enough
@@ -126,16 +118,6 @@ static ROCKSDB_PROPERTY_MAP: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     .cloned()
     .collect()
 });
-
-fn error_if_too_many_requested(
-    num_requested: u64, max_allowed: u64,
-) -> Result<()> {
-    if num_requested > max_allowed {
-        Err(DiemDbError::TooManyRequested(num_requested, max_allowed).into())
-    } else {
-        Ok(())
-    }
-}
 
 fn gen_rocksdb_options(config: &RocksdbConfig) -> Options {
     let mut db_opts = Options::default();
@@ -370,29 +352,6 @@ impl PosLedgerDB {
         Ok((lis, more))
     }
 
-    fn get_transaction_with_proof(
-        &self, version: Version, ledger_version: Version, fetch_events: bool,
-    ) -> Result<TransactionWithProof> {
-        let proof = self
-            .ledger_store
-            .get_transaction_info_with_proof(version, ledger_version)?;
-        let transaction = self.transaction_store.get_transaction(version)?;
-
-        // If events were requested, also fetch those.
-        let events = if fetch_events {
-            Some(self.event_store.get_events_by_version(version)?)
-        } else {
-            None
-        };
-
-        Ok(TransactionWithProof {
-            version,
-            transaction,
-            events,
-            proof,
-        })
-    }
-
     // TODO check if already have methods can do this
     pub fn get_transaction(&self, version: Version) -> Result<Transaction> {
         self.transaction_store.get_transaction(version)
@@ -497,61 +456,6 @@ impl DbReader for PosLedgerDB {
         })
     }
 
-    // ======================= State Synchronizer Internal APIs
-    // ===================================
-    /// Gets a batch of transactions for the purpose of synchronizing state to
-    /// another node.
-    ///
-    /// This is used by the State Synchronizer module internally.
-    fn get_transactions(
-        &self, start_version: Version, limit: u64, ledger_version: Version,
-        fetch_events: bool,
-    ) -> Result<TransactionListWithProof> {
-        gauged_api("get_transactions", || {
-            error_if_too_many_requested(limit, MAX_LIMIT)?;
-
-            if start_version > ledger_version || limit == 0 {
-                return Ok(TransactionListWithProof::new_empty());
-            }
-
-            let limit =
-                std::cmp::min(limit, ledger_version - start_version + 1);
-
-            let txns = (start_version..start_version + limit)
-                .map(|version| self.transaction_store.get_transaction(version))
-                .collect::<Result<Vec<_>>>()?;
-            let txn_infos = (start_version..start_version + limit)
-                .map(|version| self.ledger_store.get_transaction_info(version))
-                .collect::<Result<Vec<_>>>()?;
-            let events = if fetch_events {
-                Some(
-                    (start_version..start_version + limit)
-                        .map(|version| {
-                            self.event_store.get_events_by_version(version)
-                        })
-                        .collect::<Result<Vec<_>>>()?,
-                )
-            } else {
-                None
-            };
-            let proof = TransactionListProof::new(
-                self.ledger_store.get_transaction_range_proof(
-                    Some(start_version),
-                    limit,
-                    ledger_version,
-                )?,
-                txn_infos,
-            );
-
-            Ok(TransactionListWithProof::new(
-                txns,
-                events,
-                Some(start_version),
-                proof,
-            ))
-        })
-    }
-
     fn get_block_timestamp(&self, version: u64) -> Result<u64> {
         gauged_api("get_block_timestamp", || {
             let ts = match self.transaction_store.get_block_metadata(version)? {
@@ -574,89 +478,6 @@ impl DbReader for PosLedgerDB {
     ) -> Result<Option<StartupInfo>> {
         gauged_api("get_startup_info", || {
             self.ledger_store.get_startup_info(need_pos_state)
-        })
-    }
-
-    /// Returns a transaction that is the `seq_num`-th one associated with the
-    /// given account. If the transaction with given `seq_num` doesn't
-    /// exist, returns `None`.
-    fn get_txn_by_account(
-        &self, address: AccountAddress, seq_num: u64, ledger_version: Version,
-        fetch_events: bool,
-    ) -> Result<Option<TransactionWithProof>> {
-        gauged_api("get_txn_by_account", || {
-            self.transaction_store
-                .lookup_transaction_by_account(
-                    address,
-                    seq_num,
-                    ledger_version,
-                )?
-                .map(|version| {
-                    self.get_transaction_with_proof(
-                        version,
-                        ledger_version,
-                        fetch_events,
-                    )
-                })
-                .transpose()
-        })
-    }
-
-    fn get_state_proof_with_ledger_info(
-        &self, known_version: u64,
-        ledger_info_with_sigs: LedgerInfoWithSignatures,
-    ) -> Result<(EpochChangeProof, AccumulatorConsistencyProof)> {
-        gauged_api("get_state_proof_with_ledger_info", || {
-            let ledger_info = ledger_info_with_sigs.ledger_info();
-            ensure!(
-                known_version <= ledger_info.version(),
-                "Client known_version {} larger than ledger version {}.",
-                known_version,
-                ledger_info.version(),
-            );
-            let known_epoch = self.ledger_store.get_epoch(known_version)?;
-            let epoch_change_proof =
-                if known_epoch < ledger_info.next_block_epoch() {
-                    let (ledger_infos_with_sigs, more) = self
-                        .get_epoch_ending_ledger_infos(
-                            known_epoch,
-                            ledger_info.next_block_epoch(),
-                            // This is only used for local initialization, so
-                            // it's ok to use MAX.
-                            usize::MAX,
-                        )?;
-                    EpochChangeProof::new(ledger_infos_with_sigs, more)
-                } else {
-                    EpochChangeProof::new(vec![], /* more = */ false)
-                };
-
-            let ledger_consistency_proof = self
-                .ledger_store
-                .get_consistency_proof(known_version, ledger_info.version())?;
-            Ok((epoch_change_proof, ledger_consistency_proof))
-        })
-    }
-
-    fn get_state_proof(
-        &self, known_version: u64,
-    ) -> Result<(
-        LedgerInfoWithSignatures,
-        EpochChangeProof,
-        AccumulatorConsistencyProof,
-    )> {
-        gauged_api("get_state_proof", || {
-            let ledger_info_with_sigs =
-                self.ledger_store.get_latest_ledger_info()?;
-            let (epoch_change_proof, ledger_consistency_proof) = self
-                .get_state_proof_with_ledger_info(
-                    known_version,
-                    ledger_info_with_sigs.clone(),
-                )?;
-            Ok((
-                ledger_info_with_sigs,
-                epoch_change_proof,
-                ledger_consistency_proof,
-            ))
         })
     }
 

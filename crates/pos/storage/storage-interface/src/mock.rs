@@ -11,14 +11,9 @@ use crate::{DBReaderForPoW, DbReader, StartupInfo, TreeState};
 use anyhow::Result;
 use diem_crypto::HashValue;
 use diem_types::{
-    account_address::AccountAddress,
-    committed_block::CommittedBlock,
-    contract_event::ContractEvent,
-    epoch_change::EpochChangeProof,
-    ledger_info::LedgerInfoWithSignatures,
-    proof::AccumulatorConsistencyProof,
+    committed_block::CommittedBlock, contract_event::ContractEvent,
+    epoch_change::EpochChangeProof, ledger_info::LedgerInfoWithSignatures,
     reward_distribution_event::RewardDistributionEventV2,
-    transaction::{TransactionListWithProof, TransactionWithProof, Version},
 };
 
 /// This is a mock of the dbreader in tests.
@@ -28,13 +23,6 @@ impl DbReader for MockDbReader {
     fn get_epoch_ending_ledger_infos(
         &self, _start_epoch: u64, _end_epoch: u64,
     ) -> Result<EpochChangeProof> {
-        unimplemented!()
-    }
-
-    fn get_transactions(
-        &self, _start_version: Version, _batch_size: u64,
-        _ledger_version: Version, _fetch_events: bool,
-    ) -> Result<TransactionListWithProof> {
         unimplemented!()
     }
 
@@ -50,29 +38,6 @@ impl DbReader for MockDbReader {
     fn get_startup_info(
         &self, _need_pos_state: bool,
     ) -> Result<Option<StartupInfo>> {
-        unimplemented!()
-    }
-
-    fn get_txn_by_account(
-        &self, _address: AccountAddress, _seq_num: u64,
-        _ledger_version: Version, _fetch_events: bool,
-    ) -> Result<Option<TransactionWithProof>> {
-        unimplemented!()
-    }
-
-    fn get_state_proof_with_ledger_info(
-        &self, _known_version: u64, _ledger_info: LedgerInfoWithSignatures,
-    ) -> Result<(EpochChangeProof, AccumulatorConsistencyProof)> {
-        unimplemented!()
-    }
-
-    fn get_state_proof(
-        &self, _known_version: u64,
-    ) -> Result<(
-        LedgerInfoWithSignatures,
-        EpochChangeProof,
-        AccumulatorConsistencyProof,
-    )> {
         unimplemented!()
     }
 

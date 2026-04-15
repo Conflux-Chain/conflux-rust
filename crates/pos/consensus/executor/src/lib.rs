@@ -9,7 +9,6 @@
 
 use std::{
     collections::{BTreeMap, HashSet},
-    marker::PhantomData,
     sync::Arc,
 };
 
@@ -58,7 +57,7 @@ use crate::{
         DIEM_EXECUTOR_TRANSACTIONS_SAVED,
         DIEM_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS,
     },
-    vm::VMExecutor,
+    vm::PosVM,
 };
 use diem_types::term_state::{
     pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
@@ -72,16 +71,13 @@ pub mod vm;
 
 /// `Executor` implements all functionalities the execution module needs to
 /// provide.
-pub struct Executor<V> {
+pub struct Executor {
     db_with_cache: Arc<CachedPosLedgerDB>,
     consensus_db: Arc<dyn LedgerBlockRW>,
-    phantom: PhantomData<V>,
     pow_handler: Arc<dyn PowInterface>,
 }
 
-impl<V> Executor<V>
-where V: VMExecutor
-{
+impl Executor {
     pub fn committed_block_id(&self) -> HashValue {
         self.db_with_cache.committed_block_id()
     }
@@ -95,7 +91,6 @@ where V: VMExecutor
         Self {
             db_with_cache,
             consensus_db,
-            phantom: PhantomData,
             pow_handler,
         }
     }
@@ -426,7 +421,7 @@ where V: VMExecutor
     }
 }
 
-impl<V: VMExecutor> BlockExecutor for Executor<V> {
+impl BlockExecutor for Executor {
     fn committed_block_id(&self) -> Result<HashValue, Error> {
         Ok(self.committed_block_id())
     }
@@ -508,7 +503,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                         "Injected error in vm_execute_block"
                     )))
                 });
-                V::execute_block(
+                PosVM::execute_block(
                     transactions.clone(),
                     &state_view,
                     catch_up_mode,

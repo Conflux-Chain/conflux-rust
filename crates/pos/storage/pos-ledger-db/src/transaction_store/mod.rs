@@ -9,16 +9,11 @@
 //! signed transactions.
 
 use crate::{
-    change_set::ChangeSet,
-    errors::DiemDbError,
-    schema::{
-        transaction::TransactionSchema,
-        transaction_by_account::TransactionByAccountSchema,
-    },
+    change_set::ChangeSet, errors::DiemDbError,
+    schema::transaction::TransactionSchema,
 };
 use anyhow::Result;
 use diem_types::{
-    account_address::AccountAddress,
     block_metadata::BlockMetadata,
     transaction::{Transaction, Version},
 };
@@ -32,24 +27,6 @@ pub(crate) struct TransactionStore {
 
 impl TransactionStore {
     pub fn new(db: Arc<DB>) -> Self { Self { db } }
-
-    /// Gets the version of a transaction by the sender `address` and
-    /// `sequence_number`.
-    pub fn lookup_transaction_by_account(
-        &self, address: AccountAddress, sequence_number: u64,
-        ledger_version: Version,
-    ) -> Result<Option<Version>> {
-        if let Some(version) = self
-            .db
-            .get::<TransactionByAccountSchema>(&(address, sequence_number))?
-        {
-            if version <= ledger_version {
-                return Ok(Some(version));
-            }
-        }
-
-        Ok(None)
-    }
 
     /// Get signed transaction given `version`
     pub fn get_transaction(&self, version: Version) -> Result<Transaction> {
@@ -65,6 +42,13 @@ impl TransactionStore {
     pub fn get_block_metadata(
         &self, version: Version,
     ) -> Result<Option<(Version, BlockMetadata)>> {
+        // Version 0 is always the genesis transaction, which carries no
+        // block metadata. Short-circuit without deserializing: pre-cleanup
+        // DBs hold a `WriteSetPayload`-based genesis record that would fail
+        // to decode against the post-PR Transaction enum.
+        if version == 0 {
+            return Ok(None);
+        }
         // Maximum TPS from benchmark is around 1000.
         const MAX_VERSIONS_TO_SEARCH: usize = 1000 * 3;
 
@@ -94,15 +78,7 @@ impl TransactionStore {
     pub fn put_transaction(
         &self, version: Version, transaction: &Transaction, cs: &mut ChangeSet,
     ) -> Result<()> {
-        if let Transaction::UserTransaction(txn) = transaction {
-            // TODO(lpl): Find a proper way to keep account-related info.
-            cs.batch.put::<TransactionByAccountSchema>(
-                &(txn.sender(), 0),
-                &version,
-            )?;
-        }
         cs.batch.put::<TransactionSchema>(&version, &transaction)?;
-
         Ok(())
     }
 }

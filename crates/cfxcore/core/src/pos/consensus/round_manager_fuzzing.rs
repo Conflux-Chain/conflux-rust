@@ -14,7 +14,6 @@ use super::{
             ExponentialTimeInterval, NewRoundEvent, NewRoundReason, RoundState,
         },
     },
-    metrics_safety_rules::MetricsSafetyRules,
     network::NetworkSender,
     network_interface::ConsensusNetworkSender,
     persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
@@ -26,6 +25,7 @@ use super::{
 };
 use channel::{self, diem_channel, message_queues::QueueStyle};
 use consensus_types::proposal_msg::ProposalMsg;
+use diem_infallible::RwLock;
 use diem_types::{
     epoch_state::EpochState, ledger_info::LedgerInfo,
     on_chain_config::ValidatorSet, validator_info::ValidatorInfo,
@@ -37,7 +37,7 @@ use network::{
     protocols::network::NewNetworkSender,
 };
 use once_cell::sync::Lazy;
-use safety_rules::{test_utils, SafetyRules, TSafetyRules};
+use safety_rules::{test_utils, SafetyRules};
 use std::{sync::Arc, time::Duration};
 use tokio::runtime::Runtime;
 
@@ -116,9 +116,14 @@ fn create_node_for_fuzzing() -> RoundManager {
 
     // TODO: remove
     let epoch_state = make_initial_epoch_state(&signer);
-    let mut safety_rules =
-        SafetyRules::new(test_utils::test_storage(&signer), false, false);
+    let mut safety_rules = SafetyRules::new(
+        test_utils::test_storage(&signer),
+        false,
+        None,
+        Default::default(),
+    );
     safety_rules.initialize(&epoch_state).unwrap();
+    let safety_rules = Arc::new(RwLock::new(safety_rules));
 
     // TODO: mock channels
     let (network_reqs_tx, _network_reqs_rx) =
@@ -172,7 +177,7 @@ fn create_node_for_fuzzing() -> RoundManager {
         round_state,
         proposer_election,
         proposal_generator,
-        MetricsSafetyRules::new(Box::new(safety_rules), storage.clone()),
+        safety_rules,
         network,
         Arc::new(MockTransactionManager::new(None)),
         storage,

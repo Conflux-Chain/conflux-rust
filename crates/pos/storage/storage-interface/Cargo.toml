@@ -18,7 +18,6 @@ parking_lot = { workspace = true }
 
 bcs = "0.1.2"
 diem-crypto = { workspace = true }
-diem-secure-net = { workspace = true }
 diem-state-view = { workspace = true }
 diem-types = { workspace = true }
 

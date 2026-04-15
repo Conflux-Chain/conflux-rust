@@ -5,6 +5,5 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 pub use move_core_types::vm_status::{
-    known_locations, sub_status, AbortLocation, DiscardedVMStatus,
-    KeptVMStatus, StatusCode, StatusType, VMStatus,
+    DiscardedVMStatus, KeptVMStatus, StatusCode, StatusType, VMStatus,
 };
