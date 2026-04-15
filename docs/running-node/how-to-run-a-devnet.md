@@ -66,16 +66,14 @@ These correspond to the chain IDs for Conflux Core Space and eSpace.
 
 1. Run the command below to generate PoS genesis data:
    `./target/release/pos-genesis-tool random --initial-seed=0000000000000000000000000000000000000000000000000000000000000000 --num-validator=3 --num-genesis-validator=3 --chain-id=1234`
-2. Copy the generated `waypoint_config` value to `base.waypoint.from_config` in the PoS template config `pos_config.yaml`.
-3. Create a `pos_config` directory and place `genesis_file`, `initial_nodes.json`, and `pos_config.yaml` in it.
-4. Step 1 generates multiple node private keys. Move each corresponding key from `private_keys` into `pos_config` and rename it to `pos_key`.
+2. Create a `pos_config` directory and place `initial_nodes.json`, and `pos_config.yaml` in it.
+3. Step 1 generates multiple node private keys. Move each corresponding key from `private_keys` into `pos_config` and rename it to `pos_key`.
 
 Example output directory after step 1:
 
 ```sh
 $ tree
 .
-├── genesis_file
 ├── initial_nodes.json
 ├── private_keys
 │   ├── 0
@@ -91,21 +89,17 @@ $ tree
 
 The generated `pos_key` has an empty password by default.
 
-`pos_config.yaml` template example:
+Below is a `pos_config.yaml` template:
 
 ```yaml
 base:
   #data_dir: ./pos_db
   role: validator
-  waypoint:
-    from_config: 0:6f5f7086097ae82aa886b02d359b1ee626c47399f9a8af214e2b91c537ffc0fb
 consensus:
   round_initial_timeout_ms: 60000
   safety_rules:
     service:
       type: local
-execution:
-  genesis_file_location: ./genesis_file
 logger:
   file: ./log/pos.log
   level: INFO
