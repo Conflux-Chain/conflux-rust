@@ -206,6 +206,12 @@ impl ConsensusGraph {
 
             let evm_chain_id = self.best_chain_id().in_evm_space();
 
+            let block_number = self
+                .get_block_number(&b.hash())?
+                .ok_or("block_number not found when recover phantom block")?;
+            let epoch_number = pivot.block_header.height();
+            let spec = self.params.spec(block_number, epoch_number);
+
             for (id, tx) in b.transactions.iter().enumerate() {
                 match tx.space() {
                     Space::Ethereum => {
@@ -251,18 +257,7 @@ impl ConsensusGraph {
 
                         // if cip90 is not enabled, there will be no phantom
                         // txs, so we can skip the recovery process
-                        let block_number = self
-                            .get_block_number(&b.hash())?
-                            .ok_or(
-                            "block_number not found when recover phantom block",
-                        )?;
-                        let epoch_number = pivot.block_header.height();
-                        let spec = self.params.spec(block_number, epoch_number);
-
-                        let cip90_enabled = epoch_number
-                            >= self.params.transition_heights.cip90a;
-
-                        if !(cip90_enabled && spec.cip90) {
+                        if !spec.cip90 {
                             continue;
                         }
 
