@@ -52,8 +52,8 @@
 <a href=#52 id=52 data-nosnippet>52</a>        catch_up_mode: bool,
 <a href=#53 id=53 data-nosnippet>53</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;StateComputeResult, ExecutionError&gt;;
 <a href=#54 id=54 data-nosnippet>54</a>
-<a href=#55 id=55 data-nosnippet>55</a>    <span class="doccomment">/// Send a successful commit. A future is fulfilled when the state is
-<a href=#56 id=56 data-nosnippet>56</a>    /// finalized.
+<a href=#55 id=55 data-nosnippet>55</a>    <span class="doccomment">/// Commit the given blocks and notify mempool to prune committed
+<a href=#56 id=56 data-nosnippet>56</a>    /// transactions.
 <a href=#57 id=57 data-nosnippet>57</a>    </span><span class="kw">async fn </span>commit(
 <a href=#58 id=58 data-nosnippet>58</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block_ids: Vec&lt;HashValue&gt;,
 <a href=#59 id=59 data-nosnippet>59</a>        finality_proof: LedgerInfoWithSignatures,

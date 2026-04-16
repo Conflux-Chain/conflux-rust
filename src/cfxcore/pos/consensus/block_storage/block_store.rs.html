@@ -218,7 +218,7 @@
 <a href=#218 id=218 data-nosnippet>218</a>        block_store
 <a href=#219 id=219 data-nosnippet>219</a>    }
 <a href=#220 id=220 data-nosnippet>220</a>
-<a href=#221 id=221 data-nosnippet>221</a>    <span class="doccomment">/// Commit the given block id with the proof, returns () on success or error
+<a href=#221 id=221 data-nosnippet>221</a>    <span class="doccomment">/// Commit the given block id with the proof.
 <a href=#222 id=222 data-nosnippet>222</a>    </span><span class="kw">pub async fn </span>commit(
 <a href=#223 id=223 data-nosnippet>223</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, finality_proof: LedgerInfoWithSignatures,
 <a href=#224 id=224 data-nosnippet>224</a>    ) -&gt; anyhow::Result&lt;()&gt; {
@@ -271,246 +271,241 @@
 <a href=#271 id=271 data-nosnippet>271</a>            <span class="string">"parent_id"</span>: block_to_commit.parent_id().short_str(),
 <a href=#272 id=272 data-nosnippet>272</a>        );
 <a href=#273 id=273 data-nosnippet>273</a>        <span class="self">self</span>.prune_tree(block_to_commit.id());
-<a href=#274 id=274 data-nosnippet>274</a>        <span class="comment">// After a block is committed, we will never need to execute a block
-<a href=#275 id=275 data-nosnippet>275</a>        // with an earlier pivot decision, so we can safely prune all
-<a href=#276 id=276 data-nosnippet>276</a>        // staking events before.
-<a href=#277 id=277 data-nosnippet>277</a>        // TODO: Delete range causes OOM now. Prune staking events after the
-<a href=#278 id=278 data-nosnippet>278</a>        // rocksdb issue is solved.
-<a href=#279 id=279 data-nosnippet>279</a>        </span><span class="prelude-val">Ok</span>(())
-<a href=#280 id=280 data-nosnippet>280</a>    }
-<a href=#281 id=281 data-nosnippet>281</a>
-<a href=#282 id=282 data-nosnippet>282</a>    <span class="doccomment">/// Execute and insert a block if it passes all validation tests.
-<a href=#283 id=283 data-nosnippet>283</a>    /// Returns the Arc to the block kept in the block store after persisting it
-<a href=#284 id=284 data-nosnippet>284</a>    /// to storage
-<a href=#285 id=285 data-nosnippet>285</a>    ///
-<a href=#286 id=286 data-nosnippet>286</a>    /// This function assumes that the ancestors are present (returns
-<a href=#287 id=287 data-nosnippet>287</a>    /// MissingParent otherwise).
-<a href=#288 id=288 data-nosnippet>288</a>    ///
-<a href=#289 id=289 data-nosnippet>289</a>    /// Duplicate inserts will return the previously inserted block (
-<a href=#290 id=290 data-nosnippet>290</a>    /// note that it is considered a valid non-error case, for example, it can
-<a href=#291 id=291 data-nosnippet>291</a>    /// happen if a validator receives a certificate for a block that is
-<a href=#292 id=292 data-nosnippet>292</a>    /// currently being added).
-<a href=#293 id=293 data-nosnippet>293</a>    </span><span class="kw">pub fn </span>execute_and_insert_block(
-<a href=#294 id=294 data-nosnippet>294</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block: Block, catch_up_mode: bool, force_compute: bool,
-<a href=#295 id=295 data-nosnippet>295</a>    ) -&gt; anyhow::Result&lt;Arc&lt;ExecutedBlock&gt;&gt; {
-<a href=#296 id=296 data-nosnippet>296</a>        <span class="macro">diem_debug!</span>(<span class="string">"execute_and_insert_block: block={:?}"</span>, block.id());
-<a href=#297 id=297 data-nosnippet>297</a>        <span class="kw">if </span>!force_compute {
-<a href=#298 id=298 data-nosnippet>298</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(existing_block) = <span class="self">self</span>.get_block(block.id()) {
-<a href=#299 id=299 data-nosnippet>299</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(existing_block);
-<a href=#300 id=300 data-nosnippet>300</a>            }
-<a href=#301 id=301 data-nosnippet>301</a>        }
-<a href=#302 id=302 data-nosnippet>302</a>        <span class="macro">ensure!</span>(
-<a href=#303 id=303 data-nosnippet>303</a>            <span class="self">self</span>.inner.read().root().round() &lt; block.round(),
-<a href=#304 id=304 data-nosnippet>304</a>            <span class="string">"Block with old round"
-<a href=#305 id=305 data-nosnippet>305</a>        </span>);
-<a href=#306 id=306 data-nosnippet>306</a>
-<a href=#307 id=307 data-nosnippet>307</a>        <span class="kw">let </span>executed_block = <span class="kw">match </span><span class="self">self
-<a href=#308 id=308 data-nosnippet>308</a>            </span>.execute_block(block.clone(), catch_up_mode)
-<a href=#309 id=309 data-nosnippet>309</a>        {
-<a href=#310 id=310 data-nosnippet>310</a>            <span class="prelude-val">Ok</span>(res) =&gt; <span class="prelude-val">Ok</span>(res),
-<a href=#311 id=311 data-nosnippet>311</a>            <span class="prelude-val">Err</span>(Error::BlockNotFound(parent_block_id)) =&gt; {
-<a href=#312 id=312 data-nosnippet>312</a>                <span class="comment">// recover the block tree in executor
-<a href=#313 id=313 data-nosnippet>313</a>                </span><span class="kw">let </span>blocks_to_reexecute = <span class="self">self
-<a href=#314 id=314 data-nosnippet>314</a>                    </span>.path_from_root(parent_block_id)
-<a href=#315 id=315 data-nosnippet>315</a>                    .unwrap_or_else(Vec::new);
-<a href=#316 id=316 data-nosnippet>316</a>
-<a href=#317 id=317 data-nosnippet>317</a>                <span class="kw">for </span>block <span class="kw">in </span>blocks_to_reexecute {
-<a href=#318 id=318 data-nosnippet>318</a>                    <span class="self">self</span>.execute_block(block.block().clone(), catch_up_mode)<span class="question-mark">?</span>;
-<a href=#319 id=319 data-nosnippet>319</a>                }
-<a href=#320 id=320 data-nosnippet>320</a>                <span class="self">self</span>.execute_block(block, catch_up_mode)
-<a href=#321 id=321 data-nosnippet>321</a>            }
-<a href=#322 id=322 data-nosnippet>322</a>            err =&gt; err,
-<a href=#323 id=323 data-nosnippet>323</a>        }<span class="question-mark">?</span>;
-<a href=#324 id=324 data-nosnippet>324</a>
-<a href=#325 id=325 data-nosnippet>325</a>        <span class="comment">// ensure local time past the block time
-<a href=#326 id=326 data-nosnippet>326</a>        </span><span class="kw">let </span>block_time =
-<a href=#327 id=327 data-nosnippet>327</a>            Duration::from_micros(executed_block.timestamp_usecs());
-<a href=#328 id=328 data-nosnippet>328</a>        <span class="self">self</span>.time_service.wait_until(block_time);
-<a href=#329 id=329 data-nosnippet>329</a>        <span class="self">self</span>.storage
-<a href=#330 id=330 data-nosnippet>330</a>            .save_tree(<span class="macro">vec!</span>[executed_block.block().clone()], <span class="macro">vec!</span>[])
-<a href=#331 id=331 data-nosnippet>331</a>            .context(<span class="string">"Insert block failed when saving block"</span>)<span class="question-mark">?</span>;
-<a href=#332 id=332 data-nosnippet>332</a>        <span class="self">self</span>.inner.write().insert_block(executed_block)
-<a href=#333 id=333 data-nosnippet>333</a>    }
-<a href=#334 id=334 data-nosnippet>334</a>
-<a href=#335 id=335 data-nosnippet>335</a>    <span class="kw">fn </span>execute_block(
-<a href=#336 id=336 data-nosnippet>336</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block: Block, catch_up_mode: bool,
-<a href=#337 id=337 data-nosnippet>337</a>    ) -&gt; anyhow::Result&lt;ExecutedBlock, Error&gt; {
-<a href=#338 id=338 data-nosnippet>338</a>        <span class="comment">// Although NIL blocks don't have a payload, we still send a
-<a href=#339 id=339 data-nosnippet>339</a>        // T::default() to compute because we may inject a block
-<a href=#340 id=340 data-nosnippet>340</a>        // prologue transaction.
-<a href=#341 id=341 data-nosnippet>341</a>        </span><span class="kw">let </span>state_compute_result = <span class="self">self</span>.state_computer.compute(
-<a href=#342 id=342 data-nosnippet>342</a>            <span class="kw-2">&amp;</span>block,
-<a href=#343 id=343 data-nosnippet>343</a>            block.parent_id(),
-<a href=#344 id=344 data-nosnippet>344</a>            catch_up_mode,
-<a href=#345 id=345 data-nosnippet>345</a>        )<span class="question-mark">?</span>;
-<a href=#346 id=346 data-nosnippet>346</a>        observe_block(block.timestamp_usecs(), BlockStage::EXECUTED);
-<a href=#347 id=347 data-nosnippet>347</a>
-<a href=#348 id=348 data-nosnippet>348</a>        <span class="prelude-val">Ok</span>(ExecutedBlock::new(block, state_compute_result))
-<a href=#349 id=349 data-nosnippet>349</a>    }
-<a href=#350 id=350 data-nosnippet>350</a>
-<a href=#351 id=351 data-nosnippet>351</a>    <span class="doccomment">/// Validates quorum certificates and inserts it into block tree assuming
-<a href=#352 id=352 data-nosnippet>352</a>    /// dependencies exist.
-<a href=#353 id=353 data-nosnippet>353</a>    </span><span class="kw">pub fn </span>insert_single_quorum_cert(
-<a href=#354 id=354 data-nosnippet>354</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, qc: QuorumCert,
-<a href=#355 id=355 data-nosnippet>355</a>    ) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#356 id=356 data-nosnippet>356</a>        <span class="macro">diem_debug!</span>(<span class="string">"insert_single_quorum_cert: qc={:?}"</span>, qc);
-<a href=#357 id=357 data-nosnippet>357</a>        <span class="comment">// If the parent block is not the root block (i.e not None), ensure the
-<a href=#358 id=358 data-nosnippet>358</a>        // executed state of a block is consistent with its QuorumCert,
-<a href=#359 id=359 data-nosnippet>359</a>        // otherwise persist the QuorumCert's state and on restart, a
-<a href=#360 id=360 data-nosnippet>360</a>        // new execution will agree with it.  A new execution will match
-<a href=#361 id=361 data-nosnippet>361</a>        // the QuorumCert's state on the next restart will work if there is a
-<a href=#362 id=362 data-nosnippet>362</a>        // memory corruption, for example.
-<a href=#363 id=363 data-nosnippet>363</a>        </span><span class="kw">match </span><span class="self">self</span>.get_block(qc.certified_block().id()) {
-<a href=#364 id=364 data-nosnippet>364</a>            <span class="prelude-val">Some</span>(executed_block) =&gt; {
-<a href=#365 id=365 data-nosnippet>365</a>                <span class="macro">ensure!</span>(
-<a href=#366 id=366 data-nosnippet>366</a>                    executed_block.block_info() == <span class="kw-2">*</span>qc.certified_block(),
-<a href=#367 id=367 data-nosnippet>367</a>                    <span class="string">"QC for block {} has different {:?} than local {:?}"</span>,
-<a href=#368 id=368 data-nosnippet>368</a>                    qc.certified_block().id(),
-<a href=#369 id=369 data-nosnippet>369</a>                    qc.certified_block(),
-<a href=#370 id=370 data-nosnippet>370</a>                    executed_block.block_info()
-<a href=#371 id=371 data-nosnippet>371</a>                );
-<a href=#372 id=372 data-nosnippet>372</a>                observe_block(
-<a href=#373 id=373 data-nosnippet>373</a>                    executed_block.block().timestamp_usecs(),
-<a href=#374 id=374 data-nosnippet>374</a>                    BlockStage::QC_ADDED,
-<a href=#375 id=375 data-nosnippet>375</a>                );
-<a href=#376 id=376 data-nosnippet>376</a>            }
-<a href=#377 id=377 data-nosnippet>377</a>            <span class="prelude-val">None </span>=&gt; {
-<a href=#378 id=378 data-nosnippet>378</a>                <span class="macro">bail!</span>(<span class="string">"Insert {} without having the block in store first"</span>, qc)
-<a href=#379 id=379 data-nosnippet>379</a>            }
-<a href=#380 id=380 data-nosnippet>380</a>        };
-<a href=#381 id=381 data-nosnippet>381</a>
-<a href=#382 id=382 data-nosnippet>382</a>        <span class="self">self</span>.storage
-<a href=#383 id=383 data-nosnippet>383</a>            .save_tree(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[qc.clone()])
-<a href=#384 id=384 data-nosnippet>384</a>            .context(<span class="string">"Insert block failed when saving quorum"</span>)<span class="question-mark">?</span>;
-<a href=#385 id=385 data-nosnippet>385</a>        <span class="self">self</span>.inner.write().insert_quorum_cert(qc)
-<a href=#386 id=386 data-nosnippet>386</a>    }
-<a href=#387 id=387 data-nosnippet>387</a>
-<a href=#388 id=388 data-nosnippet>388</a>    <span class="doccomment">/// Replace the highest timeout certificate in case the given one has a
-<a href=#389 id=389 data-nosnippet>389</a>    /// higher round. In case a timeout certificate is updated, persist it
-<a href=#390 id=390 data-nosnippet>390</a>    /// to storage.
-<a href=#391 id=391 data-nosnippet>391</a>    </span><span class="kw">pub fn </span>insert_timeout_certificate(
-<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, tc: Arc&lt;TimeoutCertificate&gt;,
-<a href=#393 id=393 data-nosnippet>393</a>    ) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#394 id=394 data-nosnippet>394</a>        <span class="kw">let </span>cur_tc_round =
-<a href=#395 id=395 data-nosnippet>395</a>            <span class="self">self</span>.highest_timeout_cert().map_or(<span class="number">0</span>, |tc| tc.round());
-<a href=#396 id=396 data-nosnippet>396</a>        <span class="kw">if </span>tc.round() &lt;= cur_tc_round {
-<a href=#397 id=397 data-nosnippet>397</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#398 id=398 data-nosnippet>398</a>        }
-<a href=#399 id=399 data-nosnippet>399</a>        <span class="self">self</span>.storage
-<a href=#400 id=400 data-nosnippet>400</a>            .save_highest_timeout_cert(tc.as_ref().clone())
-<a href=#401 id=401 data-nosnippet>401</a>            .context(
-<a href=#402 id=402 data-nosnippet>402</a>                <span class="string">"Timeout certificate insert failed when persisting to DB"</span>,
-<a href=#403 id=403 data-nosnippet>403</a>            )<span class="question-mark">?</span>;
-<a href=#404 id=404 data-nosnippet>404</a>        <span class="self">self</span>.inner.write().replace_timeout_cert(tc);
-<a href=#405 id=405 data-nosnippet>405</a>        <span class="prelude-val">Ok</span>(())
-<a href=#406 id=406 data-nosnippet>406</a>    }
-<a href=#407 id=407 data-nosnippet>407</a>
-<a href=#408 id=408 data-nosnippet>408</a>    <span class="doccomment">/// Prune the tree up to next_root_id (keep next_root_id's block).  Any
-<a href=#409 id=409 data-nosnippet>409</a>    /// branches not part of the next_root_id's tree should be removed as
-<a href=#410 id=410 data-nosnippet>410</a>    /// well.
-<a href=#411 id=411 data-nosnippet>411</a>    ///
-<a href=#412 id=412 data-nosnippet>412</a>    /// For example, root = B0
-<a href=#413 id=413 data-nosnippet>413</a>    /// B0--&gt; B1--&gt; B2
-<a href=#414 id=414 data-nosnippet>414</a>    ///        ╰--&gt; B3--&gt; B4
-<a href=#415 id=415 data-nosnippet>415</a>    ///
-<a href=#416 id=416 data-nosnippet>416</a>    /// prune_tree(B3) should be left with
-<a href=#417 id=417 data-nosnippet>417</a>    /// B3--&gt; B4, root = B3
-<a href=#418 id=418 data-nosnippet>418</a>    ///
-<a href=#419 id=419 data-nosnippet>419</a>    /// Returns the block ids of the blocks removed.
-<a href=#420 id=420 data-nosnippet>420</a>    </span><span class="kw">fn </span>prune_tree(<span class="kw-2">&amp;</span><span class="self">self</span>, next_root_id: HashValue) -&gt; VecDeque&lt;HashValue&gt; {
-<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">let </span>id_to_remove = <span class="self">self</span>.inner.read().find_blocks_to_prune(next_root_id);
-<a href=#422 id=422 data-nosnippet>422</a>        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self
-<a href=#423 id=423 data-nosnippet>423</a>            </span>.storage
-<a href=#424 id=424 data-nosnippet>424</a>            .prune_tree(id_to_remove.clone().into_iter().collect())
-<a href=#425 id=425 data-nosnippet>425</a>        {
-<a href=#426 id=426 data-nosnippet>426</a>            <span class="comment">// it's fine to fail here, as long as the commit succeeds, the next
-<a href=#427 id=427 data-nosnippet>427</a>            // restart will clean up dangling blocks, and we need to
-<a href=#428 id=428 data-nosnippet>428</a>            // prune the tree to keep the root consistent with
-<a href=#429 id=429 data-nosnippet>429</a>            // executor.
-<a href=#430 id=430 data-nosnippet>430</a>            </span><span class="macro">diem_error!</span>(error = <span class="question-mark">?</span>e, <span class="string">"fail to delete block"</span>);
-<a href=#431 id=431 data-nosnippet>431</a>        }
-<a href=#432 id=432 data-nosnippet>432</a>        <span class="self">self</span>.inner
-<a href=#433 id=433 data-nosnippet>433</a>            .write()
-<a href=#434 id=434 data-nosnippet>434</a>            .process_pruned_blocks(next_root_id, id_to_remove.clone());
-<a href=#435 id=435 data-nosnippet>435</a>        id_to_remove
-<a href=#436 id=436 data-nosnippet>436</a>    }
-<a href=#437 id=437 data-nosnippet>437</a>}
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="prelude-val">Ok</span>(())
+<a href=#275 id=275 data-nosnippet>275</a>    }
+<a href=#276 id=276 data-nosnippet>276</a>
+<a href=#277 id=277 data-nosnippet>277</a>    <span class="doccomment">/// Execute and insert a block if it passes all validation tests.
+<a href=#278 id=278 data-nosnippet>278</a>    /// Returns the Arc to the block kept in the block store after persisting it
+<a href=#279 id=279 data-nosnippet>279</a>    /// to storage
+<a href=#280 id=280 data-nosnippet>280</a>    ///
+<a href=#281 id=281 data-nosnippet>281</a>    /// This function assumes that the ancestors are present (returns
+<a href=#282 id=282 data-nosnippet>282</a>    /// MissingParent otherwise).
+<a href=#283 id=283 data-nosnippet>283</a>    ///
+<a href=#284 id=284 data-nosnippet>284</a>    /// Duplicate inserts will return the previously inserted block (
+<a href=#285 id=285 data-nosnippet>285</a>    /// note that it is considered a valid non-error case, for example, it can
+<a href=#286 id=286 data-nosnippet>286</a>    /// happen if a validator receives a certificate for a block that is
+<a href=#287 id=287 data-nosnippet>287</a>    /// currently being added).
+<a href=#288 id=288 data-nosnippet>288</a>    </span><span class="kw">pub fn </span>execute_and_insert_block(
+<a href=#289 id=289 data-nosnippet>289</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block: Block, catch_up_mode: bool, force_compute: bool,
+<a href=#290 id=290 data-nosnippet>290</a>    ) -&gt; anyhow::Result&lt;Arc&lt;ExecutedBlock&gt;&gt; {
+<a href=#291 id=291 data-nosnippet>291</a>        <span class="macro">diem_debug!</span>(<span class="string">"execute_and_insert_block: block={:?}"</span>, block.id());
+<a href=#292 id=292 data-nosnippet>292</a>        <span class="kw">if </span>!force_compute {
+<a href=#293 id=293 data-nosnippet>293</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(existing_block) = <span class="self">self</span>.get_block(block.id()) {
+<a href=#294 id=294 data-nosnippet>294</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(existing_block);
+<a href=#295 id=295 data-nosnippet>295</a>            }
+<a href=#296 id=296 data-nosnippet>296</a>        }
+<a href=#297 id=297 data-nosnippet>297</a>        <span class="macro">ensure!</span>(
+<a href=#298 id=298 data-nosnippet>298</a>            <span class="self">self</span>.inner.read().root().round() &lt; block.round(),
+<a href=#299 id=299 data-nosnippet>299</a>            <span class="string">"Block with old round"
+<a href=#300 id=300 data-nosnippet>300</a>        </span>);
+<a href=#301 id=301 data-nosnippet>301</a>
+<a href=#302 id=302 data-nosnippet>302</a>        <span class="kw">let </span>executed_block = <span class="kw">match </span><span class="self">self
+<a href=#303 id=303 data-nosnippet>303</a>            </span>.execute_block(block.clone(), catch_up_mode)
+<a href=#304 id=304 data-nosnippet>304</a>        {
+<a href=#305 id=305 data-nosnippet>305</a>            <span class="prelude-val">Ok</span>(res) =&gt; <span class="prelude-val">Ok</span>(res),
+<a href=#306 id=306 data-nosnippet>306</a>            <span class="prelude-val">Err</span>(Error::BlockNotFound(parent_block_id)) =&gt; {
+<a href=#307 id=307 data-nosnippet>307</a>                <span class="comment">// recover the block tree in executor
+<a href=#308 id=308 data-nosnippet>308</a>                </span><span class="kw">let </span>blocks_to_reexecute = <span class="self">self
+<a href=#309 id=309 data-nosnippet>309</a>                    </span>.path_from_root(parent_block_id)
+<a href=#310 id=310 data-nosnippet>310</a>                    .unwrap_or_else(Vec::new);
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a>                <span class="kw">for </span>block <span class="kw">in </span>blocks_to_reexecute {
+<a href=#313 id=313 data-nosnippet>313</a>                    <span class="self">self</span>.execute_block(block.block().clone(), catch_up_mode)<span class="question-mark">?</span>;
+<a href=#314 id=314 data-nosnippet>314</a>                }
+<a href=#315 id=315 data-nosnippet>315</a>                <span class="self">self</span>.execute_block(block, catch_up_mode)
+<a href=#316 id=316 data-nosnippet>316</a>            }
+<a href=#317 id=317 data-nosnippet>317</a>            err =&gt; err,
+<a href=#318 id=318 data-nosnippet>318</a>        }<span class="question-mark">?</span>;
+<a href=#319 id=319 data-nosnippet>319</a>
+<a href=#320 id=320 data-nosnippet>320</a>        <span class="comment">// ensure local time past the block time
+<a href=#321 id=321 data-nosnippet>321</a>        </span><span class="kw">let </span>block_time =
+<a href=#322 id=322 data-nosnippet>322</a>            Duration::from_micros(executed_block.timestamp_usecs());
+<a href=#323 id=323 data-nosnippet>323</a>        <span class="self">self</span>.time_service.wait_until(block_time);
+<a href=#324 id=324 data-nosnippet>324</a>        <span class="self">self</span>.storage
+<a href=#325 id=325 data-nosnippet>325</a>            .save_tree(<span class="macro">vec!</span>[executed_block.block().clone()], <span class="macro">vec!</span>[])
+<a href=#326 id=326 data-nosnippet>326</a>            .context(<span class="string">"Insert block failed when saving block"</span>)<span class="question-mark">?</span>;
+<a href=#327 id=327 data-nosnippet>327</a>        <span class="self">self</span>.inner.write().insert_block(executed_block)
+<a href=#328 id=328 data-nosnippet>328</a>    }
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a>    <span class="kw">fn </span>execute_block(
+<a href=#331 id=331 data-nosnippet>331</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block: Block, catch_up_mode: bool,
+<a href=#332 id=332 data-nosnippet>332</a>    ) -&gt; anyhow::Result&lt;ExecutedBlock, Error&gt; {
+<a href=#333 id=333 data-nosnippet>333</a>        <span class="comment">// Although NIL blocks don't have a payload, we still send a
+<a href=#334 id=334 data-nosnippet>334</a>        // T::default() to compute because we may inject a block
+<a href=#335 id=335 data-nosnippet>335</a>        // prologue transaction.
+<a href=#336 id=336 data-nosnippet>336</a>        </span><span class="kw">let </span>state_compute_result = <span class="self">self</span>.state_computer.compute(
+<a href=#337 id=337 data-nosnippet>337</a>            <span class="kw-2">&amp;</span>block,
+<a href=#338 id=338 data-nosnippet>338</a>            block.parent_id(),
+<a href=#339 id=339 data-nosnippet>339</a>            catch_up_mode,
+<a href=#340 id=340 data-nosnippet>340</a>        )<span class="question-mark">?</span>;
+<a href=#341 id=341 data-nosnippet>341</a>        observe_block(block.timestamp_usecs(), BlockStage::EXECUTED);
+<a href=#342 id=342 data-nosnippet>342</a>
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="prelude-val">Ok</span>(ExecutedBlock::new(block, state_compute_result))
+<a href=#344 id=344 data-nosnippet>344</a>    }
+<a href=#345 id=345 data-nosnippet>345</a>
+<a href=#346 id=346 data-nosnippet>346</a>    <span class="doccomment">/// Validates quorum certificates and inserts it into block tree assuming
+<a href=#347 id=347 data-nosnippet>347</a>    /// dependencies exist.
+<a href=#348 id=348 data-nosnippet>348</a>    </span><span class="kw">pub fn </span>insert_single_quorum_cert(
+<a href=#349 id=349 data-nosnippet>349</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, qc: QuorumCert,
+<a href=#350 id=350 data-nosnippet>350</a>    ) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#351 id=351 data-nosnippet>351</a>        <span class="macro">diem_debug!</span>(<span class="string">"insert_single_quorum_cert: qc={:?}"</span>, qc);
+<a href=#352 id=352 data-nosnippet>352</a>        <span class="comment">// If the parent block is not the root block (i.e not None), ensure the
+<a href=#353 id=353 data-nosnippet>353</a>        // executed state of a block is consistent with its QuorumCert,
+<a href=#354 id=354 data-nosnippet>354</a>        // otherwise persist the QuorumCert's state and on restart, a
+<a href=#355 id=355 data-nosnippet>355</a>        // new execution will agree with it.  A new execution will match
+<a href=#356 id=356 data-nosnippet>356</a>        // the QuorumCert's state on the next restart will work if there is a
+<a href=#357 id=357 data-nosnippet>357</a>        // memory corruption, for example.
+<a href=#358 id=358 data-nosnippet>358</a>        </span><span class="kw">match </span><span class="self">self</span>.get_block(qc.certified_block().id()) {
+<a href=#359 id=359 data-nosnippet>359</a>            <span class="prelude-val">Some</span>(executed_block) =&gt; {
+<a href=#360 id=360 data-nosnippet>360</a>                <span class="macro">ensure!</span>(
+<a href=#361 id=361 data-nosnippet>361</a>                    executed_block.block_info() == <span class="kw-2">*</span>qc.certified_block(),
+<a href=#362 id=362 data-nosnippet>362</a>                    <span class="string">"QC for block {} has different {:?} than local {:?}"</span>,
+<a href=#363 id=363 data-nosnippet>363</a>                    qc.certified_block().id(),
+<a href=#364 id=364 data-nosnippet>364</a>                    qc.certified_block(),
+<a href=#365 id=365 data-nosnippet>365</a>                    executed_block.block_info()
+<a href=#366 id=366 data-nosnippet>366</a>                );
+<a href=#367 id=367 data-nosnippet>367</a>                observe_block(
+<a href=#368 id=368 data-nosnippet>368</a>                    executed_block.block().timestamp_usecs(),
+<a href=#369 id=369 data-nosnippet>369</a>                    BlockStage::QC_ADDED,
+<a href=#370 id=370 data-nosnippet>370</a>                );
+<a href=#371 id=371 data-nosnippet>371</a>            }
+<a href=#372 id=372 data-nosnippet>372</a>            <span class="prelude-val">None </span>=&gt; {
+<a href=#373 id=373 data-nosnippet>373</a>                <span class="macro">bail!</span>(<span class="string">"Insert {} without having the block in store first"</span>, qc)
+<a href=#374 id=374 data-nosnippet>374</a>            }
+<a href=#375 id=375 data-nosnippet>375</a>        };
+<a href=#376 id=376 data-nosnippet>376</a>
+<a href=#377 id=377 data-nosnippet>377</a>        <span class="self">self</span>.storage
+<a href=#378 id=378 data-nosnippet>378</a>            .save_tree(<span class="macro">vec!</span>[], <span class="macro">vec!</span>[qc.clone()])
+<a href=#379 id=379 data-nosnippet>379</a>            .context(<span class="string">"Insert block failed when saving quorum"</span>)<span class="question-mark">?</span>;
+<a href=#380 id=380 data-nosnippet>380</a>        <span class="self">self</span>.inner.write().insert_quorum_cert(qc)
+<a href=#381 id=381 data-nosnippet>381</a>    }
+<a href=#382 id=382 data-nosnippet>382</a>
+<a href=#383 id=383 data-nosnippet>383</a>    <span class="doccomment">/// Replace the highest timeout certificate in case the given one has a
+<a href=#384 id=384 data-nosnippet>384</a>    /// higher round. In case a timeout certificate is updated, persist it
+<a href=#385 id=385 data-nosnippet>385</a>    /// to storage.
+<a href=#386 id=386 data-nosnippet>386</a>    </span><span class="kw">pub fn </span>insert_timeout_certificate(
+<a href=#387 id=387 data-nosnippet>387</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, tc: Arc&lt;TimeoutCertificate&gt;,
+<a href=#388 id=388 data-nosnippet>388</a>    ) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#389 id=389 data-nosnippet>389</a>        <span class="kw">let </span>cur_tc_round =
+<a href=#390 id=390 data-nosnippet>390</a>            <span class="self">self</span>.highest_timeout_cert().map_or(<span class="number">0</span>, |tc| tc.round());
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="kw">if </span>tc.round() &lt;= cur_tc_round {
+<a href=#392 id=392 data-nosnippet>392</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#393 id=393 data-nosnippet>393</a>        }
+<a href=#394 id=394 data-nosnippet>394</a>        <span class="self">self</span>.storage
+<a href=#395 id=395 data-nosnippet>395</a>            .save_highest_timeout_cert(tc.as_ref().clone())
+<a href=#396 id=396 data-nosnippet>396</a>            .context(
+<a href=#397 id=397 data-nosnippet>397</a>                <span class="string">"Timeout certificate insert failed when persisting to DB"</span>,
+<a href=#398 id=398 data-nosnippet>398</a>            )<span class="question-mark">?</span>;
+<a href=#399 id=399 data-nosnippet>399</a>        <span class="self">self</span>.inner.write().replace_timeout_cert(tc);
+<a href=#400 id=400 data-nosnippet>400</a>        <span class="prelude-val">Ok</span>(())
+<a href=#401 id=401 data-nosnippet>401</a>    }
+<a href=#402 id=402 data-nosnippet>402</a>
+<a href=#403 id=403 data-nosnippet>403</a>    <span class="doccomment">/// Prune the tree up to next_root_id (keep next_root_id's block).  Any
+<a href=#404 id=404 data-nosnippet>404</a>    /// branches not part of the next_root_id's tree should be removed as
+<a href=#405 id=405 data-nosnippet>405</a>    /// well.
+<a href=#406 id=406 data-nosnippet>406</a>    ///
+<a href=#407 id=407 data-nosnippet>407</a>    /// For example, root = B0
+<a href=#408 id=408 data-nosnippet>408</a>    /// B0--&gt; B1--&gt; B2
+<a href=#409 id=409 data-nosnippet>409</a>    ///        ╰--&gt; B3--&gt; B4
+<a href=#410 id=410 data-nosnippet>410</a>    ///
+<a href=#411 id=411 data-nosnippet>411</a>    /// prune_tree(B3) should be left with
+<a href=#412 id=412 data-nosnippet>412</a>    /// B3--&gt; B4, root = B3
+<a href=#413 id=413 data-nosnippet>413</a>    ///
+<a href=#414 id=414 data-nosnippet>414</a>    /// Returns the block ids of the blocks removed.
+<a href=#415 id=415 data-nosnippet>415</a>    </span><span class="kw">fn </span>prune_tree(<span class="kw-2">&amp;</span><span class="self">self</span>, next_root_id: HashValue) -&gt; VecDeque&lt;HashValue&gt; {
+<a href=#416 id=416 data-nosnippet>416</a>        <span class="kw">let </span>id_to_remove = <span class="self">self</span>.inner.read().find_blocks_to_prune(next_root_id);
+<a href=#417 id=417 data-nosnippet>417</a>        <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self
+<a href=#418 id=418 data-nosnippet>418</a>            </span>.storage
+<a href=#419 id=419 data-nosnippet>419</a>            .prune_tree(id_to_remove.clone().into_iter().collect())
+<a href=#420 id=420 data-nosnippet>420</a>        {
+<a href=#421 id=421 data-nosnippet>421</a>            <span class="comment">// it's fine to fail here, as long as the commit succeeds, the next
+<a href=#422 id=422 data-nosnippet>422</a>            // restart will clean up dangling blocks, and we need to
+<a href=#423 id=423 data-nosnippet>423</a>            // prune the tree to keep the root consistent with
+<a href=#424 id=424 data-nosnippet>424</a>            // executor.
+<a href=#425 id=425 data-nosnippet>425</a>            </span><span class="macro">diem_error!</span>(error = <span class="question-mark">?</span>e, <span class="string">"fail to delete block"</span>);
+<a href=#426 id=426 data-nosnippet>426</a>        }
+<a href=#427 id=427 data-nosnippet>427</a>        <span class="self">self</span>.inner
+<a href=#428 id=428 data-nosnippet>428</a>            .write()
+<a href=#429 id=429 data-nosnippet>429</a>            .process_pruned_blocks(next_root_id, id_to_remove.clone());
+<a href=#430 id=430 data-nosnippet>430</a>        id_to_remove
+<a href=#431 id=431 data-nosnippet>431</a>    }
+<a href=#432 id=432 data-nosnippet>432</a>}
+<a href=#433 id=433 data-nosnippet>433</a>
+<a href=#434 id=434 data-nosnippet>434</a><span class="kw">impl </span>BlockReader <span class="kw">for </span>BlockStore {
+<a href=#435 id=435 data-nosnippet>435</a>    <span class="kw">fn </span>block_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, block_id: HashValue) -&gt; bool {
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="self">self</span>.inner.read().block_exists(<span class="kw-2">&amp;</span>block_id)
+<a href=#437 id=437 data-nosnippet>437</a>    }
 <a href=#438 id=438 data-nosnippet>438</a>
-<a href=#439 id=439 data-nosnippet>439</a><span class="kw">impl </span>BlockReader <span class="kw">for </span>BlockStore {
-<a href=#440 id=440 data-nosnippet>440</a>    <span class="kw">fn </span>block_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, block_id: HashValue) -&gt; bool {
-<a href=#441 id=441 data-nosnippet>441</a>        <span class="self">self</span>.inner.read().block_exists(<span class="kw-2">&amp;</span>block_id)
-<a href=#442 id=442 data-nosnippet>442</a>    }
-<a href=#443 id=443 data-nosnippet>443</a>
-<a href=#444 id=444 data-nosnippet>444</a>    <span class="kw">fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, block_id: HashValue) -&gt; <span class="prelude-ty">Option</span>&lt;Arc&lt;ExecutedBlock&gt;&gt; {
-<a href=#445 id=445 data-nosnippet>445</a>        <span class="self">self</span>.inner.read().get_block(<span class="kw-2">&amp;</span>block_id)
-<a href=#446 id=446 data-nosnippet>446</a>    }
-<a href=#447 id=447 data-nosnippet>447</a>
-<a href=#448 id=448 data-nosnippet>448</a>    <span class="kw">fn </span>get_ledger_block(
-<a href=#449 id=449 data-nosnippet>449</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block_id: <span class="kw-2">&amp;</span>HashValue,
-<a href=#450 id=450 data-nosnippet>450</a>    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Block&gt;&gt; {
-<a href=#451 id=451 data-nosnippet>451</a>        <span class="self">self</span>.storage.get_ledger_block(block_id)
-<a href=#452 id=452 data-nosnippet>452</a>    }
-<a href=#453 id=453 data-nosnippet>453</a>
-<a href=#454 id=454 data-nosnippet>454</a>    <span class="kw">fn </span>root(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;ExecutedBlock&gt; { <span class="self">self</span>.inner.read().root() }
-<a href=#455 id=455 data-nosnippet>455</a>
-<a href=#456 id=456 data-nosnippet>456</a>    <span class="kw">fn </span>get_quorum_cert_for_block(
-<a href=#457 id=457 data-nosnippet>457</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block_id: HashValue,
-<a href=#458 id=458 data-nosnippet>458</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Arc&lt;QuorumCert&gt;&gt; {
-<a href=#459 id=459 data-nosnippet>459</a>        <span class="self">self</span>.inner.read().get_quorum_cert_for_block(<span class="kw-2">&amp;</span>block_id)
-<a href=#460 id=460 data-nosnippet>460</a>    }
-<a href=#461 id=461 data-nosnippet>461</a>
-<a href=#462 id=462 data-nosnippet>462</a>    <span class="kw">fn </span>path_from_root(
-<a href=#463 id=463 data-nosnippet>463</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block_id: HashValue,
-<a href=#464 id=464 data-nosnippet>464</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;Arc&lt;ExecutedBlock&gt;&gt;&gt; {
-<a href=#465 id=465 data-nosnippet>465</a>        <span class="self">self</span>.inner.read().path_from_root(block_id)
-<a href=#466 id=466 data-nosnippet>466</a>    }
-<a href=#467 id=467 data-nosnippet>467</a>
-<a href=#468 id=468 data-nosnippet>468</a>    <span class="kw">fn </span>highest_certified_block(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;ExecutedBlock&gt; {
-<a href=#469 id=469 data-nosnippet>469</a>        <span class="self">self</span>.inner.read().highest_certified_block()
-<a href=#470 id=470 data-nosnippet>470</a>    }
-<a href=#471 id=471 data-nosnippet>471</a>
-<a href=#472 id=472 data-nosnippet>472</a>    <span class="kw">fn </span>highest_quorum_cert(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;QuorumCert&gt; {
-<a href=#473 id=473 data-nosnippet>473</a>        <span class="self">self</span>.inner.read().highest_quorum_cert()
-<a href=#474 id=474 data-nosnippet>474</a>    }
-<a href=#475 id=475 data-nosnippet>475</a>
-<a href=#476 id=476 data-nosnippet>476</a>    <span class="kw">fn </span>highest_commit_cert(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;QuorumCert&gt; {
-<a href=#477 id=477 data-nosnippet>477</a>        <span class="self">self</span>.inner.read().highest_commit_cert()
-<a href=#478 id=478 data-nosnippet>478</a>    }
-<a href=#479 id=479 data-nosnippet>479</a>
-<a href=#480 id=480 data-nosnippet>480</a>    <span class="kw">fn </span>highest_timeout_cert(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Arc&lt;TimeoutCertificate&gt;&gt; {
-<a href=#481 id=481 data-nosnippet>481</a>        <span class="self">self</span>.inner.read().highest_timeout_cert()
-<a href=#482 id=482 data-nosnippet>482</a>    }
-<a href=#483 id=483 data-nosnippet>483</a>
-<a href=#484 id=484 data-nosnippet>484</a>    <span class="kw">fn </span>sync_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SyncInfo {
-<a href=#485 id=485 data-nosnippet>485</a>        SyncInfo::new(
-<a href=#486 id=486 data-nosnippet>486</a>            <span class="self">self</span>.highest_quorum_cert().as_ref().clone(),
-<a href=#487 id=487 data-nosnippet>487</a>            <span class="self">self</span>.highest_commit_cert().as_ref().clone(),
-<a href=#488 id=488 data-nosnippet>488</a>            <span class="self">self</span>.highest_timeout_cert().map(|tc| tc.as_ref().clone()),
-<a href=#489 id=489 data-nosnippet>489</a>        )
-<a href=#490 id=490 data-nosnippet>490</a>    }
-<a href=#491 id=491 data-nosnippet>491</a>}
-<a href=#492 id=492 data-nosnippet>492</a>
-<a href=#493 id=493 data-nosnippet>493</a><span class="attr">#[cfg(any(test, feature = <span class="string">"fuzzing"</span>))]
-<a href=#494 id=494 data-nosnippet>494</a>#[allow(unused)]
-<a href=#495 id=495 data-nosnippet>495</a></span><span class="kw">impl </span>BlockStore {
-<a href=#496 id=496 data-nosnippet>496</a>    <span class="doccomment">/// Returns the number of blocks in the tree
-<a href=#497 id=497 data-nosnippet>497</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize { <span class="self">self</span>.inner.read().len() }
+<a href=#439 id=439 data-nosnippet>439</a>    <span class="kw">fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, block_id: HashValue) -&gt; <span class="prelude-ty">Option</span>&lt;Arc&lt;ExecutedBlock&gt;&gt; {
+<a href=#440 id=440 data-nosnippet>440</a>        <span class="self">self</span>.inner.read().get_block(<span class="kw-2">&amp;</span>block_id)
+<a href=#441 id=441 data-nosnippet>441</a>    }
+<a href=#442 id=442 data-nosnippet>442</a>
+<a href=#443 id=443 data-nosnippet>443</a>    <span class="kw">fn </span>get_ledger_block(
+<a href=#444 id=444 data-nosnippet>444</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block_id: <span class="kw-2">&amp;</span>HashValue,
+<a href=#445 id=445 data-nosnippet>445</a>    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Block&gt;&gt; {
+<a href=#446 id=446 data-nosnippet>446</a>        <span class="self">self</span>.storage.get_ledger_block(block_id)
+<a href=#447 id=447 data-nosnippet>447</a>    }
+<a href=#448 id=448 data-nosnippet>448</a>
+<a href=#449 id=449 data-nosnippet>449</a>    <span class="kw">fn </span>root(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;ExecutedBlock&gt; { <span class="self">self</span>.inner.read().root() }
+<a href=#450 id=450 data-nosnippet>450</a>
+<a href=#451 id=451 data-nosnippet>451</a>    <span class="kw">fn </span>get_quorum_cert_for_block(
+<a href=#452 id=452 data-nosnippet>452</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block_id: HashValue,
+<a href=#453 id=453 data-nosnippet>453</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Arc&lt;QuorumCert&gt;&gt; {
+<a href=#454 id=454 data-nosnippet>454</a>        <span class="self">self</span>.inner.read().get_quorum_cert_for_block(<span class="kw-2">&amp;</span>block_id)
+<a href=#455 id=455 data-nosnippet>455</a>    }
+<a href=#456 id=456 data-nosnippet>456</a>
+<a href=#457 id=457 data-nosnippet>457</a>    <span class="kw">fn </span>path_from_root(
+<a href=#458 id=458 data-nosnippet>458</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block_id: HashValue,
+<a href=#459 id=459 data-nosnippet>459</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;Arc&lt;ExecutedBlock&gt;&gt;&gt; {
+<a href=#460 id=460 data-nosnippet>460</a>        <span class="self">self</span>.inner.read().path_from_root(block_id)
+<a href=#461 id=461 data-nosnippet>461</a>    }
+<a href=#462 id=462 data-nosnippet>462</a>
+<a href=#463 id=463 data-nosnippet>463</a>    <span class="kw">fn </span>highest_certified_block(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;ExecutedBlock&gt; {
+<a href=#464 id=464 data-nosnippet>464</a>        <span class="self">self</span>.inner.read().highest_certified_block()
+<a href=#465 id=465 data-nosnippet>465</a>    }
+<a href=#466 id=466 data-nosnippet>466</a>
+<a href=#467 id=467 data-nosnippet>467</a>    <span class="kw">fn </span>highest_quorum_cert(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;QuorumCert&gt; {
+<a href=#468 id=468 data-nosnippet>468</a>        <span class="self">self</span>.inner.read().highest_quorum_cert()
+<a href=#469 id=469 data-nosnippet>469</a>    }
+<a href=#470 id=470 data-nosnippet>470</a>
+<a href=#471 id=471 data-nosnippet>471</a>    <span class="kw">fn </span>highest_commit_cert(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;QuorumCert&gt; {
+<a href=#472 id=472 data-nosnippet>472</a>        <span class="self">self</span>.inner.read().highest_commit_cert()
+<a href=#473 id=473 data-nosnippet>473</a>    }
+<a href=#474 id=474 data-nosnippet>474</a>
+<a href=#475 id=475 data-nosnippet>475</a>    <span class="kw">fn </span>highest_timeout_cert(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Arc&lt;TimeoutCertificate&gt;&gt; {
+<a href=#476 id=476 data-nosnippet>476</a>        <span class="self">self</span>.inner.read().highest_timeout_cert()
+<a href=#477 id=477 data-nosnippet>477</a>    }
+<a href=#478 id=478 data-nosnippet>478</a>
+<a href=#479 id=479 data-nosnippet>479</a>    <span class="kw">fn </span>sync_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SyncInfo {
+<a href=#480 id=480 data-nosnippet>480</a>        SyncInfo::new(
+<a href=#481 id=481 data-nosnippet>481</a>            <span class="self">self</span>.highest_quorum_cert().as_ref().clone(),
+<a href=#482 id=482 data-nosnippet>482</a>            <span class="self">self</span>.highest_commit_cert().as_ref().clone(),
+<a href=#483 id=483 data-nosnippet>483</a>            <span class="self">self</span>.highest_timeout_cert().map(|tc| tc.as_ref().clone()),
+<a href=#484 id=484 data-nosnippet>484</a>        )
+<a href=#485 id=485 data-nosnippet>485</a>    }
+<a href=#486 id=486 data-nosnippet>486</a>}
+<a href=#487 id=487 data-nosnippet>487</a>
+<a href=#488 id=488 data-nosnippet>488</a><span class="attr">#[cfg(any(test, feature = <span class="string">"fuzzing"</span>))]
+<a href=#489 id=489 data-nosnippet>489</a>#[allow(unused)]
+<a href=#490 id=490 data-nosnippet>490</a></span><span class="kw">impl </span>BlockStore {
+<a href=#491 id=491 data-nosnippet>491</a>    <span class="doccomment">/// Returns the number of blocks in the tree
+<a href=#492 id=492 data-nosnippet>492</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize { <span class="self">self</span>.inner.read().len() }
+<a href=#493 id=493 data-nosnippet>493</a>
+<a href=#494 id=494 data-nosnippet>494</a>    <span class="doccomment">/// Returns the number of child links in the tree
+<a href=#495 id=495 data-nosnippet>495</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>child_links(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#496 id=496 data-nosnippet>496</a>        <span class="self">self</span>.inner.read().child_links()
+<a href=#497 id=497 data-nosnippet>497</a>    }
 <a href=#498 id=498 data-nosnippet>498</a>
-<a href=#499 id=499 data-nosnippet>499</a>    <span class="doccomment">/// Returns the number of child links in the tree
-<a href=#500 id=500 data-nosnippet>500</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>child_links(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-<a href=#501 id=501 data-nosnippet>501</a>        <span class="self">self</span>.inner.read().child_links()
+<a href=#499 id=499 data-nosnippet>499</a>    <span class="doccomment">/// The number of pruned blocks that are still available in memory
+<a href=#500 id=500 data-nosnippet>500</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>pruned_blocks_in_mem(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#501 id=501 data-nosnippet>501</a>        <span class="self">self</span>.inner.read().pruned_blocks_in_mem()
 <a href=#502 id=502 data-nosnippet>502</a>    }
 <a href=#503 id=503 data-nosnippet>503</a>
-<a href=#504 id=504 data-nosnippet>504</a>    <span class="doccomment">/// The number of pruned blocks that are still available in memory
-<a href=#505 id=505 data-nosnippet>505</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>pruned_blocks_in_mem(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-<a href=#506 id=506 data-nosnippet>506</a>        <span class="self">self</span>.inner.read().pruned_blocks_in_mem()
-<a href=#507 id=507 data-nosnippet>507</a>    }
-<a href=#508 id=508 data-nosnippet>508</a>
-<a href=#509 id=509 data-nosnippet>509</a>    <span class="doccomment">/// Helper function to insert the block with the qc together
-<a href=#510 id=510 data-nosnippet>510</a>    </span><span class="kw">pub fn </span>insert_block_with_qc(
-<a href=#511 id=511 data-nosnippet>511</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block: Block,
-<a href=#512 id=512 data-nosnippet>512</a>    ) -&gt; anyhow::Result&lt;Arc&lt;ExecutedBlock&gt;&gt; {
-<a href=#513 id=513 data-nosnippet>513</a>        <span class="self">self</span>.insert_single_quorum_cert(block.quorum_cert().clone())<span class="question-mark">?</span>;
-<a href=#514 id=514 data-nosnippet>514</a>        <span class="self">self</span>.execute_and_insert_block(block, <span class="bool-val">false</span>, <span class="bool-val">false</span>)
-<a href=#515 id=515 data-nosnippet>515</a>    }
-<a href=#516 id=516 data-nosnippet>516</a>}</code></pre></div></section></main></body></html>
+<a href=#504 id=504 data-nosnippet>504</a>    <span class="doccomment">/// Helper function to insert the block with the qc together
+<a href=#505 id=505 data-nosnippet>505</a>    </span><span class="kw">pub fn </span>insert_block_with_qc(
+<a href=#506 id=506 data-nosnippet>506</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, block: Block,
+<a href=#507 id=507 data-nosnippet>507</a>    ) -&gt; anyhow::Result&lt;Arc&lt;ExecutedBlock&gt;&gt; {
+<a href=#508 id=508 data-nosnippet>508</a>        <span class="self">self</span>.insert_single_quorum_cert(block.quorum_cert().clone())<span class="question-mark">?</span>;
+<a href=#509 id=509 data-nosnippet>509</a>        <span class="self">self</span>.execute_and_insert_block(block, <span class="bool-val">false</span>, <span class="bool-val">false</span>)
+<a href=#510 id=510 data-nosnippet>510</a>    }
+<a href=#511 id=511 data-nosnippet>511</a>}</code></pre></div></section></main></body></html>

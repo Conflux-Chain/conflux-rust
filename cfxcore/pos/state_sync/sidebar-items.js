@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["bootstrapper","client","coordinator","executor_proxy"]};

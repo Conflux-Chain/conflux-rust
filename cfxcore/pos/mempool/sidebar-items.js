@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ConsensusRequest","ConsensusResponse"],"fn":["bootstrap","gen_mempool_reconfig_subscription"],"mod":["network"],"struct":["CommitNotification","CommitResponse","CommittedTransaction","TransactionExclusion"],"type":["MempoolClientSender","SubmissionStatus"]};
+window.SIDEBAR_ITEMS = {"enum":["ConsensusRequest","ConsensusResponse"],"fn":["bootstrap"],"mod":["network"],"struct":["CommitNotification","CommitResponse","CommittedTransaction","TransactionExclusion"],"type":["MempoolClientSender","SubmissionStatus"]};
