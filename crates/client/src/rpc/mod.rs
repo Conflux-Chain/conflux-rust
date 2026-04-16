@@ -3,15 +3,18 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_rpc_builder::{
-    CfxRpcModuleBuilder, CfxRpcServerConfig, CfxTransportRpcModuleConfig,
-    RpcModuleBuilder, RpcServerConfig, RpcServerHandle,
-    TransportRpcModuleConfig,
+    CfxRpcModule, CfxRpcModuleBuilder, CfxRpcServerConfig,
+    CfxTransportRpcModuleConfig, CfxTransportRpcModules, RpcModuleBuilder,
+    RpcServerConfig, RpcServerHandle, TransportRpcModuleConfig,
+};
+use cfx_rpc_cfx_api::{
+    CfxDebugRpcServer, CfxRpcServer, DebugRpcServer, TestRpcServer,
 };
 use cfx_tasks::TaskExecutor;
 use cfxcore::{
     block_data_manager::BlockDataManager, consensus::pos_handler::PosVerifier,
-    Notifications, SharedConsensusGraph, SharedSynchronizationService,
-    SharedTransactionPool,
+    LightQueryService, Notifications, SharedConsensusGraph,
+    SharedSynchronizationService, SharedTransactionPool,
 };
 use jsonrpc_core::{MetaIoHandler, RemoteProcedure, Value};
 use jsonrpc_http_server::{
@@ -26,8 +29,10 @@ use jsonrpc_ws_server::{
     ServerBuilder as WsServerBuilder,
 };
 pub use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::RpcModule;
 use log::{info, warn};
 use network::NetworkService;
+use parking_lot::{Condvar, Mutex};
 use std::sync::Arc;
 
 mod authcodes;
@@ -541,6 +546,150 @@ pub async fn launch_cfx_async_rpc_servers(
 
     let server_handle = server_config
         .start(&transport_rpc_modules)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(Some(server_handle))
+}
+
+// start core space light rpc server (async, jsonrpsee)
+pub async fn launch_cfx_light_async_rpc_servers(
+    consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
+    data_man: Arc<BlockDataManager>, network: Arc<NetworkService>,
+    pos_handler: Arc<PosVerifier>,
+    accounts: Arc<cfxcore_accounts::AccountProvider>,
+    light: Arc<LightQueryService>, exit: Arc<(Mutex<bool>, Condvar)>,
+    conf: &Configuration,
+) -> Result<Option<RpcServerHandle>, String> {
+    use cfx_rpc_cfx_impl::{
+        common::CommonRpcImpl,
+        light::{
+            LightCfxHandler, LightDebugHandler, LightTestHandler,
+            RpcImpl as LightRpcImpl,
+        },
+    };
+
+    let http_config = conf.cfx_http_config();
+    let ws_config = conf.cfx_ws_config();
+    let apis = conf.raw_conf.public_cfx_rpc_apis.clone();
+
+    let server_config = match (http_config.enabled, ws_config.enabled) {
+        (true, true) => {
+            CfxRpcServerConfig::http(conf.jsonrpsee_server_builder())
+                .with_ws(conf.jsonrpsee_server_builder())
+                .with_http_address(http_config.address)
+                .with_ws_address(ws_config.address)
+        }
+        (true, false) => {
+            CfxRpcServerConfig::http(conf.jsonrpsee_server_builder())
+                .with_http_address(http_config.address)
+        }
+        (false, true) => {
+            CfxRpcServerConfig::ws(conf.jsonrpsee_server_builder())
+                .with_ws_address(ws_config.address)
+        }
+        _ => return Ok(None),
+    };
+
+    let common_rpc_impl = Arc::new(CommonRpcImpl::new(
+        exit,
+        consensus.clone(),
+        network,
+        tx_pool,
+        accounts.clone(),
+        pos_handler,
+    ));
+
+    let light_rpc_impl =
+        Arc::new(LightRpcImpl::new(light, accounts, consensus, data_man));
+
+    // Build the RpcModule by merging selected light handlers.
+    let mut module = RpcModule::new(());
+
+    for api in apis.iter_selection() {
+        match api {
+            CfxRpcModule::Cfx => {
+                let handler = LightCfxHandler::new(
+                    light_rpc_impl.clone(),
+                    common_rpc_impl.clone(),
+                );
+                module
+                    .merge(CfxRpcServer::into_rpc(handler))
+                    .expect("No conflicts for Cfx module");
+            }
+            CfxRpcModule::Debug => {
+                let cfx_debug_handler = LightCfxHandler::new(
+                    light_rpc_impl.clone(),
+                    common_rpc_impl.clone(),
+                );
+                module
+                    .merge(CfxDebugRpcServer::into_rpc(cfx_debug_handler))
+                    .expect("No conflicts for CfxDebug module");
+
+                let debug_handler =
+                    LightDebugHandler::new(common_rpc_impl.clone());
+                module
+                    .merge(DebugRpcServer::into_rpc(debug_handler))
+                    .expect("No conflicts for Debug module");
+            }
+            CfxRpcModule::Test => {
+                let handler = LightTestHandler::new(common_rpc_impl.clone());
+                module
+                    .merge(TestRpcServer::into_rpc(handler))
+                    .expect("No conflicts for Test module");
+            }
+            CfxRpcModule::PubSub => {
+                warn!(
+                    "Light node PubSub not yet supported \
+                     in async RPC"
+                );
+            }
+            CfxRpcModule::Trace => {
+                warn!("Light nodes do not support trace RPC");
+            }
+            CfxRpcModule::Txpool => {
+                warn!("Light nodes do not support txpool RPC");
+            }
+            CfxRpcModule::Pos => {
+                warn!("Light nodes do not support PoS RPC");
+            }
+        }
+    }
+
+    info!(
+        "Enabled cfx light async rpc modules: {:?}",
+        apis.to_selection()
+    );
+
+    // Build transport modules with the same module for both
+    // HTTP and WS.
+    let mut transport_modules = CfxTransportRpcModules::default();
+
+    // Set the config so that same-port validation works
+    // correctly.
+    match (http_config.enabled, ws_config.enabled) {
+        (true, true) => {
+            transport_modules.config =
+                CfxTransportRpcModuleConfig::set_http(apis.clone())
+                    .with_ws(apis);
+            transport_modules.http = Some(module.clone());
+            transport_modules.ws = Some(module);
+        }
+        (true, false) => {
+            transport_modules.config =
+                CfxTransportRpcModuleConfig::set_http(apis);
+            transport_modules.http = Some(module);
+        }
+        (false, true) => {
+            transport_modules.config =
+                CfxTransportRpcModuleConfig::set_ws(apis);
+            transport_modules.ws = Some(module);
+        }
+        _ => unreachable!(),
+    }
+
+    let server_handle = server_config
+        .start(&transport_modules)
         .await
         .map_err(|e| e.to_string())?;
 

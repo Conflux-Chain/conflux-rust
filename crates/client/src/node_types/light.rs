@@ -7,17 +7,12 @@ use std::sync::Arc;
 use parking_lot::{Condvar, Mutex};
 use secret_store::SecretStore;
 
-use jsonrpc_http_server::Server as HttpServer;
-use jsonrpc_tcp_server::Server as TcpServer;
-use jsonrpc_ws_server::Server as WsServer;
+use cfx_rpc_builder::RpcServerHandle;
 
 use crate::{
     common::{initialize_common_modules, ClientComponents},
     configuration::Configuration,
-    rpc::{
-        extractor::RpcExtractor, impls::light::RpcImpl,
-        setup_debug_rpc_apis_light, setup_public_rpc_apis_light,
-    },
+    rpc::launch_cfx_light_async_rpc_servers,
 };
 use blockgen::BlockGenerator;
 use cfxcore::{
@@ -28,13 +23,8 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 
 pub struct LightClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
-    pub debug_rpc_http_server: Option<HttpServer>,
-    pub debug_rpc_tcp_server: Option<TcpServer>,
-    pub debug_rpc_ws_server: Option<WsServer>,
+    pub cfx_rpc_server_handle: Option<RpcServerHandle>,
     pub light: Arc<LightQueryService>,
-    pub rpc_http_server: Option<HttpServer>,
-    pub rpc_tcp_server: Option<TcpServer>,
-    pub rpc_ws_server: Option<WsServer>,
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
@@ -47,7 +37,8 @@ impl MallocSizeOf for LightClientExtraComponents {
 pub struct LightClient {}
 
 impl LightClient {
-    // Start all key components of Conflux and pass out their handles
+    // Start all key components of Conflux and pass out
+    // their handles
     pub fn start(
         mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Result<
@@ -65,11 +56,11 @@ impl LightClient {
             consensus,
             sync_graph,
             network,
-            common_impl,
+            _common_impl,
             accounts,
             notifications,
-            pubsub,
-            _tokio_runtime,
+            _pubsub,
+            tokio_runtime,
         ) = initialize_common_modules(
             &mut conf,
             exit.clone(),
@@ -88,76 +79,20 @@ impl LightClient {
 
         sync_graph.recover_graph_from_db();
 
-        let rpc_impl = Arc::new(RpcImpl::new(
-            light.clone(),
-            accounts,
-            consensus.clone(),
-            data_man.clone(),
-        ));
-
-        let debug_rpc_http_server = crate::rpc::start_http(
-            conf.local_http_config(),
-            setup_debug_rpc_apis_light(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
+        // Start the new jsonrpsee-based core space RPC
+        // servers for the light node.
+        let cfx_rpc_server_handle =
+            tokio_runtime.block_on(launch_cfx_light_async_rpc_servers(
+                consensus.clone(),
+                txpool.clone(),
+                data_man.clone(),
+                network.clone(),
+                pos_verifier.clone(),
+                accounts,
+                light.clone(),
+                exit,
                 &conf,
-            ),
-        )?;
-
-        let debug_rpc_tcp_server = crate::rpc::start_tcp(
-            conf.local_tcp_config(),
-            setup_debug_rpc_apis_light(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
-                &conf,
-            ),
-            RpcExtractor,
-        )?;
-
-        let rpc_tcp_server = crate::rpc::start_tcp(
-            conf.tcp_config(),
-            setup_public_rpc_apis_light(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
-                &conf,
-            ),
-            RpcExtractor,
-        )?;
-
-        let debug_rpc_ws_server = crate::rpc::start_ws(
-            conf.local_ws_config(),
-            setup_public_rpc_apis_light(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
-                &conf,
-            ),
-            RpcExtractor,
-        )?;
-
-        let rpc_ws_server = crate::rpc::start_ws(
-            conf.ws_config(),
-            setup_public_rpc_apis_light(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
-                &conf,
-            ),
-            RpcExtractor,
-        )?;
-
-        let rpc_http_server = crate::rpc::start_http(
-            conf.http_config(),
-            setup_public_rpc_apis_light(
-                common_impl,
-                rpc_impl,
-                pubsub.clone(),
-                &conf,
-            ),
-        )?;
+            ))?;
 
         network.start();
 
@@ -167,13 +102,8 @@ impl LightClient {
             pos_handler: Some(pos_verifier),
             other_components: LightClientExtraComponents {
                 consensus,
-                debug_rpc_http_server,
-                debug_rpc_tcp_server,
-                debug_rpc_ws_server,
+                cfx_rpc_server_handle,
                 light,
-                rpc_http_server,
-                rpc_tcp_server,
-                rpc_ws_server,
                 secret_store,
                 txpool,
                 pow,
