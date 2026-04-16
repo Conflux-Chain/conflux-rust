@@ -469,6 +469,13 @@ impl PosHandler {
     }
 
     fn tx_by_version(&self, version: u64) -> Option<Transaction> {
+        // Genesis (version 0) is not exposed via RPC. Short-circuit
+        // without deserializing: pre-cleanup DBs hold a
+        // `WriteSetPayload`-based genesis record that would fail to
+        // decode against the post-PR Transaction enum.
+        if version == 0 {
+            return None;
+        }
         let pos_ledger_db = self.pos_handler.pos_ledger_db();
         match pos_ledger_db.get_transaction(version).ok()? {
             CoreTransaction::UserTransaction(signed_tx) => {

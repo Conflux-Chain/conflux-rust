@@ -54,3 +54,12 @@ pub fn is_internal_address(address: &Address) -> bool {
         &address[..2] == b"\x08\x88" && &address[2..19] == &[0u8; 17];
     maybe_internal
 }
+
+/// Creates an Ethereum address from an EVM word's upper 20 bytes
+pub fn u256_to_address_be(value: U256) -> Address {
+    let mut buf = [0u8; 32];
+    value.to_big_endian(&mut buf);
+    let mut addr_bytes: [u8; 20] = [0u8; 20];
+    addr_bytes.copy_from_slice(&buf[12..]);
+    Address::from(addr_bytes)
+}

@@ -9,7 +9,10 @@ use cfx_executor::{
 use solidity_abi::string_revert_reason_decode;
 
 use super::observer::{
-    exec_tracer::ErrorUnwind, gasman::GasLimitEstimation, Observer,
+    access_list::{AccessListInspector, AccessListKey},
+    exec_tracer::ErrorUnwind,
+    gasman::GasLimitEstimationKey,
+    Observer,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
 use cfx_statedb::Result as DbResult;
@@ -17,9 +20,12 @@ use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, Space, U256,
 };
 use cfx_vm_types::{self as vm, Env, Spec};
-use primitives::{transaction::Action, SignedTransaction, Transaction};
+use primitives::{
+    transaction::Action, AccessList, SignedTransaction, Transaction,
+};
 use std::{
     cmp::{max, min},
+    collections::HashSet,
     fmt::Display,
     ops::{Mul, Shl},
 };
@@ -33,6 +39,7 @@ enum SponsoredType {
 pub struct EstimateExt {
     pub estimated_gas_limit: U256,
     pub estimated_storage_limit: u64,
+    pub access_list: AccessList, // default empty
 }
 
 pub struct EstimationContext<'a> {
@@ -140,7 +147,7 @@ impl<'a> EstimationContext<'a> {
 
         self.process_estimate_request(&mut tx, &request)?;
 
-        let (executed, overwrite_storage_limit) = match self
+        let (executed, overwrite_storage_limit, access_list) = match self
             .two_pass_estimation(&tx, request)?
         {
             Ok(x) => x,
@@ -156,6 +163,7 @@ impl<'a> EstimationContext<'a> {
                                 executed, &tx,
                             ),
                             estimated_storage_limit: storage_limit(executed),
+                            access_list: AccessList::new(),
                         }
                     }
                     ExecutionOutcome::Finished(_) => unreachable!(),
@@ -169,7 +177,45 @@ impl<'a> EstimationContext<'a> {
             executed,
             overwrite_storage_limit,
             &request,
+            access_list,
         )
+    }
+
+    pub fn prepare_access_list_inspector(
+        &mut self, tx: &SignedTransaction, request: &EstimateRequest,
+    ) -> Option<AccessListInspector> {
+        if !request.collect_access_list {
+            return None;
+        }
+        // prepare the excludes: add from, to, precompiles, 7702 authorities to
+        // excludes
+        let mut excludes = HashSet::new();
+        excludes.insert(tx.sender().address);
+        let to = match tx.transaction.action() {
+            Action::Call(to) => to,
+            Action::Create => {
+                tx.cal_created_address().expect("should success").address
+            }
+        };
+        excludes.insert(to);
+
+        if let Some(auth_list) = tx.authorization_list() {
+            excludes
+                .extend(auth_list.iter().filter_map(|auth| auth.authority()));
+        }
+
+        let builtins = match tx.space() {
+            Space::Native => &self.machine.builtins(),
+            Space::Ethereum => &self.machine.builtins_evm(),
+        };
+        excludes.extend(builtins.iter().map(|(addr, _)| *addr));
+
+        let access_list = tx
+            .access_list()
+            .map(|val| val.to_vec())
+            .unwrap_or(AccessList::new());
+
+        Some(AccessListInspector::new(access_list, excludes))
     }
 
     fn check_cip130(
@@ -195,23 +241,25 @@ impl<'a> EstimationContext<'a> {
     // storage limit paid by the sponsor are different values. So
     // this function will
     //
-    // 1. First Pass: Assuming the sponsor pays for storage collateral,
-    // check if the transaction will fail for
-    // NotEnoughBalanceForStorage.
+    // 1. First Pass: Assuming the sender pays for storage collateral,
+    // check if the transaction will finished
     //
     // 2. Second Pass: If it does, executes the transaction again assuming
-    // the user pays for the storage collateral. The resultant
+    // the sponsor pays for the storage collateral. The resultant
     // storage limit must be larger than the maximum storage limit
     // can be afford by the sponsor, to guarantee the user pays for
     // the storage limit.
     fn two_pass_estimation(
         &mut self, tx: &SignedTransaction, request: EstimateRequest,
-    ) -> DbResult<Result<(Executed, Option<u64>), ExecutionOutcome>> {
+    ) -> DbResult<Result<(Executed, Option<u64>, AccessList), ExecutionOutcome>>
+    {
+        let access_list_inspector =
+            self.prepare_access_list_inspector(tx, &request);
         // First pass
         let saved = self.state.save();
         let sender_pay_executed = match self
             .as_executive()
-            .transact(&tx, request.first_pass_options())?
+            .transact(&tx, request.first_pass_options(access_list_inspector))?
         {
             ExecutionOutcome::Finished(executed) => executed,
             res => {
@@ -224,6 +272,12 @@ impl<'a> EstimationContext<'a> {
         );
         self.state.update_state_post_tx_execution(false);
         self.state.restore(saved);
+
+        let access_list = sender_pay_executed
+            .ext_result
+            .get::<AccessListKey>()
+            .map(|a| a.to_vec())
+            .unwrap_or(AccessList::new());
 
         // Second pass
         let contract_pay_executed: Option<Executed>;
@@ -255,7 +309,7 @@ impl<'a> EstimationContext<'a> {
                 );
                 contract_pay_executed
             } else {
-                return Ok(Ok((sender_pay_executed, None)));
+                return Ok(Ok((sender_pay_executed, None, access_list)));
             };
 
         let contract_address =
@@ -276,24 +330,26 @@ impl<'a> EstimationContext<'a> {
             storage_limit(&sender_pay_executed),
             max_sponsor_storage_limit + 64,
         );
-        Ok(Ok(
-            if let Some(contract_pay_executed) = contract_pay_executed {
-                if max_sponsor_storage_limit
-                    >= storage_limit(&contract_pay_executed)
-                {
-                    (contract_pay_executed, None)
-                } else {
-                    (sender_pay_executed, Some(overwrite_storage_limit))
-                }
-            } else {
-                (sender_pay_executed, Some(overwrite_storage_limit))
-            },
-        ))
+
+        if let Some(contract_pay_executed) = contract_pay_executed {
+            if max_sponsor_storage_limit
+                >= storage_limit(&contract_pay_executed)
+            {
+                return Ok(Ok((contract_pay_executed, None, access_list)));
+            }
+        };
+
+        Ok(Ok((
+            sender_pay_executed,
+            Some(overwrite_storage_limit),
+            access_list,
+        )))
     }
 
     fn enact_executed_by_estimation_request(
         &self, tx: SignedTransaction, mut executed: Executed,
         overwrite_storage_limit: Option<u64>, request: &EstimateRequest,
+        access_list: AccessList,
     ) -> DbResult<(ExecutionOutcome, EstimateExt)> {
         let estimated_storage_limit =
             overwrite_storage_limit.unwrap_or(storage_limit(&executed));
@@ -301,6 +357,7 @@ impl<'a> EstimationContext<'a> {
         let estimation = EstimateExt {
             estimated_storage_limit,
             estimated_gas_limit,
+            access_list,
         };
 
         let gas_sponsored_contract_if_eligible_sender = self
@@ -412,7 +469,7 @@ fn estimated_gas_limit(executed: &Executed, tx: &SignedTransaction) -> U256 {
             .map(|&x| if x == 0 { 10 } else { 40 })
             .sum::<u64>();
     let estimated =
-        executed.ext_result.get::<GasLimitEstimation>().unwrap() * 7 / 6
+        executed.ext_result.get::<GasLimitEstimationKey>().unwrap() * 7 / 6
             + executed.base_gas;
     U256::max(
         eip7623_gas_limit.into(),
@@ -464,6 +521,7 @@ pub struct EstimateRequest {
     pub has_gas_price: bool,
     pub has_nonce: bool,
     pub has_storage_limit: bool,
+    pub collect_access_list: bool,
 }
 
 impl EstimateRequest {
@@ -485,9 +543,13 @@ impl EstimateRequest {
         }
     }
 
-    fn first_pass_options(self) -> TransactOptions<Observer> {
+    fn first_pass_options(
+        self, access_list_inspector: Option<AccessListInspector>,
+    ) -> TransactOptions<Observer> {
+        let mut observer = Observer::virtual_call();
+        observer.access_list_inspector = access_list_inspector;
         TransactOptions {
-            observer: Observer::virtual_call(),
+            observer,
             settings: self.transact_settings(ChargeCollateral::EstimateSender),
         }
     }

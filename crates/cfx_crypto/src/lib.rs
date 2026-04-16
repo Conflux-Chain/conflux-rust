@@ -24,13 +24,6 @@
 
 pub mod crypto;
 
-use lazy_static::lazy_static;
-
-lazy_static! {
-    pub static ref SECP256K1: secp256k1::Secp256k1 =
-        secp256k1::Secp256k1::new();
-}
-
 /// Trait for secret key types used in cryptographic operations.
 pub trait SecretKey: AsRef<[u8]> {
     /// Create a secret key from an unsafe slice (may not be validated).

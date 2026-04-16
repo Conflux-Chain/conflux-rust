@@ -2,7 +2,3 @@ base:
     # Update this value to the location you want Diem to store its database
     data_dir: "/opt/diem/data"
     role: "full_node"
-
-execution:
-    # Update this to the location to where the genesis.blob is stored, prefer fullpaths
-    genesis_file_location: "/full/path/to/genesis"

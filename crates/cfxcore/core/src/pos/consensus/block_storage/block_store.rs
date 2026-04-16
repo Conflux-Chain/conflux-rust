@@ -218,7 +218,7 @@ impl BlockStore {
         block_store
     }
 
-    /// Commit the given block id with the proof, returns () on success or error
+    /// Commit the given block id with the proof.
     pub async fn commit(
         &self, finality_proof: LedgerInfoWithSignatures,
     ) -> anyhow::Result<()> {
@@ -271,11 +271,6 @@ impl BlockStore {
             "parent_id": block_to_commit.parent_id().short_str(),
         );
         self.prune_tree(block_to_commit.id());
-        // After a block is committed, we will never need to execute a block
-        // with an earlier pivot decision, so we can safely prune all
-        // staking events before.
-        // TODO: Delete range causes OOM now. Prune staking events after the
-        // rocksdb issue is solved.
         Ok(())
     }
 

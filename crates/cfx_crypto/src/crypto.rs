@@ -22,7 +22,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::{KeyPair, RandomKeyPairGenerator, SecretKey, SECP256K1};
+use crate::{KeyPair, RandomKeyPairGenerator, SecretKey};
 use std::io;
 use subtle::ConstantTimeEq;
 
@@ -44,16 +44,22 @@ pub enum Error {
 
 /// ECDH functions
 pub mod ecdh {
-    use super::{Error, SecretKey, SECP256K1};
-    use secp256k1::{self, ecdh, key};
+    use super::{Error, SecretKey};
+    use secp256k1::{self, ecdh, PublicKey};
 
-    /// Agree on a shared secret
+    /// Agree on a shared secret.
+    ///
+    /// Returns the raw X-coordinate of the EC-DH point (first 32 bytes of
+    /// `shared_secret_point`). Matches the legacy `parity-secp256k1`
+    /// `SharedSecret::new_raw()[0..32]` semantics, which Conflux keystore
+    /// ECIES relies on. Do NOT switch to `ecdh::SharedSecret::new()` — that
+    /// returns SHA-256 of the compressed point, a different value that would
+    /// break decryption of existing keystore files.
     pub fn agree<S, P>(secret: &S, public: &P) -> Result<S, Error>
     where
         S: SecretKey,
         P: AsRef<[u8]>,
     {
-        let context = &SECP256K1;
         let pdata = {
             let mut temp = [4u8; 65];
             let pub_bytes = public.as_ref();
@@ -64,11 +70,11 @@ pub mod ecdh {
             temp
         };
 
-        let publ = key::PublicKey::from_slice(context, &pdata)?;
-        let sec = key::SecretKey::from_slice(context, secret.as_ref())?;
-        let shared = ecdh::SharedSecret::new_raw(context, &publ, &sec);
+        let publ = PublicKey::from_slice(&pdata)?;
+        let sec = secp256k1::SecretKey::from_slice(secret.as_ref())?;
+        let xy = ecdh::shared_secret_point(&publ, &sec);
 
-        S::from_unsafe_slice(&shared[0..32])
+        S::from_unsafe_slice(&xy[0..32])
             .map_err(|_| Error::Secp(secp256k1::Error::InvalidSecretKey))
     }
 }

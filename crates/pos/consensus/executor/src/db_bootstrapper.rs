@@ -20,22 +20,52 @@ use diem_types::{
         BlockInfo, PivotBlockDecision, GENESIS_EPOCH, GENESIS_ROUND,
         GENESIS_TIMESTAMP_USECS,
     },
+    contract_event::ContractEvent,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
+    on_chain_config::{new_epoch_event_key, ValidatorSet},
     term_state::NodeID,
     transaction::Transaction,
+    validator_config::ValidatorConfig,
+    validator_info::ValidatorInfo,
 };
 use executor_types::BlockExecutor;
 use pow_types::FakePowHandler;
 use std::{collections::btree_map::BTreeMap, sync::Arc};
 use storage_interface::{DbReaderWriter, TreeState};
 
+/// Build the genesis `Transaction` from the initial validator set. The
+/// transaction carries a single epoch-change event with the serialised
+/// `ValidatorSet`.
+fn build_genesis_transaction(initial_nodes: &[(NodeID, u64)]) -> Transaction {
+    let validators: Vec<ValidatorInfo> = initial_nodes
+        .iter()
+        .map(|(node_id, voting_power)| {
+            let config = ValidatorConfig::new(
+                node_id.public_key.clone(),
+                Some(node_id.vrf_public_key.clone()),
+                vec![],
+                vec![],
+            );
+            ValidatorInfo::new(node_id.addr, *voting_power, config)
+        })
+        .collect();
+
+    let validator_set = ValidatorSet::new(validators);
+    let event = ContractEvent::new(
+        new_epoch_event_key(),
+        bcs::to_bytes(&validator_set)
+            .expect("ValidatorSet serialization cannot fail"),
+    );
+
+    Transaction::GenesisTransaction(vec![event])
+}
+
 /// If the database has not been bootstrapped yet, commit the genesis
 /// transaction. Returns Ok(true) if committed, Ok(false) if already
 /// bootstrapped.
 pub fn maybe_bootstrap(
-    db: &DbReaderWriter, genesis_txn: &Transaction,
-    genesis_pivot_decision: Option<PivotBlockDecision>, initial_seed: Vec<u8>,
-    initial_nodes: Vec<(NodeID, u64)>,
+    db: &DbReaderWriter, genesis_pivot_decision: Option<PivotBlockDecision>,
+    initial_seed: Vec<u8>, initial_nodes: Vec<(NodeID, u64)>,
     initial_committee: Vec<(AccountAddress, u64)>,
 ) -> Result<bool> {
     let tree_state = db.reader.get_latest_tree_state()?;
@@ -44,6 +74,8 @@ pub fn maybe_bootstrap(
         diem_info!("DB already bootstrapped, skipping genesis.");
         return Ok(false);
     }
+
+    let genesis_txn = build_genesis_transaction(&initial_nodes);
     diem_debug!(
         "genesis_txn={:?}, initial_nodes={:?} ",
         genesis_txn,
@@ -53,7 +85,7 @@ pub fn maybe_bootstrap(
     let committer = calculate_genesis(
         db,
         tree_state,
-        genesis_txn,
+        &genesis_txn,
         genesis_pivot_decision,
         initial_seed,
         initial_nodes,
@@ -63,13 +95,13 @@ pub fn maybe_bootstrap(
     Ok(true)
 }
 
-pub struct GenesisCommitter {
+struct GenesisCommitter {
     executor: Executor,
     ledger_info_with_sigs: LedgerInfoWithSignatures,
 }
 
 impl GenesisCommitter {
-    pub fn new(
+    fn new(
         executor: Executor, ledger_info_with_sigs: LedgerInfoWithSignatures,
     ) -> Result<Self> {
         Ok(Self {
@@ -78,27 +110,22 @@ impl GenesisCommitter {
         })
     }
 
-    pub fn commit(self) -> Result<()> {
+    fn commit(self) -> Result<()> {
         self.executor.commit_blocks(
             vec![genesis_block_id()],
             self.ledger_info_with_sigs,
         )?;
         diem_info!("Genesis commited.");
-        // DB bootstrapped, avoid anything that could fail after this.
-
         Ok(())
     }
 }
 
-pub fn calculate_genesis(
+fn calculate_genesis(
     db: &DbReaderWriter, tree_state: TreeState, genesis_txn: &Transaction,
     genesis_pivot_decision: Option<PivotBlockDecision>, initial_seed: Vec<u8>,
     initial_nodes: Vec<(NodeID, u64)>,
     initial_committee: Vec<(AccountAddress, u64)>,
 ) -> Result<GenesisCommitter> {
-    // DB bootstrapper works on either an empty transaction accumulator or an
-    // existing block chain. In the very extreme and sad situation of losing
-    // quorum among validators, we refer to the second use case said above.
     let genesis_version = tree_state.num_transactions;
     let db_with_cache = Arc::new(CachedPosLedgerDB::new_on_unbootstrapped_db(
         db.clone(),
@@ -116,22 +143,15 @@ pub fn calculate_genesis(
     );
 
     let block_id = HashValue::zero();
-    // Deliberate product decision: Conflux PoS does not support Diem's
-    // non-zero genesis recovery path (bootstrapping from a mid-chain
-    // snapshot). This assertion ensures we fail explicitly rather than
-    // silently producing incorrect state if this assumption is violated.
     assert_eq!(
         genesis_version, 0,
         "Conflux PoS only supports genesis at version 0"
     );
     let epoch = GENESIS_EPOCH;
 
-    // Create a block with genesis_txn being the only txn. Execute it then
-    // commit it immediately.
     let result = executor.execute_block(
         (block_id, vec![genesis_txn.clone()]),
         *PRE_GENESIS_BLOCK_ID,
-        // Use `catch_up_mode=false` for genesis to calculate VDF output.
         false,
     )?;
 

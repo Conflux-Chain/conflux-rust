@@ -68,4 +68,4 @@ pub use vote_params_info::VoteParamsInfo;
 pub use cfx_rpc_primitives::Bytes;
 pub use primitives::BlockHashOrEpochNumber;
 
-pub use subscriber_id::{random, SubId};
+pub use subscriber_id::SubId;

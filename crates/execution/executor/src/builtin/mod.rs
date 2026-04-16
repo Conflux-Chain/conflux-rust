@@ -59,6 +59,19 @@ pub(crate) use pricer::{
 };
 use secp256r1::Secp256R1;
 
+/// Determines when a built-in contract becomes active.
+pub enum ActivateAt {
+    /// Activates when the DAG block number reaches the given value.
+    ByBlockNumber(u64),
+    /// Activates when the pivot-chain epoch height reaches the given value.
+    ByEpochHeight(u64),
+}
+
+impl ActivateAt {
+    /// Shorthand for precompiles active from genesis (block 0).
+    pub const GENESIS: Self = Self::ByBlockNumber(0);
+}
+
 /// Pricing scheme, execution definition, and activation block for a built-in
 /// contract.
 ///
@@ -70,7 +83,7 @@ use secp256r1::Secp256R1;
 pub struct Builtin {
     price_plan: Box<dyn PricePlan>,
     native: Box<dyn Precompile>,
-    activate_at: u64,
+    activate_at: ActivateAt,
 }
 
 impl Builtin {
@@ -92,12 +105,19 @@ impl Builtin {
         self.native.execute(input, output)
     }
 
-    /// Whether the builtin is activated at the given cardinal number.
-    pub fn is_active(&self, at: u64) -> bool { at >= self.activate_at }
+    /// Whether the builtin is active at the given execution context.
+    /// `block_number` is the DAG block number; `epoch_height` is the pivot
+    /// chain height. Parameter order must match `Env`: (number, epoch_height).
+    pub fn is_active(&self, block_number: u64, epoch_height: u64) -> bool {
+        match self.activate_at {
+            ActivateAt::ByBlockNumber(n) => block_number >= n,
+            ActivateAt::ByEpochHeight(h) => epoch_height >= h,
+        }
+    }
 
     pub fn new(
         price_plan: Box<dyn PricePlan>, native: Box<dyn Precompile>,
-        activate_at: u64,
+        activate_at: ActivateAt,
     ) -> Builtin {
         Builtin {
             price_plan,
@@ -538,12 +558,14 @@ impl Precompile for KzgPointEval {
 mod tests {
     use super::{
         builtin_factory, modexp::modexp as me, price_plan::StaticPlan,
-        Blake2FPricer, Builtin, Linear, ModexpPricer,
+        ActivateAt, Blake2FPricer, Builtin, Linear, ModexpPricer,
     };
     use cfx_bytes::BytesRef;
     use cfx_types::U256;
     use num::{BigUint, One, Zero};
     use rustc_hex::FromHex;
+
+    const ALWAYS: ActivateAt = ActivateAt::GENESIS;
 
     #[test]
     fn modexp_func() {
@@ -733,7 +755,7 @@ mod tests {
         let f = Builtin {
             price_plan: Box::new(StaticPlan(ModexpPricer::new_byzantium(20))),
             native: builtin_factory("modexp"),
-            activate_at: 0,
+            activate_at: ALWAYS,
         };
 
         // test for potential gas cost multiplication overflow
@@ -858,7 +880,7 @@ mod tests {
         let f = Builtin {
             price_plan: Box::new(StaticPlan(Linear { base: 0, word: 0 })),
             native: builtin_factory("alt_bn128_add"),
-            activate_at: 0,
+            activate_at: ALWAYS,
         };
 
         // zero-points additions
@@ -927,7 +949,7 @@ mod tests {
         let f = Builtin {
             price_plan: Box::new(StaticPlan(Linear { base: 0, word: 0 })),
             native: builtin_factory("alt_bn128_mul"),
-            activate_at: 0,
+            activate_at: ALWAYS,
         };
 
         // zero-point multiplication
@@ -975,7 +997,7 @@ mod tests {
         Builtin {
             price_plan: Box::new(StaticPlan(Linear { base: 0, word: 0 })),
             native: builtin_factory("alt_bn128_pairing"),
-            activate_at: 0,
+            activate_at: ALWAYS,
         }
     }
 
@@ -1060,12 +1082,25 @@ mod tests {
         let b = Builtin {
             price_plan,
             native: builtin_factory("identity"),
-            activate_at: 100_000,
+            activate_at: ActivateAt::ByBlockNumber(100_000),
         };
 
-        assert!(!b.is_active(99_999));
-        assert!(b.is_active(100_000));
-        assert!(b.is_active(100_001));
+        // epoch_height=0: irrelevant for ByBlockNumber variant
+        assert!(!b.is_active(99_999, 0));
+        assert!(b.is_active(100_000, 0));
+        assert!(b.is_active(100_001, 0));
+
+        let price_plan = Box::new(StaticPlan(Linear { base: 10, word: 20 }));
+        let b_height = Builtin {
+            price_plan,
+            native: builtin_factory("identity"),
+            activate_at: ActivateAt::ByEpochHeight(100_000),
+        };
+
+        // block_number is irrelevant for ByEpochHeight variant
+        assert!(!b_height.is_active(u64::MAX, 99_999));
+        assert!(b_height.is_active(0, 100_000));
+        assert!(b_height.is_active(0, 100_001));
     }
 
     #[test]
@@ -1074,7 +1109,7 @@ mod tests {
         let b = Builtin {
             price_plan,
             native: builtin_factory("identity"),
-            activate_at: 1,
+            activate_at: ActivateAt::ByBlockNumber(1),
         };
 
         assert_eq!(b.cost_on_genesis(&[0; 0]), U256::from(10));
@@ -1093,7 +1128,7 @@ mod tests {
         Builtin {
             price_plan: Box::new(StaticPlan(Blake2FPricer::new(123))),
             native: builtin_factory("blake2_f"),
-            activate_at: 0,
+            activate_at: ALWAYS,
         }
     }
 

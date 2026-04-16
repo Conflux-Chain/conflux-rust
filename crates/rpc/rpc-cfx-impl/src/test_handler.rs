@@ -228,9 +228,6 @@ impl TestHandler {
                                                             tx_index,
                                                             prior_gas_used,
                                                             epoch_number,
-                                                            execution_result
-                                                                .block_receipts
-                                                                .block_number,
                                                             b.block_header
                                                                 .base_price(),
                                                             maybe_state_root,
