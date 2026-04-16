@@ -11,8 +11,8 @@ use crate::{
 };
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{node_table::NodeId, NetworkContext};
+use primitives::CompatBool;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use rlp_compat::CompatBool04;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, DeriveMallocSizeOf)]
 pub enum DynamicCapability {
@@ -54,10 +54,10 @@ impl Encodable for DynamicCapability {
 
         match self {
             DynamicCapability::NormalPhase(enabled) => {
-                s.append(&CompatBool04(*enabled))
+                s.append(&CompatBool(*enabled))
             }
             DynamicCapability::ServeHeaders(enabled) => {
-                s.append(&CompatBool04(*enabled))
+                s.append(&CompatBool(*enabled))
             }
         };
     }
@@ -71,10 +71,10 @@ impl Decodable for DynamicCapability {
 
         match rlp.val_at::<u8>(0)? {
             0 => Ok(DynamicCapability::NormalPhase(
-                rlp.val_at::<CompatBool04>(1)?.0,
+                rlp.val_at::<CompatBool>(1)?.0,
             )),
             1 => Ok(DynamicCapability::ServeHeaders(
-                rlp.val_at::<CompatBool04>(1)?.0,
+                rlp.val_at::<CompatBool>(1)?.0,
             )),
             _ => Err(DecoderError::Custom("invalid capability code")),
         }

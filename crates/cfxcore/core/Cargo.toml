@@ -52,7 +52,6 @@ rand_xorshift = { workspace = true }
 rangetools = { workspace = true }
 rayon = { workspace = true }
 rlp = { workspace = true }
-rlp-compat = { workspace = true }
 rlp_derive = { workspace = true }
 rustc-hex = { workspace = true }
 secret-store = { workspace = true }

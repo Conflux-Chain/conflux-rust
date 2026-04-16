@@ -6,6 +6,11 @@ use cfx_bytes as bytes;
 use cfxkey as keylib;
 use keccak_hash as hash;
 
+// P2P / DB / trace RLP `bool` encoding. Retarget to `CompatBool06` for
+// the Phase 2 transition (issue #3254). `pub use ... as ...` not
+// `pub type`, so `CompatBool(x)` tuple-construction still compiles.
+pub use rlp_compat::CompatBool04 as CompatBool;
+
 pub mod account;
 pub mod block;
 pub mod block_header;

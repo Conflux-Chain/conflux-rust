@@ -1,38 +1,32 @@
-//! Wrapper types that pin the RLP wire format for types whose `Encodable` /
-//! `Decodable` impls have changed across `rlp` crate versions.
+//! Wrapper types that pin the RLP wire format across `rlp` crate version
+//! changes. Apply them at serialization boundaries so consensus hashes and
+//! P2P message bytes stay stable regardless of which `rlp` is linked.
 //!
-//! Consensus hashes and P2P message formats depend on byte-for-byte wire
-//! stability, so any `rlp` upgrade that shifts an impl's output is a
-//! consensus or protocol break. This crate decouples our wire format from
-//! the underlying `rlp` version: apply the wrappers at serialization
-//! boundaries and the encoded/decoded bytes stay stable regardless of which
-//! `rlp` version is linked.
-//!
-//! Currently covers `bool` — the only wire-format incompatibility between
-//! rlp 0.4 and 0.6 (see rlp 0.5.1 CHANGELOG / parity-common #572).
+//! Currently covers `bool` — the only wire-format change between rlp 0.4
+//! and 0.6 (see rlp 0.5.1 CHANGELOG / parity-common #572). For the
+//! conflux-rust project alias naming the Phase 1/Phase 2 choice, see
+//! `primitives::CompatBool`.
 
-use std::iter::{empty, once};
+use std::iter::once;
 
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
-/// Boolean wrapper for consensus-critical fields.
-///
-/// - Encodes `false` as `0x00`, `true` as `0x01`.
-/// - Decodes `0x00`/`0x01` only; **rejects `0x80`** and any other encoding.
-///
-/// Strict decoding is a defensive measure against future consensus bool
-/// fields where non-canonical encoding on the wire could cause chain splits.
+// rlp 0.4's `bool` encoding.
+fn encode_04(b: bool, s: &mut RlpStream) {
+    s.encoder().encode_iter(once(if b { 1u8 } else { 0u8 }));
+}
+
+/// Encodes `0x00`/`0x01`, decodes `0x00`/`0x01` only. Reject-on-drift for
+/// consensus-critical fields: non-canonical encoding on the wire could
+/// cause chain splits if accepted.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Hash, DeriveMallocSizeOf,
 )]
 pub struct StrictBool(pub bool);
 
 impl Encodable for StrictBool {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        let byte: u8 = if self.0 { 1 } else { 0 };
-        s.encoder().encode_iter(once(byte));
-    }
+    fn rlp_append(&self, s: &mut RlpStream) { encode_04(self.0, s); }
 }
 
 impl Decodable for StrictBool {
@@ -45,26 +39,16 @@ impl Decodable for StrictBool {
     }
 }
 
-/// Boolean wrapper matching rlp 0.4's `bool` encoding (`false` → `0x00`).
-///
-/// - Encodes like rlp 0.4's native `bool`.
-/// - Decodes permissively: accepts `0x00`, `0x01`, and `0x80` (the encoding rlp
-///   0.5.1+ emits for `false`), so peers on either side of the encoding change
-///   stay interoperable.
-///
-/// This is the Phase 1 type: we encode legacy and decode either, letting
-/// the network roll over to permissive decoders before any node switches
-/// encoder output.
+/// Encodes like rlp 0.4 (`false` → `0x00`), decodes permissively
+/// (`0x00`/`0x01`/`0x80`) so peers on either side of the encoding change
+/// stay interoperable.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Hash, DeriveMallocSizeOf,
 )]
 pub struct CompatBool04(pub bool);
 
 impl Encodable for CompatBool04 {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        let byte: u8 = if self.0 { 1 } else { 0 };
-        s.encoder().encode_iter(once(byte));
-    }
+    fn rlp_append(&self, s: &mut RlpStream) { encode_04(self.0, s); }
 }
 
 impl Decodable for CompatBool04 {
@@ -77,28 +61,19 @@ impl Decodable for CompatBool04 {
     }
 }
 
-/// Boolean wrapper matching rlp 0.6's `bool` encoding (`false` → `0x80`).
-///
-/// - Encodes like rlp 0.6's native `bool`: `false` as the empty-string marker
-///   `0x80`, `true` as `0x01`.
-/// - Decodes permissively, identical to `CompatBool04`.
-///
-/// Not wired into any field in this PR. Reserved for the future Phase 2
-/// transition: swapping a `CompatBool04` call site to `CompatBool06` flips
-/// the emitted encoding while peers running Phase 1 still decode
-/// successfully.
+/// Encodes like rlp 0.6 (`false` → `0x80`), decodes permissively (same as
+/// `CompatBool04`). Phase 2 target; point `primitives::CompatBool` here
+/// once peers accept `0x80`.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Hash, DeriveMallocSizeOf,
 )]
 pub struct CompatBool06(pub bool);
 
 impl Encodable for CompatBool06 {
+    // Mirrors rlp 0.5.1+'s `bool`, which delegates to `u8`. `u8` encoding
+    // is identical between rlp 0.4 and 0.6, so output is stable.
     fn rlp_append(&self, s: &mut RlpStream) {
-        if self.0 {
-            s.encoder().encode_iter(once(1u8));
-        } else {
-            s.encoder().encode_iter(empty());
-        }
+        s.append_internal(&(self.0 as u8));
     }
 }
 
@@ -114,12 +89,9 @@ impl Decodable for CompatBool06 {
 
 #[cfg(test)]
 mod tests {
-    //! Tests compare our wrappers against both rlp 0.4 and rlp 0.6 native
-    //! `bool` impls side-by-side. The main `rlp` dependency is 0.4 today
-    //! (referenced below as `rlp`); `rlp_06` is a dev-dep alias to rlp 0.6.
-    //! After the upgrade bumps the main `rlp` to 0.6, the dev-dep should
-    //! flip to `rlp_04 = { package = "rlp", version = "0.4" }` and the
-    //! `rlp::` references for the 0.4 side swap to `rlp_04::`.
+    //! `rlp::` is the main dep (0.4 today); `rlp_06` is a dev-dep alias
+    //! to rlp 0.6. After the main `rlp` upgrade to 0.6, flip the dev-dep
+    //! to `rlp_04` and rewrite `rlp::` → `rlp_04::` on the 0.4 side.
 
     use super::*;
 
@@ -128,7 +100,20 @@ mod tests {
         rlp::decode(bytes)
     }
 
-    // --- Encode: byte-for-byte match against the matching native impl ---
+    // --- Encode ---
+
+    #[test]
+    fn encode_absolute_bytes() {
+        assert_eq!(encode(&StrictBool(false)), vec![0x00]);
+        assert_eq!(encode(&StrictBool(true)), vec![0x01]);
+        assert_eq!(encode(&CompatBool04(false)), vec![0x00]);
+        assert_eq!(encode(&CompatBool04(true)), vec![0x01]);
+        assert_eq!(encode(&CompatBool06(false)), vec![0x80]);
+        assert_eq!(encode(&CompatBool06(true)), vec![0x01]);
+    }
+
+    // Cross-checks against the ambient native impls, documenting which
+    // rlp version each wrapper's encoding mirrors.
 
     #[test]
     fn compat_bool_04_encode_matches_rlp_04() {
@@ -147,15 +132,11 @@ mod tests {
 
     #[test]
     fn strict_bool_encode_matches_rlp_04() {
-        // StrictBool's encode output is identical to rlp 0.4's; it differs
-        // from both versions only on decode (stricter than either).
         assert_eq!(encode(&StrictBool(false)), rlp::encode(&false).to_vec());
         assert_eq!(encode(&StrictBool(true)), rlp::encode(&true).to_vec());
     }
 
-    // --- Decode: behavior matrix vs both native versions ---
-    //
-    // For each single-byte payload `[b]`:
+    // Decode behavior for each payload `[b]`:
     //
     //   b       rlp_04  rlp_06  StrictBool  CompatBool04  CompatBool06
     //   -----   ------  ------  ----------  ------------  ------------
