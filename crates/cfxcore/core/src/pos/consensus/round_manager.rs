@@ -660,17 +660,13 @@ impl RoundManager {
                     &mut retriever,
                 )
                 .await?;
-            // `insert_quorum_cert` will wait for PoW to initialize if needed,
-            // so here we do not need to execute as catch_up_mode
-            // again.
             self.block_store.execute_and_insert_block(
                 block_for_ledger_info,
                 true,
                 false,
             )?;
         };
-        self.block_store.commit(ledger_info.clone()).await?;
-        Ok(())
+        self.block_store.commit(ledger_info.clone()).await
     }
 
     /// The function makes sure that it ensures the message_round equal to what
