@@ -657,12 +657,9 @@ pub fn initialize_not_light_node_modules(
         }
         if pow_config.enable_mining() {
             let bg = blockgen.clone();
-            thread::Builder::new()
-                .name("mining".into())
-                .spawn(move || {
-                    bg.mine();
-                })
-                .expect("Mining thread spawn error");
+            tokio_runtime.spawn(async move {
+                bg.mine().await;
+            });
         }
     }
 
@@ -676,7 +673,7 @@ pub fn initialize_not_light_node_modules(
         maybe_txgen.clone(),
         maybe_direct_txgen,
         conf.rpc_impl_config(),
-        accounts,
+        accounts.clone(),
     ));
 
     // When using old impl, start V1 core space RPC servers (jsonrpc-core
@@ -787,6 +784,8 @@ pub fn initialize_not_light_node_modules(
             pos_verifier.clone(),
             notifications.clone(),
             task_executor.clone(),
+            accounts.clone(),
+            exit.clone(),
             conf,
         ))?
     } else {

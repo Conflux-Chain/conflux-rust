@@ -17,12 +17,14 @@ use cfxcore::{
     Notifications, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
+use cfxcore_accounts::AccountProvider;
 use jsonrpsee::{
     core::RegisterMethodError,
     server::{IdProvider, ServerBuilder, ServerConfigBuilder},
     Methods, RpcModule,
 };
 use network::NetworkService;
+use parking_lot::{Condvar, Mutex};
 use std::{
     collections::{HashMap, HashSet},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
@@ -42,6 +44,8 @@ pub struct RpcModuleBuilder {
     network: Arc<NetworkService>,
     pos_handler: Arc<PosVerifier>,
     notifications: Arc<Notifications>,
+    accounts: Arc<AccountProvider>,
+    exit: Arc<(Mutex<bool>, Condvar)>,
 }
 
 impl RpcModuleBuilder {
@@ -50,6 +54,7 @@ impl RpcModuleBuilder {
         tx_pool: SharedTransactionPool, executor: TaskExecutor,
         data_man: Arc<BlockDataManager>, network: Arc<NetworkService>,
         pos_handler: Arc<PosVerifier>, notifications: Arc<Notifications>,
+        accounts: Arc<AccountProvider>, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Self {
         Self {
             consensus,
@@ -60,6 +65,8 @@ impl RpcModuleBuilder {
             network,
             pos_handler,
             notifications,
+            accounts,
+            exit,
         }
     }
 
@@ -80,6 +87,8 @@ impl RpcModuleBuilder {
                 network,
                 pos_handler,
                 notifications,
+                accounts,
+                exit,
             } = self;
 
             let mut registry = RpcRegistryInner::new(
@@ -91,6 +100,8 @@ impl RpcModuleBuilder {
                 network,
                 pos_handler,
                 notifications,
+                accounts,
+                exit,
             );
 
             modules.config = module_config;
@@ -112,6 +123,8 @@ pub struct RpcRegistryInner {
     network: Arc<NetworkService>,
     pos_handler: Arc<PosVerifier>,
     notifications: Arc<Notifications>,
+    accounts: Arc<AccountProvider>,
+    exit: Arc<(Mutex<bool>, Condvar)>,
     modules: HashMap<CfxRpcModule, Methods>,
 }
 
@@ -121,6 +134,7 @@ impl RpcRegistryInner {
         tx_pool: SharedTransactionPool, executor: TaskExecutor,
         data_man: Arc<BlockDataManager>, network: Arc<NetworkService>,
         pos_handler: Arc<PosVerifier>, notifications: Arc<Notifications>,
+        accounts: Arc<AccountProvider>, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Self {
         Self {
             consensus,
@@ -131,6 +145,8 @@ impl RpcRegistryInner {
             network,
             pos_handler,
             notifications,
+            accounts,
+            exit,
             modules: Default::default(),
         }
     }
@@ -164,6 +180,9 @@ impl RpcRegistryInner {
                         self.consensus.clone(),
                         self.sync.clone(),
                         self.network.clone(),
+                        self.accounts.clone(),
+                        self.pos_handler.clone(),
+                        self.exit.clone(),
                     )
                     .into_rpc()
                     .into(),

@@ -8,11 +8,11 @@
 use crate::{
     account_address::AccountAddress,
     chain_id::ChainId,
-    transaction::{Module, RawTransaction, Script, SignedTransaction},
+    transaction::{
+        RawTransaction, RetirePayload, SignedTransaction, TransactionPayload,
+    },
 };
 use diem_crypto::{bls::*, traits::*};
-
-static EMPTY_SCRIPT: &[u8] = include_bytes!("empty_script.mv");
 
 // Create an expiration time 'seconds' after now
 fn expiration_time(seconds: u64) -> u64 {
@@ -23,35 +23,22 @@ fn expiration_time(seconds: u64) -> u64 {
         + seconds
 }
 
-// Test helper for transaction creation
-pub fn get_test_signed_module_publishing_transaction(
-    sender: AccountAddress, private_key: &BLSPrivateKey,
-    public_key: BLSPublicKey, module: Module,
-) -> SignedTransaction {
-    let expiration_time = expiration_time(10);
-    let raw_txn = RawTransaction::new_module(
-        sender,
-        module,
-        expiration_time,
-        ChainId::test(),
-    );
-
-    let signature = private_key.sign(&raw_txn);
-
-    SignedTransaction::new(raw_txn, public_key, signature)
+fn dummy_payload(sender: AccountAddress) -> TransactionPayload {
+    TransactionPayload::Retire(RetirePayload {
+        node_id: sender,
+        votes: 0,
+    })
 }
 
 // Test helper for transaction creation
 pub fn get_test_signed_transaction(
     sender: AccountAddress, private_key: &BLSPrivateKey,
-    public_key: BLSPublicKey, script: Option<Script>,
+    public_key: BLSPublicKey, payload: Option<TransactionPayload>,
     expiration_timestamp_secs: u64,
 ) -> SignedTransaction {
-    let raw_txn = RawTransaction::new_script(
+    let raw_txn = RawTransaction::new(
         sender,
-        script.unwrap_or_else(|| {
-            Script::new(EMPTY_SCRIPT.to_vec(), vec![], Vec::new())
-        }),
+        payload.unwrap_or_else(|| dummy_payload(sender)),
         expiration_timestamp_secs,
         ChainId::test(),
     );
@@ -65,13 +52,14 @@ pub fn get_test_signed_transaction(
 // checked.
 pub fn get_test_unchecked_transaction(
     sender: AccountAddress, private_key: &BLSPrivateKey,
-    public_key: BLSPublicKey, script: Option<Script>, expiration_time: u64,
+    public_key: BLSPublicKey, payload: Option<TransactionPayload>,
+    expiration_time: u64,
 ) -> SignedTransaction {
     get_test_unchecked_transaction_(
         sender,
         private_key,
         public_key,
-        script,
+        payload,
         expiration_time,
         ChainId::test(),
     )
@@ -81,14 +69,12 @@ pub fn get_test_unchecked_transaction(
 // checked.
 fn get_test_unchecked_transaction_(
     sender: AccountAddress, private_key: &BLSPrivateKey,
-    public_key: BLSPublicKey, script: Option<Script>,
+    public_key: BLSPublicKey, payload: Option<TransactionPayload>,
     expiration_timestamp_secs: u64, chain_id: ChainId,
 ) -> SignedTransaction {
-    let raw_txn = RawTransaction::new_script(
+    let raw_txn = RawTransaction::new(
         sender,
-        script.unwrap_or_else(|| {
-            Script::new(EMPTY_SCRIPT.to_vec(), vec![], Vec::new())
-        }),
+        payload.unwrap_or_else(|| dummy_payload(sender)),
         expiration_timestamp_secs,
         chain_id,
     );
@@ -99,31 +85,31 @@ fn get_test_unchecked_transaction_(
 }
 
 // Test helper for transaction creation. Short version for
-// get_test_signed_transaction Omits some fields
+// get_test_signed_transaction. Omits some fields.
 pub fn get_test_signed_txn(
     sender: AccountAddress, private_key: &BLSPrivateKey,
-    public_key: BLSPublicKey, script: Option<Script>,
+    public_key: BLSPublicKey, payload: Option<TransactionPayload>,
 ) -> SignedTransaction {
     let expiration_time = expiration_time(10);
     get_test_signed_transaction(
         sender,
         private_key,
         public_key,
-        script,
+        payload,
         expiration_time,
     )
 }
 
 pub fn get_test_unchecked_txn(
     sender: AccountAddress, private_key: &BLSPrivateKey,
-    public_key: BLSPublicKey, script: Option<Script>,
+    public_key: BLSPublicKey, payload: Option<TransactionPayload>,
 ) -> SignedTransaction {
     let expiration_time = expiration_time(10);
     get_test_unchecked_transaction(
         sender,
         private_key,
         public_key,
-        script,
+        payload,
         expiration_time,
     )
 }

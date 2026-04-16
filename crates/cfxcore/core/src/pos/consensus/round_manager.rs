@@ -13,6 +13,8 @@ use std::{
     time::Duration,
 };
 
+use diem_infallible::RwLock;
+
 use anyhow::{bail, ensure, Context, Result};
 use fail::fail_point;
 use futures::{
@@ -51,7 +53,7 @@ use diem_types::{
 };
 #[cfg(test)]
 use safety_rules::ConsensusState;
-use safety_rules::{SafetyRules, TSafetyRules};
+use safety_rules::SafetyRules;
 
 use crate::pos::{
     mempool::SubmissionStatus,
@@ -71,7 +73,6 @@ use super::{
         round_state::{NewRoundEvent, NewRoundReason, RoundState},
     },
     logging::{LogEvent, LogSchema},
-    metrics_safety_rules::MetricsSafetyRules,
     network::{
         ConsensusMsg, ConsensusNetworkSender, IncomingBlockRetrievalRequest,
     },
@@ -224,7 +225,7 @@ pub struct RoundManager {
     proposer_election: Box<dyn ProposerElection + Send + Sync>,
     // None if this is not a validator.
     proposal_generator: Option<ProposalGenerator>,
-    safety_rules: MetricsSafetyRules,
+    safety_rules: Arc<RwLock<SafetyRules>>,
     network: ConsensusNetworkSender,
     txn_manager: Arc<dyn TxnManager>,
     storage: Arc<dyn PersistentLivenessStorage>,
@@ -247,8 +248,8 @@ impl RoundManager {
         round_state: RoundState,
         proposer_election: Box<dyn ProposerElection + Send + Sync>,
         proposal_generator: Option<ProposalGenerator>,
-        safety_rules: MetricsSafetyRules, network: ConsensusNetworkSender,
-        txn_manager: Arc<dyn TxnManager>,
+        safety_rules: Arc<RwLock<SafetyRules>>,
+        network: ConsensusNetworkSender, txn_manager: Arc<dyn TxnManager>,
         storage: Arc<dyn PersistentLivenessStorage>, sync_only: bool,
         tx_sender: mpsc::Sender<(
             SignedTransaction,
@@ -492,7 +493,8 @@ impl RoundManager {
                 self.epoch_state.verifier().clone(),
             )
             .await?;
-        let mut signed_proposal = self.safety_rules.sign_proposal(proposal)?;
+        let mut signed_proposal =
+            self.safety_rules.write().sign_proposal(proposal)?;
         if self.proposer_election.is_random_election() {
             signed_proposal.set_vrf_nonce_and_proof(
                 self.proposer_election
@@ -838,6 +840,7 @@ impl RoundManager {
             let timeout = timeout_vote.timeout();
             let signature = self
                 .safety_rules
+                .write()
                 .sign_timeout(&timeout)
                 .context("[RoundManager] SafetyRules signs timeout")?;
             timeout_vote.add_timeout_signature(signature);
@@ -1019,12 +1022,10 @@ impl RoundManager {
             executed_block.maybe_signed_vote_proposal();
         let vote = self
             .safety_rules
+            .write()
             .construct_and_sign_vote(&maybe_signed_vote_proposal)
             .context(format!(
-                "[RoundManager] SafetyRules {}Rejected",
-                // TODO(lpl): Remove color because `termion` does not support
-                // windows. Fg(Red),
-                // Fg(Reset),
+                "[RoundManager] SafetyRules Rejected {}",
                 executed_block.block()
             ))?;
         observe_block(
@@ -1274,12 +1275,12 @@ impl RoundManager {
     #[cfg(test)]
     #[allow(unused)]
     pub fn consensus_state(&mut self) -> ConsensusState {
-        self.safety_rules.consensus_state().unwrap()
+        self.safety_rules.write().consensus_state().unwrap()
     }
 
     #[cfg(test)]
     #[allow(unused)]
-    pub fn set_safety_rules(&mut self, safety_rules: MetricsSafetyRules) {
+    pub fn set_safety_rules(&mut self, safety_rules: Arc<RwLock<SafetyRules>>) {
         self.safety_rules = safety_rules
     }
 
@@ -1427,6 +1428,7 @@ impl RoundManager {
     pub fn start_voting(&mut self, initialize: bool) -> anyhow::Result<()> {
         if !initialize {
             self.safety_rules
+                .write()
                 .start_voting(initialize)
                 .map_err(anyhow::Error::from)?;
         }
@@ -1436,6 +1438,7 @@ impl RoundManager {
 
     pub fn stop_voting(&mut self) -> anyhow::Result<()> {
         self.safety_rules
+            .write()
             .stop_voting()
             .map_err(anyhow::Error::from)?;
         self.is_voting = false;

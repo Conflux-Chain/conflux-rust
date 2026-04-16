@@ -5,11 +5,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::config::NodeConfig;
 use diem_types::{
     account_address::AccountAddress,
     network_address::{NetworkAddress, Protocol},
-    transaction::{authenticator::AuthenticationKey, Transaction},
+    transaction::authenticator::AuthenticationKey,
 };
 use if_addrs::get_if_addrs;
 use std::net::{TcpListener, TcpStream};
@@ -77,8 +76,4 @@ pub fn get_available_port_in_multiaddr(is_ipv4: bool) -> NetworkAddress {
         Protocol::Ip6("::1".parse().unwrap())
     };
     NetworkAddress::from(ip_proto).push(Protocol::Tcp(get_available_port()))
-}
-
-pub fn get_genesis_txn(config: &NodeConfig) -> Option<&Transaction> {
-    config.execution.genesis.as_ref()
 }

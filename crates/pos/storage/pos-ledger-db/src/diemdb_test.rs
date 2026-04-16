@@ -386,14 +386,6 @@ fn test_get_first_seq_num_and_limit() {
 }
 
 #[test]
-fn test_too_many_requested() {
-    let tmp_dir = TempPath::new();
-    let db = PosLedgerDB::new_for_test(&tmp_dir);
-
-    assert!(db.get_transactions(0, 1001 /* limit */, 0, true).is_err());
-}
-
-#[test]
 fn test_get_latest_tree_state() {
     let tmp_dir = TempPath::new();
     let db = PosLedgerDB::new_for_test(&tmp_dir);

@@ -15,32 +15,19 @@ use diem_types::{
         DisputePayload, ElectionPayload, RegisterPayload, RetirePayload,
         SignatureCheckedTransaction, SignedTransaction, Transaction,
         TransactionOutput, TransactionPayload, TransactionStatus,
-        UpdateVotingPowerPayload, WriteSetPayload,
+        UpdateVotingPowerPayload,
     },
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
 };
 
-/// This trait describes the VM's execution interface.
-pub trait VMExecutor: Send {
-    // NOTE: At the moment there are no persistent caches that live past the end
-    // of a block (that's why execute_block doesn't take &self.)
-    // There are some cache invalidation issues around transactions publishing
-    // code that need to be sorted out before that's possible.
-
-    /// Executes a block of transactions and returns output for each one of
-    /// them.
-    fn execute_block(
-        transactions: Vec<Transaction>, state_view: &dyn StateView,
-        catch_up_mode: bool,
-    ) -> Result<Vec<TransactionOutput>, VMStatus>;
-}
-
 /// A VM for Conflux PoS chain.
 pub struct PosVM;
 
-impl VMExecutor for PosVM {
-    fn execute_block(
+impl PosVM {
+    /// Executes a block of transactions and returns output for each one of
+    /// them.
+    pub fn execute_block(
         transactions: Vec<Transaction>, state_view: &dyn StateView,
         catch_up_mode: bool,
     ) -> Result<Vec<TransactionOutput>, VMStatus> {
@@ -55,8 +42,8 @@ impl VMExecutor for PosVM {
                     let spec = Spec { catch_up_mode };
                     Self::process_user_transaction(state_view, &tx, &spec)?
                 }
-                Transaction::GenesisTransaction(change_set) => {
-                    Self::process_genesis_transction(&change_set)?
+                Transaction::GenesisTransaction(events) => {
+                    Self::process_genesis_transaction(events)?
                 }
             };
             vm_outputs.push(output);
@@ -112,9 +99,6 @@ impl PosVM {
         spec: &Spec,
     ) -> Result<TransactionOutput, VMStatus> {
         let events = match tx.payload() {
-            TransactionPayload::WriteSet(WriteSetPayload::Direct(
-                change_set,
-            )) => change_set.events().to_vec(),
             TransactionPayload::Election(election_payload) => {
                 election_payload.execute(state_view, tx, spec)?
             }
@@ -139,14 +123,9 @@ impl PosVM {
         Ok(Self::gen_output(events))
     }
 
-    fn process_genesis_transction(
-        change_set: &WriteSetPayload,
+    fn process_genesis_transaction(
+        events: Vec<ContractEvent>,
     ) -> Result<TransactionOutput, VMStatus> {
-        let events = match change_set {
-            WriteSetPayload::Direct(change_set) => change_set.events().to_vec(),
-            _ => return Err(VMStatus::Error(StatusCode::CFX_UNEXPECTED_TX)),
-        };
-
         Ok(Self::gen_output(events))
     }
 

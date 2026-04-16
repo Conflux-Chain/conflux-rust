@@ -5,7 +5,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::serializer::SafetyRulesInput;
 use consensus_types::{
     block::Block,
     block_data::{BlockData, BlockType},
@@ -218,40 +217,9 @@ fn arb_block_type() -> impl Strategy<Value = BlockType> {
     ]
 }
 
-// This generates an arbitrary SafetyRulesInput enum.
-pub fn arb_safety_rules_input() -> impl Strategy<Value = SafetyRulesInput> {
-    prop_oneof![
-        Just(SafetyRulesInput::ConsensusState),
-        arb_epoch_state().prop_map(|input| {
-            SafetyRulesInput::Initialize(Box::new(input.unwrap_or_else(|| {
-                EpochState::new(
-                    0,
-                    ValidatorVerifier::new_for_testing(
-                        std::collections::BTreeMap::new(),
-                        0,
-                        0,
-                    ),
-                    vec![],
-                )
-            })))
-        }),
-        arb_maybe_signed_vote_proposal().prop_map(|input| {
-            SafetyRulesInput::ConstructAndSignVote(Box::new(input))
-        }),
-        arb_block_data().prop_map(|input| {
-            SafetyRulesInput::SignProposal(Box::new(input))
-        }),
-        arb_timeout().prop_map(|input| {
-            SafetyRulesInput::SignTimeout(Box::new(input))
-        }),
-    ]
-}
-
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod fuzzing {
-    use crate::{
-        error::Error, serializer::SafetyRulesInput, test_utils, TSafetyRules,
-    };
+    use crate::{error::Error, test_utils};
     use consensus_types::{
         block::Block, block_data::BlockData, timeout::Timeout, vote::Vote,
         vote_proposal::MaybeSignedVoteProposal,
@@ -269,23 +237,6 @@ pub mod fuzzing {
     ) -> Result<Vote, Error> {
         let mut safety_rules = test_utils::test_safety_rules();
         safety_rules.construct_and_sign_vote(&maybe_signed_vote_proposal)
-    }
-
-    pub fn fuzz_handle_message(
-        safety_rules_input: SafetyRulesInput,
-    ) -> Result<Vec<u8>, Error> {
-        // Create a safety rules serializer test instance for fuzzing
-        let mut serializer_service = test_utils::test_serializer();
-
-        // BCS encode the safety_rules_input and fuzz the handle_message()
-        // method
-        if let Ok(safety_rules_input) = bcs::to_bytes(&safety_rules_input) {
-            serializer_service.handle_message(safety_rules_input)
-        } else {
-            Err(Error::SerializationError(
-                "Unable to serialize safety rules input for fuzzer!".into(),
-            ))
-        }
     }
 
     pub fn fuzz_sign_proposal(block_data: BlockData) -> Result<Block, Error> {
@@ -306,23 +257,18 @@ pub mod fuzzing {
 mod tests {
     use crate::{
         fuzzing::{
-            fuzz_construct_and_sign_vote, fuzz_handle_message, fuzz_initialize,
-            fuzz_sign_proposal, fuzz_sign_timeout,
+            fuzz_construct_and_sign_vote, fuzz_initialize, fuzz_sign_proposal,
+            fuzz_sign_timeout,
         },
         fuzzing_utils::{
             arb_block_data, arb_epoch_state, arb_maybe_signed_vote_proposal,
-            arb_safety_rules_input, arb_timeout,
+            arb_timeout,
         },
     };
     use proptest::prelude::*;
 
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(10))]
-
-        #[test]
-        fn handle_message_proptest(input in arb_safety_rules_input()) {
-            let _ = fuzz_handle_message(input);
-        }
 
         #[test]
         fn initialize_proptest(input in arb_epoch_state()) {

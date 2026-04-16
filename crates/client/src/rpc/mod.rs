@@ -480,6 +480,8 @@ pub async fn launch_cfx_async_rpc_servers(
     tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
     network: Arc<NetworkService>, pos_handler: Arc<PosVerifier>,
     notifications: Arc<Notifications>, executor: TaskExecutor,
+    accounts: Arc<cfxcore_accounts::AccountProvider>,
+    exit: Arc<(parking_lot::Mutex<bool>, parking_lot::Condvar)>,
     conf: &Configuration,
 ) -> Result<Option<RpcServerHandle>, String> {
     let http_config = conf.cfx_http_config();
@@ -530,6 +532,8 @@ pub async fn launch_cfx_async_rpc_servers(
         network,
         pos_handler,
         notifications,
+        accounts,
+        exit,
     );
 
     let transport_rpc_modules =

@@ -24,11 +24,7 @@ use diem_types::{
     committed_block::CommittedBlock,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
-    proof::{
-        definition::LeafCount, position::Position, AccumulatorConsistencyProof,
-        TransactionAccumulatorProof, TransactionAccumulatorRangeProof,
-        TransactionInfoWithProof,
-    },
+    proof::{definition::LeafCount, position::Position},
     reward_distribution_event::RewardDistributionEventV2,
     term_state::PosState,
     transaction::{TransactionInfo, Version},
@@ -323,55 +319,6 @@ impl LedgerStore {
             next_epoch: start_epoch,
             end_epoch,
         })
-    }
-
-    /// Get transaction info at `version` with proof towards root of ledger at
-    /// `ledger_version`.
-    pub fn get_transaction_info_with_proof(
-        &self, version: Version, ledger_version: Version,
-    ) -> Result<TransactionInfoWithProof> {
-        Ok(TransactionInfoWithProof::new(
-            self.get_transaction_proof(version, ledger_version)?,
-            self.get_transaction_info(version)?,
-        ))
-    }
-
-    /// Get proof for transaction at `version` towards root of ledger at
-    /// `ledger_version`.
-    pub fn get_transaction_proof(
-        &self, version: Version, ledger_version: Version,
-    ) -> Result<TransactionAccumulatorProof> {
-        Accumulator::get_proof(
-            self,
-            ledger_version + 1, /* num_leaves */
-            version,
-        )
-    }
-
-    /// Get proof for `num_txns` consecutive transactions starting from
-    /// `start_version` towards root of ledger at `ledger_version`.
-    pub fn get_transaction_range_proof(
-        &self, start_version: Option<Version>, num_txns: u64,
-        ledger_version: Version,
-    ) -> Result<TransactionAccumulatorRangeProof> {
-        Accumulator::get_range_proof(
-            self,
-            ledger_version + 1, /* num_leaves */
-            start_version,
-            num_txns,
-        )
-    }
-
-    /// Gets proof that shows the ledger at `ledger_version` is consistent with
-    /// the ledger at `client_known_version`.
-    pub fn get_consistency_proof(
-        &self, client_known_version: Version, ledger_version: Version,
-    ) -> Result<AccumulatorConsistencyProof> {
-        Accumulator::get_consistency_proof(
-            self,
-            ledger_version + 1,
-            client_known_version + 1,
-        )
     }
 
     /// Write `txn_infos` to `batch`. Assigned `first_version` to the

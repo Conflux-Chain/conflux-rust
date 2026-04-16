@@ -5,7 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use diem_secure_push_metrics::{
+use diem_metrics_core::{
     register_histogram_vec, register_int_counter_vec, register_int_gauge_vec,
     HistogramTimer, HistogramVec, IntCounterVec, IntGaugeVec,
 };

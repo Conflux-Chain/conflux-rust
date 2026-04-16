@@ -7,22 +7,36 @@
 
 use diem_crypto::{
     hash::{
-        CryptoHash, TestOnlyHash, ACCUMULATOR_PLACEHOLDER_HASH,
+        CryptoHash, CryptoHasher, TestOnlyHash, ACCUMULATOR_PLACEHOLDER_HASH,
         SPARSE_MERKLE_PLACEHOLDER_HASH,
     },
     HashValue,
 };
+use diem_crypto_derive::CryptoHasher;
 
-use crate::{
-    account_state_blob::AccountStateBlob,
-    proof::{
-        definition::MAX_ACCUMULATOR_PROOF_DEPTH, SparseMerkleInternalNode,
-        SparseMerkleLeafNode, TestAccumulatorInternalNode,
-        TestAccumulatorProof,
-    },
+use crate::proof::{
+    definition::MAX_ACCUMULATOR_PROOF_DEPTH, SparseMerkleInternalNode,
+    SparseMerkleLeafNode, TestAccumulatorInternalNode, TestAccumulatorProof,
 };
 
-type SparseMerkleProof = crate::proof::SparseMerkleProof<AccountStateBlob>;
+#[derive(CryptoHasher, Clone, serde::Serialize, serde::Deserialize)]
+struct TestBlob(Vec<u8>);
+
+impl CryptoHash for TestBlob {
+    type Hasher = TestBlobHasher;
+
+    fn hash(&self) -> HashValue {
+        let mut hasher = Self::Hasher::default();
+        hasher.update(&self.0);
+        hasher.finish()
+    }
+}
+
+impl From<Vec<u8>> for TestBlob {
+    fn from(blob: Vec<u8>) -> Self { TestBlob(blob) }
+}
+
+type SparseMerkleProof = crate::proof::SparseMerkleProof<TestBlob>;
 
 #[test]
 fn test_verify_empty_accumulator() {
@@ -155,7 +169,7 @@ fn test_verify_empty_sparse_merkle() {
 #[test]
 fn test_verify_single_element_sparse_merkle() {
     let key = b"hello".test_only_hash();
-    let blob: AccountStateBlob = b"world".to_vec().into();
+    let blob: TestBlob = b"world".to_vec().into();
     let blob_hash = blob.hash();
     let non_existing_blob = b"world?".to_vec().into();
     let root_node = SparseMerkleLeafNode::new(key, blob_hash);
@@ -197,9 +211,9 @@ fn test_verify_three_element_sparse_merkle() {
     assert_eq!(key2[0], 0b0100_0010);
     assert_eq!(key3[0], 0b0110_1001);
 
-    let blob1 = AccountStateBlob::from(b"1".to_vec());
-    let blob2 = AccountStateBlob::from(b"2".to_vec());
-    let blob3 = AccountStateBlob::from(b"3".to_vec());
+    let blob1 = TestBlob::from(b"1".to_vec());
+    let blob2 = TestBlob::from(b"2".to_vec());
+    let blob3 = TestBlob::from(b"3".to_vec());
 
     let leaf1 = SparseMerkleLeafNode::new(key1, blob1.hash());
     let leaf1_hash = leaf1.hash();

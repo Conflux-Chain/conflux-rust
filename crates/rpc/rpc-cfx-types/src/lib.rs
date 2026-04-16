@@ -41,7 +41,7 @@ pub use blame_info::BlameInfo;
 pub use block::{Block, BlockTransactions, Header};
 pub use chain_meta::ChainStaticMeta;
 pub use consensus_graph_states::*;
-pub use epoch_number::EpochNumber;
+pub use epoch_number::{BlockHashOrEpochNumber, EpochNumber};
 pub use fee_history::CfxFeeHistory;
 pub use fee_history_cache_entry::FeeHistoryCacheEntry;
 pub use filter::{CfxRpcLogFilter, *};
@@ -66,6 +66,5 @@ pub use tx_pool::*;
 pub use vote_params_info::VoteParamsInfo;
 
 pub use cfx_rpc_primitives::Bytes;
-pub use primitives::BlockHashOrEpochNumber;
 
-pub use subscriber_id::{random, SubId};
+pub use subscriber_id::SubId;

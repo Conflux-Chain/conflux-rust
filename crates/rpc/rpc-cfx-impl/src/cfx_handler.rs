@@ -145,8 +145,10 @@ impl CfxHandler {
     fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     fn check_address_network(&self, network: Network) -> RpcResult<()> {
-        check_rpc_address_network(Some(network), &self.network_type)
-            .map_err(|e| into_rpc_err(e.to_string()))
+        invalid_params_check(
+            "address",
+            check_rpc_address_network(Some(network), &self.network_type),
+        )
     }
 
     fn get_epoch_number_with_pivot_check(
@@ -166,27 +168,7 @@ impl CfxHandler {
                 Ok(EpochNumber::Num(U64::from(epoch_number)))
             }
             Some(BlockHashOrEpochNumber::EpochNumber(epoch_number)) => {
-                Ok(match epoch_number {
-                    PrimitiveEpochNumber::Number(n) => {
-                        EpochNumber::Num(cfx_types::U64::from(n))
-                    }
-                    PrimitiveEpochNumber::Earliest => EpochNumber::Earliest,
-                    PrimitiveEpochNumber::LatestCheckpoint => {
-                        EpochNumber::LatestCheckpoint
-                    }
-                    PrimitiveEpochNumber::LatestFinalized => {
-                        EpochNumber::LatestFinalized
-                    }
-                    PrimitiveEpochNumber::LatestConfirmed => {
-                        EpochNumber::LatestConfirmed
-                    }
-                    PrimitiveEpochNumber::LatestState => {
-                        EpochNumber::LatestState
-                    }
-                    PrimitiveEpochNumber::LatestMined => {
-                        EpochNumber::LatestMined
-                    }
-                })
+                Ok(epoch_number)
             }
             None => Ok(EpochNumber::LatestState),
         }
@@ -286,7 +268,6 @@ impl CfxHandler {
             tx_index,
             prior_gas_used,
             Some(exec_info.epoch_number),
-            exec_info.block_receipts.block_number,
             exec_info.pivot_header.base_price(),
             exec_info.maybe_state_root.clone(),
             tx_exec_error_msg,
@@ -406,6 +387,7 @@ impl CfxHandler {
             has_gas_price: request.has_gas_price(),
             has_nonce: request.nonce.is_some(),
             has_storage_limit: request.storage_limit.is_some(),
+            collect_access_list: false,
         };
 
         let epoch_height = consensus_graph
@@ -469,9 +451,8 @@ impl CfxHandler {
             let nonce = consensus_graph.next_nonce(
                 Address::from(tx.from.clone().ok_or("from should have")?)
                     .with_native_space(),
-                BlockHashOrEpochNumber::EpochNumber(
-                    PrimitiveEpochNumber::LatestState,
-                ),
+                BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
+                    .into(),
                 "internal EpochNumber::LatestState",
             )?;
             tx.nonce.replace(nonce.into());
@@ -1038,7 +1019,7 @@ impl CfxRpcServer for CfxHandler {
         self.check_address_network(addr.network)?;
         let consensus_graph = self.consensus_graph();
         let num = num.unwrap_or(BlockHashOrEpochNumber::EpochNumber(
-            PrimitiveEpochNumber::LatestState,
+            EpochNumber::LatestState,
         ));
         info!(
             "RPC Request: cfx_getNextNonce address={:?} epoch_num={:?}",
@@ -1222,7 +1203,7 @@ impl CfxRpcServer for CfxHandler {
                 None => PackedOrExecuted::Packed(tx_index),
                 Some(MaybeExecutedTxExtraInfo {
                     receipt,
-                    block_number,
+                    block_number: _,
                     prior_gas_used,
                     tx_exec_error_msg,
                 }) => {
@@ -1248,7 +1229,6 @@ impl CfxRpcServer for CfxHandler {
                             tx_index,
                             prior_gas_used,
                             epoch_number,
-                            block_number,
                             maybe_base_price,
                             maybe_state_root,
                             tx_exec_error_msg,

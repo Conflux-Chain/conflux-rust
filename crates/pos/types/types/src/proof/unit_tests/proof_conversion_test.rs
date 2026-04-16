@@ -5,18 +5,40 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    account_state_blob::AccountStateBlob,
-    proof::{
-        AccumulatorConsistencyProof, TestAccumulatorProof,
-        TestAccumulatorRangeProof, TransactionInfoWithProof,
-        TransactionListProof,
-    },
+use crate::proof::{
+    AccumulatorConsistencyProof, TestAccumulatorProof,
+    TestAccumulatorRangeProof, TransactionInfoWithProof, TransactionListProof,
 };
 use bcs::test_helpers::assert_canonical_encode_decode;
+use diem_crypto::{
+    hash::{CryptoHash, CryptoHasher},
+    HashValue,
+};
+use diem_crypto_derive::CryptoHasher;
 use proptest::prelude::*;
 
-type SparseMerkleProof = crate::proof::SparseMerkleProof<AccountStateBlob>;
+#[derive(
+    CryptoHasher, Clone, PartialEq, serde::Serialize, serde::Deserialize,
+)]
+struct TestBlob(Vec<u8>);
+
+impl CryptoHash for TestBlob {
+    type Hasher = TestBlobHasher;
+
+    fn hash(&self) -> HashValue {
+        let mut hasher = Self::Hasher::default();
+        hasher.update(&self.0);
+        hasher.finish()
+    }
+}
+
+impl std::fmt::Debug for TestBlob {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TestBlob({:?})", self.0)
+    }
+}
+
+type SparseMerkleProof = crate::proof::SparseMerkleProof<TestBlob>;
 
 proptest! {
 

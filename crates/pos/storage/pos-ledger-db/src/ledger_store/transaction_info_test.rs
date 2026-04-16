@@ -12,30 +12,14 @@ use proptest::{collection::vec, prelude::*};
 
 fn verify(
     store: &LedgerStore, txn_infos: &[TransactionInfo], first_version: Version,
-    ledger_version: Version, root_hash: HashValue,
 ) {
     txn_infos
         .iter()
         .enumerate()
         .for_each(|(idx, expected_txn_info)| {
             let version = first_version + idx as u64;
-
-            let txn_info_with_proof = store
-                .get_transaction_info_with_proof(version, ledger_version)
-                .unwrap();
-
-            assert_eq!(
-                txn_info_with_proof.transaction_info(),
-                expected_txn_info
-            );
-            txn_info_with_proof
-                .ledger_info_to_transaction_info_proof()
-                .verify(
-                    root_hash,
-                    txn_info_with_proof.transaction_info().hash(),
-                    version,
-                )
-                .unwrap();
+            let txn_info = store.get_transaction_info(version).unwrap();
+            assert_eq!(&txn_info, expected_txn_info);
         })
 }
 
@@ -63,17 +47,11 @@ proptest! {
         let store = &db.ledger_store;
 
         // insert two batches of transaction infos
-        let root_hash1 = save(store, 0, &batch1);
-        let ledger_version1 = batch1.len() as u64 - 1;
-        let root_hash2 = save(store, batch1.len() as u64, &batch2);
-        let ledger_version2 = batch1.len() as u64 + batch2.len() as u64 - 1;
+        let _root_hash1 = save(store, 0, &batch1);
+        let _root_hash2 = save(store, batch1.len() as u64, &batch2);
 
-        // retrieve all leaves and verify against latest root hash
-        verify(store, &batch1, 0, ledger_version2, root_hash2);
-        verify(store, &batch2, batch1.len() as u64, ledger_version2, root_hash2);
-
-        // retrieve batch1 and verify against root_hash after batch1 was interted
-        verify(store, &batch1, 0, ledger_version1, root_hash1);
+        // retrieve all transaction infos and verify
+        verify(store, &batch1, 0);
+        verify(store, &batch2, batch1.len() as u64);
     }
-
 }
