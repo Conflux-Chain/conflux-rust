@@ -1184,6 +1184,7 @@ impl EthApiServer for EthApi {
             block_number,
             state_overrides,
             block_overrides,
+            false,
         )?;
 
         Ok(execution.output.into())
@@ -1219,10 +1220,24 @@ impl EthApiServer for EthApi {
     /// gas usage compared to a transaction without an access list.
     async fn create_access_list(
         &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<RpcStateOverride>,
     ) -> RpcResult<AccessListResult> {
-        let _ = block_number;
-        let _ = request;
-        Err(internal_error_with_data("Not implemented"))
+        let (executed, estimate_res) = self.tx_executor.do_exec_transaction(
+            request,
+            block_number,
+            state_overrides,
+            None,
+            true,
+        )?;
+        let error = TxExecutor::parse_execution_outcome(executed)
+            .map_err(|err| err.to_string())
+            .err();
+        Ok(AccessListResult {
+            access_list: estimate_res.access_list,
+            // TODO: return the gas used after applying access list
+            gas_used: estimate_res.estimated_gas_limit,
+            error,
+        })
     }
 
     /// Generates and returns an estimate of how much gas is necessary to allow
@@ -1236,6 +1251,7 @@ impl EthApiServer for EthApi {
             block_number,
             state_overrides,
             None,
+            false,
         )?;
 
         Ok(estimated_gas)

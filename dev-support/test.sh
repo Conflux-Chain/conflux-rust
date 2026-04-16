@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 
 SCRIPT_DIR=`dirname "${BASH_SOURCE[0]}"`
+set -o pipefail
+
 echo "Checking dependent python3 modules ..."
 source $SCRIPT_DIR/activate_new_venv.sh
-source $SCRIPT_DIR/dep_pip3.sh
-set -o pipefail
+bash $SCRIPT_DIR/dep_pip3.sh || { echo "Dependency installation failed"; exit 1; }
 
 ROOT_DIR="$( cd $SCRIPT_DIR/.. && pwd )"
 TEST_MAX_WORKERS="${1-8}"
@@ -123,11 +124,25 @@ function save_test_result {
 echo -n "" > $ROOT_DIR/.phabricator-comment
 mkdir -p $ROOT_DIR/build
 
-# Build
+# Phase 1: Build main project
+echo "=== Phase 1/4: Building main project ==="
 declare -a test_result; check_build test_result; save_test_result test_result $CHECK_BUILD
+echo "=== Phase 1/4: Build succeeded ==="
+
+# Phase 2: Build consensus_bench
+echo "=== Phase 2/4: Building consensus_bench ==="
 declare -a test_result; check_build_consensus_bench test_result; save_test_result test_result $CHECK_BUILD
-# Integration test
+echo "=== Phase 2/4: Build succeeded ==="
+
+# Phase 3: Integration tests
+echo "=== Phase 3/4: Integration tests ==="
 declare -a test_result; check_integration_tests test_result; save_test_result test_result $CHECK_INT_TEST
-# Pytest
+echo "=== Phase 3/4: Integration tests passed ==="
+
+# Phase 4: Pytest
+echo "=== Phase 4/4: Pytest ==="
 declare -a test_result; check_pytests test_result; save_test_result test_result $CHECK_PY_TEST
+echo "=== Phase 4/4: Pytest passed ==="
+
+echo "=== All phases passed ==="
 

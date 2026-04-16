@@ -9,17 +9,13 @@ use consensus_types::block::block_test_utils;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use diem_secure_storage::{InMemoryStorage, OnDiskStorage, Storage};
 use diem_types::validator_signer::ValidatorSigner;
-use safety_rules::{
-    test_utils, PersistentSafetyStorage, SafetyRulesManager, TSafetyRules,
-};
+use safety_rules::{test_utils, PersistentSafetyStorage, SafetyRules};
 use tempfile::NamedTempFile;
 
 /// Execute an in order series of blocks (0 <- 1 <- 2 <- 3 and commit 0 and
 /// continue to rotate left, appending new blocks on the right, committing the
 /// left most block
-fn lsr(
-    mut safety_rules: Box<dyn TSafetyRules>, signer: ValidatorSigner, n: u64,
-) {
+fn lsr(mut safety_rules: SafetyRules, signer: ValidatorSigner, n: u64) {
     let data = block_test_utils::random_payload(1);
 
     let (proof, genesis_qc) = test_utils::make_genesis(&signer);
@@ -81,9 +77,9 @@ fn in_memory(n: u64) {
         signer.private_key().clone(),
         true,
     );
-    let safety_rules_manager =
-        SafetyRulesManager::new_local(storage, false, false);
-    lsr(safety_rules_manager.client(), signer, n);
+    let safety_rules =
+        SafetyRules::new(storage, false, None, Default::default());
+    lsr(safety_rules, signer, n);
 }
 
 fn on_disk(n: u64) {
@@ -96,41 +92,9 @@ fn on_disk(n: u64) {
         signer.private_key().clone(),
         true,
     );
-    let safety_rules_manager =
-        SafetyRulesManager::new_local(storage, false, false);
-    lsr(safety_rules_manager.client(), signer, n);
-}
-
-fn serializer(n: u64) {
-    let signer = ValidatorSigner::from_int(0);
-    let file_path =
-        NamedTempFile::new().unwrap().into_temp_path().to_path_buf();
-    let storage = PersistentSafetyStorage::initialize(
-        Storage::from(OnDiskStorage::new(file_path)),
-        signer.author(),
-        signer.private_key().clone(),
-        true,
-    );
-    let safety_rules_manager =
-        SafetyRulesManager::new_serializer(storage, false, false);
-    lsr(safety_rules_manager.client(), signer, n);
-}
-
-fn thread(n: u64) {
-    let signer = ValidatorSigner::from_int(0);
-    let file_path =
-        NamedTempFile::new().unwrap().into_temp_path().to_path_buf();
-    let storage = PersistentSafetyStorage::initialize(
-        Storage::from(OnDiskStorage::new(file_path)),
-        signer.author(),
-        signer.private_key().clone(),
-        true,
-    );
-    // Test value, in milliseconds
-    let timeout_ms = 5_000;
-    let safety_rules_manager =
-        SafetyRulesManager::new_thread(storage, false, false, timeout_ms);
-    lsr(safety_rules_manager.client(), signer, n);
+    let safety_rules =
+        SafetyRules::new(storage, false, None, Default::default());
+    lsr(safety_rules, signer, n);
 }
 
 pub fn benchmark(c: &mut Criterion) {
@@ -145,10 +109,6 @@ pub fn benchmark(c: &mut Criterion) {
     group
         .bench_function("InMemory", |b| b.iter(|| in_memory(black_box(count))));
     group.bench_function("OnDisk", |b| b.iter(|| on_disk(black_box(count))));
-    group.bench_function("Serializer", |b| {
-        b.iter(|| serializer(black_box(count)))
-    });
-    group.bench_function("Thread", |b| b.iter(|| thread(black_box(count))));
 }
 
 criterion_group!(benches, benchmark);

@@ -8,8 +8,6 @@ use cfx_rpc_eth_types::{
 };
 use cfx_rpc_utils::error::{
     errors::{EthApiError, RpcInvalidTransactionError},
-    // jsonrpc_error_helpers::{geth_call_execution_error,
-    // invalid_input_rpc_err},
     jsonrpsee_error_helpers::{
         geth_call_execution_error, invalid_input_rpc_err,
     },
@@ -76,6 +74,7 @@ impl TxExecutor {
         block_number_or_hash: Option<BlockId>,
         state_overrides: Option<RpcStateOverride>,
         block_overrides: Option<Box<BlockOverrides>>,
+        collect_access_list: bool,
     ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
         let consensus_graph = self.consensus_graph();
 
@@ -134,6 +133,7 @@ impl TxExecutor {
             has_gas_price: request.has_gas_price(),
             has_nonce: request.nonce.is_some(),
             has_storage_limit: false,
+            collect_access_list,
         };
 
         let chain_id = self.consensus.best_chain_id();
@@ -149,20 +149,10 @@ impl TxExecutor {
         )
     }
 
-    pub fn exec_transaction(
-        &self, request: TransactionRequest,
-        block_number_or_hash: Option<BlockId>,
-        state_overrides: Option<RpcStateOverride>,
-        block_overrides: Option<Box<BlockOverrides>>,
-    ) -> CoreResult<(Executed, U256)> {
-        let (execution_outcome, estimation) = self.do_exec_transaction(
-            request,
-            block_number_or_hash,
-            state_overrides,
-            block_overrides,
-        )?;
-
-        let executed = match execution_outcome {
+    pub fn parse_execution_outcome(
+        execution_outcome: ExecutionOutcome,
+    ) -> CoreResult<Executed> {
+        match execution_outcome {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
@@ -228,8 +218,26 @@ impl TxExecutor {
                 format!("execution reverted: {}", e),
                 "".into()
             )),
-            ExecutionOutcome::Finished(executed) => executed,
-        };
+            ExecutionOutcome::Finished(executed) => Ok(executed),
+        }
+    }
+
+    pub fn exec_transaction(
+        &self, request: TransactionRequest,
+        block_number_or_hash: Option<BlockId>,
+        state_overrides: Option<RpcStateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
+        collect_access_list: bool,
+    ) -> CoreResult<(Executed, U256)> {
+        let (execution_outcome, estimation) = self.do_exec_transaction(
+            request,
+            block_number_or_hash,
+            state_overrides,
+            block_overrides,
+            collect_access_list,
+        )?;
+
+        let executed = Self::parse_execution_outcome(execution_outcome)?;
 
         Ok((executed, estimation.estimated_gas_limit))
     }

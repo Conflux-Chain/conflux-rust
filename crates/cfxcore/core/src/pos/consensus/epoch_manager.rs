@@ -19,7 +19,6 @@ use super::{
         },
     },
     logging::{LogEvent, LogSchema},
-    metrics_safety_rules::MetricsSafetyRules,
     network::{
         ConsensusMsg, ConsensusNetworkSender, IncomingBlockRetrievalRequest,
         NetworkReceivers,
@@ -46,7 +45,7 @@ use consensus_types::{
 };
 use diem_config::config::{ConsensusConfig, ConsensusProposerType, NodeConfig};
 use diem_crypto::HashValue;
-use diem_infallible::duration_since_epoch;
+use diem_infallible::{duration_since_epoch, RwLock};
 use diem_logger::prelude::*;
 use diem_metrics::monitor;
 use diem_types::{
@@ -62,7 +61,7 @@ use futures::{
     select_biased, StreamExt,
 };
 use pow_types::PowInterface;
-use safety_rules::SafetyRulesManager;
+use safety_rules::SafetyRules;
 use std::{
     cmp::Ordering,
     sync::{
@@ -111,7 +110,7 @@ pub struct EpochManager {
     txn_manager: Arc<dyn TxnManager>,
     state_computer: Arc<dyn StateComputer>,
     storage: Arc<dyn PersistentLivenessStorage>,
-    safety_rules_manager: SafetyRulesManager,
+    safety_rules: Arc<RwLock<SafetyRules>>,
     processor: Option<RoundProcessor>,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     // Conflux PoW handler
@@ -147,7 +146,7 @@ impl EpochManager {
     ) -> Self {
         let config = node_config.consensus.clone();
         let sr_config = &node_config.consensus.safety_rules;
-        let safety_rules_manager = SafetyRulesManager::new(sr_config);
+        let safety_rules = safety_rules::create_safety_rules(sr_config);
         diem_debug!("EpochManager.author={:?}", author);
         Self {
             author,
@@ -161,7 +160,7 @@ impl EpochManager {
             txn_manager,
             state_computer,
             storage,
-            safety_rules_manager,
+            safety_rules: Arc::new(RwLock::new(safety_rules)),
             processor: None,
             reconfig_events,
             pow_handler,
@@ -397,13 +396,8 @@ impl EpochManager {
             self.pow_handler.clone(),
         ));
 
-        diem_info!(epoch = epoch, "Update SafetyRules");
-
-        let mut safety_rules = MetricsSafetyRules::new(
-            self.safety_rules_manager.client(),
-            self.storage.clone(),
-        );
-        if let Err(error) = safety_rules.perform_initialize() {
+        diem_info!(epoch = epoch, "Initialize SafetyRules");
+        if let Err(error) = self.safety_rules.write().initialize(&epoch_state) {
             diem_error!(
                 epoch = epoch,
                 error = error,
@@ -465,7 +459,7 @@ impl EpochManager {
             round_state,
             proposer_election,
             proposal_generator,
-            safety_rules,
+            self.safety_rules.clone(),
             network_sender,
             self.txn_manager.clone(),
             self.storage.clone(),

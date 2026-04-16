@@ -18,7 +18,9 @@ use cfx_rpc_eth_types::{
     TraceFilter, TraceResults, TraceType, TransactionRequest,
 };
 use cfx_rpc_utils::error::{
-    jsonrpc_error_helpers::error_object_owned_to_jsonrpc_error,
+    jsonrpc_error_helpers::{
+        call_execution_error, error_object_owned_to_jsonrpc_error,
+    },
     jsonrpsee_error_helpers::{internal_error, invalid_params_rpc_err},
 };
 use cfx_types::{H256, U256};
@@ -221,20 +223,45 @@ impl TraceApi {
     }
 
     pub fn trace_call(
-        &self, call: TransactionRequest, _trace_types: HashSet<TraceType>,
+        &self, call: TransactionRequest, trace_types: HashSet<TraceType>,
         block_id: Option<BlockId>, state_overrides: Option<RpcStateOverride>,
         block_overrides: Option<Box<BlockOverrides>>,
     ) -> CoreResult<TraceResults> {
+        // currently we only support default trace type: TraceType::Trace
+        if trace_types.contains(&TraceType::VmTrace)
+            || trace_types.contains(&TraceType::StateDiff)
+        {
+            return Err(invalid_params_rpc_err(
+                "Unsupported trace type",
+                Some(trace_types),
+            )
+            .into());
+        }
+
         let (executed, _) = self.tx_executor.do_exec_transaction(
             call,
             block_id,
             state_overrides,
             block_overrides,
+            false,
         )?;
         let output = match &executed {
             ExecutionOutcome::ExecutionErrorBumpNonce(_, e) => e.output.clone(),
             ExecutionOutcome::Finished(e) => e.output.clone(),
-            _ => Default::default(),
+            ExecutionOutcome::NotExecutedDrop(err) => {
+                return Err(call_execution_error(
+                    "NotExecutedDrop".into(),
+                    format!("{:?}", err),
+                )
+                .into());
+            }
+            ExecutionOutcome::NotExecutedToReconsiderPacking(err) => {
+                return Err(call_execution_error(
+                    "NotExecutedToReconsiderPacking".into(),
+                    format!("{:?}", err),
+                )
+                .into());
+            }
         };
         let traces = parity_traces(&executed);
         let localized_traces = into_eth_localized_traces(

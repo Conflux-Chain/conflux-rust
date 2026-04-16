@@ -16,7 +16,6 @@ use anyhow::{ensure, format_err, Error, Result};
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 
-pub use change_set::ChangeSet;
 use diem_crypto::{
     hash::{CryptoHash, EventAccumulatorHasher},
     traits::SigningKey,
@@ -50,7 +49,6 @@ use crate::{
 };
 
 pub mod authenticator;
-mod change_set;
 
 pub type Version = u64; // Height - also used for MVCC in StateDB
 
@@ -244,8 +242,9 @@ impl RawTransaction {
 /// were never used in Conflux PoS but must be preserved as placeholders.
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TransactionPayload {
-    /// A system maintenance transaction.
-    WriteSet(WriteSetPayload),
+    /// Legacy Diem variant (index 0). Never used in Conflux PoS.
+    #[doc(hidden)]
+    _LegacyWriteSet,
     /// Legacy Diem variant (index 1). Never used in Conflux PoS.
     #[doc(hidden)]
     _LegacyScript,
@@ -379,13 +378,6 @@ impl DisputePayload {
             bcs::to_bytes(&event).unwrap(),
         )
     }
-}
-
-/// WriteSet transaction payload.
-#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub enum WriteSetPayload {
-    /// Directly passing in the WriteSet.
-    Direct(ChangeSet),
 }
 
 /// A transaction that has been signed.
@@ -897,19 +889,19 @@ pub enum Transaction {
     /// codebase.
     UserTransaction(SignedTransaction),
 
-    /// Transaction that applies a WriteSet to the current storage, it's
-    /// applied manually via db-bootstrapper.
-    GenesisTransaction(WriteSetPayload),
+    /// Genesis transaction carrying the epoch-change event for the
+    /// initial validator set.
+    GenesisTransaction(Vec<ContractEvent>),
 
-    /// Transaction to update the block metadata resource at the beginning of a
-    /// block.
+    /// Transaction to update the block metadata resource at the beginning
+    /// of a block.
     BlockMetadata(BlockMetadata),
 }
 
 #[derive(Deserialize)]
 pub enum TransactionUnchecked {
     UserTransaction(SignedTransactionUnchecked),
-    GenesisTransaction(WriteSetPayload),
+    GenesisTransaction(Vec<ContractEvent>),
     BlockMetadata(BlockMetadata),
 }
 

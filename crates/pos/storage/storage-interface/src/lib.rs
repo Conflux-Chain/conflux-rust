@@ -151,14 +151,6 @@ impl From<bcs::Error> for Error {
     }
 }
 
-impl From<diem_secure_net::Error> for Error {
-    fn from(error: diem_secure_net::Error) -> Self {
-        Self::ServiceError {
-            error: format!("{}", error),
-        }
-    }
-}
-
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Order {
     Ascending,

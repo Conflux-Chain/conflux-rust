@@ -35,11 +35,3 @@ impl From<bcs::Error> for Error {
         Self::SerializationError(format!("{}", error))
     }
 }
-
-impl From<diem_secure_net::Error> for Error {
-    fn from(error: diem_secure_net::Error) -> Self {
-        Self::InternalError {
-            error: format!("{}", error),
-        }
-    }
-}

@@ -1,6 +1,3 @@
 base:
     data_dir: "/opt/diem/data"
     role: "full_node"
-
-execution:
-    genesis_file_location: "relative/path/to/genesis"
