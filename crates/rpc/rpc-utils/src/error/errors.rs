@@ -3,12 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::error::jsonrpsee_error_helpers::{
-    internal_error_with_msg, invalid_params_msg, rpc_error_with_code,
+    internal_error_with_msg, invalid_params_msg, rpc_err, rpc_error_with_code,
 };
 use alloy_primitives::{hex, Address, Bytes};
 use alloy_rpc_types::error::EthRpcErrorCode;
 use alloy_sol_types::decode_revert_reason;
-use jsonrpc_core::{Error as JsonRpcError, ErrorCode};
 use jsonrpsee::types::ErrorObjectOwned;
 use revm_context_interface::result::{HaltReason, OutOfGasError};
 use std::time::Duration;
@@ -362,29 +361,16 @@ impl RpcInvalidTransactionError {
     }
 }
 
-impl From<RpcInvalidTransactionError> for JsonRpcError {
-    fn from(e: RpcInvalidTransactionError) -> Self {
-        match e {
-            RpcInvalidTransactionError::Revert(revert) => JsonRpcError {
-                code: ErrorCode::ServerError(revert.error_code() as i64),
-                message: revert.to_string(),
-                data: revert.output.as_ref().map(|out| out.as_ref()).map(|v| {
-                    serde_json::Value::String(hex::encode_prefixed(v))
-                }),
-            },
-            err => JsonRpcError {
-                code: ErrorCode::ServerError(err.error_code() as i64),
-                message: err.to_string(),
-                data: None,
-            },
-        }
-    }
-}
-
 impl From<RpcInvalidTransactionError> for ErrorObjectOwned {
     fn from(e: RpcInvalidTransactionError) -> Self {
-        let err = JsonRpcError::from(e);
-        ErrorObjectOwned::owned(err.code.code() as i32, err.message, err.data)
+        match e {
+            RpcInvalidTransactionError::Revert(revert) => rpc_err(
+                revert.error_code(),
+                revert.to_string(),
+                revert.output.map(|v| hex::encode_prefixed(v)),
+            ),
+            err => rpc_err(err.error_code(), err.to_string(), None::<()>),
+        }
     }
 }
 
