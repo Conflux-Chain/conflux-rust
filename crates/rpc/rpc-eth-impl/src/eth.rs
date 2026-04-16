@@ -20,13 +20,11 @@ use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::{
     error::{
         errors::{EthApiError, RpcInvalidTransactionError, RpcPoolError},
-        jsonrpc_error_helpers::{
-            geth_call_execution_error, request_rejected_in_catch_up_mode,
-            unknown_block,
-        },
         jsonrpsee_error_helpers::{
-            internal_error, internal_error_with_data, invalid_input_rpc_err,
-            invalid_params, invalid_params_rpc_err,
+            geth_call_execution_error, internal_error,
+            internal_error_with_data, invalid_input_rpc_err, invalid_params,
+            invalid_params_rpc_err, request_rejected_in_catch_up_mode,
+            unknown_block,
         },
     },
     helpers::SpawnBlocking,

@@ -1,4 +1,3 @@
-use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
 #[derive(Debug, PartialEq)]
@@ -24,7 +23,6 @@ impl TcpConfiguration {
 pub struct HttpConfiguration {
     pub enabled: bool,
     pub address: SocketAddr,
-    pub cors_domains: DomainsValidation<AccessControlAllowOrigin>,
     pub keep_alive: bool,
     // If it's Some, we will manually set the number of threads of HTTP RPC
     // server
@@ -33,8 +31,8 @@ pub struct HttpConfiguration {
 
 impl HttpConfiguration {
     pub fn new(
-        ip: Option<(u8, u8, u8, u8)>, port: Option<u16>, cors: Option<String>,
-        keep_alive: bool, threads: Option<usize>,
+        ip: Option<(u8, u8, u8, u8)>, port: Option<u16>, keep_alive: bool,
+        threads: Option<usize>,
     ) -> Self {
         let ipv4 = match ip {
             Some(ip) => Ipv4Addr::new(ip.0, ip.1, ip.2, ip.3),
@@ -43,18 +41,6 @@ impl HttpConfiguration {
         HttpConfiguration {
             enabled: port.is_some(),
             address: SocketAddr::V4(SocketAddrV4::new(ipv4, port.unwrap_or(0))),
-            cors_domains: match cors {
-                None => DomainsValidation::Disabled,
-                Some(cors_list) => match cors_list.as_str() {
-                    "none" => DomainsValidation::Disabled,
-                    "all" => DomainsValidation::AllowOnly(vec![
-                        AccessControlAllowOrigin::Any,
-                    ]),
-                    _ => DomainsValidation::AllowOnly(
-                        cors_list.split(',').map(Into::into).collect(),
-                    ),
-                },
-            },
             keep_alive,
             threads,
         }

@@ -1406,7 +1406,6 @@ dependencies = [
  "clap",
  "db",
  "diem-types",
- "jsonrpc-http-server",
  "jsonrpsee",
  "kvdb-rocksdb",
  "lazy_static",
@@ -1611,6 +1610,7 @@ dependencies = [
  "cfx-rpc-middlewares",
  "cfx-tasks",
  "cfxcore",
+ "cfxcore-accounts",
  "jsonrpsee",
  "jsonrpsee-core",
  "jsonrpsee-types",
@@ -2057,7 +2057,6 @@ dependencies = [
  "heap-map",
  "hibitset",
  "itertools 0.14.0",
- "jsonrpc-core",
  "jsonrpsee",
  "keccak-hash",
  "kvdb",
@@ -3748,19 +3747,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
-name = "globset"
-version = "0.4.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "029d74589adefde59de1a0c4f4732695c32805624aec7b68d91503d4dba79afc"
-dependencies = [
- "aho-corasick 0.7.20",
- "bstr",
- "fnv",
- "log",
- "regex",
-]
-
-[[package]]
 name = "gmp-mpfr-sys"
 version = "1.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3798,7 +3784,7 @@ dependencies = [
  "indexmap 2.8.0",
  "slab",
  "tokio",
- "tokio-util 0.7.7",
+ "tokio-util",
  "tracing",
 ]
 
@@ -3817,7 +3803,7 @@ dependencies = [
  "indexmap 2.8.0",
  "slab",
  "tokio",
- "tokio-util 0.7.7",
+ "tokio-util",
  "tracing",
 ]
 
@@ -4588,40 +4574,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonrpc-http-server"
-version = "18.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1dea6e07251d9ce6a552abfb5d7ad6bc290a4596c8dcc3d795fae2bbdc1f3ff"
-dependencies = [
- "futures 0.3.30",
- "hyper 0.14.32",
- "jsonrpc-core",
- "jsonrpc-server-utils",
- "log",
- "net2",
- "parking_lot 0.11.2",
- "unicase",
-]
-
-[[package]]
-name = "jsonrpc-server-utils"
-version = "18.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa4fdea130485b572c39a460d50888beb00afb3e35de23ccd7fad8ff19f0e0d4"
-dependencies = [
- "bytes",
- "futures 0.3.30",
- "globset",
- "jsonrpc-core",
- "lazy_static",
- "log",
- "tokio",
- "tokio-stream",
- "tokio-util 0.6.10",
- "unicase",
-]
-
-[[package]]
 name = "jsonrpsee"
 version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4654,7 +4606,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-rustls",
- "tokio-util 0.7.7",
+ "tokio-util",
  "tracing",
  "url",
 ]
@@ -4721,7 +4673,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
- "tokio-util 0.7.7",
+ "tokio-util",
  "tower 0.5.2",
  "tracing",
 ]
@@ -5277,17 +5229,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d85b74917d95eab8b26ab6fe28e21d3fede3a614411ca4d3b01265c05bf86a12"
 dependencies = [
  "cc",
-]
-
-[[package]]
-name = "net2"
-version = "0.2.38"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74d0df99cfcd2530b2e694f6e17e7f37b8e26bb23983ac530c0c97408837c631"
-dependencies = [
- "cfg-if 0.1.10",
- "libc",
- "winapi 0.3.9",
 ]
 
 [[package]]
@@ -8111,21 +8052,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
- "tokio-util 0.7.7",
-]
-
-[[package]]
-name = "tokio-util"
-version = "0.6.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36943ee01a6d67977dd3f84a5a1d2efeb4ada3a1ae771cadfaa535d9d9fc6507"
-dependencies = [
- "bytes",
- "futures-core",
- "futures-sink",
- "log",
- "pin-project-lite",
- "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -8405,15 +8332,6 @@ checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
 name = "unexpected"
 version = "0.1.0"
 source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=08d6a6df3caa0a169177e22a7d082ce97b2830ae#08d6a6df3caa0a169177e22a7d082ce97b2830ae"
-
-[[package]]
-name = "unicase"
-version = "2.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50f37be617794602aabbeee0be4f259dc1778fabe05e2d67ee8f79326d5cb4f6"
-dependencies = [
- "version_check",
-]
 
 [[package]]
 name = "unicode-ident"

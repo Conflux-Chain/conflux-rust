@@ -1152,7 +1152,6 @@ impl Configuration {
         HttpConfiguration::new(
             Some((127, 0, 0, 1)),
             self.raw_conf.jsonrpc_local_http_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
         )
@@ -1162,7 +1161,6 @@ impl Configuration {
         HttpConfiguration::new(
             None,
             self.raw_conf.jsonrpc_http_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
         )
@@ -1172,7 +1170,6 @@ impl Configuration {
         HttpConfiguration::new(
             None,
             self.raw_conf.jsonrpc_http_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
         )
@@ -1190,7 +1187,6 @@ impl Configuration {
         HttpConfiguration::new(
             None,
             self.raw_conf.jsonrpc_http_eth_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
         )

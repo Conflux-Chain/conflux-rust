@@ -1790,7 +1790,6 @@ dependencies = [
  "heap-map",
  "hibitset",
  "itertools 0.14.0",
- "jsonrpc-core",
  "jsonrpsee",
  "keccak-hash",
  "kvdb",

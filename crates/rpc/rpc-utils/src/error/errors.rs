@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::error::jsonrpc_error_helpers::*;
+use crate::error::jsonrpsee_error_helpers::{
+    internal_error_with_msg, invalid_params_msg, rpc_error_with_code,
+};
 use alloy_primitives::{hex, Address, Bytes};
 use alloy_rpc_types::error::EthRpcErrorCode;
 use alloy_sol_types::decode_revert_reason;
@@ -128,7 +130,7 @@ pub enum EthApiError {
     Other(String),
 }
 
-impl From<EthApiError> for JsonRpcError {
+impl From<EthApiError> for ErrorObjectOwned {
     fn from(error: EthApiError) -> Self {
         match error {
             EthApiError::FailedToDecodeSignedTransaction |
@@ -139,7 +141,7 @@ impl From<EthApiError> for JsonRpcError {
             // EthApiError::Signing(_) |
             EthApiError::BothStateAndStateDiffInOverride(_) |
             EthApiError::InvalidTracerConfig |
-            EthApiError::TransactionConversionError => invalid_params_rpc_err(error.to_string()),
+            EthApiError::TransactionConversionError => invalid_params_msg(&error.to_string()),
             EthApiError::InvalidTransaction(err) => err.into(),
             EthApiError::PoolError(err) => err.into(),
             EthApiError::PrevrandaoNotSet |
@@ -148,33 +150,26 @@ impl From<EthApiError> for JsonRpcError {
             // EthApiError::Internal(_) |
             EthApiError::TransactionNotFound |
             EthApiError::EvmCustom(_) |
-            EthApiError::InvalidRewardPercentiles => internal_rpc_err(error.to_string()),
+            EthApiError::InvalidRewardPercentiles => internal_error_with_msg(error.to_string()),
             EthApiError::UnknownBlockNumber | EthApiError::UnknownBlockOrTxIndex => {
-                build_rpc_server_error(EthRpcErrorCode::ResourceNotFound.code() as i64, error.to_string())
+                rpc_error_with_code(EthRpcErrorCode::ResourceNotFound.code(), error.to_string())
             }
             EthApiError::UnknownSafeOrFinalizedBlock => {
-                build_rpc_server_error(EthRpcErrorCode::UnknownBlock.code() as i64, error.to_string())
+                rpc_error_with_code(EthRpcErrorCode::UnknownBlock.code(), error.to_string())
             }
-            EthApiError::Unsupported(msg) => internal_rpc_err(msg),
-            EthApiError::InternalJsTracerError(msg) => internal_rpc_err(msg),
-            EthApiError::InvalidParams(msg) => invalid_params_rpc_err(msg),
+            EthApiError::Unsupported(msg) => internal_error_with_msg(msg.into()),
+            EthApiError::InternalJsTracerError(msg) => internal_error_with_msg(msg),
+            EthApiError::InvalidParams(msg) => invalid_params_msg(&msg),
             err @ EthApiError::ExecutionTimedOut(_) => {
-                build_rpc_server_error(-32000, err.to_string()) // CALL_EXECUTION_FAILED_CODE = -32000
+                rpc_error_with_code(-32000, err.to_string()) // CALL_EXECUTION_FAILED_CODE = -32000
             }
             err @ EthApiError::InternalBlockingTaskError | err @ EthApiError::InternalEthError => {
-                internal_rpc_err(err.to_string())
+                internal_error_with_msg(err.to_string())
             }
-            err @ EthApiError::TransactionInputError(_) => invalid_params_rpc_err(err.to_string()),
-            EthApiError::Other(err) => internal_rpc_err(err),
+            err @ EthApiError::TransactionInputError(_) => invalid_params_msg(&err.to_string()),
+            EthApiError::Other(err) => internal_error_with_msg(err),
             // EthApiError::MuxTracerError(msg) => internal_rpc_err(msg.to_string()),
         }
-    }
-}
-
-impl From<EthApiError> for ErrorObjectOwned {
-    fn from(e: EthApiError) -> Self {
-        let err = JsonRpcError::from(e);
-        ErrorObjectOwned::owned(err.code.code() as i32, err.message, err.data)
     }
 }
 
@@ -495,15 +490,11 @@ pub enum RpcPoolError {
     Other(Box<dyn std::error::Error + Send + Sync>),
 }
 
-impl From<RpcPoolError> for JsonRpcError {
+impl From<RpcPoolError> for ErrorObjectOwned {
     fn from(e: RpcPoolError) -> Self {
         match e {
             RpcPoolError::Invalid(err) => err.into(),
-            error => JsonRpcError {
-                code: ErrorCode::InternalError,
-                message: error.to_string(),
-                data: None,
-            },
+            error => internal_error_with_msg(error.to_string()),
         }
     }
 }

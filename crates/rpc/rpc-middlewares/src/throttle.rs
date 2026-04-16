@@ -1,7 +1,4 @@
-use cfx_rpc_utils::error::jsonrpc_error_helpers::{
-    jsonrpc_error_to_error_object_owned,
-    request_rejected_too_many_request_error,
-};
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::request_rejected_too_many_request_error;
 use cfx_util_macros::bail;
 use futures::FutureExt;
 use jsonrpsee::{
@@ -51,14 +48,14 @@ impl<S> Throttle<S> {
                 let err = request_rejected_too_many_request_error(Some(
                     format!("throttled in {:?}", wait_time),
                 ));
-                bail!(jsonrpc_error_to_error_object_owned(err))
+                bail!(err)
             }
             ThrottleResult::AlreadyThrottled => {
                 debug!("RPC {} already throttled", name);
                 let err = request_rejected_too_many_request_error(Some(
                     "already throttled, please try again later".into(),
                 ));
-                bail!(jsonrpc_error_to_error_object_owned(err))
+                bail!(err)
             }
         }
     }
