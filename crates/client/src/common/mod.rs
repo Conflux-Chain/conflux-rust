@@ -14,9 +14,6 @@ use std::{
 
 use cfx_rpc_builder::RpcServerHandle;
 use cfx_util_macros::bail;
-use jsonrpc_http_server::Server as HttpServer;
-use jsonrpc_tcp_server::Server as TcpServer;
-use jsonrpc_ws_server::Server as WSServer;
 use parking_lot::{Condvar, Mutex};
 use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use threadpool::ThreadPool;
@@ -66,13 +63,8 @@ use crate::{
     accounts::{account_provider, keys_path},
     keylib::KeyPair,
     rpc::{
-        extractor::RpcExtractor,
-        impls::{
-            cfx::RpcImpl, common::RpcImpl as CommonRpcImpl,
-            pubsub::PubSubClient,
-        },
+        impls::{common::RpcImpl as CommonRpcImpl, pubsub::PubSubClient},
         launch_async_rpc_servers, launch_cfx_async_rpc_servers,
-        setup_debug_rpc_apis, setup_public_rpc_apis,
     },
 };
 #[cfg(all(unix, feature = "jemalloc-prof"))]
@@ -515,12 +507,6 @@ pub fn initialize_not_light_node_modules(
         Arc<ConsensusGraph>,
         Arc<SynchronizationService>,
         Arc<BlockGenerator>,
-        Option<HttpServer>,
-        Option<HttpServer>,
-        Option<TcpServer>,
-        Option<TcpServer>,
-        Option<WSServer>,
-        Option<WSServer>,
         Arc<PosVerifier>,
         Arc<TokioRuntime>,
         Option<RpcServerHandle>,
@@ -540,10 +526,10 @@ pub fn initialize_not_light_node_modules(
         consensus,
         sync_graph,
         network,
-        common_impl,
+        _common_impl,
         accounts,
         notifications,
-        pubsub,
+        _pubsub,
         tokio_runtime,
     ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
@@ -609,7 +595,7 @@ pub fn initialize_not_light_node_modules(
         ).expect("Memory usage thread start fails");
     }
 
-    let (maybe_txgen, maybe_direct_txgen) = initialize_txgens(
+    let (maybe_txgen, _maybe_direct_txgen) = initialize_txgens(
         consensus.clone(),
         txpool.clone(),
         sync.clone(),
@@ -663,101 +649,7 @@ pub fn initialize_not_light_node_modules(
         }
     }
 
-    let use_old_core_rpc = conf.raw_conf.core_space_rpc_use_old_impl;
-
-    let rpc_impl = Arc::new(RpcImpl::new(
-        consensus.clone(),
-        sync.clone(),
-        blockgen.test_api(),
-        txpool.clone(),
-        maybe_txgen.clone(),
-        maybe_direct_txgen,
-        conf.rpc_impl_config(),
-        accounts.clone(),
-    ));
-
-    // When using old impl, start V1 core space RPC servers (jsonrpc-core
-    // based). When using new impl, these are skipped and V2 async servers
-    // are started instead.
-    let (
-        debug_rpc_http_server,
-        rpc_http_server,
-        debug_rpc_tcp_server,
-        rpc_tcp_server,
-        debug_rpc_ws_server,
-        rpc_ws_server,
-    ) = if use_old_core_rpc {
-        let debug_rpc_http_server = super::rpc::start_http(
-            conf.local_http_config(),
-            setup_debug_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
-                &conf,
-            ),
-        )?;
-
-        let debug_rpc_tcp_server = super::rpc::start_tcp(
-            conf.local_tcp_config(),
-            setup_debug_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
-                &conf,
-            ),
-            RpcExtractor,
-        )?;
-
-        let rpc_tcp_server = super::rpc::start_tcp(
-            conf.tcp_config(),
-            setup_public_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
-                &conf,
-            ),
-            RpcExtractor,
-        )?;
-
-        let debug_rpc_ws_server = super::rpc::start_ws(
-            conf.local_ws_config(),
-            setup_public_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
-                &conf,
-            ),
-            RpcExtractor,
-        )?;
-
-        let rpc_ws_server = super::rpc::start_ws(
-            conf.ws_config(),
-            setup_public_rpc_apis(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
-                &conf,
-            ),
-            RpcExtractor,
-        )?;
-
-        let rpc_http_server = super::rpc::start_http(
-            conf.http_config(),
-            setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
-        )?;
-
-        (
-            debug_rpc_http_server,
-            rpc_http_server,
-            debug_rpc_tcp_server,
-            rpc_tcp_server,
-            debug_rpc_ws_server,
-            rpc_ws_server,
-        )
-    } else {
-        info!("Using new async core space RPC implementation");
-        (None, None, None, None, None, None)
-    };
+    info!("Using new async core space RPC implementation");
 
     let task_manager = TaskManager::new(tokio_runtime.handle().clone());
     let task_executor = task_manager.executor();
@@ -772,9 +664,8 @@ pub fn initialize_not_light_node_modules(
             conf,
         ))?;
 
-    // Start V2 async core space RPC servers when using the new
-    // implementation.
-    let cfx_rpc_server_handle = if !use_old_core_rpc {
+    // Start V2 async core space RPC servers.
+    let cfx_rpc_server_handle =
         tokio_runtime.block_on(launch_cfx_async_rpc_servers(
             consensus.clone(),
             sync.clone(),
@@ -787,10 +678,7 @@ pub fn initialize_not_light_node_modules(
             accounts.clone(),
             exit.clone(),
             conf,
-        ))?
-    } else {
-        None
-    };
+        ))?;
 
     // start pprf server, which is used to serve the pprof data for heap
     // profiling
@@ -815,12 +703,6 @@ pub fn initialize_not_light_node_modules(
         consensus,
         sync,
         blockgen,
-        debug_rpc_http_server,
-        rpc_http_server,
-        debug_rpc_tcp_server,
-        rpc_tcp_server,
-        debug_rpc_ws_server,
-        rpc_ws_server,
         pos_verifier,
         tokio_runtime,
         eth_rpc_server_handle,
