@@ -6,7 +6,7 @@ use crate::log_entry::LogEntry;
 use cfx_types::{Address, Bloom, Space, U256, U64};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use rlp_bool::StrictBool;
+use rlp_compat::StrictBool;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 pub const TRANSACTION_OUTCOME_SUCCESS: u8 = 0;

@@ -19,7 +19,7 @@ use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::Block;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use rlp_bool::CompatBool;
+use rlp_compat::CompatBool04;
 use std::{any::Any, time::Duration};
 
 #[derive(Debug, PartialEq, Default, Clone, DeriveMallocSizeOf)]
@@ -36,7 +36,7 @@ impl Encodable for GetBlocks {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(3)
             .append(&self.request_id)
-            .append(&CompatBool(self.with_public))
+            .append(&CompatBool04(self.with_public))
             .append_list(&self.hashes);
     }
 }
@@ -45,7 +45,7 @@ impl Decodable for GetBlocks {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         Ok(GetBlocks {
             request_id: rlp.val_at(0)?,
-            with_public: rlp.val_at::<CompatBool>(1)?.0,
+            with_public: rlp.val_at::<CompatBool04>(1)?.0,
             hashes: rlp.list_at(2)?,
             preferred_node_type: None,
         })

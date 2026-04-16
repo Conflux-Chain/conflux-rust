@@ -48,7 +48,7 @@ impl Encodable for SnapshotInfo {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(7)
             .append(&self.snapshot_info_kept_to_provide_sync)
-            .append(&CompatBool(self.serve_one_step_sync))
+            .append(&CompatBool04(self.serve_one_step_sync))
             .append(&self.merkle_root)
             .append(&self.parent_snapshot_height)
             .append(&self.height)
@@ -61,7 +61,7 @@ impl Decodable for SnapshotInfo {
     fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
         Ok(SnapshotInfo {
             snapshot_info_kept_to_provide_sync: rlp.val_at(0)?,
-            serve_one_step_sync: rlp.val_at::<CompatBool>(1)?.0,
+            serve_one_step_sync: rlp.val_at::<CompatBool04>(1)?.0,
             merkle_root: rlp.val_at(2)?,
             parent_snapshot_height: rlp.val_at(3)?,
             height: rlp.val_at(4)?,
@@ -213,6 +213,6 @@ use derive_more::Debug;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use rlp_bool::CompatBool;
+use rlp_compat::CompatBool04;
 use std::{path::Path, sync::Arc};
 use tokio::sync::Semaphore;

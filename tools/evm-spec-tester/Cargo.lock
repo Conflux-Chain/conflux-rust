@@ -1591,7 +1591,7 @@ dependencies = [
  "malloc_size_of_derive",
  "primitives",
  "rlp 0.4.6",
- "rlp-bool",
+ "rlp-compat",
  "rlp-derive",
  "serde",
  "strum_macros 0.26.4",
@@ -1906,7 +1906,7 @@ dependencies = [
  "rand_chacha 0.9.0",
  "random-crash",
  "rlp 0.4.6",
- "rlp-bool",
+ "rlp-compat",
  "rlp-derive",
  "rustc-hex",
  "serde",
@@ -2081,7 +2081,7 @@ dependencies = [
  "rangetools",
  "rayon",
  "rlp 0.4.6",
- "rlp-bool",
+ "rlp-compat",
  "rlp-derive",
  "rustc-hex",
  "safety-rules",
@@ -6101,7 +6101,7 @@ dependencies = [
  "once_cell",
  "rand 0.9.3",
  "rlp 0.4.6",
- "rlp-bool",
+ "rlp-compat",
  "rlp-derive",
  "serde",
  "serde_derive",
@@ -6727,7 +6727,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rlp-bool"
+name = "rlp-compat"
 version = "0.1.0"
 dependencies = [
  "malloc_size_of",
