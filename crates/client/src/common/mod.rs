@@ -62,16 +62,12 @@ use cfx_config::{parse_config_address_string, Configuration};
 use crate::{
     accounts::{account_provider, keys_path},
     keylib::KeyPair,
-    rpc::{
-        impls::{common::RpcImpl as CommonRpcImpl, pubsub::PubSubClient},
-        launch_async_rpc_servers, launch_cfx_async_rpc_servers,
-    },
+    rpc_starter::{launch_async_rpc_servers, launch_cfx_async_rpc_servers},
 };
 #[cfg(all(unix, feature = "jemalloc-prof"))]
 use cfx_mallocator_utils::start_pprf_server;
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 
-pub mod delegate_convert;
 pub mod shutdown_handler;
 
 /// Hold all top-level components for a type of client.
@@ -144,10 +140,8 @@ pub fn initialize_common_modules(
         Arc<ConsensusGraph>,
         Arc<SynchronizationGraph>,
         Arc<NetworkService>,
-        Arc<CommonRpcImpl>,
         Arc<AccountProvider>,
         Arc<Notifications>,
-        PubSubClient,
         Arc<TokioRuntime>,
     ),
     String,
@@ -459,23 +453,8 @@ pub fn initialize_common_modules(
         .expect("failed to initialize account provider"),
     );
 
-    let common_impl = Arc::new(CommonRpcImpl::new(
-        exit,
-        consensus.clone(),
-        network.clone(),
-        txpool.clone(),
-        accounts.clone(),
-        pos_verifier.clone(),
-    ));
     let tokio_runtime =
         Arc::new(TokioRuntime::new().map_err(|e| e.to_string())?);
-
-    let pubsub = PubSubClient::new(
-        tokio_runtime.clone(),
-        consensus.clone(),
-        notifications.clone(),
-        *network.get_network_type(),
-    );
 
     Ok((
         machine,
@@ -488,10 +467,8 @@ pub fn initialize_common_modules(
         consensus,
         sync_graph,
         network,
-        common_impl,
         accounts,
         notifications,
-        pubsub,
         tokio_runtime,
     ))
 }
@@ -526,10 +503,8 @@ pub fn initialize_not_light_node_modules(
         consensus,
         sync_graph,
         network,
-        _common_impl,
         accounts,
         notifications,
-        _pubsub,
         tokio_runtime,
     ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
