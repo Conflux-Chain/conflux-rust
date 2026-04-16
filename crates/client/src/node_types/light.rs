@@ -12,7 +12,7 @@ use cfx_rpc_builder::RpcServerHandle;
 use crate::{
     common::{initialize_common_modules, ClientComponents},
     configuration::Configuration,
-    rpc::launch_cfx_light_async_rpc_servers,
+    rpc_starter::launch_cfx_light_async_rpc_servers,
 };
 use blockgen::BlockGenerator;
 use cfxcore::{
@@ -56,10 +56,8 @@ impl LightClient {
             consensus,
             sync_graph,
             network,
-            _common_impl,
             accounts,
             notifications,
-            _pubsub,
             tokio_runtime,
         ) = initialize_common_modules(
             &mut conf,
