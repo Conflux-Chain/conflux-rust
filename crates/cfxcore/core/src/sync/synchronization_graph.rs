@@ -1803,6 +1803,18 @@ impl SynchronizationGraph {
 
         debug!("insert_block {:?}", hash);
 
+        // This verification only depends on the block payload and current
+        // chain id. Running it before taking the sync-graph write lock reduces
+        // lock hold time for large blocks with many transactions.
+        let basic_verify_result = if need_to_verify {
+            Some(self.verification_config.verify_sync_graph_block_basic(
+                &block,
+                self.consensus.best_chain_id(),
+            ))
+        } else {
+            None
+        };
+
         let inner = &mut *self.inner.write();
 
         let contains_block =
@@ -1828,14 +1840,9 @@ impl SynchronizationGraph {
 
         debug_assert!(hash == inner.arena[me].block_header.hash());
         debug_assert!(!inner.arena[me].block_ready);
-        inner.arena[me].block_ready = true;
 
-        if need_to_verify {
-            let r = self.verification_config.verify_sync_graph_block_basic(
-                &block,
-                self.consensus.best_chain_id(),
-            );
-            match r {
+        if let Some(result) = basic_verify_result {
+            match result {
                 Err(Error::Block(BlockError::InvalidTransactionsRoot(e))) => {
                     warn!("BlockTransactionRoot not match! inserted_block={:?} err={:?}", block, e);
                     // If the transaction root does not match, it might be
@@ -1845,7 +1852,6 @@ impl SynchronizationGraph {
                     // adversaries. In either case, we should request the block
                     // again, and the received block body is
                     // discarded.
-                    inner.arena[me].block_ready = false;
                     return BlockInsertionResult::RequestAgain;
                 }
                 Err(e) => {
@@ -1858,6 +1864,8 @@ impl SynchronizationGraph {
                 _ => {}
             };
         }
+
+        inner.arena[me].block_ready = true;
 
         let block = Arc::new(block);
         if inner.arena[me].graph_status != BLOCK_INVALID {
