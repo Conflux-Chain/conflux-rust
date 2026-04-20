@@ -6,7 +6,7 @@
 // See http://www.gnu.org/licenses/
 use crate::config::RoleType;
 use diem_types::PeerId;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use short_hex_str::AsShortHexStr;
 use std::{cmp::Ordering, fmt};
 
@@ -37,72 +37,6 @@ pub enum PeerRole {
 impl Default for PeerRole {
     /// Default to least trusted
     fn default() -> Self { PeerRole::Unknown }
-}
-
-/// A grouping of common information between all networking code for logging.
-/// This should greatly reduce the groupings between these given everywhere, and
-/// will allow for logging accordingly.
-#[derive(Clone, Eq, PartialEq, Serialize)]
-pub struct NetworkContext {
-    /// The type of node
-    role: RoleType,
-    #[serde(serialize_with = "NetworkId::serialize_str")]
-    network_id: NetworkId,
-    peer_id: PeerId,
-}
-
-impl fmt::Debug for NetworkContext {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
-    }
-}
-
-impl fmt::Display for NetworkContext {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "[{},{},{}]",
-            self.role,
-            self.network_id.as_str(),
-            self.peer_id.short_str(),
-        )
-    }
-}
-
-impl NetworkContext {
-    pub fn new(
-        role: RoleType, network_id: NetworkId, peer_id: PeerId,
-    ) -> NetworkContext {
-        NetworkContext {
-            role,
-            network_id,
-            peer_id,
-        }
-    }
-
-    pub fn role(&self) -> RoleType { self.role }
-
-    pub fn network_id(&self) -> &NetworkId { &self.network_id }
-
-    pub fn peer_id(&self) -> PeerId { self.peer_id }
-
-    #[cfg(any(test, feature = "testing", feature = "fuzzing"))]
-    pub fn mock_with_peer_id(peer_id: PeerId) -> std::sync::Arc<Self> {
-        std::sync::Arc::new(Self::new(
-            RoleType::Validator,
-            NetworkId::Validator,
-            peer_id,
-        ))
-    }
-
-    #[cfg(any(test, feature = "testing", feature = "fuzzing"))]
-    pub fn mock() -> std::sync::Arc<Self> {
-        std::sync::Arc::new(Self::new(
-            RoleType::Validator,
-            NetworkId::Validator,
-            PeerId::random(),
-        ))
-    }
 }
 
 /// A representation of the network being used in communication.
@@ -276,13 +210,6 @@ impl NetworkId {
             NetworkId::Private(info) => info.as_ref(),
         }
     }
-
-    fn serialize_str<S>(
-        &self, serializer: S,
-    ) -> std::result::Result<S::Ok, S::Error>
-    where S: Serializer {
-        self.as_str().serialize(serializer)
-    }
 }
 
 /// Identifier of a node, represented as (network_id, peer_id)
@@ -295,22 +222,6 @@ impl PeerNetworkId {
     pub fn raw_network_id(&self) -> NetworkId { self.0.network_id() }
 
     pub fn peer_id(&self) -> PeerId { self.1 }
-
-    #[cfg(any(test, feature = "fuzzing"))]
-    pub fn random() -> Self {
-        Self(
-            NodeNetworkId::new(NetworkId::default(), 0),
-            PeerId::random(),
-        )
-    }
-
-    #[cfg(any(test, feature = "fuzzing"))]
-    pub fn random_validator() -> Self {
-        Self(
-            NodeNetworkId::new(NetworkId::Validator, 0),
-            PeerId::random(),
-        )
-    }
 }
 
 impl fmt::Debug for PeerNetworkId {
@@ -362,22 +273,5 @@ mod test {
         let decoded: NetworkId =
             yaml_serde::from_slice(encoded.as_slice()).unwrap();
         assert_eq!(id, decoded);
-    }
-
-    #[test]
-    fn test_network_context_serialization() {
-        let peer_id = PeerId::random();
-        let context = NetworkContext::new(
-            RoleType::Validator,
-            NetworkId::vfn_network(),
-            peer_id,
-        );
-        let expected = format!(
-            "role: {}\nnetwork_id: {}\npeer_id: {:x}\n",
-            RoleType::Validator,
-            VFN_NETWORK,
-            peer_id
-        );
-        assert_eq!(expected, yaml_serde::to_string(&context).unwrap());
     }
 }

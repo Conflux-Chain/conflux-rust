@@ -10,7 +10,6 @@ publish = false
 edition = "2018"
 
 [dependencies]
-rand = "0.8.3"
 serde = { version = "1.0.124", features = ["rc"], default-features = false }
 yaml_serde = "0.10.3"
 thiserror = "1.0.24"

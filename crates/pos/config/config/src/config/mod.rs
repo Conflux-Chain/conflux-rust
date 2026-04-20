@@ -5,7 +5,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use rand::{rngs::StdRng, SeedableRng};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -147,57 +146,6 @@ impl NodeConfig {
     ) -> Result<(), Error> {
         self.save_config(&output_path)?;
         Ok(())
-    }
-
-    pub fn random() -> Self {
-        let mut rng = StdRng::from_seed([0u8; 32]);
-        Self::random_with_template(0, &NodeConfig::default(), &mut rng)
-    }
-
-    pub fn random_with_template(
-        idx: u32, template: &Self, rng: &mut StdRng,
-    ) -> Self {
-        let mut config = template.clone();
-        config.random_internal(idx, rng);
-        config
-    }
-
-    fn random_internal(&mut self, idx: u32, rng: &mut StdRng) {
-        let test = TestConfig::new_with_temp_dir(None);
-
-        if self.base.role == RoleType::Validator {
-            let peer_id = crate::utils::validator_owner_account_from_name(
-                idx.to_string().as_bytes(),
-            );
-
-            let mut safety_rules_test_config =
-                SafetyRulesTestConfig::new(peer_id);
-            safety_rules_test_config.random_consensus_key(rng);
-            self.consensus.safety_rules.test = Some(safety_rules_test_config);
-        }
-        self.set_data_dir(test.temp_dir().unwrap().to_path_buf());
-        self.test = Some(test);
-    }
-
-    fn default_config(serialized: &str, path: &'static str) -> Self {
-        let config = Self::parse(serialized)
-            .unwrap_or_else(|e| panic!("Error in {}: {}", path, e));
-        config
-    }
-
-    pub fn default_for_public_full_node() -> Self {
-        let contents = std::include_str!("test_data/public_full_node.yaml");
-        Self::default_config(contents, "default_for_public_full_node")
-    }
-
-    pub fn default_for_validator() -> Self {
-        let contents = std::include_str!("test_data/validator.yaml");
-        Self::default_config(contents, "default_for_validator")
-    }
-
-    pub fn default_for_validator_full_node() -> Self {
-        let contents = std::include_str!("test_data/validator_full_node.yaml");
-        Self::default_config(contents, "default_for_validator_full_node")
     }
 }
 

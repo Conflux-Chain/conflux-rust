@@ -2851,7 +2851,6 @@ dependencies = [
  "diem-secure-storage",
  "diem-temppath",
  "diem-types",
- "rand 0.8.5",
  "serde",
  "short-hex-str",
  "thiserror 1.0.63",
