@@ -21,7 +21,6 @@ diem-logger = { workspace = true }
 diem-secure-storage = { workspace = true }
 diem-temppath = { workspace = true }
 diem-types = { workspace = true }
-short-hex-str = { workspace = true }
 cfx-types = { workspace = true }
 
 [dev-dependencies]

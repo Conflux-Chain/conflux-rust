@@ -379,26 +379,4 @@ impl PeerManager {
             sync_state.broadcast_info.backoff_mode = true;
         }
     }
-
-    /*// If the origin is provided, checks whether this peer is an upstream peer
-    // based on configured preferences and connection origin.
-    // If the origin is not provided, checks whether this peer is an upstream
-    // peer that was seen before.
-    pub fn is_upstream_peer(
-        &self, peer: &PeerNetworkId, metadata: Option<&ConnectionMetadata>,
-    ) -> bool {
-        // Validator network is always upstream
-        if peer.raw_network_id().is_validator_network() {
-            return true;
-        }
-
-        // Outbound connections are upstream on non-P2P networks
-        if let Some(metadata) = metadata {
-            metadata.origin == ConnectionOrigin::Outbound
-        } else {
-            // If we already know about the peer, it's upstream
-            // TODO: If this is actually used it seems kinda pointless?
-            self.peer_states.lock().contains_key(peer)
-        }
-    }*/
 }
