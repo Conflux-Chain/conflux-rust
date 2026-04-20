@@ -2580,7 +2580,6 @@ dependencies = [
  "cfx-types",
  "diem-crypto-derive",
  "diem-logger",
- "digest 0.9.0",
  "hex",
  "lazy_static",
  "mirai-annotations",

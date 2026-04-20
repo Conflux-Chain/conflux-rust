@@ -261,7 +261,7 @@ dependencies = [
  "ruint",
  "rustc-hash 2.1.1",
  "serde",
- "sha3 0.10.8",
+ "sha3",
  "tiny-keccak",
 ]
 
@@ -1218,7 +1218,6 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4152116fd6e9dadb291ae18fc1ec3575ed6d84c29642d97890f4b4a3417297e4"
 dependencies = [
- "block-padding 0.2.1",
  "generic-array 0.14.6",
 ]
 
@@ -3338,7 +3337,6 @@ dependencies = [
  "criterion",
  "diem-crypto-derive",
  "diem-logger",
- "digest 0.9.0",
  "hex",
  "lazy_static",
  "mirai-annotations",
@@ -3352,7 +3350,6 @@ dependencies = [
  "serde",
  "serde-name",
  "serde_bytes",
- "sha3 0.9.1",
  "static_assertions",
  "thiserror 1.0.63",
  "tiny-keccak",
@@ -8736,18 +8733,6 @@ dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
  "digest 0.10.7",
-]
-
-[[package]]
-name = "sha3"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f81199417d4e5de3f04b1e871023acea7389672c4135918f05aa9cbf2f2fa809"
-dependencies = [
- "block-buffer 0.9.0",
- "digest 0.9.0",
- "keccak",
- "opaque-debug 0.3.0",
 ]
 
 [[package]]
