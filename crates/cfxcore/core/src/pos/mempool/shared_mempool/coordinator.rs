@@ -20,12 +20,11 @@ use crate::pos::{
 };
 use anyhow::Result;
 use bounded_executor::BoundedExecutor;
-use channel::diem_channel;
 use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::{
-    mempool_status::MempoolStatus, on_chain_config::OnChainConfigPayload,
-    transaction::SignedTransaction, vm_status::DiscardedVMStatus,
+    mempool_status::MempoolStatus, transaction::SignedTransaction,
+    vm_status::DiscardedVMStatus,
 };
 use futures::{
     channel::{mpsc, oneshot},
@@ -50,11 +49,7 @@ pub(crate) async fn coordinator(
         oneshot::Sender<Result<SubmissionStatus>>,
     )>,
     mut consensus_requests: mpsc::Receiver<ConsensusRequest>,
-    mut state_sync_requests: mpsc::Receiver<CommitNotification>,
-    mut mempool_reconfig_events: diem_channel::Receiver<
-        (),
-        OnChainConfigPayload,
-    >,
+    mut commit_notifications: mpsc::Receiver<CommitNotification>,
 ) {
     diem_info!(LogSchema::event_log(
         LogEntry::CoordinatorRuntime,
@@ -79,12 +74,9 @@ pub(crate) async fn coordinator(
             msg = consensus_requests.select_next_some() => {
                 tasks::process_consensus_request(smp.db_with_cache.clone(), &smp.mempool, msg).await;
             }
-            msg = state_sync_requests.select_next_some() => {
-                handle_state_sync_request(&mut smp, msg);
+            msg = commit_notifications.select_next_some() => {
+                handle_commit_notification(&mut smp, msg);
             }
-            config_update = mempool_reconfig_events.select_next_some() => {
-                handle_mempool_reconfig_event(&mut smp, &bounded_executor, config_update).await;
-            },
             (peer, backoff) = scheduled_broadcasts.select_next_some() => {
                 // diem_debug!("scheduled_broadcasts");
                 tasks::execute_broadcast(peer, backoff, &mut smp, &mut scheduled_broadcasts, &mut broadcasting_peers, executor.clone());
@@ -146,34 +138,18 @@ async fn handle_client_event(
         .await;
 }
 
-fn handle_state_sync_request(smp: &mut SharedMempool, msg: CommitNotification) {
+fn handle_commit_notification(
+    smp: &mut SharedMempool, msg: CommitNotification,
+) {
     let _timer = counters::task_spawn_latency_timer(
         counters::STATE_SYNC_EVENT_LABEL,
         counters::SPAWN_LABEL,
     );
     smp.update_pos_state();
-    tokio::spawn(tasks::process_state_sync_request(smp.mempool.clone(), msg));
-}
-
-async fn handle_mempool_reconfig_event(
-    smp: &mut SharedMempool, bounded_executor: &BoundedExecutor,
-    config_update: OnChainConfigPayload,
-) {
-    diem_info!(LogSchema::event_log(
-        LogEntry::ReconfigUpdate,
-        LogEvent::Received
+    tokio::spawn(tasks::process_committed_transactions(
+        smp.mempool.clone(),
+        msg,
     ));
-    let _timer = counters::task_spawn_latency_timer(
-        counters::RECONFIG_EVENT_LABEL,
-        counters::SPAWN_LABEL,
-    );
-
-    bounded_executor
-        .spawn(tasks::process_config_update(
-            config_update,
-            smp.validator.clone(),
-        ))
-        .await;
 }
 
 async fn handle_mempool_sync_msg(
