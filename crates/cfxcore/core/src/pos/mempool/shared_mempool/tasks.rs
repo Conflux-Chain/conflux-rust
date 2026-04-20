@@ -250,29 +250,20 @@ pub(crate) async fn process_incoming_transactions(
     {
         let mut mempool = smp.mempool.lock();
         for (idx, transaction) in transactions.into_iter().enumerate() {
-            if let Some(validation_result) = &validation_results[idx] {
-                match validation_result.status() {
-                    None => {
-                        let ranking_score = validation_result.score();
-                        let governance_role =
-                            validation_result.governance_role();
-                        let mempool_status = mempool.add_txn(
-                            transaction.clone(),
-                            ranking_score,
-                            timeline_state,
-                            governance_role,
-                        );
-                        statuses.push((transaction, (mempool_status, None)));
-                    }
-                    Some(validation_status) => {
-                        statuses.push((
-                            transaction.clone(),
-                            (
-                                MempoolStatus::new(MempoolStatusCode::VmError),
-                                Some(validation_status),
-                            ),
-                        ));
-                    }
+            match validation_results[idx] {
+                None => {
+                    let mempool_status =
+                        mempool.add_txn(transaction.clone(), timeline_state);
+                    statuses.push((transaction, (mempool_status, None)));
+                }
+                Some(validation_status) => {
+                    statuses.push((
+                        transaction,
+                        (
+                            MempoolStatus::new(MempoolStatusCode::VmError),
+                            Some(validation_status),
+                        ),
+                    ));
                 }
             }
         }

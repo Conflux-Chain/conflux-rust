@@ -161,10 +161,8 @@ impl TransactionStore {
         );
     }
 
-    /// Handles transaction commit.
-    /// It includes deletion of all transactions with sequence number <=
-    /// `account_sequence_number` and potential promotion of sequential txns
-    /// to PriorityIndex/TimelineIndex.
+    /// Handles transaction commit: deletes the transaction and cleans up
+    /// its entries in the timeline and TTL indexes.
     pub(crate) fn commit_transaction(
         &mut self, _account: &AccountAddress, hash: HashValue,
     ) {
