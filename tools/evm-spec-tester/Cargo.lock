@@ -1611,6 +1611,7 @@ dependencies = [
  "cfx-rpc-middlewares",
  "cfx-tasks",
  "cfxcore",
+ "cfxcore-accounts",
  "jsonrpsee",
  "jsonrpsee-core",
  "jsonrpsee-types",
