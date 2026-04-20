@@ -27,7 +27,6 @@ use diem_state_view::StateViewId;
 use diem_types::{
     block_info::PivotBlockDecision,
     committed_block::CommittedBlock,
-    contract_event::ContractEvent,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
     on_chain_config::{self, ValidatorSet},
@@ -385,16 +384,6 @@ impl Executor {
         ))
     }
 
-    fn extract_reconfig_events(
-        events: Vec<ContractEvent>,
-    ) -> Vec<ContractEvent> {
-        let new_epoch_event_key = on_chain_config::new_epoch_event_key();
-        events
-            .into_iter()
-            .filter(|event| *event.key() == new_epoch_event_key)
-            .collect()
-    }
-
     fn get_executed_trees(
         &self, block_id: HashValue,
     ) -> Result<ExecutedTrees, Error> {
@@ -554,7 +543,7 @@ impl BlockExecutor for Executor {
     fn commit_blocks(
         &self, block_ids: Vec<HashValue>,
         ledger_info_with_sigs: LedgerInfoWithSignatures,
-    ) -> Result<(Vec<Transaction>, Vec<ContractEvent>), Error> {
+    ) -> Result<Vec<Transaction>, Error> {
         let _timer = DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS.start_timer();
         let mut pos_state_to_commit = self
             .get_executed_trees(
@@ -904,16 +893,10 @@ impl BlockExecutor for Executor {
             )?;
         }
 
-        // Calculate committed transactions and reconfig events now that commit
-        // has succeeded
-        let mut committed_txns = vec![];
-        let mut reconfig_events = vec![];
-        for txn in txns_to_commit.iter() {
-            committed_txns.push(txn.transaction().clone());
-            reconfig_events.append(&mut Self::extract_reconfig_events(
-                txn.events().to_vec(),
-            ));
-        }
+        let committed_txns: Vec<Transaction> = txns_to_commit
+            .iter()
+            .map(|txn| txn.transaction().clone())
+            .collect();
 
         // Drop block locks before prune() which needs to re-lock them.
         drop(blocks);
@@ -922,15 +905,12 @@ impl BlockExecutor for Executor {
         let old_committed_block = self.db_with_cache.prune(
             ledger_info_with_sigs.ledger_info(),
             committed_txns.clone(),
-            reconfig_events.clone(),
         )?;
         self.db_with_cache
             .db
             .writer
             .delete_pos_state_by_block(&old_committed_block)?;
 
-        // Now that the blocks are persisted successfully, we can reply to
-        // consensus
-        Ok((committed_txns, reconfig_events))
+        Ok(committed_txns)
     }
 }

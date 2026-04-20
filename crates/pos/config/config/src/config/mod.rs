@@ -29,8 +29,6 @@ mod mempool_config;
 pub use mempool_config::*;
 mod secure_backend_config;
 pub use secure_backend_config::*;
-mod state_sync_config;
-pub use state_sync_config::*;
 mod storage_config;
 pub use storage_config::*;
 mod safety_rules_config;
@@ -55,8 +53,6 @@ pub struct NodeConfig {
     pub metrics: MetricsConfig,
     #[serde(default)]
     pub mempool: MempoolConfig,
-    #[serde(default)]
-    pub state_sync: StateSyncConfig,
     #[serde(default)]
     pub storage: StorageConfig,
     #[serde(default)]
