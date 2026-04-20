@@ -20,7 +20,6 @@ use consensus_types::{
 use diem_crypto::HashValue;
 use diem_infallible::Mutex;
 use diem_types::{
-    epoch_change::EpochChangeProof,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
     on_chain_config::ValidatorSet,
 };
@@ -228,21 +227,6 @@ impl PersistentLivenessStorage for MockStorage {
         Ok(())
     }
 
-    fn retrieve_epoch_change_proof(
-        &self, version: u64,
-    ) -> Result<EpochChangeProof> {
-        let lis = self
-            .shared_storage
-            .lis
-            .lock()
-            .get(&version)
-            .cloned()
-            .ok_or_else(|| {
-                anyhow::anyhow!("LedgerInfo for version not found")
-            })?;
-        Ok(EpochChangeProof::new(vec![lis], false))
-    }
-
     fn pos_ledger_db(&self) -> Arc<dyn DbReader> { unimplemented!() }
 }
 
@@ -298,12 +282,6 @@ impl PersistentLivenessStorage for EmptyStorage {
 
     fn save_highest_timeout_cert(&self, _: TimeoutCertificate) -> Result<()> {
         Ok(())
-    }
-
-    fn retrieve_epoch_change_proof(
-        &self, _version: u64,
-    ) -> Result<EpochChangeProof> {
-        unimplemented!()
     }
 
     fn pos_ledger_db(&self) -> Arc<dyn DbReader> { unimplemented!() }

@@ -24,11 +24,7 @@ use diem_types::{
     committed_block::CommittedBlock,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
-    proof::{
-        definition::LeafCount, position::Position, AccumulatorConsistencyProof,
-        TransactionAccumulatorProof, TransactionAccumulatorRangeProof,
-        TransactionInfoWithProof,
-    },
+    proof::{definition::LeafCount, position::Position},
     reward_distribution_event::RewardDistributionEventV2,
     term_state::PosState,
     transaction::{TransactionInfo, Version},
@@ -175,15 +171,6 @@ impl LedgerStore {
             .store(Arc::new(Some(ledger_info_with_sigs)));
     }
 
-    pub fn get_latest_ledger_info_in_epoch(
-        &self, epoch: u64,
-    ) -> Result<LedgerInfoWithSignatures> {
-        self.db.get::<LedgerInfoSchema>(&epoch)?.ok_or_else(|| {
-            DiemDbError::NotFound(format!("Last LedgerInfo of epoch {}", epoch))
-                .into()
-        })
-    }
-
     fn get_epoch_state(&self, epoch: u64) -> Result<EpochState> {
         ensure!(epoch > 0, "EpochState only queryable for epoch >= 1.",);
 
@@ -319,26 +306,6 @@ impl LedgerStore {
         })
     }
 
-    /// Gets an iterator that yields `num_transaction_infos` transaction infos
-    /// starting from `start_version`.
-    pub fn get_transaction_info_iter(
-        &self, start_version: Version, num_transaction_infos: usize,
-    ) -> Result<TransactionInfoIter<'_>> {
-        let mut iter = self
-            .db
-            .iter::<TransactionInfoSchema>(ReadOptions::default())?;
-        iter.seek(&start_version)?;
-        Ok(TransactionInfoIter {
-            inner: iter,
-            expected_next_version: start_version,
-            end_version: start_version
-                .checked_add(num_transaction_infos as u64)
-                .ok_or_else(|| {
-                    format_err!("Too many transaction infos requested.")
-                })?,
-        })
-    }
-
     /// Gets an iterator that yields epoch ending ledger infos, starting
     /// from `start_epoch`, and ends at the one before `end_epoch`
     pub fn get_epoch_ending_ledger_info_iter(
@@ -352,55 +319,6 @@ impl LedgerStore {
             next_epoch: start_epoch,
             end_epoch,
         })
-    }
-
-    /// Get transaction info at `version` with proof towards root of ledger at
-    /// `ledger_version`.
-    pub fn get_transaction_info_with_proof(
-        &self, version: Version, ledger_version: Version,
-    ) -> Result<TransactionInfoWithProof> {
-        Ok(TransactionInfoWithProof::new(
-            self.get_transaction_proof(version, ledger_version)?,
-            self.get_transaction_info(version)?,
-        ))
-    }
-
-    /// Get proof for transaction at `version` towards root of ledger at
-    /// `ledger_version`.
-    pub fn get_transaction_proof(
-        &self, version: Version, ledger_version: Version,
-    ) -> Result<TransactionAccumulatorProof> {
-        Accumulator::get_proof(
-            self,
-            ledger_version + 1, /* num_leaves */
-            version,
-        )
-    }
-
-    /// Get proof for `num_txns` consecutive transactions starting from
-    /// `start_version` towards root of ledger at `ledger_version`.
-    pub fn get_transaction_range_proof(
-        &self, start_version: Option<Version>, num_txns: u64,
-        ledger_version: Version,
-    ) -> Result<TransactionAccumulatorRangeProof> {
-        Accumulator::get_range_proof(
-            self,
-            ledger_version + 1, /* num_leaves */
-            start_version,
-            num_txns,
-        )
-    }
-
-    /// Gets proof that shows the ledger at `ledger_version` is consistent with
-    /// the ledger at `client_known_version`.
-    pub fn get_consistency_proof(
-        &self, client_known_version: Version, ledger_version: Version,
-    ) -> Result<AccumulatorConsistencyProof> {
-        Accumulator::get_consistency_proof(
-            self,
-            ledger_version + 1,
-            client_known_version + 1,
-        )
     }
 
     /// Write `txn_infos` to `batch`. Assigned `first_version` to the
@@ -456,6 +374,16 @@ impl LedgerStore {
         )
     }
 
+    /// Persists `pos_state` under `block_hash` and updates the
+    /// `latest_pos_state` cache iff `pos_state.current_view()` strictly
+    /// exceeds the cached view.
+    ///
+    /// Invariant relied on by `EpochManager::latest_epoch_state`: BFT commits
+    /// are serialised and `current_view` is strictly monotonic across commits
+    /// (including across epoch boundaries), so every committed `pos_state`
+    /// replaces the cache. After a commit returns, a reader calling
+    /// `get_latest_pos_state` is guaranteed to observe the just-committed
+    /// `EpochState`.
     pub fn put_pos_state(
         &self, block_hash: &HashValue, pos_state: PosState, cs: &mut ChangeSet,
     ) -> Result<()> {
@@ -608,40 +536,6 @@ impl HashReader for LedgerStore {
             .get::<TransactionAccumulatorSchema>(&position)?
             .ok_or_else(|| format_err!("{} does not exist.", position))
     }
-}
-
-pub struct TransactionInfoIter<'a> {
-    inner: SchemaIterator<'a, TransactionInfoSchema>,
-    expected_next_version: Version,
-    end_version: Version,
-}
-
-impl<'a> TransactionInfoIter<'a> {
-    fn next_impl(&mut self) -> Result<Option<TransactionInfo>> {
-        if self.expected_next_version >= self.end_version {
-            return Ok(None);
-        }
-
-        let ret = match self.inner.next().transpose()? {
-            Some((version, transaction_info)) => {
-                ensure!(
-                    version == self.expected_next_version,
-                    "Transaction info versions are not consecutive.",
-                );
-                self.expected_next_version += 1;
-                Some(transaction_info)
-            }
-            _ => None,
-        };
-
-        Ok(ret)
-    }
-}
-
-impl<'a> Iterator for TransactionInfoIter<'a> {
-    type Item = Result<TransactionInfo>;
-
-    fn next(&mut self) -> Option<Self::Item> { self.next_impl().transpose() }
 }
 
 pub struct EpochEndingLedgerInfoIter<'a> {

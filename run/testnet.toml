@@ -596,3 +596,5 @@ dao_vote_transition_height = 88100000
 dao_vote_transition_number = 112400000
 pos_cip99_transition_view = 342000
 cip105_transition_number = 122700000
+
+use_isolated_db_for_mpt_table = true

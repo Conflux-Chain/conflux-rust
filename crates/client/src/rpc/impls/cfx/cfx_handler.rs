@@ -24,6 +24,7 @@ use cfx_executor::{
     internal_contract::storage_point_prop,
 };
 use cfx_rpc_eth_types::Transaction as EthTransaction;
+use cfx_rpc_utils::error::jsonrpc_error_helpers::error_object_owned_to_jsonrpc_error;
 use cfx_statedb::{
     global_params::{
         AccumulateInterestRate, BaseFeeProp, DistributablePoSInterest,
@@ -87,12 +88,13 @@ use crate::{
             pos::Block as PosBlock, Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CfxRpcLogFilter,
-            CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
-            EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
-            PackedOrExecuted, Receipt as RpcReceipt,
-            RewardInfo as RpcRewardInfo, Status as RpcStatus,
-            StorageCollateralInfo, SyncGraphStates,
-            Transaction as RpcTransaction, TransactionRequest,
+            CheckBalanceAgainstTransactionResponse,
+            ConsensusGraphBlockExecutionState, ConsensusGraphBlockState,
+            ConsensusGraphStates, EpochNumber,
+            EstimateGasAndCollateralResponse, Log as RpcLog, PackedOrExecuted,
+            Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
+            Status as RpcStatus, StorageCollateralInfo, SyncGraphBlockState,
+            SyncGraphStates, Transaction as RpcTransaction, TransactionRequest,
         },
         CoreResult,
     },
@@ -586,7 +588,8 @@ impl RpcImpl {
         tx.check_rpc_address_network(
             "tx",
             self.sync.network.get_network_type(),
-        )?;
+        )
+        .map_err(error_object_owned_to_jsonrpc_error)?;
 
         if tx.nonce.is_none() {
             let nonce = consensus_graph.next_nonce(
@@ -633,6 +636,7 @@ impl RpcImpl {
             password,
             self.accounts.clone(),
         )
+        .map_err(Into::into)
     }
 
     fn send_transaction(
@@ -718,7 +722,7 @@ impl RpcImpl {
                 None => PackedOrExecuted::Packed(tx_index),
                 Some(MaybeExecutedTxExtraInfo {
                     receipt,
-                    block_number,
+                    block_number: _,
                     prior_gas_used,
                     tx_exec_error_msg,
                 }) => {
@@ -745,7 +749,6 @@ impl RpcImpl {
                         tx_index,
                         prior_gas_used,
                         epoch_number,
-                        block_number,
                         maybe_base_price,
                         maybe_state_root,
                         tx_exec_error_msg,
@@ -877,7 +880,6 @@ impl RpcImpl {
             tx_index,
             prior_gas_used,
             Some(exec_info.epoch_number),
-            exec_info.block_receipts.block_number,
             exec_info.pivot_header.base_price(),
             exec_info.maybe_state_root.clone(),
             tx_exec_error_msg,
@@ -1177,7 +1179,9 @@ impl RpcImpl {
         let consensus_graph = self.consensus_graph();
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
-        let filter: LogFilter = filter.into_primitive()?;
+        let filter: LogFilter = filter
+            .into_primitive()
+            .map_err(error_object_owned_to_jsonrpc_error)?;
 
         let logs = consensus_graph
             .logs(filter)?
@@ -1249,7 +1253,13 @@ impl RpcImpl {
                         *self.sync.network.get_network_type(),
                     )?;
 
-                    ret.push(RpcRewardInfo::new(b, author, reward_result));
+                    ret.push(RpcRewardInfo {
+                        block_hash: b.into(),
+                        author,
+                        total_reward: reward_result.total_reward.into(),
+                        base_reward: reward_result.base_reward.into(),
+                        tx_fee: reward_result.tx_fee.into(),
+                    })
                 }
             }
         }
@@ -1468,16 +1478,19 @@ impl RpcImpl {
             has_gas_price: request.has_gas_price(),
             has_nonce: request.nonce.is_some(),
             has_storage_limit: request.storage_limit.is_some(),
+            collect_access_list: false,
         };
 
         let epoch_height = consensus_graph
             .get_height_from_epoch_number(epoch.clone().into())?;
         let chain_id = consensus_graph.best_chain_id();
-        let signed_tx = request.sign_call(
-            epoch_height,
-            chain_id.in_native_space(),
-            self.config.max_estimation_gas_limit,
-        )?;
+        let signed_tx = request
+            .sign_call(
+                epoch_height,
+                chain_id.in_native_space(),
+                self.config.max_estimation_gas_limit,
+            )
+            .map_err(error_object_owned_to_jsonrpc_error)?;
         trace!("call tx {:?}", signed_tx);
 
         consensus_graph.call_virtual(
@@ -1532,12 +1545,55 @@ impl RpcImpl {
     pub fn consensus_graph_state(&self) -> CoreResult<ConsensusGraphStates> {
         let consensus_graph_states =
             STATE_EXPOSER.consensus_graph.lock().retrieve();
-        Ok(ConsensusGraphStates::new(consensus_graph_states))
+        // Ok(ConsensusGraphStates::new(consensus_graph_states))
+        let mut block_state_vec = Vec::new();
+        let mut block_execution_state_vec = Vec::new();
+
+        for block_state in &consensus_graph_states.block_state_vec {
+            block_state_vec.push(ConsensusGraphBlockState {
+                block_hash: block_state.block_hash.into(),
+                best_block_hash: block_state.best_block_hash.into(),
+                block_status: (block_state.block_status as u8).into(),
+                era_block_hash: block_state.era_block_hash.into(),
+                adaptive: block_state.adaptive,
+            })
+        }
+        for exec_state in &consensus_graph_states.block_execution_state_vec {
+            block_execution_state_vec.push(ConsensusGraphBlockExecutionState {
+                block_hash: exec_state.block_hash.into(),
+                deferred_state_root: exec_state.deferred_state_root.into(),
+                deferred_receipt_root: exec_state.deferred_receipt_root.into(),
+                deferred_logs_bloom_hash: exec_state
+                    .deferred_logs_bloom_hash
+                    .into(),
+                state_valid: exec_state.state_valid,
+            })
+        }
+
+        Ok(ConsensusGraphStates {
+            block_state_vec,
+            block_execution_state_vec,
+        })
     }
 
     pub fn sync_graph_state(&self) -> CoreResult<SyncGraphStates> {
         let sync_graph_states = STATE_EXPOSER.sync_graph.lock().retrieve();
-        Ok(SyncGraphStates::new(sync_graph_states))
+        let mut ready_block_vec = Vec::new();
+        for block_state in sync_graph_states.ready_block_vec {
+            ready_block_vec.push(SyncGraphBlockState {
+                block_hash: block_state.block_hash.into(),
+                parent: block_state.parent.into(),
+                referees: block_state
+                    .referees
+                    .iter()
+                    .map(|x| H256::from(*x))
+                    .collect(),
+                nonce: block_state.nonce.into(),
+                timestamp: U64::from(block_state.timestamp),
+                adaptive: block_state.adaptive,
+            })
+        }
+        Ok(SyncGraphStates { ready_block_vec })
     }
 
     /// Return (block_info.status, state_valid)
@@ -2197,7 +2253,6 @@ impl RpcImpl {
                 tx_index,
                 prior_gas_used,
                 Some(epoch_number),
-                execution_result.block_receipts.block_number,
                 b.block_header.base_price(),
                 maybe_state_root,
                 if tx_exec_error_msg.is_empty() {

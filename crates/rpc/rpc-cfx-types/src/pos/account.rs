@@ -6,7 +6,7 @@ use crate::pos::NodeLockStatus;
 use cfx_types::{H256, U64};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     ///

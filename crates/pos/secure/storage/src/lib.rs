@@ -14,7 +14,6 @@ mod in_memory;
 mod kv_storage;
 mod namespaced_storage;
 mod on_disk;
-mod policy;
 mod storage;
 
 pub use crate::{
@@ -25,7 +24,6 @@ pub use crate::{
     kv_storage::{GetResponse, KVStorage},
     namespaced_storage::NamespacedStorage,
     on_disk::OnDiskStorage,
-    policy::{Capability, Identity, Permission, Policy},
     storage::Storage,
 };
 

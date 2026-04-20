@@ -62,7 +62,7 @@ impl TransactionValidator {
                 Some(DiscardedVMStatus::INVALID_EXPIRATION_TIME),
                 0,
                 GovernanceRole::Validator,
-            ))
+            ));
         }
 
         Some(VMValidatorResult::new(result, 0, GovernanceRole::Validator))

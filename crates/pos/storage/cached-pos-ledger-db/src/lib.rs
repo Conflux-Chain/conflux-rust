@@ -12,7 +12,6 @@ use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
     block_info::PivotBlockDecision,
-    contract_event::ContractEvent,
     ledger_info::LedgerInfo,
     term_state::{NodeID, PosState},
     transaction::Transaction,
@@ -155,13 +154,11 @@ impl CachedPosLedgerDB {
     pub fn update_block_tree_root(
         &self, committed_trees: ExecutedTrees,
         committed_ledger_info: &LedgerInfo, committed_txns: Vec<Transaction>,
-        reconfig_events: Vec<ContractEvent>,
     ) {
         self.cache.lock().update_block_tree_root(
             committed_trees,
             committed_ledger_info,
             committed_txns,
-            reconfig_events,
         )
     }
 
@@ -184,13 +181,11 @@ impl CachedPosLedgerDB {
 
     pub fn prune(
         &self, committed_ledger_info: &LedgerInfo,
-        committed_txns: Vec<Transaction>, reconfig_events: Vec<ContractEvent>,
+        committed_txns: Vec<Transaction>,
     ) -> Result<HashValue, Error> {
-        self.cache.lock().prune(
-            committed_ledger_info,
-            committed_txns,
-            reconfig_events,
-        )
+        self.cache
+            .lock()
+            .prune(committed_ledger_info, committed_txns)
     }
 
     pub fn get_block(

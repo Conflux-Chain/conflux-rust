@@ -15,6 +15,7 @@ use crate::{
 use cfx_addr::Network;
 use cfx_rpc_cfx_impl::TraceHandler as CfxTraceHandler;
 use cfx_rpc_eth_types::trace::EpochTrace;
+use cfx_rpc_utils::error::jsonrpc_error_helpers::error_object_owned_to_jsonrpc_error;
 use cfx_types::H256;
 
 use cfxcore::SharedConsensusGraph;
@@ -43,7 +44,9 @@ impl Trace for TraceHandler {
     fn filter_traces(
         &self, filter: RpcTraceFilter,
     ) -> JsonRpcResult<Option<Vec<LocalizedTrace>>> {
-        let primitive_filter = filter.into_primitive()?;
+        let primitive_filter = filter
+            .into_primitive()
+            .map_err(error_object_owned_to_jsonrpc_error)?;
         into_jsonrpc_result(self.inner.filter_traces_impl(primitive_filter))
     }
 

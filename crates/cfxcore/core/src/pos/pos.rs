@@ -10,13 +10,11 @@ use crate::{
     pos::{
         consensus::{
             consensus_provider::start_consensus,
-            gen_consensus_reconfig_subscription,
             network::NetworkReceivers as ConsensusNetworkReceivers,
             ConsensusDB, TestCommand,
         },
         mempool as diem_mempool,
         mempool::{
-            gen_mempool_reconfig_subscription,
             network::NetworkReceivers as MemPoolNetworkReceivers,
             SubmissionStatus,
         },
@@ -25,14 +23,12 @@ use crate::{
             network_sender::NetworkSender,
             sync_protocol::HotStuffSynchronizationProtocol,
         },
-        state_sync::bootstrapper::StateSyncBootstrapper,
     },
     sync::ProtocolConfiguration,
 };
 
 use cached_pos_ledger_db::CachedPosLedgerDB;
-use consensus_types::db::FakeLedgerBlockDB;
-use diem_config::{config::NodeConfig, utils::get_genesis_txn};
+use diem_config::config::NodeConfig;
 use diem_logger::{prelude::*, Writer};
 use diem_types::{
     account_address::{from_consensus_public_key, AccountAddress},
@@ -42,18 +38,13 @@ use diem_types::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     PeerId,
 };
-use executor::{db_bootstrapper::maybe_bootstrap, vm::PosVM, Executor};
-use executor_types::ChunkExecutor;
-use futures::{
-    channel::{
-        mpsc::{self, channel},
-        oneshot,
-    },
-    executor::block_on,
+use executor::db_bootstrapper::maybe_bootstrap;
+use futures::channel::{
+    mpsc::{self, channel},
+    oneshot,
 };
 use network::NetworkService;
 use pos_ledger_db::PosLedgerDB;
-use pow_types::FakePowHandler;
 use std::{
     boxed::Box,
     fs,
@@ -81,7 +72,6 @@ pub struct PosDropHandle {
     )>,
     pub stopped: Arc<AtomicBool>,
     _mempool: Runtime,
-    _state_sync_bootstrapper: StateSyncBootstrapper,
     _consensus_runtime: Runtime,
 }
 
@@ -172,14 +162,6 @@ fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
     );
 }
 
-fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
-    Box::new(Executor::<PosVM>::new(
-        Arc::new(CachedPosLedgerDB::new(db)),
-        Arc::new(FakePowHandler {}),
-        Arc::new(FakeLedgerBlockDB {}),
-    ))
-}
-
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     protocol_config: ProtocolConfiguration,
@@ -218,69 +200,33 @@ pub fn setup_pos_environment(
         .expect("DB should open."),
     );
 
-    let genesis_waypoint = node_config.base.waypoint.genesis_waypoint();
-    // if there's genesis txn and waypoint, commit it if the result matches.
-    if let Some(genesis) = get_genesis_txn(&node_config) {
-        maybe_bootstrap::<PosVM>(
-            &db_rw,
-            genesis,
-            genesis_waypoint,
-            Some(PivotBlockDecision {
-                block_hash: protocol_config.pos_genesis_pivot_decision,
-                height: 0,
-            }),
-            pos_genesis_state.initial_seed.as_bytes().to_vec(),
-            pos_genesis_state
-                .initial_nodes
-                .into_iter()
-                .map(|node| {
-                    (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
-                })
-                .collect(),
-            pos_genesis_state.initial_committee,
-        )
-        .expect("Db-bootstrapper should not fail.");
-    } else {
-        panic!("Genesis txn not provided.");
-    }
+    // If the DB hasn't been bootstrapped yet, commit genesis.
+    maybe_bootstrap(
+        &db_rw,
+        Some(PivotBlockDecision {
+            block_hash: protocol_config.pos_genesis_pivot_decision,
+            height: 0,
+        }),
+        pos_genesis_state.initial_seed.as_bytes().to_vec(),
+        pos_genesis_state
+            .initial_nodes
+            .into_iter()
+            .map(|node| {
+                (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
+            })
+            .collect(),
+        pos_genesis_state.initial_committee,
+    )
+    .expect("Db-bootstrapper should not fail.");
 
     debug!(
         "Storage service started in {} ms",
         instant.elapsed().as_millis()
     );
 
-    instant = Instant::now();
-    let chunk_executor = setup_chunk_executor(db_rw.clone());
-    debug!(
-        "ChunkExecutor setup in {} ms",
-        instant.elapsed().as_millis()
-    );
-    let mut reconfig_subscriptions = vec![];
-
-    let (mempool_reconfig_subscription, mempool_reconfig_events) =
-        gen_mempool_reconfig_subscription();
-    reconfig_subscriptions.push(mempool_reconfig_subscription);
-    // consensus has to subscribe to ALL on-chain configs
-    let (consensus_reconfig_subscription, consensus_reconfig_events) =
-        gen_consensus_reconfig_subscription();
-    if node_config.base.role.is_validator() {
-        reconfig_subscriptions.push(consensus_reconfig_subscription);
-    }
-
-    // for state sync to send requests to mempool
-    let (state_sync_to_mempool_sender, state_sync_requests) =
+    // Channel for consensus to notify mempool of committed transactions.
+    let (mempool_commit_sender, mempool_commit_receiver) =
         channel(INTRA_NODE_CHANNEL_BUFFER_SIZE);
-    let state_sync_bootstrapper = StateSyncBootstrapper::bootstrap(
-        state_sync_to_mempool_sender,
-        Arc::clone(&db_rw.reader),
-        chunk_executor,
-        node_config,
-        genesis_waypoint,
-        reconfig_subscriptions,
-    );
-
-    let state_sync_client = state_sync_bootstrapper
-        .create_client(node_config.state_sync.client_commit_timeout_ms);
 
     let (consensus_to_mempool_sender, consensus_requests) =
         channel(INTRA_NODE_CHANNEL_BUFFER_SIZE);
@@ -303,20 +249,9 @@ pub fn setup_pos_environment(
         mempool_network_receiver,
         mp_client_events,
         consensus_requests,
-        state_sync_requests,
-        mempool_reconfig_events,
+        mempool_commit_receiver,
     );
     debug!("Mempool started in {} ms", instant.elapsed().as_millis());
-
-    // Make sure that state synchronizer is caught up at least to its waypoint
-    // (in case it's present). There is no sense to start consensus prior to
-    // that. TODO: Note that we need the networking layer to be able to
-    // discover & connect to the peers with potentially outdated network
-    // identity public keys.
-    debug!("Wait until state sync is initialized");
-    block_on(state_sync_client.wait_until_initialized())
-        .expect("State sync initialization failure");
-    debug!("State sync initialization complete.");
 
     // Initialize and start consensus.
     instant = Instant::now();
@@ -327,10 +262,10 @@ pub fn setup_pos_environment(
             network_sender,
             consensus_network_receiver,
             consensus_to_mempool_sender,
-            state_sync_client,
+            mempool_commit_sender.clone(),
+            node_config.consensus.mempool_commit_timeout_ms,
             pos_ledger_db.clone(),
             db_with_cache.clone(),
-            consensus_reconfig_events,
             own_pos_public_key.map_or_else(
                 || AccountAddress::random(),
                 |public_key| {
@@ -347,7 +282,6 @@ pub fn setup_pos_environment(
         pow_handler,
         _consensus_runtime: consensus_runtime,
         stopped,
-        _state_sync_bootstrapper: state_sync_bootstrapper,
         _mempool: mempool,
         pos_ledger_db,
         cached_db: db_with_cache,

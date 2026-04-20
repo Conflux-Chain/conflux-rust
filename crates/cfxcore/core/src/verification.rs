@@ -22,7 +22,6 @@ use cfx_types::{
     H256, U256,
 };
 use cfx_vm_types::{ConsensusGasSpec, Spec};
-use log::debug;
 use primitives::{
     block::BlockHeight,
     block_header::compute_next_price_tuple,
@@ -675,7 +674,7 @@ impl VerificationConfig {
             spec,
             |mode: &VerifyTxMode| {
                 if !Self::check_eip1559_transaction(tx, cip1559, mode) {
-                    debug!(
+                    trace!(
                         "fast_recheck: EIP-1559 transaction check failed at height {} txhash={:?}",
                         height,
                         tx.hash()
@@ -684,7 +683,7 @@ impl VerificationConfig {
                 }
 
                 if !Self::check_eip7702_transaction(tx, cip7702, mode) {
-                    debug!(
+                    trace!(
                         "fast_recheck: EIP-7702 transaction check failed at height {} txhash={:?}",
                         height,
                         tx.hash()
@@ -693,7 +692,7 @@ impl VerificationConfig {
                 }
 
                 if !Self::check_eip3860(tx, cip645) {
-                    debug!(
+                    trace!(
                         "fast_recheck: EIP-3860 transaction check failed at height {} txhash={:?}",
                         height,
                         tx.hash()

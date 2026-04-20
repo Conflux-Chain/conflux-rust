@@ -5,10 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{
-    consensusdb::ConsensusDB, epoch_manager::LivenessStorageData,
-    error::DbError,
-};
+use super::{consensusdb::ConsensusDB, epoch_manager::LivenessStorageData};
 use anyhow::{format_err, Context, Result};
 use consensus_types::{
     block::Block, db::LedgerBlockRW, quorum_cert::QuorumCert,
@@ -19,7 +16,6 @@ use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use diem_types::{
     block_info::{PivotBlockDecision, Round},
-    epoch_change::EpochChangeProof,
     ledger_info::LedgerInfo,
     transaction::Version,
 };
@@ -57,24 +53,11 @@ pub trait PersistentLivenessStorage: Send + Sync {
         &self, highest_timeout_cert: TimeoutCertificate,
     ) -> Result<()>;
 
-    /// Retrieve a epoch change proof for SafetyRules so it can instantiate its
-    /// ValidatorVerifier.
-    fn retrieve_epoch_change_proof(
-        &self, version: u64,
-    ) -> Result<EpochChangeProof>;
-
     fn save_ledger_blocks(&self, _blocks: Vec<Block>) -> Result<()> {
         unimplemented!()
     }
 
     fn get_ledger_block(&self, _block_id: &HashValue) -> Result<Option<Block>> {
-        unimplemented!()
-    }
-
-    #[allow(dead_code)]
-    fn prune_staking_events(
-        &self, _committed_pivot_decision: &PivotBlockDecision,
-    ) -> Result<()> {
         unimplemented!()
     }
 
@@ -461,16 +444,6 @@ impl PersistentLivenessStorage for StorageWriteProxy {
         )?)?)
     }
 
-    fn retrieve_epoch_change_proof(
-        &self, version: u64,
-    ) -> Result<EpochChangeProof> {
-        let (_, proofs, _) = self
-            .pos_ledger_db
-            .get_state_proof(version)
-            .map_err(DbError::from)?;
-        Ok(proofs)
-    }
-
     fn pos_ledger_db(&self) -> Arc<dyn DbReader> { self.pos_ledger_db.clone() }
 
     fn save_ledger_blocks(&self, blocks: Vec<Block>) -> Result<()> {
@@ -479,13 +452,5 @@ impl PersistentLivenessStorage for StorageWriteProxy {
 
     fn get_ledger_block(&self, block_id: &HashValue) -> Result<Option<Block>> {
         Ok(self.db.get_ledger_block(block_id)?)
-    }
-
-    fn prune_staking_events(
-        &self, committed_pivot_decision: &PivotBlockDecision,
-    ) -> Result<()> {
-        Ok(self
-            .db
-            .delete_staking_events_before(committed_pivot_decision.height)?)
     }
 }

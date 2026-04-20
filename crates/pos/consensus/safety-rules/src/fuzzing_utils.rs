@@ -5,7 +5,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::serializer::SafetyRulesInput;
 use consensus_types::{
     block::Block,
     block_data::{BlockData, BlockType},
@@ -22,7 +21,6 @@ use diem_crypto::{
 };
 use diem_types::{
     account_address::AccountAddress,
-    epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
     proof::AccumulatorExtensionProof,
@@ -36,7 +34,6 @@ use rand::{rngs::StdRng, SeedableRng};
 const MAX_BLOCK_SIZE: usize = 10000;
 const MAX_NUM_ADDR_TO_VALIDATOR_INFO: usize = 10;
 const MAX_NUM_LEAVES: usize = 20;
-const MAX_NUM_LEDGER_INFO_WITH_SIGS: usize = 10;
 const MAX_NUM_SUBTREE_ROOTS: usize = 20;
 const MAX_PROPOSAL_TRANSACTIONS: usize = 5;
 const NUM_UNIVERSE_ACCOUNTS: usize = 3;
@@ -132,23 +129,6 @@ prop_compose! {
     }
 }
 
-// This generates an arbitrary EpochChangeProof.
-prop_compose! {
-    pub fn arb_epoch_change_proof(
-    )(
-        more in any::<bool>(),
-        ledger_info_with_sigs in prop::collection::vec(
-            any::<LedgerInfoWithSignatures>(),
-            0..MAX_NUM_LEDGER_INFO_WITH_SIGS
-        ),
-    ) -> EpochChangeProof {
-        EpochChangeProof::new(
-            ledger_info_with_sigs,
-            more,
-        )
-    }
-}
-
 // This generates an arbitrary Timeout.
 prop_compose! {
     pub fn arb_timeout(
@@ -237,39 +217,19 @@ fn arb_block_type() -> impl Strategy<Value = BlockType> {
     ]
 }
 
-// This generates an arbitrary SafetyRulesInput enum.
-pub fn arb_safety_rules_input() -> impl Strategy<Value = SafetyRulesInput> {
-    prop_oneof![
-        Just(SafetyRulesInput::ConsensusState),
-        arb_epoch_change_proof()
-            .prop_map(|input| SafetyRulesInput::Initialize(Box::new(input))),
-        arb_maybe_signed_vote_proposal().prop_map(|input| {
-            SafetyRulesInput::ConstructAndSignVote(Box::new(input))
-        }),
-        arb_block_data().prop_map(|input| {
-            SafetyRulesInput::SignProposal(Box::new(input))
-        }),
-        arb_timeout().prop_map(|input| {
-            SafetyRulesInput::SignTimeout(Box::new(input))
-        }),
-    ]
-}
-
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod fuzzing {
-    use crate::{
-        error::Error, serializer::SafetyRulesInput, test_utils, TSafetyRules,
-    };
+    use crate::{error::Error, test_utils};
     use consensus_types::{
         block::Block, block_data::BlockData, timeout::Timeout, vote::Vote,
         vote_proposal::MaybeSignedVoteProposal,
     };
     use diem_crypto::bls::BLSSignature;
-    use diem_types::epoch_change::EpochChangeProof;
+    use diem_types::epoch_state::EpochState;
 
-    pub fn fuzz_initialize(proof: EpochChangeProof) -> Result<(), Error> {
+    pub fn fuzz_initialize(epoch_state: EpochState) -> Result<(), Error> {
         let mut safety_rules = test_utils::test_safety_rules_uninitialized();
-        safety_rules.initialize(&proof)
+        safety_rules.initialize(&epoch_state)
     }
 
     pub fn fuzz_construct_and_sign_vote(
@@ -277,23 +237,6 @@ pub mod fuzzing {
     ) -> Result<Vote, Error> {
         let mut safety_rules = test_utils::test_safety_rules();
         safety_rules.construct_and_sign_vote(&maybe_signed_vote_proposal)
-    }
-
-    pub fn fuzz_handle_message(
-        safety_rules_input: SafetyRulesInput,
-    ) -> Result<Vec<u8>, Error> {
-        // Create a safety rules serializer test instance for fuzzing
-        let mut serializer_service = test_utils::test_serializer();
-
-        // BCS encode the safety_rules_input and fuzz the handle_message()
-        // method
-        if let Ok(safety_rules_input) = bcs::to_bytes(&safety_rules_input) {
-            serializer_service.handle_message(safety_rules_input)
-        } else {
-            Err(Error::SerializationError(
-                "Unable to serialize safety rules input for fuzzer!".into(),
-            ))
-        }
     }
 
     pub fn fuzz_sign_proposal(block_data: BlockData) -> Result<Block, Error> {
@@ -314,12 +257,11 @@ pub mod fuzzing {
 mod tests {
     use crate::{
         fuzzing::{
-            fuzz_construct_and_sign_vote, fuzz_handle_message, fuzz_initialize,
-            fuzz_sign_proposal, fuzz_sign_timeout,
+            fuzz_construct_and_sign_vote, fuzz_initialize, fuzz_sign_proposal,
+            fuzz_sign_timeout,
         },
         fuzzing_utils::{
-            arb_block_data, arb_epoch_change_proof,
-            arb_maybe_signed_vote_proposal, arb_safety_rules_input,
+            arb_block_data, arb_epoch_state, arb_maybe_signed_vote_proposal,
             arb_timeout,
         },
     };
@@ -329,13 +271,10 @@ mod tests {
         #![proptest_config(ProptestConfig::with_cases(10))]
 
         #[test]
-        fn handle_message_proptest(input in arb_safety_rules_input()) {
-            let _ = fuzz_handle_message(input);
-        }
-
-        #[test]
-        fn initialize_proptest(input in arb_epoch_change_proof()) {
-            let _ = fuzz_initialize(input);
+        fn initialize_proptest(input in arb_epoch_state()) {
+            if let Some(epoch_state) = input {
+                let _ = fuzz_initialize(epoch_state);
+            }
         }
 
         #[test]

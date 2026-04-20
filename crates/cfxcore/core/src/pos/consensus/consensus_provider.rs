@@ -11,22 +11,19 @@ use futures::channel::{mpsc, oneshot};
 use tokio::runtime::{self, Runtime};
 
 use cached_pos_ledger_db::CachedPosLedgerDB;
-use channel::diem_channel;
 use consensus_types::db::LedgerBlockRW;
 use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
 use diem_types::{
-    account_address::AccountAddress, on_chain_config::OnChainConfigPayload,
-    transaction::SignedTransaction,
+    account_address::AccountAddress, transaction::SignedTransaction,
 };
-use executor::{vm::PosVM, Executor};
+use executor::Executor;
 use storage_interface::DbReader;
 
 use crate::pos::{
     mempool::{ConsensusRequest, SubmissionStatus},
     pow_handler::PowHandler,
     protocol::network_sender::NetworkSender,
-    state_sync::client::StateSyncClient,
 };
 
 use super::{
@@ -43,10 +40,11 @@ pub fn start_consensus(
     node_config: &NodeConfig, network_sender: NetworkSender,
     network_receiver: NetworkReceivers,
     consensus_to_mempool_sender: mpsc::Sender<ConsensusRequest>,
-    state_sync_client: StateSyncClient, pos_ledger_db: Arc<dyn DbReader>,
-    db_with_cache: Arc<CachedPosLedgerDB>,
-    reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
-    author: AccountAddress,
+    mempool_commit_sender: mpsc::Sender<
+        crate::pos::mempool::CommitNotification,
+    >,
+    mempool_commit_timeout_ms: u64, pos_ledger_db: Arc<dyn DbReader>,
+    db_with_cache: Arc<CachedPosLedgerDB>, author: AccountAddress,
     tx_sender: mpsc::Sender<(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
@@ -74,13 +72,16 @@ pub fn start_consensus(
         runtime.handle().clone(),
         consensus_db.clone(),
     ));
-    let executor = Box::new(Executor::<PosVM>::new(
+    let executor = Box::new(Executor::new(
         db_with_cache,
         pow_handler.clone(),
         consensus_db.clone() as Arc<dyn LedgerBlockRW>,
     ));
-    let state_computer =
-        Arc::new(ExecutionProxy::new(executor, state_sync_client));
+    let state_computer = Arc::new(ExecutionProxy::new(
+        executor,
+        mempool_commit_sender,
+        mempool_commit_timeout_ms,
+    ));
     let time_service =
         Arc::new(ClockTimeService::new(runtime.handle().clone()));
 
@@ -101,7 +102,6 @@ pub fn start_consensus(
         txn_manager,
         state_computer,
         storage,
-        reconfig_events,
         pow_handler.clone(),
         author,
         tx_sender,

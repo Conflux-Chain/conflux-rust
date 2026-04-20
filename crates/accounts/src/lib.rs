@@ -605,7 +605,6 @@ impl AccountProvider {
         self.sstore
             .list_geth_accounts(testnet)
             .into_iter()
-            .map(|a| a)
             .collect()
     }
 

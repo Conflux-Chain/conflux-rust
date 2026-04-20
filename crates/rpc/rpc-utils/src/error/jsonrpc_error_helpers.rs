@@ -160,6 +160,10 @@ pub fn error_object_owned_to_jsonrpc_error(e: ErrorObjectOwned) -> Error {
     Error {
         code: ErrorCode::from(e.code() as i64),
         message: e.message().into(),
-        data: e.data().map(|v| Value::String(v.to_string())),
+        data: e.data().and_then(|v| serde_json::from_str(v.get()).ok()),
     }
+}
+
+pub fn jsonrpc_error_to_error_object_owned(e: Error) -> ErrorObjectOwned {
+    ErrorObjectOwned::owned(e.code.code() as i32, e.message, e.data)
 }

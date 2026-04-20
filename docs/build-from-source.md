@@ -2,7 +2,7 @@
 
 ## Install Build Dependencies
 
-Conflux requires **Rust 1.90**, ```clang```, and ```sqlite``` to build.
+Conflux requires **Rust 1.94**, ```clang```, and ```sqlite``` to build.
 
 We recommend installing Rust through [rustup](https://rustup.rs/). If you don't already have ```rustup``` or ```clang```, you can install them like this:
 
@@ -13,7 +13,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # you might need to run 
 # source "$HOME/.cargo/env"
 # to configure your shell
-rustup install 1.90
+rustup install 1.94
 ```
 
 Other dependencies including ```clang```, ```cmake (version >= 3.12 and < 4.0)``` and ```sqlite (version >= 3.8.3 and < 4.0)``` can be installed with:
@@ -57,7 +57,7 @@ curl https://sh.rustup.rs -sSf | sh
 # you might need to run 
 # source "$HOME/.cargo/env"
 # to configure your shell
-rustup install 1.90
+rustup install 1.94
 ```
 
 You might need to install ```brew``` if you need to use it to install ```clang```:
@@ -121,11 +121,6 @@ Note: when compiling a crate and you receive errors, it is in most cases due to 
 
 ```shell
 cargo clean && cargo update
-```
-When compiling on Linux, by default `cc` is linked to `gcc`. You may need to export the `CC` environment variable to point to `clang`:
-
-```shell
-CC=clang CXX=clang++ cargo build --release
 ```
 
 To start running a Conflux full node, you can follow the instructions at [Running Conflux Full Node](https://doc.confluxnetwork.org/docs/general/run-a-node/).
