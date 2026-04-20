@@ -90,7 +90,12 @@ impl SessionManager {
     pub fn get_by_id(&self, node_id: &NodeId) -> Option<Arc<RwLock<Session>>> {
         let sessions = self.sessions.read();
         let idx = *self.node_id_index.read().get(node_id)?;
-        sessions.get(idx).cloned()
+        let session = sessions.get(idx)?.clone();
+        if session.read().expired() {
+            None
+        } else {
+            Some(session)
+        }
     }
 
     /// Get all the sessions in `SessionManager`.
@@ -136,9 +141,7 @@ impl SessionManager {
     }
 
     /// Check the session existence for the specified node id.
-    pub fn contains_node(&self, id: &NodeId) -> bool {
-        self.node_id_index.read().contains_key(id)
-    }
+    pub fn contains_node(&self, id: &NodeId) -> bool { self.get_by_id(id).is_some() }
 
     /// Get the session index by node id.
     pub fn get_index_by_id(&self, id: &NodeId) -> Option<usize> {
@@ -177,14 +180,25 @@ impl SessionManager {
 
         // ensure the node id is unique if specified.
         if let Some(node_id) = id {
-            if node_id_index.contains_key(node_id) {
-                debug!(
-                    "SessionManager.create: leave on node_id already exists"
-                );
-                return Err(format!(
-                    "session already exists, nodeId = {:?}",
-                    node_id
-                ));
+            if let Some(cur_idx) = node_id_index.get(node_id).cloned() {
+                // Stream deregistration is asynchronous, so a recently
+                // disconnected session can leave a stale NodeId index behind
+                // briefly even though the session is already expired.
+                let is_stale = sessions
+                    .get(cur_idx)
+                    .map(|session| session.read().expired())
+                    .unwrap_or(true);
+                if is_stale {
+                    node_id_index.remove(node_id);
+                } else {
+                    debug!(
+                        "SessionManager.create: leave on node_id already exists"
+                    );
+                    return Err(format!(
+                        "session already exists, nodeId = {:?}",
+                        node_id
+                    ));
+                }
             }
         }
 

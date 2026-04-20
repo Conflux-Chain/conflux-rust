@@ -7,7 +7,7 @@ use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     mem, panic,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
     thread,
@@ -992,10 +992,12 @@ struct ConsensusWorkerHandle {
     /// Channel + subscription ID for unsubscribe-based shutdown.
     new_block_hashes: Arc<Channel<H256>>,
     worker_subscription_id: u64,
+    stop_requested: Arc<AtomicBool>,
 }
 
 impl ConsensusWorkerHandle {
     fn stop(&self) {
+        self.stop_requested.store(true, Ordering::SeqCst);
         self.new_block_hashes
             .unsubscribe(self.worker_subscription_id);
         if let Some(handle) = self.thread.lock().take() {
@@ -1088,6 +1090,8 @@ impl SynchronizationGraph {
         let worker_data_man = data_man.clone();
         let worker_consensus = consensus.clone();
         let worker_unprocessed_count = consensus_unprocessed_count.clone();
+        let worker_stop_requested = Arc::new(AtomicBool::new(false));
+        let worker_stop_requested_for_thread = worker_stop_requested.clone();
 
         // It receives `BLOCK_GRAPH_READY` blocks in order and handles them in
         // `ConsensusGraph`
@@ -1106,6 +1110,12 @@ impl SynchronizationGraph {
                 let mut pos_started = false;
 
                 'outer: loop {
+                    if worker_stop_requested_for_thread
+                        .load(Ordering::SeqCst)
+                    {
+                        break;
+                    }
+
                     // Only block when we have processed all received blocks.
                     let mut blocking = priority_queue.is_empty();
                     'inner: loop {
@@ -1123,7 +1133,11 @@ impl SynchronizationGraph {
 
                         match maybe_item {
                             // FIXME: We need to investigate why duplicate hash may send to the consensus worker
-                            Ok(hash) => if !reverse_map.contains_key(&hash) {
+                            Ok(hash) => if worker_stop_requested_for_thread
+                                .load(Ordering::SeqCst)
+                            {
+                                break 'outer;
+                            } else if !reverse_map.contains_key(&hash) {
                                 debug!("Worker thread receive: block = {}", hash);
                                 let header = worker_data_man.block_header_by_hash(&hash).expect("Header must exist before sending to the consensus worker!");
 
@@ -1168,6 +1182,9 @@ impl SynchronizationGraph {
                             Err(TryRecvError::Disconnected) => break 'outer,
                         }
                     }
+                    if worker_stop_requested_for_thread.load(Ordering::SeqCst) {
+                        break 'outer;
+                    }
                     if let Some((_, hash)) = priority_queue.pop() {
                         CONSENSUS_WORKER_QUEUE.dequeue(1);
                         let successors = reverse_map.remove(&hash).unwrap();
@@ -1195,6 +1212,7 @@ impl SynchronizationGraph {
             thread: Mutex::new(Some(handle)),
             new_block_hashes: notifications.new_block_hashes.clone(),
             worker_subscription_id,
+            stop_requested: worker_stop_requested,
         };
 
         let sync_graph = SynchronizationGraph {
