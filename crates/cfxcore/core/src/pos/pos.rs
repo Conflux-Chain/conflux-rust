@@ -10,13 +10,11 @@ use crate::{
     pos::{
         consensus::{
             consensus_provider::start_consensus,
-            gen_consensus_reconfig_subscription,
             network::NetworkReceivers as ConsensusNetworkReceivers,
             ConsensusDB, TestCommand,
         },
         mempool as diem_mempool,
         mempool::{
-            gen_mempool_reconfig_subscription,
             network::NetworkReceivers as MemPoolNetworkReceivers,
             SubmissionStatus,
         },
@@ -25,7 +23,6 @@ use crate::{
             network_sender::NetworkSender,
             sync_protocol::HotStuffSynchronizationProtocol,
         },
-        state_sync::bootstrapper::StateSyncBootstrapper,
     },
     sync::ProtocolConfiguration,
 };
@@ -42,12 +39,9 @@ use diem_types::{
     PeerId,
 };
 use executor::db_bootstrapper::maybe_bootstrap;
-use futures::{
-    channel::{
-        mpsc::{self, channel},
-        oneshot,
-    },
-    executor::block_on,
+use futures::channel::{
+    mpsc::{self, channel},
+    oneshot,
 };
 use network::NetworkService;
 use pos_ledger_db::PosLedgerDB;
@@ -78,7 +72,6 @@ pub struct PosDropHandle {
     )>,
     pub stopped: Arc<AtomicBool>,
     _mempool: Runtime,
-    _state_sync_bootstrapper: StateSyncBootstrapper,
     _consensus_runtime: Runtime,
 }
 
@@ -231,30 +224,9 @@ pub fn setup_pos_environment(
         instant.elapsed().as_millis()
     );
 
-    let mut reconfig_subscriptions = vec![];
-
-    let (mempool_reconfig_subscription, mempool_reconfig_events) =
-        gen_mempool_reconfig_subscription();
-    reconfig_subscriptions.push(mempool_reconfig_subscription);
-    // consensus has to subscribe to ALL on-chain configs
-    let (consensus_reconfig_subscription, consensus_reconfig_events) =
-        gen_consensus_reconfig_subscription();
-    if node_config.base.role.is_validator() {
-        reconfig_subscriptions.push(consensus_reconfig_subscription);
-    }
-
-    // for state sync to send requests to mempool
-    let (state_sync_to_mempool_sender, state_sync_requests) =
+    // Channel for consensus to notify mempool of committed transactions.
+    let (mempool_commit_sender, mempool_commit_receiver) =
         channel(INTRA_NODE_CHANNEL_BUFFER_SIZE);
-    let state_sync_bootstrapper = StateSyncBootstrapper::bootstrap(
-        state_sync_to_mempool_sender,
-        Arc::clone(&db_rw.reader),
-        node_config,
-        reconfig_subscriptions,
-    );
-
-    let state_sync_client = state_sync_bootstrapper
-        .create_client(node_config.state_sync.client_commit_timeout_ms);
 
     let (consensus_to_mempool_sender, consensus_requests) =
         channel(INTRA_NODE_CHANNEL_BUFFER_SIZE);
@@ -277,20 +249,9 @@ pub fn setup_pos_environment(
         mempool_network_receiver,
         mp_client_events,
         consensus_requests,
-        state_sync_requests,
-        mempool_reconfig_events,
+        mempool_commit_receiver,
     );
     debug!("Mempool started in {} ms", instant.elapsed().as_millis());
-
-    // Make sure that state synchronizer is caught up at least to its waypoint
-    // (in case it's present). There is no sense to start consensus prior to
-    // that. TODO: Note that we need the networking layer to be able to
-    // discover & connect to the peers with potentially outdated network
-    // identity public keys.
-    debug!("Wait until state sync is initialized");
-    block_on(state_sync_client.wait_until_initialized())
-        .expect("State sync initialization failure");
-    debug!("State sync initialization complete.");
 
     // Initialize and start consensus.
     instant = Instant::now();
@@ -301,10 +262,10 @@ pub fn setup_pos_environment(
             network_sender,
             consensus_network_receiver,
             consensus_to_mempool_sender,
-            state_sync_client,
+            mempool_commit_sender.clone(),
+            node_config.consensus.mempool_commit_timeout_ms,
             pos_ledger_db.clone(),
             db_with_cache.clone(),
-            consensus_reconfig_events,
             own_pos_public_key.map_or_else(
                 || AccountAddress::random(),
                 |public_key| {
@@ -321,7 +282,6 @@ pub fn setup_pos_environment(
         pow_handler,
         _consensus_runtime: consensus_runtime,
         stopped,
-        _state_sync_bootstrapper: state_sync_bootstrapper,
         _mempool: mempool,
         pos_ledger_db,
         cached_db: db_with_cache,

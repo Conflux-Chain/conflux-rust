@@ -47,7 +47,6 @@ pub const CLIENT_LABEL: &str = "client";
 // Bounded executor task labels
 pub const CLIENT_EVENT_LABEL: &str = "client_event";
 pub const STATE_SYNC_EVENT_LABEL: &str = "state_sync";
-pub const RECONFIG_EVENT_LABEL: &str = "reconfig";
 pub const PEER_BROADCAST_EVENT_LABEL: &str = "peer_broadcast";
 
 // task spawn stage labels
