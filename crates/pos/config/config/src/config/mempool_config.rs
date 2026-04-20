@@ -11,8 +11,6 @@ use serde::{Deserialize, Serialize};
 #[serde(default, deny_unknown_fields)]
 pub struct MempoolConfig {
     pub capacity: usize,
-    // number of failovers to broadcast to when the primary network is alive
-    pub default_failovers: usize,
     pub max_broadcasts_per_peer: usize,
     pub shared_mempool_ack_timeout_ms: u64,
     pub shared_mempool_backoff_interval_ms: u64,
@@ -34,7 +32,6 @@ impl Default for MempoolConfig {
             // Allow for 1s latency with the default 500ms tick.
             max_broadcasts_per_peer: 2,
             capacity: 100_000,
-            default_failovers: 3,
             system_transaction_timeout_secs: 600,
             system_transaction_gc_interval_ms: 60_000,
         }

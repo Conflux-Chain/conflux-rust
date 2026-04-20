@@ -4,40 +4,10 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-use crate::config::RoleType;
 use diem_types::PeerId;
 use serde::{Deserialize, Serialize};
 use short_hex_str::AsShortHexStr;
 use std::{cmp::Ordering, fmt};
-
-/// Represents the Role that a peer plays in the network ecosystem rather than
-/// the type of node.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Deserialize,
-    Eq,
-    Hash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-)]
-pub enum PeerRole {
-    Validator = 0,
-    PreferredUpstream,
-    Upstream,
-    ValidatorFullNode,
-    Downstream,
-    Known,
-    Unknown,
-}
-
-impl Default for PeerRole {
-    /// Default to least trusted
-    fn default() -> Self { PeerRole::Unknown }
-}
 
 /// A representation of the network being used in communication.
 /// There should only be one of each NetworkId used for a single node (except
@@ -147,54 +117,6 @@ impl NetworkId {
 
     pub fn is_validator_network(&self) -> bool {
         matches!(self, NetworkId::Validator)
-    }
-
-    /// Roles for a prioritization of relative upstreams
-    pub fn upstream_roles(&self, role: &RoleType) -> &'static [PeerRole] {
-        match self {
-            NetworkId::Validator => &[PeerRole::Validator],
-            NetworkId::Public => &[
-                PeerRole::PreferredUpstream,
-                PeerRole::Upstream,
-                PeerRole::ValidatorFullNode,
-            ],
-            NetworkId::Private(_) => {
-                if self.is_vfn_network() {
-                    match role {
-                        RoleType::Validator => &[],
-                        RoleType::FullNode => &[PeerRole::Validator],
-                    }
-                } else {
-                    &[PeerRole::PreferredUpstream, PeerRole::Upstream]
-                }
-            }
-        }
-    }
-
-    /// Roles for a prioritization of relative downstreams
-    pub fn downstream_roles(&self, role: &RoleType) -> &'static [PeerRole] {
-        match self {
-            NetworkId::Validator => &[PeerRole::Validator],
-            // In order to allow fallbacks, we must allow for nodes to accept
-            // ValidatorFullNodes
-            NetworkId::Public => &[
-                PeerRole::ValidatorFullNode,
-                PeerRole::Downstream,
-                PeerRole::Known,
-                PeerRole::Unknown,
-            ],
-            NetworkId::Private(_) => {
-                if self.is_vfn_network() {
-                    match role {
-                        RoleType::Validator => &[PeerRole::ValidatorFullNode],
-                        RoleType::FullNode => &[],
-                    }
-                } else {
-                    // It's a private network, disallow unknown peers
-                    &[PeerRole::Downstream, PeerRole::Known]
-                }
-            }
-        }
     }
 
     pub fn as_str(&self) -> &str {

@@ -14,20 +14,14 @@ use crate::pos::mempool::{
         types::{notify_subscribers, SharedMempool, SharedMempoolNotification},
     },
 };
-use diem_config::{
-    config::{MempoolConfig, RoleType},
-    network_id::PeerRole,
-};
 use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::transaction::SignedTransaction;
-use itertools::Itertools;
 //use netcore::transport::ConnectionOrigin;
 //use network::transport::ConnectionMetadata;
 use network::node_table::NodeId;
 use serde::{Deserialize, Serialize};
 use std::{
-    cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap},
     ops::Add,
     time::{Duration, SystemTime},
@@ -62,11 +56,7 @@ impl PeerSyncState {
 }
 
 pub(crate) struct PeerManager {
-    /// Role of the current node
-    role: RoleType,
-    mempool_config: MempoolConfig,
     peer_states: Mutex<PeerSyncStates>,
-    prioritized_peers: Mutex<Vec<NodeId>>,
 }
 /// Identifier for a broadcasted batch of txns.
 /// For BatchId(`start_id`, `end_id`), (`start_id`, `end_id`) is the range of
@@ -110,16 +100,13 @@ impl BroadcastInfo {
 }
 
 impl PeerManager {
-    pub fn new(role: RoleType, mempool_config: MempoolConfig) -> Self {
+    pub fn new() -> Self {
         // Primary network is always chosen at initialization.
         counters::upstream_network(PRIMARY_NETWORK_PREFERENCE);
         diem_info!(LogSchema::new(LogEntry::UpstreamNetwork)
             .network_level(PRIMARY_NETWORK_PREFERENCE));
         Self {
-            role,
-            mempool_config,
             peer_states: Mutex::new(PeerSyncStates::new()),
-            prioritized_peers: Mutex::new(Vec::new()),
         }
     }
 
@@ -147,10 +134,6 @@ impl PeerManager {
         }
         //}
         drop(peer_states);
-
-        // Always need to update the prioritized peers, because of `is_alive`
-        // state changes
-        self.update_prioritized_peers();
         is_new_peer
     }
 
@@ -158,7 +141,6 @@ impl PeerManager {
     pub fn disable_peer(&self, peer: NodeId) {
         diem_debug!("PeerManager::disable_peer [{:?}]", peer);
         self.peer_states.lock().remove(&peer);
-        self.update_prioritized_peers();
     }
 
     pub fn is_backoff_mode(&self, peer: &NodeId) -> bool {
@@ -191,19 +173,6 @@ impl PeerManager {
         // Only broadcast to peers that are alive.
         if !state.is_alive {
             return;
-        }
-
-        // When not a validator, only broadcast to `default_failovers`
-        if !self.role.is_validator() {
-            let priority = self
-                .prioritized_peers
-                .lock()
-                .iter()
-                .find_position(|peer_network_id| *peer_network_id == &peer)
-                .map_or(usize::MAX, |(pos, _)| pos);
-            if priority > self.mempool_config.default_failovers {
-                return;
-            }
         }
 
         // If backoff mode is on for this peer, only execute broadcasts that
@@ -245,7 +214,7 @@ impl PeerManager {
             // decreasing order in the timeline index
             for (batch, sent_time) in state.broadcast_info.sent_batches.iter() {
                 let deadline = sent_time.add(Duration::from_millis(
-                    self.mempool_config.shared_mempool_ack_timeout_ms,
+                    smp.config.shared_mempool_ack_timeout_ms,
                 ));
                 if SystemTime::now().duration_since(deadline).is_ok() {
                     expired = Some(batch);
@@ -261,9 +230,7 @@ impl PeerManager {
                 // expires. This helps rate-limit egress network
                 // bandwidth and not overload a remote peer or this
                 // node's Diem network sender.
-                if pending_broadcasts
-                    >= self.mempool_config.max_broadcasts_per_peer
-                {
+                if pending_broadcasts >= smp.config.max_broadcasts_per_peer {
                     diem_debug!(
                         "pending_broadcasts too much for peer {:?}",
                         peer
@@ -283,7 +250,7 @@ impl PeerManager {
                         // Fresh broadcast
                         let (txns, new_timeline_id) = mempool.read_timeline(
                             state.timeline_id,
-                            self.mempool_config.shared_mempool_batch_size,
+                            smp.config.shared_mempool_batch_size,
                         );
                         (BatchId(state.timeline_id, new_timeline_id), txns)
                     }
@@ -338,42 +305,6 @@ impl PeerManager {
         //.peer(&peer)
         .batch_id(&batch_id)
         .backpressure(scheduled_backoff));
-    }
-
-    fn update_prioritized_peers(&self) {
-        // Only do this if it's not a validator
-        if self.role.is_validator() {
-            return;
-        }
-
-        // Retrieve just what's needed for the peer ordering
-        let peers: Vec<_> = {
-            let peer_states = self.peer_states.lock();
-            peer_states
-                .iter()
-                .filter(|(_, state)| state.is_alive)
-                .map(|(peer, _state)| {
-                    (
-                        peer.clone(),
-                        PeerRole::Validator, /* state.metadata.role */
-                    )
-                })
-                .collect()
-        };
-
-        // Order peers by network and by type
-        // Origin doesn't matter at this point, only inserted ones into
-        // peer_states are upstream Validators will always have the full
-        // set
-        let mut prioritized_peers = self.prioritized_peers.lock();
-        let peers: Vec<_> = peers
-            .iter()
-            .sorted_by(|peer_a, peer_b| {
-                compare_prioritized_peers(peer_a, peer_b)
-            })
-            .map(|(peer, _)| peer.clone())
-            .collect();
-        let _ = std::mem::replace(&mut *prioritized_peers, peers);
     }
 
     pub fn process_broadcast_ack(
@@ -471,81 +402,3 @@ impl PeerManager {
         }
     }*/
 }
-
-/// Provides ordering for prioritized peers
-fn compare_prioritized_peers(
-    peer_a: &(NodeId, PeerRole), peer_b: &(NodeId, PeerRole),
-) -> Ordering {
-    // Sort by NodeId
-    match peer_a.0.cmp(&peer_b.0) {
-        Ordering::Equal => {
-            // Then sort by Role
-            let role_a = peer_a.1;
-            let role_b = peer_b.1;
-            role_a.cmp(&role_b)
-        }
-        ordering => ordering,
-    }
-}
-
-/*
-#[cfg(test)]
-mod test {
-    use super::*;
-    use diem_config::network_id::{NetworkId, NodeNetworkId};
-    use diem_types::PeerId;
-
-    fn peer_network_id(peer_id: PeerId, network: NetworkId) -> PeerNetworkId {
-        PeerNetworkId(NodeNetworkId::new(network, 0), peer_id)
-    }
-
-    #[test]
-    fn check_peer_prioritization() {
-        let peer_id_1 = PeerId::from_hex_literal("0x1").unwrap();
-        let peer_id_2 = PeerId::from_hex_literal("0x2").unwrap();
-        let val_1 = (
-            peer_network_id(peer_id_1, NetworkId::vfn_network()),
-            PeerRole::Validator,
-        );
-        let val_2 = (
-            peer_network_id(peer_id_2, NetworkId::vfn_network()),
-            PeerRole::Validator,
-        );
-        let vfn_1 = (
-            peer_network_id(peer_id_1, NetworkId::Public),
-            PeerRole::ValidatorFullNode,
-        );
-        let preferred_1 = (
-            peer_network_id(peer_id_1, NetworkId::Public),
-            PeerRole::PreferredUpstream,
-        );
-
-        // NetworkId ordering
-        assert_eq!(
-            Ordering::Greater,
-            compare_prioritized_peers(&vfn_1, &val_1)
-        );
-        assert_eq!(Ordering::Less, compare_prioritized_peers(&val_1, &vfn_1));
-
-        // PeerRole ordering
-        assert_eq!(
-            Ordering::Greater,
-            compare_prioritized_peers(&vfn_1, &preferred_1)
-        );
-        assert_eq!(
-            Ordering::Less,
-            compare_prioritized_peers(&preferred_1, &vfn_1)
-        );
-
-        // Tiebreaker on peer_id
-        assert_eq!(
-            Ordering::Greater,
-            compare_prioritized_peers(&val_2, &val_1)
-        );
-        assert_eq!(Ordering::Less, compare_prioritized_peers(&val_1, &val_2));
-
-        // Same the only equal case
-        assert_eq!(Ordering::Equal, compare_prioritized_peers(&val_1, &val_1));
-    }
-}
-*/
