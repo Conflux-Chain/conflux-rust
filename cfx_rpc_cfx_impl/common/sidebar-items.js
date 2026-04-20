@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["grouped_txs"],"struct":["CommonRpcImpl"]};
