@@ -65,9 +65,7 @@ pub(crate) fn set_cips_according_to_spec(
     // set osaka opcode transition height according to spec
     if spec >= &SpecName::Osaka {
         conf.raw_conf.osaka_opcode_transition_height = Some(1);
-        conf.raw_conf.osaka_opcode_transition_number = Some(1);
     } else {
         conf.raw_conf.osaka_opcode_transition_height = Some(u64::MAX);
-        conf.raw_conf.osaka_opcode_transition_number = Some(u64::MAX);
     }
 }
