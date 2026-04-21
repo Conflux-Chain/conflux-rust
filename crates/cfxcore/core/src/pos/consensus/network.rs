@@ -10,7 +10,7 @@ use std::{mem::Discriminant, time::Duration};
 use anyhow::{anyhow, bail, ensure, format_err};
 use serde::{Deserialize, Serialize};
 
-use channel::{self, diem_channel, message_queues::QueueStyle};
+use channel::{diem_channel, message_queues::QueueStyle};
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
     common::Author,

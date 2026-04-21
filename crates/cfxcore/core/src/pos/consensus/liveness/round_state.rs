@@ -7,6 +7,7 @@
 
 use std::{fmt, sync::Arc, time::Duration};
 
+use futures::channel::mpsc;
 use serde::Serialize;
 
 use consensus_types::{common::Round, sync_info::SyncInfo, vote::Vote};
@@ -165,11 +166,11 @@ pub struct RoundState {
     // Service for timer
     time_service: Arc<dyn TimeService>,
     // To send local timeout events to the subscriber (e.g., SMR)
-    timeout_sender: channel::Sender<(u64, Round)>,
+    timeout_sender: mpsc::Sender<(u64, Round)>,
     // To send timeout events for proposal selection to the subscriber (e.g.,
     // SMR)
-    proposal_timeout_sender: channel::Sender<(u64, Round)>,
-    new_round_timeout_sender: channel::Sender<(u64, Round)>,
+    proposal_timeout_sender: mpsc::Sender<(u64, Round)>,
+    new_round_timeout_sender: mpsc::Sender<(u64, Round)>,
     new_round_sent: bool,
     // Votes received for the current round.
     pending_votes: PendingVotes,
@@ -205,9 +206,9 @@ impl RoundState {
     pub fn new(
         time_interval: Box<dyn RoundTimeInterval>,
         time_service: Arc<dyn TimeService>,
-        timeout_sender: channel::Sender<(u64, Round)>,
-        proposal_timeout_sender: channel::Sender<(u64, Round)>,
-        new_round_timeout_sender: channel::Sender<(u64, Round)>,
+        timeout_sender: mpsc::Sender<(u64, Round)>,
+        proposal_timeout_sender: mpsc::Sender<(u64, Round)>,
+        new_round_timeout_sender: mpsc::Sender<(u64, Round)>,
     ) -> Self {
         Self {
             time_interval,

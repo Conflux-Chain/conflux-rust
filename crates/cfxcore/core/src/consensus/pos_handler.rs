@@ -1,5 +1,6 @@
 use std::sync::{mpsc, Arc, Weak};
 
+use futures::channel::mpsc as futures_mpsc;
 use once_cell::sync::OnceCell;
 
 use cfx_types::{H256, U256, U64};
@@ -114,7 +115,7 @@ pub struct PosHandler {
     drop_handle: Mutex<Option<PosDropHandle>>,
     consensus_network_receiver: Mutex<Option<ConsensusNetworkReceivers>>,
     mempool_network_receiver: Mutex<Option<MemPoolNetworkReceivers>>,
-    test_command_sender: Mutex<Option<channel::Sender<TestCommand>>>,
+    test_command_sender: Mutex<Option<futures_mpsc::Sender<TestCommand>>>,
     enable_height: u64,
     hsb_protocol_handler: Option<Arc<HotStuffSynchronizationProtocol>>,
     pub conf: PosConfiguration,
@@ -192,7 +193,8 @@ impl PosHandler {
             self.conf.pos_initial_nodes_path.as_str(),
         )?;
         let network = self.network.lock().take().expect("pos not initialized");
-        let (test_command_sender, test_command_receiver) = channel::new(1024);
+        let (test_command_sender, test_command_receiver) =
+            futures_mpsc::channel(1024);
 
         pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
             author: from_consensus_public_key(

@@ -23,7 +23,7 @@ use super::{
         mock_time_service::SimulatedTimeService, time_service::TimeService,
     },
 };
-use channel::{self, diem_channel, message_queues::QueueStyle};
+use channel::{diem_channel, message_queues::QueueStyle};
 use consensus_types::proposal_msg::ProposalMsg;
 use diem_infallible::RwLock;
 use diem_types::{
@@ -96,7 +96,7 @@ fn make_initial_epoch_state(signer: &ValidatorSigner) -> EpochState {
 fn create_round_state() -> RoundState {
     let base_timeout = std::time::Duration::new(60, 0);
     let time_interval = Box::new(ExponentialTimeInterval::fixed(base_timeout));
-    let (round_timeout_sender, _) = channel::new(1_024);
+    let (round_timeout_sender, _) = mpsc::channel(1_024);
     let time_service = Arc::new(SimulatedTimeService::new());
     RoundState::new(time_interval, time_service, round_timeout_sender)
 }
@@ -133,7 +133,7 @@ fn create_node_for_fuzzing() -> RoundManager {
         PeerManagerRequestSender::new(network_reqs_tx),
         ConnectionRequestSender::new(connection_reqs_tx),
     );
-    let (self_sender, _self_receiver) = channel::new(8);
+    let (self_sender, _self_receiver) = mpsc::channel(8);
 
     let epoch_state = EpochState {
         epoch: 1,
