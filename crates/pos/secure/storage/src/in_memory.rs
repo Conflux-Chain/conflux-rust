@@ -46,7 +46,7 @@ impl KVStorage for InMemoryStorage {
     fn set<V: Serialize>(&mut self, key: &str, value: V) -> Result<(), Error> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
+            .expect("System time is before UNIX_EPOCH")
             .as_secs();
         self.data.insert(
             key.to_string(),
