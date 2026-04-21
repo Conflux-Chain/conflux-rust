@@ -32,11 +32,7 @@ use futures::{
     StreamExt,
 };
 use network::node_table::NodeId;
-use std::{
-    collections::HashSet,
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 use tokio::{runtime::Handle, time::interval};
 use tokio_stream::wrappers::IntervalStream;
 
@@ -164,11 +160,6 @@ async fn handle_mempool_sync_msg(
         } => {
             let smp_clone = smp.clone();
             let timeline_state = TimelineState::NonQualified;
-            /*
-            match smp.peer_manager.is_upstream_peer(&peer, None) {
-                true => TimelineState::NonQualified,
-                false => TimelineState::NotReady,
-            };*/
             // This timer measures how long it took for the bounded
             // executor to *schedule* the task.
             let _timer = counters::task_spawn_latency_timer(
@@ -197,14 +188,8 @@ async fn handle_mempool_sync_msg(
             retry,
             backoff,
         } => {
-            let ack_timestamp = SystemTime::now();
-            smp.peer_manager.process_broadcast_ack(
-                peer,
-                request_id,
-                retry,
-                backoff,
-                ack_timestamp,
-            );
+            smp.peer_manager
+                .process_broadcast_ack(peer, request_id, retry, backoff);
         }
     }
 }

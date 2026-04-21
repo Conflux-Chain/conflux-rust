@@ -35,14 +35,6 @@ use pow_types::PowInterface;
 use short_hex_str::AsShortHexStr;
 use std::{collections::vec_deque::VecDeque, sync::Arc, time::Duration};
 
-#[cfg(test)]
-#[path = "block_store_test.rs"]
-mod block_store_test;
-
-#[cfg(test)]
-#[path = "block_store_and_lec_recovery_test.rs"]
-mod block_store_and_lec_recovery_test;
-
 #[path = "sync_manager.rs"]
 pub mod sync_manager;
 

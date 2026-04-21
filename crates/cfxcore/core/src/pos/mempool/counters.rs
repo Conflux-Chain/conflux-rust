@@ -57,10 +57,6 @@ pub const START_LABEL: &str = "start";
 pub const BROADCAST_TXNS: &str = "broadcast_txns";
 pub const ACK_TXNS: &str = "ack_txns";
 
-// ACK direction labels
-pub const RECEIVED_LABEL: &str = "received";
-pub const SENT_LABEL: &str = "sent";
-
 /// Counter tracking size of various indices in core mempool
 static CORE_MEMPOOL_INDEX_SIZE: Lazy<IntGaugeVec> = Lazy::new(|| {
     register_int_gauge_vec!(

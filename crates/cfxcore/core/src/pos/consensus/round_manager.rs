@@ -51,8 +51,6 @@ use diem_types::{
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
     validator_verifier::ValidatorVerifier,
 };
-#[cfg(test)]
-use safety_rules::ConsensusState;
 use safety_rules::SafetyRules;
 
 use crate::pos::{
@@ -133,10 +131,6 @@ pub enum VerifiedEvent {
     VoteMsg(Box<VoteMsg>),
     SyncInfo(Box<SyncInfo>),
 }
-
-#[cfg(test)]
-#[path = "round_manager_test.rs"]
-mod round_manager_test;
 
 #[cfg(feature = "fuzzing")]
 #[path = "round_manager_fuzzing.rs"]
@@ -1265,19 +1259,6 @@ impl RoundManager {
         if let Err(e) = self.process_new_round_event(new_round_event).await {
             diem_error!(error = ?e, "[RoundManager] Error during start");
         }
-    }
-
-    /// Inspect the current consensus state.
-    #[cfg(test)]
-    #[allow(unused)]
-    pub fn consensus_state(&mut self) -> ConsensusState {
-        self.safety_rules.write().consensus_state().unwrap()
-    }
-
-    #[cfg(test)]
-    #[allow(unused)]
-    pub fn set_safety_rules(&mut self, safety_rules: Arc<RwLock<SafetyRules>>) {
-        self.safety_rules = safety_rules
     }
 
     pub fn epoch_state(&self) -> &EpochState { &self.epoch_state }

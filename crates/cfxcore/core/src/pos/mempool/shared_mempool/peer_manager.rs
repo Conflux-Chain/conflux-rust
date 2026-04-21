@@ -9,16 +9,13 @@ use crate::pos::mempool::{
     counters,
     logging::{LogEntry, LogEvent, LogSchema},
     network::MempoolSyncMsg,
-    shared_mempool::{
-        tasks,
-        types::{notify_subscribers, SharedMempool, SharedMempoolNotification},
+    shared_mempool::types::{
+        notify_subscribers, SharedMempool, SharedMempoolNotification,
     },
 };
 use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::transaction::SignedTransaction;
-//use netcore::transport::ConnectionOrigin;
-//use network::transport::ConnectionMetadata;
 use network::node_table::NodeId;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -26,7 +23,6 @@ use std::{
     ops::Add,
     time::{Duration, SystemTime},
 };
-//use vm_validator::vm_validator::TransactionValidation;
 
 const PRIMARY_NETWORK_PREFERENCE: usize = 0;
 
@@ -41,16 +37,14 @@ pub(crate) struct PeerSyncState {
     pub timeline_id: u64,
     pub is_alive: bool,
     pub broadcast_info: BroadcastInfo,
-    //pub metadata: ConnectionMetadata,
 }
 
 impl PeerSyncState {
-    pub fn new(/*metadata: ConnectionMetadata*/) -> Self {
+    pub fn new() -> Self {
         PeerSyncState {
             timeline_id: 0,
             is_alive: true,
             broadcast_info: BroadcastInfo::new(),
-            //metadata,
         }
     }
 }
@@ -110,30 +104,16 @@ impl PeerManager {
         }
     }
 
-    // Returns true if `peer` is discovered for the first time, else false.
-    pub fn add_peer(
-        &self,
-        peer: NodeId, //metadata: ConnectionMetadata,
-    ) -> bool {
+    /// Returns true if `peer` is discovered for the first time, else false.
+    pub fn add_peer(&self, peer: NodeId) -> bool {
         diem_debug!("PeerManager::add_peer [{:?}]", peer);
         let mut peer_states = self.peer_states.lock();
         let is_new_peer = !peer_states.contains_key(&peer);
-        //if self.is_upstream_peer(&peer, Some(&metadata)) {
-        // If we have a new peer, let's insert new data, otherwise, let's
-        // just update the current state
         if is_new_peer {
-            //counters::active_upstream_peers(&peer.raw_network_id()).inc();
-            peer_states.insert(peer, PeerSyncState::new(/*metadata*/));
+            peer_states.insert(peer, PeerSyncState::new());
         } else if let Some(peer_state) = peer_states.get_mut(&peer) {
-            if !peer_state.is_alive {
-                //counters::active_upstream_peers(&peer.raw_network_id())
-                //    .inc();
-            }
             peer_state.is_alive = true;
-            //peer_state.metadata = metadata;
         }
-        //}
-        drop(peer_states);
         is_new_peer
     }
 
@@ -278,7 +258,6 @@ impl PeerManager {
                 LogEntry::BroadcastTransaction,
                 LogEvent::NetworkSendFail
             )
-            //.peer(&peer)
             .error(&e.into()));
             // Actively enter backoff mode if error happens.
             state.broadcast_info.backoff_mode = true;
@@ -302,52 +281,37 @@ impl PeerManager {
             LogEntry::BroadcastTransaction,
             LogEvent::Success
         )
-        //.peer(&peer)
         .batch_id(&batch_id)
         .backpressure(scheduled_backoff));
     }
 
     pub fn process_broadcast_ack(
         &self, peer: NodeId, request_id_bytes: Vec<u8>, retry: bool,
-        backoff: bool, timestamp: SystemTime,
+        backoff: bool,
     ) {
-        let batch_id = if let Ok(id) =
-            bcs::from_bytes::<BatchId>(&request_id_bytes)
-        {
-            id
-        } else {
-            //counters::invalid_ack_inc(&peer, counters::INVALID_REQUEST_ID);
-            return;
-        };
+        let batch_id =
+            if let Ok(id) = bcs::from_bytes::<BatchId>(&request_id_bytes) {
+                id
+            } else {
+                return;
+            };
 
         let mut peer_states = self.peer_states.lock();
 
         let sync_state = if let Some(state) = peer_states.get_mut(&peer) {
             state
         } else {
-            //counters::invalid_ack_inc(&peer, counters::UNKNOWN_PEER);
             return;
         };
 
-        if let Some(sent_timestamp) =
-            sync_state.broadcast_info.sent_batches.remove(&batch_id)
+        if sync_state
+            .broadcast_info
+            .sent_batches
+            .remove(&batch_id)
+            .is_none()
         {
-            let _rtt = timestamp
-                .duration_since(sent_timestamp)
-                .expect("failed to calculate mempool broadcast RTT");
-
-        /*let network_id = peer.raw_network_id();
-        let peer_id = peer.peer_id().short_str();
-        counters::SHARED_MEMPOOL_BROADCAST_RTT
-            .with_label_values(&[network_id.as_str(), peer_id.as_str()])
-            .observe(rtt.as_secs_f64());
-
-        counters::shared_mempool_pending_broadcasts(&peer).dec();*/
-        } else {
             diem_trace!(
-                LogSchema::new(LogEntry::ReceiveACK)
-                    //.peer(&peer)
-                    .batch_id(&batch_id),
+                LogSchema::new(LogEntry::ReceiveACK).batch_id(&batch_id),
                 "batch ID does not exist or expired"
             );
             return;
@@ -355,16 +319,9 @@ impl PeerManager {
 
         diem_trace!(
             LogSchema::new(LogEntry::ReceiveACK)
-                //.peer(&peer)
                 .batch_id(&batch_id)
                 .backpressure(backoff),
             retry = retry,
-        );
-        tasks::update_ack_counter(
-            &peer,
-            counters::RECEIVED_LABEL,
-            retry,
-            backoff,
         );
 
         if retry {

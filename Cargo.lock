@@ -3317,7 +3317,6 @@ dependencies = [
  "diem-temppath",
  "diem-types",
  "serde",
- "short-hex-str",
  "thiserror 1.0.63",
  "yaml_serde",
 ]
