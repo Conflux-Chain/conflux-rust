@@ -138,13 +138,20 @@ fn gen_ack_response(
 ) -> MempoolSyncMsg {
     let mut backoff = false;
     let mut retry = false;
-    for r in results.into_iter() {
-        let submission_status = r.1;
-        if submission_status.0.code == MempoolStatusCode::MempoolIsFull {
-            backoff = true;
-        }
-        if is_txn_retryable(submission_status) {
-            retry = true;
+    for (_, (mempool_status, _)) in results.into_iter() {
+        match mempool_status.code {
+            // Global pressure: ask the peer to back off broadcasts *and*
+            // retry this txn later.
+            MempoolStatusCode::MempoolIsFull => {
+                backoff = true;
+                retry = true;
+            }
+            // Per-sender cap hit: retry so the txn can land once a TTL GC
+            // sweep or commit frees a slot; no broad broadcast backoff.
+            MempoolStatusCode::TooManyTransactions => {
+                retry = true;
+            }
+            _ => {}
         }
 
         if backoff && retry {
@@ -164,10 +171,6 @@ fn gen_ack_response(
         retry,
         backoff,
     }
-}
-
-fn is_txn_retryable(result: SubmissionStatus) -> bool {
-    result.0.code == MempoolStatusCode::MempoolIsFull
 }
 
 /// Submits a list of SignedTransaction to the local mempool

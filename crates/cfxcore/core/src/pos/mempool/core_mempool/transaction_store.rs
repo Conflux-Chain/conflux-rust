@@ -38,13 +38,19 @@ pub struct TransactionStore {
     // when commit callbacks are delayed.
     system_ttl_index: TTLIndex,
     timeline_index: TimelineIndex,
+
+    /// Per-sender live transaction count. Enforces `capacity_per_sender` so
+    /// a single Byzantine validator cannot flood the mempool with spam under
+    /// its own signing key.
+    per_sender_count: HashMap<AccountAddress, usize>,
+    capacity_per_sender: usize,
 }
 
 pub type PivotDecisionIter<'a> =
     Values<'a, HashValue, HashSet<(AccountAddress, HashValue)>>;
 
 impl TransactionStore {
-    pub(crate) fn new(_config: &MempoolConfig) -> Self {
+    pub(crate) fn new(config: &MempoolConfig) -> Self {
         Self {
             // main DS
             transactions: AccountTransactions::new(),
@@ -55,6 +61,9 @@ impl TransactionStore {
                 |t: &MempoolTransaction| t.expiration_time,
             )),
             timeline_index: TimelineIndex::new(),
+
+            per_sender_count: HashMap::new(),
+            capacity_per_sender: config.capacity_per_sender,
         }
     }
 
@@ -93,6 +102,22 @@ impl TransactionStore {
             return MempoolStatus::new(MempoolStatusCode::Accepted);
         }
 
+        let sender_count =
+            self.per_sender_count.get(&address).copied().unwrap_or(0);
+        if sender_count >= self.capacity_per_sender {
+            diem_debug!(
+                sender = %address,
+                sender_count = sender_count,
+                cap = self.capacity_per_sender,
+                "mempool: per-sender capacity reached, rejecting txn",
+            );
+            return MempoolStatus::new(MempoolStatusCode::TooManyTransactions)
+                .with_message(format!(
+                    "sender {} already has {} transactions (cap {})",
+                    address, sender_count, self.capacity_per_sender,
+                ));
+        }
+
         self.timeline_index.insert(&mut txn);
         self.system_ttl_index.insert(&txn);
 
@@ -112,6 +137,7 @@ impl TransactionStore {
         } else {
             self.transactions.insert(hash, txn, false);
         }
+        *self.per_sender_count.entry(address).or_insert(0) += 1;
         diem_debug!(
             LogSchema::new(LogEntry::AddTxn)
                 .txns(TxnsLog::new_txn(address, hash)),
@@ -152,6 +178,13 @@ impl TransactionStore {
     fn index_remove(&mut self, txn: &MempoolTransaction) {
         self.system_ttl_index.remove(&txn);
         self.timeline_index.remove(&txn);
+        let sender = txn.get_sender();
+        if let Some(count) = self.per_sender_count.get_mut(&sender) {
+            *count -= 1;
+            if *count == 0 {
+                self.per_sender_count.remove(&sender);
+            }
+        }
     }
 
     /// Read `count` transactions from timeline since `timeline_id`.
