@@ -72,7 +72,6 @@ members = [
     "crates/pos/common/infallible",
     "crates/pos/common/logger",
     "crates/pos/common/temppath",
-    "crates/pos/common/time-service",
     "crates/pos/config/global-constants",
     "crates/pos/consensus/consensus-types",
     "crates/pos/config/config",
@@ -197,7 +196,6 @@ channel = { path = "./crates/pos/common/channel" }
 diem-infallible = { path = "./crates/pos/common/infallible" }
 diem-logger = { path = "./crates/pos/common/logger" }
 diem-temppath = { path = "./crates/pos/common/temppath" }
-diem-time-service = { path = "./crates/pos/common/time-service" }
 diem-global-constants = { path = "./crates/pos/config/global-constants" }
 diem-config = { path = "./crates/pos/config/config" }
 consensus-types = { path = "./crates/pos/consensus/consensus-types" }

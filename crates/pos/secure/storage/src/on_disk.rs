@@ -7,7 +7,6 @@
 
 use crate::{CryptoKVStorage, Error, GetResponse, KVStorage};
 use diem_temppath::TempPath;
-use diem_time_service::{TimeService, TimeServiceTrait};
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
 use std::{
@@ -15,6 +14,7 @@ use std::{
     fs::{self, File},
     io::{Read, Write},
     path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 /// OnDiskStorage represents a key value store that is persisted to the local
@@ -28,17 +28,10 @@ use std::{
 pub struct OnDiskStorage {
     file_path: PathBuf,
     temp_path: TempPath,
-    time_service: TimeService,
 }
 
 impl OnDiskStorage {
     pub fn new(file_path: PathBuf) -> Self {
-        Self::new_with_time_service(file_path, TimeService::real())
-    }
-
-    fn new_with_time_service(
-        file_path: PathBuf, time_service: TimeService,
-    ) -> Self {
         if !file_path.exists() {
             File::create(&file_path).expect("Unable to create storage");
         }
@@ -52,7 +45,6 @@ impl OnDiskStorage {
         Self {
             file_path,
             temp_path: TempPath::new_with_temp_dir(file_dir),
-            time_service,
         }
     }
 
@@ -93,7 +85,10 @@ impl KVStorage for OnDiskStorage {
     }
 
     fn set<V: Serialize>(&mut self, key: &str, value: V) -> Result<(), Error> {
-        let now = self.time_service.now_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
         let mut data = self.read()?;
         data.insert(
             key.to_string(),
