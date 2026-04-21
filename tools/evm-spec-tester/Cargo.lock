@@ -2037,7 +2037,6 @@ dependencies = [
  "diem-crypto",
  "diem-infallible",
  "diem-logger",
- "diem-metrics",
  "diem-temppath",
  "diem-types",
  "either",
@@ -2219,7 +2218,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "diem-infallible",
- "diem-metrics",
  "futures 0.3.30",
 ]
 
@@ -2929,28 +2927,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "diem-metrics"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "diem-logger",
- "diem-metrics-core",
- "futures 0.3.30",
- "hyper 0.14.32",
- "once_cell",
- "prometheus",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "diem-metrics-core"
-version = "0.1.0"
-dependencies = [
- "prometheus",
-]
-
-[[package]]
 name = "diem-secure-storage"
 version = "0.1.0"
 dependencies = [
@@ -3360,7 +3336,6 @@ dependencies = [
  "consensus-types",
  "diem-crypto",
  "diem-logger",
- "diem-metrics",
  "diem-state-view",
  "diem-types",
  "executor-types",
@@ -5955,7 +5930,6 @@ dependencies = [
  "diem-crypto",
  "diem-infallible",
  "diem-logger",
- "diem-metrics",
  "diem-types",
  "itertools 0.14.0",
  "num-derive",
@@ -6957,7 +6931,6 @@ dependencies = [
  "diem-global-constants",
  "diem-infallible",
  "diem-logger",
- "diem-metrics-core",
  "diem-secure-storage",
  "diem-types",
  "log",
@@ -7009,8 +6982,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "diem-logger",
- "diem-metrics",
- "once_cell",
  "rocksdb",
 ]
 

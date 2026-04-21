@@ -5,7 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{counters, Error};
+use crate::Error;
 use consensus_types::{common::Author, safety_data::SafetyData};
 use diem_crypto::{
     hash::CryptoHash, PrivateKey, SigningKey, ValidCryptoMaterial,
@@ -141,14 +141,12 @@ impl PersistentSafetyStorage {
     }
 
     pub fn author(&self) -> Result<Author, Error> {
-        let _timer = counters::start_timer("get", OWNER_ACCOUNT);
         Ok(self.internal_store.get(OWNER_ACCOUNT).map(|v| v.value)?)
     }
 
     pub fn consensus_key_for_version(
         &self, version: ConsensusPublicKey,
     ) -> Result<ConsensusPrivateKey, Error> {
-        let _timer = counters::start_timer("get", CONSENSUS_KEY);
         if self.private_key.public_key() == version {
             let serialized: &[u8] = &(self.private_key.to_bytes());
             let cloned = ConsensusPrivateKey::try_from(serialized).unwrap();
@@ -176,14 +174,12 @@ impl PersistentSafetyStorage {
 
     pub fn safety_data(&mut self) -> Result<SafetyData, Error> {
         if !self.enable_cached_safety_data {
-            let _timer = counters::start_timer("get", SAFETY_DATA);
             return self.internal_store.get(SAFETY_DATA).map(|v| v.value)?;
         }
 
         if let Some(cached_safety_data) = self.cached_safety_data.clone() {
             Ok(cached_safety_data)
         } else {
-            let _timer = counters::start_timer("get", SAFETY_DATA);
             let safety_data: SafetyData =
                 self.internal_store.get(SAFETY_DATA).map(|v| v.value)?;
             self.cached_safety_data = Some(safety_data.clone());
@@ -192,11 +188,6 @@ impl PersistentSafetyStorage {
     }
 
     pub fn set_safety_data(&mut self, data: SafetyData) -> Result<(), Error> {
-        let _timer = counters::start_timer("set", SAFETY_DATA);
-        counters::set_state("epoch", data.epoch as i64);
-        counters::set_state("last_voted_round", data.last_voted_round as i64);
-        counters::set_state("preferred_round", data.preferred_round as i64);
-
         match self.internal_store.set(SAFETY_DATA, data.clone()) {
             Ok(_) => {
                 self.cached_safety_data = Some(data);

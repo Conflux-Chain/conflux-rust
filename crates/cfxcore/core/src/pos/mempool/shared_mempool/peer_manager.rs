@@ -6,7 +6,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::pos::mempool::{
-    counters,
     logging::{LogEntry, LogEvent, LogSchema},
     network::MempoolSyncMsg,
     shared_mempool::types::{
@@ -96,7 +95,6 @@ impl BroadcastInfo {
 impl PeerManager {
     pub fn new() -> Self {
         // Primary network is always chosen at initialization.
-        counters::upstream_network(PRIMARY_NETWORK_PREFERENCE);
         diem_info!(LogSchema::new(LogEntry::UpstreamNetwork)
             .network_level(PRIMARY_NETWORK_PREFERENCE));
         Self {
@@ -253,7 +251,6 @@ impl PeerManager {
                 transactions,
             },
         ) {
-            counters::network_send_fail_inc(counters::BROADCAST_TXNS);
             diem_info!(LogSchema::event_log(
                 LogEntry::BroadcastTransaction,
                 LogEvent::NetworkSendFail

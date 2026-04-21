@@ -14,7 +14,6 @@
 use crate::message_queues::{PerKeyQueue, QueueStyle};
 use anyhow::{ensure, Result};
 use diem_infallible::{Mutex, NonZeroUsize};
-use diem_metrics::IntCounterVec;
 use futures::{
     channel::oneshot,
     stream::{FusedStream, Stream},
@@ -208,18 +207,13 @@ impl<K: Eq + Hash + Clone, M> FusedStream for Receiver<K, M> {
 /// Create a new Diem Channel and returns the two ends of the channel.
 pub fn new<K: Eq + Hash + Clone, M>(
     queue_style: QueueStyle, max_queue_size_per_key: usize,
-    counters: Option<&'static IntCounterVec>,
 ) -> (Sender<K, M>, Receiver<K, M>) {
     let max_queue_size_per_key = NonZeroUsize!(
         max_queue_size_per_key,
         "diem_channel cannot be of size 0"
     );
     let shared_state = Arc::new(Mutex::new(SharedState {
-        internal_queue: PerKeyQueue::new(
-            queue_style,
-            max_queue_size_per_key,
-            counters,
-        ),
+        internal_queue: PerKeyQueue::new(queue_style, max_queue_size_per_key),
         waker: None,
         num_senders: 1,
         receiver_dropped: false,

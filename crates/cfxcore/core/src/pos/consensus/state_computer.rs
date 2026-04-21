@@ -12,7 +12,6 @@ use consensus_types::block::Block;
 use diem_crypto::HashValue;
 use diem_infallible::Mutex;
 use diem_logger::prelude::*;
-use diem_metrics::monitor;
 use diem_types::{
     ledger_info::LedgerInfoWithSignatures, transaction::Transaction,
 };
@@ -136,13 +135,10 @@ impl StateComputer for ExecutionProxy {
             "Executing block",
         );
 
-        monitor!(
-            "execute_block",
-            self.executor.lock().execute_block(
-                id_and_transactions_from_block(block),
-                parent_block_id,
-                catch_up_mode
-            )
+        self.executor.lock().execute_block(
+            id_and_transactions_from_block(block),
+            parent_block_id,
+            catch_up_mode,
         )
     }
 
@@ -151,16 +147,11 @@ impl StateComputer for ExecutionProxy {
         finality_proof: LedgerInfoWithSignatures,
     ) -> Result<(), ExecutionError> {
         let timestamp = finality_proof.ledger_info().timestamp_usecs();
-        let committed_txns = monitor!(
-            "commit_block",
-            self.executor
-                .lock()
-                .commit_blocks(block_ids, finality_proof)?
-        );
-        monitor!(
-            "notify_mempool",
-            self.notify_mempool(committed_txns, timestamp).await
-        );
+        let committed_txns = self
+            .executor
+            .lock()
+            .commit_blocks(block_ids, finality_proof)?;
+        self.notify_mempool(committed_txns, timestamp).await;
         Ok(())
     }
 

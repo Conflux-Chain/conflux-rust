@@ -7,7 +7,6 @@
 
 use super::{
     block_storage::BlockStore,
-    counters,
     error::{error_kind, DbError},
     liveness::{
         proposal_generator::ProposalGenerator,
@@ -44,9 +43,8 @@ use consensus_types::{
 };
 use diem_config::config::{ConsensusConfig, ConsensusProposerType, NodeConfig};
 use diem_crypto::HashValue;
-use diem_infallible::{duration_since_epoch, RwLock};
+use diem_infallible::RwLock;
 use diem_logger::prelude::*;
-use diem_metrics::monitor;
 use diem_types::{
     account_address::AccountAddress,
     block_info::PivotBlockDecision,
@@ -383,9 +381,6 @@ impl EpochManager {
         // Release the previous RoundManager, especially the SafetyRule client
         self.processor = None;
         let epoch = epoch_state.epoch;
-        counters::EPOCH.set(epoch_state.epoch as i64);
-        counters::CURRENT_EPOCH_VALIDATORS
-            .set(epoch_state.verifier().len() as i64);
         diem_info!(
             epoch = epoch_state.epoch,
             validators = epoch_state.verifier().to_string(),
@@ -579,11 +574,8 @@ impl EpochManager {
                 if event.epoch() == self.epoch() {
                     return Ok(Some(event));
                 } else {
-                    monitor!(
-                        "process_different_epoch_consensus_msg",
-                        self.process_different_epoch(event.epoch(), peer_id)
-                            .await?
-                    );
+                    self.process_different_epoch(event.epoch(), peer_id)
+                        .await?;
                 }
             }
             ConsensusMsg::EpochChangeProof(proof) => {
@@ -596,10 +588,7 @@ impl EpochManager {
                     msg_epoch,
                 );
                 if msg_epoch == self.epoch() {
-                    monitor!(
-                        "process_epoch_proof",
-                        self.start_new_epoch(*proof, peer_id).await?
-                    );
+                    self.start_new_epoch(*proof, peer_id).await?;
                 } else {
                     debug!(
                         "[EpochManager] Unexpected epoch proof from epoch {}, local epoch {}",
@@ -613,10 +602,7 @@ impl EpochManager {
                     request.end_epoch <= self.epoch(),
                     "[EpochManager] Received EpochRetrievalRequest beyond what we have locally"
                 );
-                monitor!(
-                    "process_epoch_retrieval",
-                    self.process_epoch_retrieval(*request, peer_id).await?
-                );
+                self.process_epoch_retrieval(*request, peer_id).await?;
             }
             _ => {
                 bail!("[EpochManager] Unexpected messages: {:?}", msg);
@@ -647,17 +633,13 @@ impl EpochManager {
                 Ok(())
             }
             RoundProcessor::Normal(p) => match event {
-                VerifiedEvent::ProposalMsg(proposal) => monitor!(
-                    "process_proposal",
+                VerifiedEvent::ProposalMsg(proposal) => {
                     p.process_proposal_msg(*proposal).await
-                ),
-                VerifiedEvent::VoteMsg(vote) => {
-                    monitor!("process_vote", p.process_vote_msg(*vote).await)
                 }
-                VerifiedEvent::SyncInfo(sync_info) => monitor!(
-                    "process_sync_info",
+                VerifiedEvent::VoteMsg(vote) => p.process_vote_msg(*vote).await,
+                VerifiedEvent::SyncInfo(sync_info) => {
                     p.process_sync_info_msg(*sync_info, peer_id).await
-                ),
+                }
             },
         }
     }
@@ -748,30 +730,27 @@ impl EpochManager {
             if stopped.load(AtomicOrdering::SeqCst) {
                 break;
             }
-            let result = monitor!(
-                "main_loop",
-                select_biased! {
-                    command = test_command_receiver.select_next_some() => {
-                        self.process_test_command(command).await
-                    }
-                    round = round_timeout_sender_rx.select_next_some() => {
-                        monitor!("process_local_timeout", self.process_local_timeout(round).await)
-                    }
-                    round = proposal_timeout_sender_rx.select_next_some() => {
-                        monitor!("process_proposal_timeout", self.process_proposal_timeout(round).await)
-                    }
-                    round = new_round_timeout_sender_rx.select_next_some() => {
-                        monitor!("process_new_round_timeout", self.process_new_round_timeout(round).await)
-                    }
-                    msg = network_receivers.consensus_messages.select_next_some() => {
-                        let (peer, msg) = (msg.0, msg.1);
-                        monitor!("process_message", self.process_message(peer, msg).await.with_context(|| format!("from peer: {}", peer)))
-                    }
-                    block_retrieval = network_receivers.block_retrieval.select_next_some() => {
-                        monitor!("process_block_retrieval", self.process_block_retrieval(block_retrieval).await)
-                    }
+            let result = select_biased! {
+                command = test_command_receiver.select_next_some() => {
+                    self.process_test_command(command).await
                 }
-            );
+                round = round_timeout_sender_rx.select_next_some() => {
+                    self.process_local_timeout(round).await
+                }
+                round = proposal_timeout_sender_rx.select_next_some() => {
+                    self.process_proposal_timeout(round).await
+                }
+                round = new_round_timeout_sender_rx.select_next_some() => {
+                    self.process_new_round_timeout(round).await
+                }
+                msg = network_receivers.consensus_messages.select_next_some() => {
+                    let (peer, msg) = (msg.0, msg.1);
+                    self.process_message(peer, msg).await.with_context(|| format!("from peer: {}", peer))
+                }
+                block_retrieval = network_receivers.block_retrieval.select_next_some() => {
+                    self.process_block_retrieval(block_retrieval).await
+                }
+            };
             let round_state =
                 if let RoundProcessor::Normal(p) = self.processor_mut() {
                     Some(p.round_state())
@@ -781,17 +760,9 @@ impl EpochManager {
             match result {
                 Ok(_) => diem_trace!(RoundStateLogSchema::new(round_state)),
                 Err(e) => {
-                    counters::ERROR_COUNT.inc();
                     diem_error!(error = ?e, kind = error_kind(&e), RoundStateLogSchema::new(round_state));
                 }
             }
-
-            // Continually capture the time of consensus process to ensure that
-            // clock skew between validators is reasonable and to
-            // find any unusual (possibly byzantine) clock behavior.
-            counters::OP_COUNTERS
-                .gauge("time_since_epoch_ms")
-                .set(duration_since_epoch().as_millis() as i64);
         }
     }
 }

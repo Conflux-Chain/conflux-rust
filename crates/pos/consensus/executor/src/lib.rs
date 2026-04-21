@@ -49,13 +49,6 @@ use storage_interface::state_view::VerifiedStateView;
 
 use crate::{
     logging::{LogEntry, LogSchema},
-    metrics::{
-        DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS, DIEM_EXECUTOR_ERRORS,
-        DIEM_EXECUTOR_EXECUTE_BLOCK_SECONDS,
-        DIEM_EXECUTOR_SAVE_TRANSACTIONS_SECONDS,
-        DIEM_EXECUTOR_TRANSACTIONS_SAVED,
-        DIEM_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS,
-    },
     vm::PosVM,
 };
 use diem_types::term_state::{
@@ -65,7 +58,6 @@ use diem_types::term_state::{
 
 pub mod db_bootstrapper;
 mod logging;
-mod metrics;
 pub mod vm;
 
 /// `Executor` implements all functionalities the execution module needs to
@@ -324,7 +316,6 @@ impl Executor {
                              Transaction: {:?}. Status: {:?}.",
                             txn, status,
                         );
-                        DIEM_EXECUTOR_ERRORS.inc();
                     }
                 }
                 TransactionStatus::Retry => (),
@@ -468,8 +459,6 @@ impl BlockExecutor for Executor {
                 "execute_block"
             );
 
-            let _timer = DIEM_EXECUTOR_EXECUTE_BLOCK_SECONDS.start_timer();
-
             let parent_block_executed_trees =
                 self.get_executed_trees(parent_block_id)?;
 
@@ -485,8 +474,6 @@ impl BlockExecutor for Executor {
             let vm_outputs = {
                 // trace_code_block!("executor::execute_block", {"block",
                 // block_id});
-                let _timer =
-                    DIEM_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS.start_timer();
                 fail_point!("executor::vm_execute_block", |_| {
                     Err(Error::from(anyhow::anyhow!(
                         "Injected error in vm_execute_block"
@@ -544,7 +531,6 @@ impl BlockExecutor for Executor {
         &self, block_ids: Vec<HashValue>,
         ledger_info_with_sigs: LedgerInfoWithSignatures,
     ) -> Result<Vec<Transaction>, Error> {
-        let _timer = DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS.start_timer();
         let mut pos_state_to_commit = self
             .get_executed_trees(
                 ledger_info_with_sigs.ledger_info().consensus_block_id(),
@@ -871,9 +857,6 @@ impl BlockExecutor for Executor {
 
         let num_txns_to_commit = txns_to_commit.len() as u64;
         {
-            let _timer = DIEM_EXECUTOR_SAVE_TRANSACTIONS_SECONDS.start_timer();
-            DIEM_EXECUTOR_TRANSACTIONS_SAVED.observe(num_txns_to_commit as f64);
-
             assert_eq!(
                 first_version_to_commit,
                 num_txns_in_li - num_txns_to_commit

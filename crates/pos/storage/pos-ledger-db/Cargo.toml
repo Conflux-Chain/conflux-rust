@@ -27,7 +27,6 @@ bcs = "0.1.2"
 diem-config = { workspace = true }
 diem-crypto = { workspace = true }
 diem-logger = { workspace = true }
-diem-metrics = { workspace = true }
 diem-infallible = { workspace = true }
 diem-proptest-helpers = { workspace = true, optional = true }
 diem-temppath = { workspace = true, optional = true }

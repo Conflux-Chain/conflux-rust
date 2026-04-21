@@ -63,6 +63,5 @@ pub use shared_mempool::{
 };
 
 mod core_mempool;
-mod counters;
 mod logging;
 mod shared_mempool;

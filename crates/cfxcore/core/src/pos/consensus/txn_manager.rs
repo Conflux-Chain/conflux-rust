@@ -14,7 +14,6 @@ use anyhow::Result;
 use consensus_types::{block::Block, common::Payload};
 use diem_crypto::HashValue;
 use diem_logger::prelude::*;
-use diem_metrics::monitor;
 use diem_types::validator_verifier::ValidatorVerifier;
 use executor_types::StateComputeResult;
 use fail::fail_point;
@@ -68,14 +67,12 @@ impl MempoolProxy {
             .try_send(req)
             .map_err(anyhow::Error::from)?;
         // wait for response
-        match monitor!(
-            "pull_txn",
-            timeout(
-                Duration::from_millis(self.mempool_txn_pull_timeout_ms),
-                callback_rcv
-            )
-            .await
-        ) {
+        match timeout(
+            Duration::from_millis(self.mempool_txn_pull_timeout_ms),
+            callback_rcv,
+        )
+        .await
+        {
             Err(_) => Err(anyhow::anyhow!(
                 "[consensus] did not receive GetBlockResponse on time"
             )

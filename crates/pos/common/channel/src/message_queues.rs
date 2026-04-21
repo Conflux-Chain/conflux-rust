@@ -5,7 +5,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use diem_metrics::IntCounterVec;
 use std::{
     collections::{HashMap, VecDeque},
     fmt::{Debug, Formatter, Result},
@@ -56,9 +55,6 @@ pub(crate) struct PerKeyQueue<K: Eq + Hash + Clone, T> {
     max_queue_size: NonZeroUsize,
     /// Number of messages dequeued since last GC
     num_popped_since_gc: u32,
-    /// Optional counters for recording # enqueued, # dequeued, and # dropped
-    /// messages
-    counters: Option<&'static IntCounterVec>,
 }
 
 impl<K: Eq + Hash + Clone, T> Debug for PerKeyQueue<K, T> {
@@ -76,7 +72,6 @@ impl<K: Eq + Hash + Clone, T> PerKeyQueue<K, T> {
     /// max_queue_size_per_key
     pub(crate) fn new(
         queue_style: QueueStyle, max_queue_size_per_key: NonZeroUsize,
-        counters: Option<&'static IntCounterVec>,
     ) -> Self {
         Self {
             queue_style,
@@ -84,7 +79,6 @@ impl<K: Eq + Hash + Clone, T> PerKeyQueue<K, T> {
             per_key_queue: HashMap::new(),
             round_robin_queue: VecDeque::new(),
             num_popped_since_gc: 0,
-            counters,
         }
     }
 
@@ -109,10 +103,6 @@ impl<K: Eq + Hash + Clone, T> PerKeyQueue<K, T> {
     /// Returns Some(T) if the new or an existing element was dropped. Returns
     /// None otherwise.
     pub(crate) fn push(&mut self, key: K, message: T) -> Option<T> {
-        if let Some(c) = self.counters.as_ref() {
-            c.with_label_values(&["enqueued"]).inc();
-        }
-
         let key_message_queue = self
             .per_key_queue
             .entry(key.clone())
@@ -131,9 +121,6 @@ impl<K: Eq + Hash + Clone, T> PerKeyQueue<K, T> {
 
         // Push the message to the actual key message queue
         if key_message_queue.len() >= self.max_queue_size.get() {
-            if let Some(c) = self.counters.as_ref() {
-                c.with_label_values(&["dropped"]).inc();
-            }
             match self.queue_style {
                 // Drop the newest message for FIFO
                 QueueStyle::FIFO => Some(message),
@@ -166,10 +153,6 @@ impl<K: Eq + Hash + Clone, T> PerKeyQueue<K, T> {
         }
 
         if message.is_some() {
-            if let Some(c) = self.counters.as_ref() {
-                c.with_label_values(&["dequeued"]).inc();
-            }
-
             // Remove empty per-key-queues every `POPS_PER_GC` successful
             // dequeue operations.
             //

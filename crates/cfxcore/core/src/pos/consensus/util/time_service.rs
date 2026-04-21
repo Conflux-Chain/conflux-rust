@@ -9,7 +9,6 @@ use diem_logger::prelude::*;
 use futures::{Future, FutureExt, SinkExt};
 use std::{pin::Pin, thread, time::Duration};
 
-use crate::pos::consensus::counters;
 use tokio::runtime::Handle;
 
 /// Time service is an abstraction for operations that depend on time
@@ -48,7 +47,6 @@ pub trait TimeService: Send + Sync {
                     wait_duration.as_secs()
                 );
             }
-            counters::WAIT_DURATION_S.observe_duration(wait_duration);
             self.sleep(wait_duration);
         }
     }
