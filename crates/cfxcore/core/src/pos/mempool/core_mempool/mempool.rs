@@ -25,8 +25,8 @@ use diem_types::{
     mempool_status::MempoolStatus,
     term_state::PosState,
     transaction::{
-        authenticator::TransactionAuthenticator, GovernanceRole,
-        SignedTransaction, TransactionPayload,
+        authenticator::TransactionAuthenticator, SignedTransaction,
+        TransactionPayload,
     },
     validator_verifier::ValidatorVerifier,
 };
@@ -103,8 +103,7 @@ impl Mempool {
     /// Used to add a transaction to the Mempool.
     /// Performs basic validation: checks account's sequence number.
     pub(crate) fn add_txn(
-        &mut self, txn: SignedTransaction, ranking_score: u64,
-        timeline_state: TimelineState, governance_role: GovernanceRole,
+        &mut self, txn: SignedTransaction, timeline_state: TimelineState,
     ) -> MempoolStatus {
         diem_trace!(LogSchema::new(LogEntry::AddTxn)
             .txns(TxnsLog::new_txn(txn.sender(), txn.hash())),);
@@ -116,13 +115,8 @@ impl Mempool {
                 .insert((txn.sender(), txn.hash()), SystemTime::now());
         }
 
-        let txn_info = MempoolTransaction::new(
-            txn,
-            expiration_time,
-            ranking_score,
-            timeline_state,
-            governance_role,
-        );
+        let txn_info =
+            MempoolTransaction::new(txn, expiration_time, timeline_state);
 
         self.transactions.insert(txn_info)
     }
@@ -138,16 +132,8 @@ impl Mempool {
     ) -> Vec<SignedTransaction> {
         let mut block = vec![];
         let mut block_log = TxnsLog::new();
-        // Helper DS. Helps to mitigate scenarios where account submits several
-        // transactions with increasing gas price (e.g. user submits
-        // transactions with sequence number 1, 2 and gas_price 1, 10
-        // respectively) Later txn has higher gas price and will be
-        // observed first in priority index iterator, but can't be
-        // executed before first txn. Once observed, such txn will be saved in
-        // `skipped` DS and rechecked once it's ancestor becomes available
         let seen_size = seen.len();
         let mut txn_walked = 0usize;
-        // iterate all normal transaction
         for txn in self.transactions.iter() {
             txn_walked += 1;
             if seen.contains(&TxnPointer::from(txn)) {

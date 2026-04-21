@@ -10,9 +10,7 @@ use crate::pos::mempool::core_mempool::transaction::{
     MempoolTransaction, TimelineState,
 };
 use diem_crypto::HashValue;
-use diem_types::{
-    account_address::AccountAddress, transaction::GovernanceRole,
-};
+use diem_types::account_address::AccountAddress;
 use std::{
     cmp::Ordering,
     collections::{hash_map::Values, BTreeMap, BTreeSet, HashMap},
@@ -78,49 +76,6 @@ pub type TxnPointer = (AccountAddress, HashValue);
 impl From<&MempoolTransaction> for TxnPointer {
     fn from(transaction: &MempoolTransaction) -> Self {
         (transaction.get_sender(), transaction.get_hash())
-    }
-}
-
-#[derive(Eq, PartialEq, Clone, Debug, Hash)]
-#[allow(dead_code)]
-pub struct OrderedQueueKey {
-    pub gas_ranking_score: u64,
-    pub expiration_time: Duration,
-    pub address: AccountAddress,
-    pub hash: HashValue,
-    pub governance_role: GovernanceRole,
-}
-
-impl PartialOrd for OrderedQueueKey {
-    fn partial_cmp(&self, other: &OrderedQueueKey) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for OrderedQueueKey {
-    fn cmp(&self, other: &OrderedQueueKey) -> Ordering {
-        match self
-            .governance_role
-            .priority()
-            .cmp(&other.governance_role.priority())
-        {
-            Ordering::Equal => {}
-            ordering => return ordering,
-        }
-        match self.gas_ranking_score.cmp(&other.gas_ranking_score) {
-            Ordering::Equal => {}
-            ordering => return ordering,
-        }
-        match self.expiration_time.cmp(&other.expiration_time).reverse() {
-            Ordering::Equal => {}
-            ordering => return ordering,
-        }
-        match self.address.cmp(&other.address) {
-            Ordering::Equal => {}
-            ordering => return ordering,
-        }
-        // TODO(linxi): correct compare
-        self.hash.cmp(&other.hash).reverse()
     }
 }
 
