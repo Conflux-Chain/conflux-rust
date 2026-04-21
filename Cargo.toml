@@ -69,7 +69,6 @@ members = [
     "crates/rpc/rpc-cfx-impl",
     "crates/rpc/rpc-cfx-api",
     "crates/pos/common/bounded-executor",
-    "crates/pos/common/crash-handler",
     "crates/pos/common/infallible",
     "crates/pos/common/logger",
     "crates/pos/common/proptest-helpers",
@@ -196,7 +195,6 @@ cfx-rpc-middlewares = { path = "./crates/rpc/rpc-middlewares" }
 bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 #diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
 channel = { path = "./crates/pos/common/channel" }
-crash-handler = { path = "./crates/pos/common/crash-handler" }
 diem-infallible = { path = "./crates/pos/common/infallible" }
 diem-logger = { path = "./crates/pos/common/logger" }
 diem-proptest-helpers = { path = "./crates/pos/common/proptest-helpers" }

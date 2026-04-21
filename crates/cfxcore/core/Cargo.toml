@@ -101,7 +101,6 @@ pow-types = { workspace = true }
 proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
 diem-temppath = { workspace = true }
-crash-handler = { workspace = true }
 heap-map = { workspace = true }
 treap-map = { workspace = true }
 cfx-packing-pool = { workspace = true }
