@@ -71,7 +71,6 @@ members = [
     "crates/pos/common/bounded-executor",
     "crates/pos/common/infallible",
     "crates/pos/common/logger",
-    "crates/pos/common/proptest-helpers",
     "crates/pos/common/temppath",
     "crates/pos/common/time-service",
     "crates/pos/config/global-constants",
@@ -197,7 +196,6 @@ bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 channel = { path = "./crates/pos/common/channel" }
 diem-infallible = { path = "./crates/pos/common/infallible" }
 diem-logger = { path = "./crates/pos/common/logger" }
-diem-proptest-helpers = { path = "./crates/pos/common/proptest-helpers" }
 diem-temppath = { path = "./crates/pos/common/temppath" }
 diem-time-service = { path = "./crates/pos/common/time-service" }
 diem-global-constants = { path = "./crates/pos/config/global-constants" }

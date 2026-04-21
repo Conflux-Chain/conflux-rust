@@ -3377,15 +3377,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "diem-proptest-helpers"
-version = "0.1.0"
-dependencies = [
- "crossbeam",
- "proptest",
- "proptest-derive",
-]
-
-[[package]]
 name = "diem-secure-storage"
 version = "0.1.0"
 dependencies = [
@@ -6967,7 +6958,6 @@ dependencies = [
  "diem-crypto",
  "diem-infallible",
  "diem-logger",
- "diem-proptest-helpers",
  "diem-temppath",
  "diem-types",
  "itertools 0.14.0",
@@ -8224,7 +8214,6 @@ dependencies = [
  "diem-global-constants",
  "diem-infallible",
  "diem-logger",
- "diem-proptest-helpers",
  "diem-secure-storage",
  "diem-types",
  "log",
