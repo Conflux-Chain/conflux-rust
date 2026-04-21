@@ -43,7 +43,6 @@ use consensus_types::{
 };
 use diem_config::config::{ConsensusConfig, ConsensusProposerType, NodeConfig};
 use diem_crypto::HashValue;
-use diem_infallible::RwLock;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
@@ -56,6 +55,7 @@ use futures::{
     channel::{mpsc, oneshot},
     select_biased, StreamExt,
 };
+use parking_lot::RwLock;
 use pow_types::PowInterface;
 use safety_rules::SafetyRules;
 use std::{

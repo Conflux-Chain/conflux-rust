@@ -119,7 +119,9 @@ impl TimeService for ClockTimeService {
     }
 
     fn get_current_timestamp(&self) -> Duration {
-        diem_infallible::duration_since_epoch()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH")
     }
 
     fn sleep(&self, t: Duration) { thread::sleep(t) }

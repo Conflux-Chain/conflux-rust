@@ -7,7 +7,6 @@ use std::sync::Arc;
 use anyhow::{format_err, Result};
 
 use diem_crypto::HashValue;
-use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
@@ -17,6 +16,7 @@ use diem_types::{
     transaction::Transaction,
 };
 use executor_types::{Error, ExecutedTrees, ProcessedVMOutput};
+use parking_lot::Mutex;
 pub use speculation_cache::{SpeculationBlock, SpeculationCache};
 use storage_interface::{DbReaderWriter, TreeState};
 

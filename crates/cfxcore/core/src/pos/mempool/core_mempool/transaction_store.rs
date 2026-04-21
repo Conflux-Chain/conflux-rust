@@ -208,7 +208,9 @@ impl TransactionStore {
 
     /// Garbage collect old transactions.
     pub(crate) fn gc_by_system_ttl(&mut self) {
-        let now = diem_infallible::duration_since_epoch();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH");
         self.gc(now, true);
     }
 

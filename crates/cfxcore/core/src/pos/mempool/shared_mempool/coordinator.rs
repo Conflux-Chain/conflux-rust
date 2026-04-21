@@ -19,7 +19,6 @@ use crate::pos::{
 };
 use anyhow::Result;
 use bounded_executor::BoundedExecutor;
-use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::{
     mempool_status::MempoolStatus, transaction::SignedTransaction,
@@ -31,6 +30,7 @@ use futures::{
     StreamExt,
 };
 use network::node_table::NodeId;
+use parking_lot::Mutex;
 use std::{collections::HashSet, sync::Arc, time::Duration};
 use tokio::{runtime::Handle, time::interval};
 use tokio_stream::wrappers::IntervalStream;

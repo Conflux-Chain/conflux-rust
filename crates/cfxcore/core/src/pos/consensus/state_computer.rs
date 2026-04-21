@@ -10,7 +10,6 @@ use crate::pos::mempool::{CommitNotification, CommittedTransaction};
 use anyhow::Result;
 use consensus_types::block::Block;
 use diem_crypto::HashValue;
-use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::{
     ledger_info::LedgerInfoWithSignatures, transaction::Transaction,
@@ -20,6 +19,7 @@ use executor_types::{
 };
 use fail::fail_point;
 use futures::channel::{mpsc, oneshot};
+use parking_lot::Mutex;
 use std::boxed::Box;
 
 /// Basic communication with the Execution module;

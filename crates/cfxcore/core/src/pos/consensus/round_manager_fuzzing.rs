@@ -25,7 +25,6 @@ use super::{
 };
 use channel::{diem_channel, message_queues::QueueStyle};
 use consensus_types::proposal_msg::ProposalMsg;
-use diem_infallible::RwLock;
 use diem_types::{
     epoch_state::EpochState, ledger_info::LedgerInfo,
     on_chain_config::ValidatorSet, validator_info::ValidatorInfo,
@@ -37,6 +36,7 @@ use network::{
     protocols::network::NewNetworkSender,
 };
 use once_cell::sync::Lazy;
+use parking_lot::RwLock;
 use safety_rules::{test_utils, SafetyRules};
 use std::{sync::Arc, time::Duration};
 use tokio::runtime::Runtime;

@@ -1439,10 +1439,10 @@ dependencies = [
  "anyhow",
  "consensus-types",
  "diem-crypto",
- "diem-infallible",
  "diem-logger",
  "diem-types",
  "executor-types",
+ "parking_lot 0.12.1",
  "serde",
  "storage-interface",
 ]
@@ -2192,7 +2192,6 @@ dependencies = [
  "db",
  "diem-config",
  "diem-crypto",
- "diem-infallible",
  "diem-logger",
  "diem-temppath",
  "diem-types",
@@ -2392,9 +2391,9 @@ name = "channel"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "diem-infallible",
  "diem-types",
  "futures 0.3.30",
+ "parking_lot 0.12.1",
  "tokio",
 ]
 
@@ -2689,7 +2688,6 @@ dependencies = [
  "bcs",
  "diem-crypto",
  "diem-crypto-derive",
- "diem-infallible",
  "diem-types",
  "executor-types",
  "hex",
@@ -3324,10 +3322,6 @@ name = "diem-global-constants"
 version = "0.1.0"
 
 [[package]]
-name = "diem-infallible"
-version = "0.1.0"
-
-[[package]]
 name = "diem-log-derive"
 version = "0.1.0"
 dependencies = [
@@ -3342,7 +3336,6 @@ version = "0.1.0"
 dependencies = [
  "backtrace",
  "chrono",
- "diem-infallible",
  "diem-log-derive",
  "erased-serde",
  "hostname",
@@ -3362,7 +3355,6 @@ dependencies = [
  "bcs",
  "chrono",
  "diem-crypto",
- "diem-infallible",
  "diem-logger",
  "diem-temppath",
  "diem-types",
@@ -6920,7 +6912,6 @@ dependencies = [
  "byteorder",
  "diem-config",
  "diem-crypto",
- "diem-infallible",
  "diem-logger",
  "diem-temppath",
  "diem-types",
@@ -8176,7 +8167,6 @@ dependencies = [
  "diem-config",
  "diem-crypto",
  "diem-global-constants",
- "diem-infallible",
  "diem-logger",
  "diem-secure-storage",
  "diem-types",

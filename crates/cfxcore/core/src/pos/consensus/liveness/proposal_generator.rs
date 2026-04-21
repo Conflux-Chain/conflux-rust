@@ -15,13 +15,13 @@ use consensus_types::{
     common::{Author, Round},
     quorum_cert::QuorumCert,
 };
-use diem_infallible::Mutex;
 use diem_logger::{debug as diem_debug, error as diem_error};
 use diem_types::{
     transaction::{RawTransaction, SignedTransaction, TransactionPayload},
     validator_config::ConsensusPrivateKey,
     validator_verifier::ValidatorVerifier,
 };
+use parking_lot::Mutex;
 use pow_types::PowInterface;
 
 use crate::pos::consensus::{

@@ -20,10 +20,10 @@ use consensus_types::{
     sync_info::SyncInfo, timeout_certificate::TimeoutCertificate,
 };
 use diem_crypto::HashValue;
-use diem_infallible::RwLock;
 use diem_logger::prelude::*;
 use diem_types::ledger_info::LedgerInfoWithSignatures;
 use executor_types::{Error, StateComputeResult};
+use parking_lot::RwLock;
 use pow_types::PowInterface;
 use std::{collections::vec_deque::VecDeque, sync::Arc, time::Duration};
 

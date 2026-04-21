@@ -13,9 +13,9 @@ use std::{
     time::Duration,
 };
 
-use diem_infallible::RwLock;
+use parking_lot::RwLock;
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use fail::fail_point;
 use futures::{
     channel::{mpsc, oneshot},
@@ -36,7 +36,6 @@ use consensus_types::{
 };
 use diem_config::keys::ConfigKey;
 use diem_crypto::{hash::CryptoHash, HashValue, SigningKey, VRFPrivateKey};
-use diem_infallible::checked;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::{from_consensus_public_key, AccountAddress},
@@ -676,7 +675,10 @@ impl RoundManager {
         // To avoid a ping-pong cycle between two peers that move forward
         // together.
         self.ensure_round_and_sync_up(
-            checked!((sync_info.highest_round()) + 1)?,
+            sync_info
+                .highest_round()
+                .checked_add(1)
+                .ok_or_else(|| anyhow!("round overflow"))?,
             &sync_info,
             peer,
             false,

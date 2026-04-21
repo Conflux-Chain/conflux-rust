@@ -21,7 +21,6 @@ use crate::pos::mempool::{
 };
 use anyhow::Result;
 use cached_pos_ledger_db::CachedPosLedgerDB;
-use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::{
     mempool_status::{MempoolStatus, MempoolStatusCode},
@@ -29,6 +28,7 @@ use diem_types::{
 };
 use futures::{channel::oneshot, stream::FuturesUnordered};
 use network::node_table::NodeId;
+use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::{
     cmp,
@@ -293,7 +293,9 @@ pub(crate) async fn process_consensus_request(
         // may expire in consensus Note: this gc
         // operation relies on the fact that consensus uses the system
         // time to determine block timestamp
-        let curr_time = diem_infallible::duration_since_epoch();
+        let curr_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH");
         mempool.gc_by_expiration_time(curr_time);
         let block_size = cmp::max(max_block_size, 1);
         let pos_state = db

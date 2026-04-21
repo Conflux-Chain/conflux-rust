@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.38"
 futures = { workspace = true }
-diem-infallible = { workspace = true }
+parking_lot = { workspace = true }
 
 [dev-dependencies]
 diem-types = { workspace = true }

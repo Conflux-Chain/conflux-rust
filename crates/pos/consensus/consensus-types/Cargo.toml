@@ -16,7 +16,6 @@ executor-types = { workspace = true }
 bcs = "0.1.2"
 diem-crypto = { workspace = true }
 diem-crypto-derive = { workspace = true }
-diem-infallible = { workspace = true }
 diem-types = { workspace = true }
 hex = { workspace = true }
 rustc-hex = { workspace = true }
