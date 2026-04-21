@@ -59,18 +59,6 @@ use tokio::runtime::Runtime;
 const AC_SMP_CHANNEL_BUFFER_SIZE: usize = 1_024;
 const INTRA_NODE_CHANNEL_BUFFER_SIZE: usize = 1;
 
-/// Install a panic hook that captures a backtrace and flushes the PoS log
-/// writer before unwinding. Without this, tokio task panics only surface on
-/// stderr and don't land in the node's log file.
-fn setup_panic_handler() {
-    std::panic::set_hook(Box::new(|pi| {
-        let backtrace = std::backtrace::Backtrace::force_capture();
-        eprintln!("panic: {pi}\nbacktrace:\n{backtrace}");
-        diem_error!("panic: {pi}\nbacktrace: {backtrace}");
-        diem_logger::flush();
-    }));
-}
-
 pub struct PosDropHandle {
     // pow handler
     pub pow_handler: Arc<PowHandler>,
@@ -96,8 +84,6 @@ pub fn start_pos_consensus(
     test_command_receiver: mpsc::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> PosDropHandle {
-    setup_panic_handler();
-
     let mut logger = diem_logger::Logger::new();
     logger
         .channel_size(config.logger.chan_size)

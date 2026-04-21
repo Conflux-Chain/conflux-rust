@@ -79,6 +79,7 @@ use cfx_mallocator_utils::start_pprf_server;
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 
 pub mod delegate_convert;
+pub mod panic_handler;
 pub mod shutdown_handler;
 
 /// Hold all top-level components for a type of client.
