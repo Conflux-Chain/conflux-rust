@@ -2228,6 +2228,7 @@ dependencies = [
  "geth-tracer",
  "hashbrown 0.7.2",
  "heap-map",
+ "hex",
  "hibitset",
  "itertools 0.14.0",
  "jsonrpc-core",
@@ -2270,7 +2271,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "short-hex-str",
  "siphasher 0.3.10",
  "slab",
  "smart-default",
@@ -2279,7 +2279,6 @@ dependencies = [
  "storage-interface",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "subscription-service",
  "thiserror 2.0.18",
  "threadpool",
  "throttling",
@@ -2716,11 +2715,11 @@ dependencies = [
  "diem-infallible",
  "diem-types",
  "executor-types",
+ "hex",
  "mirai-annotations",
  "proptest",
  "rustc-hex",
  "serde",
- "short-hex-str",
 ]
 
 [[package]]
@@ -8739,18 +8738,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
-name = "short-hex-str"
-version = "0.1.0"
-dependencies = [
- "hex",
- "mirai-annotations",
- "proptest",
- "serde",
- "static_assertions",
- "thiserror 1.0.63",
-]
-
-[[package]]
 name = "signal-hook-registry"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9096,15 +9083,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.114",
-]
-
-[[package]]
-name = "subscription-service"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "channel",
- "diem-types",
 ]
 
 [[package]]

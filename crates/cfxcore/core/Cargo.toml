@@ -49,6 +49,7 @@ priority-send-queue = { workspace = true }
 rand = { workspace = true }
 rand_08 = { workspace = true }
 rand_xorshift = { workspace = true }
+hex = { workspace = true }
 rangetools = { workspace = true }
 rayon = { workspace = true }
 rlp = { workspace = true }
@@ -92,8 +93,6 @@ pos-ledger-db = { workspace = true }
 cached-pos-ledger-db = { workspace = true }
 schemadb = { workspace = true }
 storage-interface = { workspace = true }
-short-hex-str = { workspace = true }
-subscription-service = { workspace = true }
 fail = { workspace = true }
 anyhow = { workspace = true }
 once_cell = { workspace = true }

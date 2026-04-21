@@ -25,7 +25,6 @@ use diem_logger::prelude::*;
 use diem_types::ledger_info::LedgerInfoWithSignatures;
 use executor_types::{Error, StateComputeResult};
 use pow_types::PowInterface;
-use short_hex_str::AsShortHexStr;
 use std::{collections::vec_deque::VecDeque, sync::Arc, time::Duration};
 
 #[path = "sync_manager.rs"]
@@ -212,10 +211,10 @@ impl BlockStore {
             block_id = block_to_commit.id(),
         );
         event!("committed",
-            "block_id": block_to_commit.id().short_str(),
+            "block_id": hex::encode(&block_to_commit.id().as_ref()[..4]),
             "epoch": block_to_commit.epoch(),
             "round": committed_round,
-            "parent_id": block_to_commit.parent_id().short_str(),
+            "parent_id": hex::encode(&block_to_commit.parent_id().as_ref()[..4]),
         );
         self.prune_tree(block_to_commit.id());
         Ok(())
