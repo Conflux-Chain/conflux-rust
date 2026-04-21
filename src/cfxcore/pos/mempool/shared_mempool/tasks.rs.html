@@ -250,219 +250,210 @@
 <a href=#250 id=250 data-nosnippet>250</a>    {
 <a href=#251 id=251 data-nosnippet>251</a>        <span class="kw">let </span><span class="kw-2">mut </span>mempool = smp.mempool.lock();
 <a href=#252 id=252 data-nosnippet>252</a>        <span class="kw">for </span>(idx, transaction) <span class="kw">in </span>transactions.into_iter().enumerate() {
-<a href=#253 id=253 data-nosnippet>253</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(validation_result) = <span class="kw-2">&amp;</span>validation_results[idx] {
-<a href=#254 id=254 data-nosnippet>254</a>                <span class="kw">match </span>validation_result.status() {
-<a href=#255 id=255 data-nosnippet>255</a>                    <span class="prelude-val">None </span>=&gt; {
-<a href=#256 id=256 data-nosnippet>256</a>                        <span class="kw">let </span>ranking_score = validation_result.score();
-<a href=#257 id=257 data-nosnippet>257</a>                        <span class="kw">let </span>governance_role =
-<a href=#258 id=258 data-nosnippet>258</a>                            validation_result.governance_role();
-<a href=#259 id=259 data-nosnippet>259</a>                        <span class="kw">let </span>mempool_status = mempool.add_txn(
-<a href=#260 id=260 data-nosnippet>260</a>                            transaction.clone(),
-<a href=#261 id=261 data-nosnippet>261</a>                            ranking_score,
-<a href=#262 id=262 data-nosnippet>262</a>                            timeline_state,
-<a href=#263 id=263 data-nosnippet>263</a>                            governance_role,
-<a href=#264 id=264 data-nosnippet>264</a>                        );
-<a href=#265 id=265 data-nosnippet>265</a>                        statuses.push((transaction, (mempool_status, <span class="prelude-val">None</span>)));
-<a href=#266 id=266 data-nosnippet>266</a>                    }
-<a href=#267 id=267 data-nosnippet>267</a>                    <span class="prelude-val">Some</span>(validation_status) =&gt; {
-<a href=#268 id=268 data-nosnippet>268</a>                        statuses.push((
-<a href=#269 id=269 data-nosnippet>269</a>                            transaction.clone(),
-<a href=#270 id=270 data-nosnippet>270</a>                            (
-<a href=#271 id=271 data-nosnippet>271</a>                                MempoolStatus::new(MempoolStatusCode::VmError),
-<a href=#272 id=272 data-nosnippet>272</a>                                <span class="prelude-val">Some</span>(validation_status),
-<a href=#273 id=273 data-nosnippet>273</a>                            ),
-<a href=#274 id=274 data-nosnippet>274</a>                        ));
-<a href=#275 id=275 data-nosnippet>275</a>                    }
-<a href=#276 id=276 data-nosnippet>276</a>                }
-<a href=#277 id=277 data-nosnippet>277</a>            }
-<a href=#278 id=278 data-nosnippet>278</a>        }
-<a href=#279 id=279 data-nosnippet>279</a>    }
-<a href=#280 id=280 data-nosnippet>280</a>    notify_subscribers(
-<a href=#281 id=281 data-nosnippet>281</a>        SharedMempoolNotification::NewTransactions,
-<a href=#282 id=282 data-nosnippet>282</a>        <span class="kw-2">&amp;</span>smp.subscribers,
-<a href=#283 id=283 data-nosnippet>283</a>    );
-<a href=#284 id=284 data-nosnippet>284</a>    statuses
-<a href=#285 id=285 data-nosnippet>285</a>}
-<a href=#286 id=286 data-nosnippet>286</a>
-<a href=#287 id=287 data-nosnippet>287</a><span class="kw">fn </span>log_txn_process_results(
-<a href=#288 id=288 data-nosnippet>288</a>    results: <span class="kw-2">&amp;</span>[SubmissionStatusBundle], sender: <span class="prelude-ty">Option</span>&lt;NodeId&gt;,
-<a href=#289 id=289 data-nosnippet>289</a>) {
-<a href=#290 id=290 data-nosnippet>290</a>    <span class="kw">let </span>sender = <span class="kw">match </span>sender {
-<a href=#291 id=291 data-nosnippet>291</a>        <span class="prelude-val">Some</span>(peer) =&gt; peer,
-<a href=#292 id=292 data-nosnippet>292</a>        <span class="prelude-val">None </span>=&gt; {
-<a href=#293 id=293 data-nosnippet>293</a>            <span class="kw">return</span>;
-<a href=#294 id=294 data-nosnippet>294</a>        }
-<a href=#295 id=295 data-nosnippet>295</a>    };
-<a href=#296 id=296 data-nosnippet>296</a>    <span class="kw">for </span>(txn, (_mempool_status, maybe_vm_status)) <span class="kw">in </span>results.iter() {
-<a href=#297 id=297 data-nosnippet>297</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(vm_status) = maybe_vm_status {
-<a href=#298 id=298 data-nosnippet>298</a>            <span class="macro">diem_trace!</span>(
-<a href=#299 id=299 data-nosnippet>299</a>                SecurityEvent::InvalidTransactionMempool,
-<a href=#300 id=300 data-nosnippet>300</a>                failed_transaction = txn,
-<a href=#301 id=301 data-nosnippet>301</a>                vm_status = vm_status,
-<a href=#302 id=302 data-nosnippet>302</a>                sender = sender,
-<a href=#303 id=303 data-nosnippet>303</a>            );
-<a href=#304 id=304 data-nosnippet>304</a>            <span class="comment">/*counters::shared_mempool_transactions_processed_inc(
-<a href=#305 id=305 data-nosnippet>305</a>                counters::VM_VALIDATION_LABEL,
-<a href=#306 id=306 data-nosnippet>306</a>                &amp;network,
-<a href=#307 id=307 data-nosnippet>307</a>                &amp;sender,
-<a href=#308 id=308 data-nosnippet>308</a>            );*/
-<a href=#309 id=309 data-nosnippet>309</a>            </span><span class="kw">continue</span>;
-<a href=#310 id=310 data-nosnippet>310</a>        }
-<a href=#311 id=311 data-nosnippet>311</a>        <span class="comment">/*
-<a href=#312 id=312 data-nosnippet>312</a>        match mempool_status.code {
-<a href=#313 id=313 data-nosnippet>313</a>            MempoolStatusCode::Accepted =&gt; {
-<a href=#314 id=314 data-nosnippet>314</a>                counters::shared_mempool_transactions_processed_inc(
-<a href=#315 id=315 data-nosnippet>315</a>                    counters::SUCCESS_LABEL,
-<a href=#316 id=316 data-nosnippet>316</a>                    &amp;network,
-<a href=#317 id=317 data-nosnippet>317</a>                    &amp;sender,
-<a href=#318 id=318 data-nosnippet>318</a>                )
-<a href=#319 id=319 data-nosnippet>319</a>            }
-<a href=#320 id=320 data-nosnippet>320</a>            _ =&gt; counters::shared_mempool_transactions_processed_inc(
-<a href=#321 id=321 data-nosnippet>321</a>                &amp;mempool_status.code.to_string(),
-<a href=#322 id=322 data-nosnippet>322</a>                &amp;network,
-<a href=#323 id=323 data-nosnippet>323</a>                &amp;sender,
-<a href=#324 id=324 data-nosnippet>324</a>            ),
-<a href=#325 id=325 data-nosnippet>325</a>        }*/
-<a href=#326 id=326 data-nosnippet>326</a>    </span>}
-<a href=#327 id=327 data-nosnippet>327</a>}
-<a href=#328 id=328 data-nosnippet>328</a>
-<a href=#329 id=329 data-nosnippet>329</a><span class="comment">// ================================= //
-<a href=#330 id=330 data-nosnippet>330</a>// intra-node communication handlers //
-<a href=#331 id=331 data-nosnippet>331</a>// ================================= //
-<a href=#332 id=332 data-nosnippet>332</a>
-<a href=#333 id=333 data-nosnippet>333</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>process_committed_transactions(
-<a href=#334 id=334 data-nosnippet>334</a>    mempool: Arc&lt;Mutex&lt;CoreMempool&gt;&gt;, req: CommitNotification,
-<a href=#335 id=335 data-nosnippet>335</a>) {
-<a href=#336 id=336 data-nosnippet>336</a>    <span class="kw">let </span>start_time = Instant::now();
-<a href=#337 id=337 data-nosnippet>337</a>    <span class="macro">diem_debug!</span>(LogSchema::event_log(
-<a href=#338 id=338 data-nosnippet>338</a>        LogEntry::StateSyncCommit,
-<a href=#339 id=339 data-nosnippet>339</a>        LogEvent::Received
-<a href=#340 id=340 data-nosnippet>340</a>    )
-<a href=#341 id=341 data-nosnippet>341</a>    .state_sync_msg(<span class="kw-2">&amp;</span>req));
-<a href=#342 id=342 data-nosnippet>342</a>    counters::mempool_service_transactions(
-<a href=#343 id=343 data-nosnippet>343</a>        counters::COMMIT_STATE_SYNC_LABEL,
-<a href=#344 id=344 data-nosnippet>344</a>        req.transactions.len(),
-<a href=#345 id=345 data-nosnippet>345</a>    );
-<a href=#346 id=346 data-nosnippet>346</a>    commit_txns(<span class="kw-2">&amp;</span>mempool, req.transactions, req.block_timestamp_usecs, <span class="bool-val">false</span>)
-<a href=#347 id=347 data-nosnippet>347</a>        .<span class="kw">await</span>;
-<a href=#348 id=348 data-nosnippet>348</a>    <span class="kw">let </span>result = <span class="kw">if </span>req.callback.send(<span class="prelude-val">Ok</span>(CommitResponse::success())).is_err() {
-<a href=#349 id=349 data-nosnippet>349</a>        <span class="macro">diem_error!</span>(LogSchema::event_log(
-<a href=#350 id=350 data-nosnippet>350</a>            LogEntry::StateSyncCommit,
-<a href=#351 id=351 data-nosnippet>351</a>            LogEvent::CallbackFail
-<a href=#352 id=352 data-nosnippet>352</a>        ));
-<a href=#353 id=353 data-nosnippet>353</a>        counters::REQUEST_FAIL_LABEL
-<a href=#354 id=354 data-nosnippet>354</a>    } <span class="kw">else </span>{
-<a href=#355 id=355 data-nosnippet>355</a>        counters::REQUEST_SUCCESS_LABEL
-<a href=#356 id=356 data-nosnippet>356</a>    };
-<a href=#357 id=357 data-nosnippet>357</a>    <span class="kw">let </span>latency = start_time.elapsed();
-<a href=#358 id=358 data-nosnippet>358</a>    counters::mempool_service_latency(
-<a href=#359 id=359 data-nosnippet>359</a>        counters::COMMIT_STATE_SYNC_LABEL,
-<a href=#360 id=360 data-nosnippet>360</a>        result,
-<a href=#361 id=361 data-nosnippet>361</a>        latency,
-<a href=#362 id=362 data-nosnippet>362</a>    );
-<a href=#363 id=363 data-nosnippet>363</a>}
-<a href=#364 id=364 data-nosnippet>364</a>
-<a href=#365 id=365 data-nosnippet>365</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>process_consensus_request(
-<a href=#366 id=366 data-nosnippet>366</a>    db: Arc&lt;CachedPosLedgerDB&gt;, mempool: <span class="kw-2">&amp;</span>Mutex&lt;CoreMempool&gt;,
-<a href=#367 id=367 data-nosnippet>367</a>    req: ConsensusRequest,
-<a href=#368 id=368 data-nosnippet>368</a>) {
-<a href=#369 id=369 data-nosnippet>369</a>    <span class="comment">// Start latency timer
-<a href=#370 id=370 data-nosnippet>370</a>    </span><span class="kw">let </span>start_time = Instant::now();
-<a href=#371 id=371 data-nosnippet>371</a>    <span class="macro">diem_debug!</span>(
-<a href=#372 id=372 data-nosnippet>372</a>        LogSchema::event_log(LogEntry::Consensus, LogEvent::Received)
-<a href=#373 id=373 data-nosnippet>373</a>            .consensus_msg(<span class="kw-2">&amp;</span>req)
-<a href=#374 id=374 data-nosnippet>374</a>    );
-<a href=#375 id=375 data-nosnippet>375</a>
-<a href=#376 id=376 data-nosnippet>376</a>    <span class="kw">let </span>(resp, callback, counter_label) = <span class="kw">match </span>req {
-<a href=#377 id=377 data-nosnippet>377</a>        ConsensusRequest::GetBlockRequest(
-<a href=#378 id=378 data-nosnippet>378</a>            max_block_size,
-<a href=#379 id=379 data-nosnippet>379</a>            transactions,
-<a href=#380 id=380 data-nosnippet>380</a>            parent_block_id,
-<a href=#381 id=381 data-nosnippet>381</a>            validators,
-<a href=#382 id=382 data-nosnippet>382</a>            callback,
-<a href=#383 id=383 data-nosnippet>383</a>        ) =&gt; {
-<a href=#384 id=384 data-nosnippet>384</a>            <span class="kw">let </span>exclude_transactions: HashSet&lt;TxnPointer&gt; = transactions
-<a href=#385 id=385 data-nosnippet>385</a>                .iter()
-<a href=#386 id=386 data-nosnippet>386</a>                .map(|txn| (txn.sender, txn.hash))
-<a href=#387 id=387 data-nosnippet>387</a>                .collect();
-<a href=#388 id=388 data-nosnippet>388</a>            <span class="kw">let </span><span class="kw-2">mut </span>txns;
-<a href=#389 id=389 data-nosnippet>389</a>            {
-<a href=#390 id=390 data-nosnippet>390</a>                <span class="kw">let </span><span class="kw-2">mut </span>mempool = mempool.lock();
-<a href=#391 id=391 data-nosnippet>391</a>                <span class="comment">// gc before pulling block as extra protection against txns that
-<a href=#392 id=392 data-nosnippet>392</a>                // may expire in consensus Note: this gc
-<a href=#393 id=393 data-nosnippet>393</a>                // operation relies on the fact that consensus uses the system
-<a href=#394 id=394 data-nosnippet>394</a>                // time to determine block timestamp
-<a href=#395 id=395 data-nosnippet>395</a>                </span><span class="kw">let </span>curr_time = diem_infallible::duration_since_epoch();
-<a href=#396 id=396 data-nosnippet>396</a>                mempool.gc_by_expiration_time(curr_time);
-<a href=#397 id=397 data-nosnippet>397</a>                <span class="kw">let </span>block_size = cmp::max(max_block_size, <span class="number">1</span>);
-<a href=#398 id=398 data-nosnippet>398</a>                <span class="kw">let </span>pos_state = db
-<a href=#399 id=399 data-nosnippet>399</a>                    .get_pos_state(<span class="kw-2">&amp;</span>parent_block_id)
-<a href=#400 id=400 data-nosnippet>400</a>                    .expect(<span class="string">"pos_state should exist"</span>);
-<a href=#401 id=401 data-nosnippet>401</a>                txns = mempool.get_block(
-<a href=#402 id=402 data-nosnippet>402</a>                    block_size,
-<a href=#403 id=403 data-nosnippet>403</a>                    exclude_transactions,
-<a href=#404 id=404 data-nosnippet>404</a>                    <span class="kw-2">&amp;</span>pos_state,
-<a href=#405 id=405 data-nosnippet>405</a>                    validators,
-<a href=#406 id=406 data-nosnippet>406</a>                );
-<a href=#407 id=407 data-nosnippet>407</a>            }
-<a href=#408 id=408 data-nosnippet>408</a>            counters::mempool_service_transactions(
-<a href=#409 id=409 data-nosnippet>409</a>                counters::GET_BLOCK_LABEL,
-<a href=#410 id=410 data-nosnippet>410</a>                txns.len(),
-<a href=#411 id=411 data-nosnippet>411</a>            );
-<a href=#412 id=412 data-nosnippet>412</a>            txns.len();
-<a href=#413 id=413 data-nosnippet>413</a>            <span class="kw">let </span>pulled_block =
-<a href=#414 id=414 data-nosnippet>414</a>                txns.drain(..).map(SignedTransaction::into).collect();
-<a href=#415 id=415 data-nosnippet>415</a>
-<a href=#416 id=416 data-nosnippet>416</a>            (
-<a href=#417 id=417 data-nosnippet>417</a>                ConsensusResponse::GetBlockResponse(pulled_block),
-<a href=#418 id=418 data-nosnippet>418</a>                callback,
-<a href=#419 id=419 data-nosnippet>419</a>                counters::GET_BLOCK_LABEL,
-<a href=#420 id=420 data-nosnippet>420</a>            )
-<a href=#421 id=421 data-nosnippet>421</a>        }
-<a href=#422 id=422 data-nosnippet>422</a>        ConsensusRequest::RejectNotification(transactions, callback) =&gt; {
-<a href=#423 id=423 data-nosnippet>423</a>            counters::mempool_service_transactions(
-<a href=#424 id=424 data-nosnippet>424</a>                counters::COMMIT_CONSENSUS_LABEL,
-<a href=#425 id=425 data-nosnippet>425</a>                transactions.len(),
-<a href=#426 id=426 data-nosnippet>426</a>            );
-<a href=#427 id=427 data-nosnippet>427</a>            commit_txns(mempool, transactions, <span class="number">0</span>, <span class="bool-val">true</span>).<span class="kw">await</span>;
-<a href=#428 id=428 data-nosnippet>428</a>            (
-<a href=#429 id=429 data-nosnippet>429</a>                ConsensusResponse::CommitResponse(),
-<a href=#430 id=430 data-nosnippet>430</a>                callback,
-<a href=#431 id=431 data-nosnippet>431</a>                counters::COMMIT_CONSENSUS_LABEL,
-<a href=#432 id=432 data-nosnippet>432</a>            )
-<a href=#433 id=433 data-nosnippet>433</a>        }
-<a href=#434 id=434 data-nosnippet>434</a>    };
-<a href=#435 id=435 data-nosnippet>435</a>    <span class="comment">// Send back to callback
-<a href=#436 id=436 data-nosnippet>436</a>    </span><span class="kw">let </span>result = <span class="kw">if </span>callback.send(<span class="prelude-val">Ok</span>(resp)).is_err() {
-<a href=#437 id=437 data-nosnippet>437</a>        <span class="macro">diem_error!</span>(LogSchema::event_log(
-<a href=#438 id=438 data-nosnippet>438</a>            LogEntry::Consensus,
-<a href=#439 id=439 data-nosnippet>439</a>            LogEvent::CallbackFail
-<a href=#440 id=440 data-nosnippet>440</a>        ));
-<a href=#441 id=441 data-nosnippet>441</a>        counters::REQUEST_FAIL_LABEL
-<a href=#442 id=442 data-nosnippet>442</a>    } <span class="kw">else </span>{
-<a href=#443 id=443 data-nosnippet>443</a>        counters::REQUEST_SUCCESS_LABEL
-<a href=#444 id=444 data-nosnippet>444</a>    };
-<a href=#445 id=445 data-nosnippet>445</a>    <span class="kw">let </span>latency = start_time.elapsed();
-<a href=#446 id=446 data-nosnippet>446</a>    counters::mempool_service_latency(counter_label, result, latency);
-<a href=#447 id=447 data-nosnippet>447</a>}
-<a href=#448 id=448 data-nosnippet>448</a>
-<a href=#449 id=449 data-nosnippet>449</a><span class="kw">async fn </span>commit_txns(
-<a href=#450 id=450 data-nosnippet>450</a>    mempool: <span class="kw-2">&amp;</span>Mutex&lt;CoreMempool&gt;, transactions: Vec&lt;CommittedTransaction&gt;,
-<a href=#451 id=451 data-nosnippet>451</a>    block_timestamp_usecs: u64, is_rejected: bool,
-<a href=#452 id=452 data-nosnippet>452</a>) {
-<a href=#453 id=453 data-nosnippet>453</a>    <span class="kw">let </span><span class="kw-2">mut </span>pool = mempool.lock();
-<a href=#454 id=454 data-nosnippet>454</a>
-<a href=#455 id=455 data-nosnippet>455</a>    <span class="kw">for </span>transaction <span class="kw">in </span>transactions {
-<a href=#456 id=456 data-nosnippet>456</a>        pool.remove_transaction(
-<a href=#457 id=457 data-nosnippet>457</a>            <span class="kw-2">&amp;</span>transaction.sender,
-<a href=#458 id=458 data-nosnippet>458</a>            transaction.hash,
-<a href=#459 id=459 data-nosnippet>459</a>            is_rejected,
-<a href=#460 id=460 data-nosnippet>460</a>        );
-<a href=#461 id=461 data-nosnippet>461</a>    }
-<a href=#462 id=462 data-nosnippet>462</a>
-<a href=#463 id=463 data-nosnippet>463</a>    <span class="kw">if </span>block_timestamp_usecs &gt; <span class="number">0 </span>{
-<a href=#464 id=464 data-nosnippet>464</a>        pool.gc_by_expiration_time(Duration::from_micros(
-<a href=#465 id=465 data-nosnippet>465</a>            block_timestamp_usecs,
-<a href=#466 id=466 data-nosnippet>466</a>        ));
-<a href=#467 id=467 data-nosnippet>467</a>    }
-<a href=#468 id=468 data-nosnippet>468</a>}</code></pre></div></section></main></body></html>
+<a href=#253 id=253 data-nosnippet>253</a>            <span class="kw">match </span>validation_results[idx] {
+<a href=#254 id=254 data-nosnippet>254</a>                <span class="prelude-val">None </span>=&gt; {
+<a href=#255 id=255 data-nosnippet>255</a>                    <span class="kw">let </span>mempool_status =
+<a href=#256 id=256 data-nosnippet>256</a>                        mempool.add_txn(transaction.clone(), timeline_state);
+<a href=#257 id=257 data-nosnippet>257</a>                    statuses.push((transaction, (mempool_status, <span class="prelude-val">None</span>)));
+<a href=#258 id=258 data-nosnippet>258</a>                }
+<a href=#259 id=259 data-nosnippet>259</a>                <span class="prelude-val">Some</span>(validation_status) =&gt; {
+<a href=#260 id=260 data-nosnippet>260</a>                    statuses.push((
+<a href=#261 id=261 data-nosnippet>261</a>                        transaction,
+<a href=#262 id=262 data-nosnippet>262</a>                        (
+<a href=#263 id=263 data-nosnippet>263</a>                            MempoolStatus::new(MempoolStatusCode::VmError),
+<a href=#264 id=264 data-nosnippet>264</a>                            <span class="prelude-val">Some</span>(validation_status),
+<a href=#265 id=265 data-nosnippet>265</a>                        ),
+<a href=#266 id=266 data-nosnippet>266</a>                    ));
+<a href=#267 id=267 data-nosnippet>267</a>                }
+<a href=#268 id=268 data-nosnippet>268</a>            }
+<a href=#269 id=269 data-nosnippet>269</a>        }
+<a href=#270 id=270 data-nosnippet>270</a>    }
+<a href=#271 id=271 data-nosnippet>271</a>    notify_subscribers(
+<a href=#272 id=272 data-nosnippet>272</a>        SharedMempoolNotification::NewTransactions,
+<a href=#273 id=273 data-nosnippet>273</a>        <span class="kw-2">&amp;</span>smp.subscribers,
+<a href=#274 id=274 data-nosnippet>274</a>    );
+<a href=#275 id=275 data-nosnippet>275</a>    statuses
+<a href=#276 id=276 data-nosnippet>276</a>}
+<a href=#277 id=277 data-nosnippet>277</a>
+<a href=#278 id=278 data-nosnippet>278</a><span class="kw">fn </span>log_txn_process_results(
+<a href=#279 id=279 data-nosnippet>279</a>    results: <span class="kw-2">&amp;</span>[SubmissionStatusBundle], sender: <span class="prelude-ty">Option</span>&lt;NodeId&gt;,
+<a href=#280 id=280 data-nosnippet>280</a>) {
+<a href=#281 id=281 data-nosnippet>281</a>    <span class="kw">let </span>sender = <span class="kw">match </span>sender {
+<a href=#282 id=282 data-nosnippet>282</a>        <span class="prelude-val">Some</span>(peer) =&gt; peer,
+<a href=#283 id=283 data-nosnippet>283</a>        <span class="prelude-val">None </span>=&gt; {
+<a href=#284 id=284 data-nosnippet>284</a>            <span class="kw">return</span>;
+<a href=#285 id=285 data-nosnippet>285</a>        }
+<a href=#286 id=286 data-nosnippet>286</a>    };
+<a href=#287 id=287 data-nosnippet>287</a>    <span class="kw">for </span>(txn, (_mempool_status, maybe_vm_status)) <span class="kw">in </span>results.iter() {
+<a href=#288 id=288 data-nosnippet>288</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(vm_status) = maybe_vm_status {
+<a href=#289 id=289 data-nosnippet>289</a>            <span class="macro">diem_trace!</span>(
+<a href=#290 id=290 data-nosnippet>290</a>                SecurityEvent::InvalidTransactionMempool,
+<a href=#291 id=291 data-nosnippet>291</a>                failed_transaction = txn,
+<a href=#292 id=292 data-nosnippet>292</a>                vm_status = vm_status,
+<a href=#293 id=293 data-nosnippet>293</a>                sender = sender,
+<a href=#294 id=294 data-nosnippet>294</a>            );
+<a href=#295 id=295 data-nosnippet>295</a>            <span class="comment">/*counters::shared_mempool_transactions_processed_inc(
+<a href=#296 id=296 data-nosnippet>296</a>                counters::VM_VALIDATION_LABEL,
+<a href=#297 id=297 data-nosnippet>297</a>                &amp;network,
+<a href=#298 id=298 data-nosnippet>298</a>                &amp;sender,
+<a href=#299 id=299 data-nosnippet>299</a>            );*/
+<a href=#300 id=300 data-nosnippet>300</a>            </span><span class="kw">continue</span>;
+<a href=#301 id=301 data-nosnippet>301</a>        }
+<a href=#302 id=302 data-nosnippet>302</a>        <span class="comment">/*
+<a href=#303 id=303 data-nosnippet>303</a>        match mempool_status.code {
+<a href=#304 id=304 data-nosnippet>304</a>            MempoolStatusCode::Accepted =&gt; {
+<a href=#305 id=305 data-nosnippet>305</a>                counters::shared_mempool_transactions_processed_inc(
+<a href=#306 id=306 data-nosnippet>306</a>                    counters::SUCCESS_LABEL,
+<a href=#307 id=307 data-nosnippet>307</a>                    &amp;network,
+<a href=#308 id=308 data-nosnippet>308</a>                    &amp;sender,
+<a href=#309 id=309 data-nosnippet>309</a>                )
+<a href=#310 id=310 data-nosnippet>310</a>            }
+<a href=#311 id=311 data-nosnippet>311</a>            _ =&gt; counters::shared_mempool_transactions_processed_inc(
+<a href=#312 id=312 data-nosnippet>312</a>                &amp;mempool_status.code.to_string(),
+<a href=#313 id=313 data-nosnippet>313</a>                &amp;network,
+<a href=#314 id=314 data-nosnippet>314</a>                &amp;sender,
+<a href=#315 id=315 data-nosnippet>315</a>            ),
+<a href=#316 id=316 data-nosnippet>316</a>        }*/
+<a href=#317 id=317 data-nosnippet>317</a>    </span>}
+<a href=#318 id=318 data-nosnippet>318</a>}
+<a href=#319 id=319 data-nosnippet>319</a>
+<a href=#320 id=320 data-nosnippet>320</a><span class="comment">// ================================= //
+<a href=#321 id=321 data-nosnippet>321</a>// intra-node communication handlers //
+<a href=#322 id=322 data-nosnippet>322</a>// ================================= //
+<a href=#323 id=323 data-nosnippet>323</a>
+<a href=#324 id=324 data-nosnippet>324</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>process_committed_transactions(
+<a href=#325 id=325 data-nosnippet>325</a>    mempool: Arc&lt;Mutex&lt;CoreMempool&gt;&gt;, req: CommitNotification,
+<a href=#326 id=326 data-nosnippet>326</a>) {
+<a href=#327 id=327 data-nosnippet>327</a>    <span class="kw">let </span>start_time = Instant::now();
+<a href=#328 id=328 data-nosnippet>328</a>    <span class="macro">diem_debug!</span>(LogSchema::event_log(
+<a href=#329 id=329 data-nosnippet>329</a>        LogEntry::StateSyncCommit,
+<a href=#330 id=330 data-nosnippet>330</a>        LogEvent::Received
+<a href=#331 id=331 data-nosnippet>331</a>    )
+<a href=#332 id=332 data-nosnippet>332</a>    .state_sync_msg(<span class="kw-2">&amp;</span>req));
+<a href=#333 id=333 data-nosnippet>333</a>    counters::mempool_service_transactions(
+<a href=#334 id=334 data-nosnippet>334</a>        counters::COMMIT_STATE_SYNC_LABEL,
+<a href=#335 id=335 data-nosnippet>335</a>        req.transactions.len(),
+<a href=#336 id=336 data-nosnippet>336</a>    );
+<a href=#337 id=337 data-nosnippet>337</a>    commit_txns(<span class="kw-2">&amp;</span>mempool, req.transactions, req.block_timestamp_usecs, <span class="bool-val">false</span>)
+<a href=#338 id=338 data-nosnippet>338</a>        .<span class="kw">await</span>;
+<a href=#339 id=339 data-nosnippet>339</a>    <span class="kw">let </span>result = <span class="kw">if </span>req.callback.send(<span class="prelude-val">Ok</span>(CommitResponse::success())).is_err() {
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="macro">diem_error!</span>(LogSchema::event_log(
+<a href=#341 id=341 data-nosnippet>341</a>            LogEntry::StateSyncCommit,
+<a href=#342 id=342 data-nosnippet>342</a>            LogEvent::CallbackFail
+<a href=#343 id=343 data-nosnippet>343</a>        ));
+<a href=#344 id=344 data-nosnippet>344</a>        counters::REQUEST_FAIL_LABEL
+<a href=#345 id=345 data-nosnippet>345</a>    } <span class="kw">else </span>{
+<a href=#346 id=346 data-nosnippet>346</a>        counters::REQUEST_SUCCESS_LABEL
+<a href=#347 id=347 data-nosnippet>347</a>    };
+<a href=#348 id=348 data-nosnippet>348</a>    <span class="kw">let </span>latency = start_time.elapsed();
+<a href=#349 id=349 data-nosnippet>349</a>    counters::mempool_service_latency(
+<a href=#350 id=350 data-nosnippet>350</a>        counters::COMMIT_STATE_SYNC_LABEL,
+<a href=#351 id=351 data-nosnippet>351</a>        result,
+<a href=#352 id=352 data-nosnippet>352</a>        latency,
+<a href=#353 id=353 data-nosnippet>353</a>    );
+<a href=#354 id=354 data-nosnippet>354</a>}
+<a href=#355 id=355 data-nosnippet>355</a>
+<a href=#356 id=356 data-nosnippet>356</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>process_consensus_request(
+<a href=#357 id=357 data-nosnippet>357</a>    db: Arc&lt;CachedPosLedgerDB&gt;, mempool: <span class="kw-2">&amp;</span>Mutex&lt;CoreMempool&gt;,
+<a href=#358 id=358 data-nosnippet>358</a>    req: ConsensusRequest,
+<a href=#359 id=359 data-nosnippet>359</a>) {
+<a href=#360 id=360 data-nosnippet>360</a>    <span class="comment">// Start latency timer
+<a href=#361 id=361 data-nosnippet>361</a>    </span><span class="kw">let </span>start_time = Instant::now();
+<a href=#362 id=362 data-nosnippet>362</a>    <span class="macro">diem_debug!</span>(
+<a href=#363 id=363 data-nosnippet>363</a>        LogSchema::event_log(LogEntry::Consensus, LogEvent::Received)
+<a href=#364 id=364 data-nosnippet>364</a>            .consensus_msg(<span class="kw-2">&amp;</span>req)
+<a href=#365 id=365 data-nosnippet>365</a>    );
+<a href=#366 id=366 data-nosnippet>366</a>
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="kw">let </span>(resp, callback, counter_label) = <span class="kw">match </span>req {
+<a href=#368 id=368 data-nosnippet>368</a>        ConsensusRequest::GetBlockRequest(
+<a href=#369 id=369 data-nosnippet>369</a>            max_block_size,
+<a href=#370 id=370 data-nosnippet>370</a>            transactions,
+<a href=#371 id=371 data-nosnippet>371</a>            parent_block_id,
+<a href=#372 id=372 data-nosnippet>372</a>            validators,
+<a href=#373 id=373 data-nosnippet>373</a>            callback,
+<a href=#374 id=374 data-nosnippet>374</a>        ) =&gt; {
+<a href=#375 id=375 data-nosnippet>375</a>            <span class="kw">let </span>exclude_transactions: HashSet&lt;TxnPointer&gt; = transactions
+<a href=#376 id=376 data-nosnippet>376</a>                .iter()
+<a href=#377 id=377 data-nosnippet>377</a>                .map(|txn| (txn.sender, txn.hash))
+<a href=#378 id=378 data-nosnippet>378</a>                .collect();
+<a href=#379 id=379 data-nosnippet>379</a>            <span class="kw">let </span><span class="kw-2">mut </span>txns;
+<a href=#380 id=380 data-nosnippet>380</a>            {
+<a href=#381 id=381 data-nosnippet>381</a>                <span class="kw">let </span><span class="kw-2">mut </span>mempool = mempool.lock();
+<a href=#382 id=382 data-nosnippet>382</a>                <span class="comment">// gc before pulling block as extra protection against txns that
+<a href=#383 id=383 data-nosnippet>383</a>                // may expire in consensus Note: this gc
+<a href=#384 id=384 data-nosnippet>384</a>                // operation relies on the fact that consensus uses the system
+<a href=#385 id=385 data-nosnippet>385</a>                // time to determine block timestamp
+<a href=#386 id=386 data-nosnippet>386</a>                </span><span class="kw">let </span>curr_time = diem_infallible::duration_since_epoch();
+<a href=#387 id=387 data-nosnippet>387</a>                mempool.gc_by_expiration_time(curr_time);
+<a href=#388 id=388 data-nosnippet>388</a>                <span class="kw">let </span>block_size = cmp::max(max_block_size, <span class="number">1</span>);
+<a href=#389 id=389 data-nosnippet>389</a>                <span class="kw">let </span>pos_state = db
+<a href=#390 id=390 data-nosnippet>390</a>                    .get_pos_state(<span class="kw-2">&amp;</span>parent_block_id)
+<a href=#391 id=391 data-nosnippet>391</a>                    .expect(<span class="string">"pos_state should exist"</span>);
+<a href=#392 id=392 data-nosnippet>392</a>                txns = mempool.get_block(
+<a href=#393 id=393 data-nosnippet>393</a>                    block_size,
+<a href=#394 id=394 data-nosnippet>394</a>                    exclude_transactions,
+<a href=#395 id=395 data-nosnippet>395</a>                    <span class="kw-2">&amp;</span>pos_state,
+<a href=#396 id=396 data-nosnippet>396</a>                    validators,
+<a href=#397 id=397 data-nosnippet>397</a>                );
+<a href=#398 id=398 data-nosnippet>398</a>            }
+<a href=#399 id=399 data-nosnippet>399</a>            counters::mempool_service_transactions(
+<a href=#400 id=400 data-nosnippet>400</a>                counters::GET_BLOCK_LABEL,
+<a href=#401 id=401 data-nosnippet>401</a>                txns.len(),
+<a href=#402 id=402 data-nosnippet>402</a>            );
+<a href=#403 id=403 data-nosnippet>403</a>            txns.len();
+<a href=#404 id=404 data-nosnippet>404</a>            <span class="kw">let </span>pulled_block =
+<a href=#405 id=405 data-nosnippet>405</a>                txns.drain(..).map(SignedTransaction::into).collect();
+<a href=#406 id=406 data-nosnippet>406</a>
+<a href=#407 id=407 data-nosnippet>407</a>            (
+<a href=#408 id=408 data-nosnippet>408</a>                ConsensusResponse::GetBlockResponse(pulled_block),
+<a href=#409 id=409 data-nosnippet>409</a>                callback,
+<a href=#410 id=410 data-nosnippet>410</a>                counters::GET_BLOCK_LABEL,
+<a href=#411 id=411 data-nosnippet>411</a>            )
+<a href=#412 id=412 data-nosnippet>412</a>        }
+<a href=#413 id=413 data-nosnippet>413</a>        ConsensusRequest::RejectNotification(transactions, callback) =&gt; {
+<a href=#414 id=414 data-nosnippet>414</a>            counters::mempool_service_transactions(
+<a href=#415 id=415 data-nosnippet>415</a>                counters::COMMIT_CONSENSUS_LABEL,
+<a href=#416 id=416 data-nosnippet>416</a>                transactions.len(),
+<a href=#417 id=417 data-nosnippet>417</a>            );
+<a href=#418 id=418 data-nosnippet>418</a>            commit_txns(mempool, transactions, <span class="number">0</span>, <span class="bool-val">true</span>).<span class="kw">await</span>;
+<a href=#419 id=419 data-nosnippet>419</a>            (
+<a href=#420 id=420 data-nosnippet>420</a>                ConsensusResponse::CommitResponse(),
+<a href=#421 id=421 data-nosnippet>421</a>                callback,
+<a href=#422 id=422 data-nosnippet>422</a>                counters::COMMIT_CONSENSUS_LABEL,
+<a href=#423 id=423 data-nosnippet>423</a>            )
+<a href=#424 id=424 data-nosnippet>424</a>        }
+<a href=#425 id=425 data-nosnippet>425</a>    };
+<a href=#426 id=426 data-nosnippet>426</a>    <span class="comment">// Send back to callback
+<a href=#427 id=427 data-nosnippet>427</a>    </span><span class="kw">let </span>result = <span class="kw">if </span>callback.send(<span class="prelude-val">Ok</span>(resp)).is_err() {
+<a href=#428 id=428 data-nosnippet>428</a>        <span class="macro">diem_error!</span>(LogSchema::event_log(
+<a href=#429 id=429 data-nosnippet>429</a>            LogEntry::Consensus,
+<a href=#430 id=430 data-nosnippet>430</a>            LogEvent::CallbackFail
+<a href=#431 id=431 data-nosnippet>431</a>        ));
+<a href=#432 id=432 data-nosnippet>432</a>        counters::REQUEST_FAIL_LABEL
+<a href=#433 id=433 data-nosnippet>433</a>    } <span class="kw">else </span>{
+<a href=#434 id=434 data-nosnippet>434</a>        counters::REQUEST_SUCCESS_LABEL
+<a href=#435 id=435 data-nosnippet>435</a>    };
+<a href=#436 id=436 data-nosnippet>436</a>    <span class="kw">let </span>latency = start_time.elapsed();
+<a href=#437 id=437 data-nosnippet>437</a>    counters::mempool_service_latency(counter_label, result, latency);
+<a href=#438 id=438 data-nosnippet>438</a>}
+<a href=#439 id=439 data-nosnippet>439</a>
+<a href=#440 id=440 data-nosnippet>440</a><span class="kw">async fn </span>commit_txns(
+<a href=#441 id=441 data-nosnippet>441</a>    mempool: <span class="kw-2">&amp;</span>Mutex&lt;CoreMempool&gt;, transactions: Vec&lt;CommittedTransaction&gt;,
+<a href=#442 id=442 data-nosnippet>442</a>    block_timestamp_usecs: u64, is_rejected: bool,
+<a href=#443 id=443 data-nosnippet>443</a>) {
+<a href=#444 id=444 data-nosnippet>444</a>    <span class="kw">let </span><span class="kw-2">mut </span>pool = mempool.lock();
+<a href=#445 id=445 data-nosnippet>445</a>
+<a href=#446 id=446 data-nosnippet>446</a>    <span class="kw">for </span>transaction <span class="kw">in </span>transactions {
+<a href=#447 id=447 data-nosnippet>447</a>        pool.remove_transaction(
+<a href=#448 id=448 data-nosnippet>448</a>            <span class="kw-2">&amp;</span>transaction.sender,
+<a href=#449 id=449 data-nosnippet>449</a>            transaction.hash,
+<a href=#450 id=450 data-nosnippet>450</a>            is_rejected,
+<a href=#451 id=451 data-nosnippet>451</a>        );
+<a href=#452 id=452 data-nosnippet>452</a>    }
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a>    <span class="kw">if </span>block_timestamp_usecs &gt; <span class="number">0 </span>{
+<a href=#455 id=455 data-nosnippet>455</a>        pool.gc_by_expiration_time(Duration::from_micros(
+<a href=#456 id=456 data-nosnippet>456</a>            block_timestamp_usecs,
+<a href=#457 id=457 data-nosnippet>457</a>        ));
+<a href=#458 id=458 data-nosnippet>458</a>    }
+<a href=#459 id=459 data-nosnippet>459</a>}</code></pre></div></section></main></body></html>
