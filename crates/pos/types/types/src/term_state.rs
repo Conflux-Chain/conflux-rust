@@ -630,7 +630,7 @@ impl PosState {
 /// Read-only functions use in `TransactionValidator`
 impl PosState {
     pub fn validate_election_simple(
-        &self, election_tx: &ElectionPayload,
+        &self, sender: &AccountAddress, election_tx: &ElectionPayload,
     ) -> Option<DiscardedVMStatus> {
         let node_id = NodeID::new(
             election_tx.public_key.clone(),
@@ -641,6 +641,13 @@ impl PosState {
             node_id.addr,
             election_tx.target_term
         );
+        // The outer tx signer must match the identity derived from the
+        // payload keys — otherwise an attacker with any fresh outer
+        // keypair could wrap an existing node's payload and burn a
+        // `capacity_per_sender` slot per attacker-sender.
+        if *sender != node_id.addr {
+            return Some(DiscardedVMStatus::ELECTION_SIGNER_MISMATCH);
+        }
         let node = match self.node_map.get(&node_id.addr) {
             Some(node) => node,
             None => {
@@ -672,10 +679,41 @@ impl PosState {
     }
 
     pub fn validate_pivot_decision_simple(
-        &self, pivot_decision_tx: &PivotBlockDecision,
+        &self, sender: &AccountAddress, pivot_decision_tx: &PivotBlockDecision,
     ) -> Option<DiscardedVMStatus> {
+        // Registered-node check (not active-committee). Committee check
+        // would be tighter but drops signatures from newly-joined
+        // committee members at every term boundary — each validator
+        // broadcasts a signed PivotDecision every round via mempool, and
+        // mempool gossip is the only propagation path for individual
+        // signatures, so receiver-lag rejections reduce the aggregated
+        // multi-sig threshold. Registered-node gating still requires
+        // paying PoS collateral, which makes fresh-keypair spam
+        // economically infeasible.
+        //
+        // TODO: revisit once production lag/latency data is available —
+        // if term-boundary windows prove small, tightening to active
+        // committee is worth the stricter DoS bound.
+        if !self.node_map.contains_key(sender) {
+            return Some(
+                DiscardedVMStatus::PIVOT_DECISION_SENDER_NOT_REGISTERED,
+            );
+        }
         if pivot_decision_tx.height <= self.pivot_decision.height {
             return Some(DiscardedVMStatus::PIVOT_DECISION_HEIGHT_TOO_OLD);
+        }
+        None
+    }
+
+    pub fn validate_dispute_simple(
+        &self, sender: &AccountAddress,
+    ) -> Option<DiscardedVMStatus> {
+        // See `validate_pivot_decision_simple` for the rationale behind
+        // registered-node gating (vs active-committee) — same
+        // term-boundary concern applies here. Full payload verification
+        // (verify_dispute) runs at execute time.
+        if !self.node_map.contains_key(sender) {
+            return Some(DiscardedVMStatus::DISPUTE_SENDER_NOT_REGISTERED);
         }
         None
     }
