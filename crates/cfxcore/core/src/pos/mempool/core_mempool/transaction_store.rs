@@ -32,16 +32,12 @@ pub struct TransactionStore {
     // pivot decision helper structure
     pivot_decisions: HashMap<HashValue, HashSet<(AccountAddress, HashValue)>>,
 
-    // TTL keyed on `MempoolTransaction.expiration_time = add_time +
-    // system_transaction_timeout`. Every txn is evicted after the timeout,
-    // regardless of its payload — keeps old txns from clogging the mempool
-    // when commit callbacks are delayed.
+    // Evicts txns after `system_transaction_timeout` so stalled commit
+    // callbacks cannot clog the mempool indefinitely.
     system_ttl_index: TTLIndex,
     timeline_index: TimelineIndex,
 
-    /// Per-sender live transaction count. Enforces `capacity_per_sender` so
-    /// a single Byzantine validator cannot flood the mempool with spam under
-    /// its own signing key.
+    // Caps live txns per sender to bound Byzantine-validator spam.
     per_sender_count: HashMap<AccountAddress, usize>,
     capacity_per_sender: usize,
 }
@@ -102,9 +98,9 @@ impl TransactionStore {
             return MempoolStatus::new(MempoolStatusCode::Accepted);
         }
 
-        let sender_count =
-            self.per_sender_count.get(&address).copied().unwrap_or(0);
-        if sender_count >= self.capacity_per_sender {
+        let sender_entry = self.per_sender_count.entry(address).or_insert(0);
+        if *sender_entry >= self.capacity_per_sender {
+            let sender_count = *sender_entry;
             diem_debug!(
                 sender = %address,
                 sender_count = sender_count,
@@ -117,6 +113,7 @@ impl TransactionStore {
                     address, sender_count, self.capacity_per_sender,
                 ));
         }
+        *sender_entry += 1;
 
         self.timeline_index.insert(&mut txn);
         self.system_ttl_index.insert(&txn);
@@ -137,7 +134,6 @@ impl TransactionStore {
         } else {
             self.transactions.insert(hash, txn, false);
         }
-        *self.per_sender_count.entry(address).or_insert(0) += 1;
         diem_debug!(
             LogSchema::new(LogEntry::AddTxn)
                 .txns(TxnsLog::new_txn(address, hash)),
