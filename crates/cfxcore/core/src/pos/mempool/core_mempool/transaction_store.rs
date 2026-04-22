@@ -250,3 +250,112 @@ impl TransactionStore {
         self.pivot_decisions.values()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diem_crypto::{
+        bls::{BLSPrivateKey, BLSPublicKey},
+        PrivateKey, SigningKey, Uniform,
+    };
+    use diem_types::{
+        chain_id::ChainId,
+        transaction::{RawTransaction, RetirePayload, TransactionPayload},
+    };
+    use std::time::Duration;
+
+    fn store_with_cap(cap: usize) -> TransactionStore {
+        let mut cfg = MempoolConfig::default();
+        cfg.capacity_per_sender = cap;
+        TransactionStore::new(&cfg)
+    }
+
+    fn new_sender() -> (BLSPrivateKey, BLSPublicKey, AccountAddress) {
+        let sk = BLSPrivateKey::generate_for_testing();
+        let pk = sk.public_key();
+        (sk, pk, AccountAddress::random())
+    }
+
+    fn mk_txn(
+        sk: &BLSPrivateKey, pk: &BLSPublicKey, sender: AccountAddress,
+        nonce: u64,
+    ) -> MempoolTransaction {
+        let payload = TransactionPayload::Retire(RetirePayload {
+            node_id: sender,
+            votes: nonce,
+        });
+        let raw =
+            RawTransaction::new(sender, payload, u64::MAX, ChainId::test());
+        let sig = sk.sign(&raw);
+        MempoolTransaction::new(
+            SignedTransaction::new(raw, pk.clone(), sig),
+            Duration::from_secs(3600),
+            TimelineState::NotReady,
+        )
+    }
+
+    #[test]
+    fn per_sender_count_insert_and_commit_lifecycle() {
+        let mut store = store_with_cap(3);
+        let (sk, pk, sender) = new_sender();
+        assert!(!store.per_sender_count.contains_key(&sender));
+
+        let mut hashes = Vec::new();
+        for n in 0..3 {
+            let txn = mk_txn(&sk, &pk, sender, n);
+            hashes.push(txn.get_hash());
+            assert_eq!(store.insert(txn).code, MempoolStatusCode::Accepted);
+        }
+        assert_eq!(store.per_sender_count[&sender], 3);
+
+        for (i, h) in hashes.iter().enumerate() {
+            store.commit_transaction(*h);
+            let remaining = 3 - (i + 1);
+            if remaining == 0 {
+                assert!(!store.per_sender_count.contains_key(&sender));
+            } else {
+                assert_eq!(store.per_sender_count[&sender], remaining);
+            }
+        }
+    }
+
+    #[test]
+    fn per_sender_count_cap_rejects_without_growth() {
+        let mut store = store_with_cap(2);
+        let (sk, pk, sender) = new_sender();
+
+        for n in 0..2 {
+            assert_eq!(
+                store.insert(mk_txn(&sk, &pk, sender, n)).code,
+                MempoolStatusCode::Accepted
+            );
+        }
+        assert_eq!(store.per_sender_count[&sender], 2);
+
+        for n in 2..6 {
+            assert_eq!(
+                store.insert(mk_txn(&sk, &pk, sender, n)).code,
+                MempoolStatusCode::TooManyTransactions
+            );
+            assert_eq!(store.per_sender_count[&sender], 2);
+        }
+    }
+
+    #[test]
+    fn per_sender_count_duplicate_hash_no_double_count() {
+        let mut store = store_with_cap(8);
+        let (sk, pk, sender) = new_sender();
+        let txn = mk_txn(&sk, &pk, sender, 0);
+        let dup = MempoolTransaction::new(
+            txn.txn.clone(),
+            txn.expiration_time,
+            txn.timeline_state,
+        );
+
+        assert_eq!(store.insert(txn).code, MempoolStatusCode::Accepted);
+        assert_eq!(store.per_sender_count[&sender], 1);
+
+        assert_eq!(store.insert(dup).code, MempoolStatusCode::Accepted);
+        assert_eq!(store.per_sender_count[&sender], 1);
+    }
+}
