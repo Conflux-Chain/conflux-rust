@@ -10,8 +10,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct MempoolConfig {
-    /// Maximum transactions a single sender can hold in the mempool.
-    /// Bounds Byzantine-validator memory footprint.
     pub capacity_per_sender: usize,
     pub max_broadcasts_per_peer: usize,
     pub shared_mempool_ack_timeout_ms: u64,
@@ -33,11 +31,9 @@ impl Default for MempoolConfig {
             shared_mempool_max_concurrent_inbound_syncs: 2,
             // Allow for 1s latency with the default 500ms tick.
             max_broadcasts_per_peer: 2,
-            // Conflux-PoS legitimate per-validator traffic over one
-            // `system_transaction_timeout_secs` window is ~30-50 txns
-            // (one pivot decision per block, rare elections/disputes).
-            // 128 leaves ~3x burst headroom without allowing meaningful
-            // Byzantine spam.
+            // Legitimate per-validator traffic is ~30-50 txns per
+            // `system_transaction_timeout_secs` window; 128 gives ~3x
+            // burst headroom.
             capacity_per_sender: 128,
             system_transaction_timeout_secs: 600,
             system_transaction_gc_interval_ms: 60_000,

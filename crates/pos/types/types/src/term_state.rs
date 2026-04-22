@@ -641,10 +641,8 @@ impl PosState {
             node_id.addr,
             election_tx.target_term
         );
-        // The outer tx signer must match the identity derived from the
-        // payload keys — otherwise an attacker with any fresh outer
-        // keypair could wrap an existing node's payload and burn a
-        // `capacity_per_sender` slot per attacker-sender.
+        // Guard against a fresh outer keypair wrapping a legit payload to
+        // bypass the per-sender cap.
         if *sender != node_id.addr {
             return Some(DiscardedVMStatus::ELECTION_SIGNER_MISMATCH);
         }
@@ -681,19 +679,14 @@ impl PosState {
     pub fn validate_pivot_decision_simple(
         &self, sender: &AccountAddress, pivot_decision_tx: &PivotBlockDecision,
     ) -> Option<DiscardedVMStatus> {
-        // Registered-node check (not active-committee). Committee check
-        // would be tighter but drops signatures from newly-joined
-        // committee members at every term boundary — each validator
-        // broadcasts a signed PivotDecision every round via mempool, and
-        // mempool gossip is the only propagation path for individual
-        // signatures, so receiver-lag rejections reduce the aggregated
-        // multi-sig threshold. Registered-node gating still requires
-        // paying PoS collateral, which makes fresh-keypair spam
-        // economically infeasible.
-        //
-        // TODO: revisit once production lag/latency data is available —
-        // if term-boundary windows prove small, tightening to active
-        // committee is worth the stricter DoS bound.
+        // Registered-node check, not active-committee: mempool gossip is
+        // the sole propagation path for individual PivotDecision
+        // signatures (one per validator per round), and a committee
+        // check would drop newly-joined members' signatures at every
+        // term boundary until lagged receivers catch up. PoS collateral
+        // at registration keeps fresh-keypair spam infeasible.
+        // TODO: tighten to active committee if production lag data
+        // shows term-boundary windows are small enough to tolerate.
         if !self.node_map.contains_key(sender) {
             return Some(
                 DiscardedVMStatus::PIVOT_DECISION_SENDER_NOT_REGISTERED,
@@ -708,10 +701,9 @@ impl PosState {
     pub fn validate_dispute_simple(
         &self, sender: &AccountAddress,
     ) -> Option<DiscardedVMStatus> {
-        // See `validate_pivot_decision_simple` for the rationale behind
-        // registered-node gating (vs active-committee) — same
-        // term-boundary concern applies here. Full payload verification
-        // (verify_dispute) runs at execute time.
+        // Registered-node gating, same rationale as
+        // `validate_pivot_decision_simple`; `verify_dispute` runs at
+        // execute time.
         if !self.node_map.contains_key(sender) {
             return Some(DiscardedVMStatus::DISPUTE_SENDER_NOT_REGISTERED);
         }
