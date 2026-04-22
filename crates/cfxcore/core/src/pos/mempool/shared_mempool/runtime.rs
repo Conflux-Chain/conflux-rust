@@ -52,8 +52,7 @@ pub(crate) fn start_shared_mempool(
     validator: Arc<RwLock<TransactionValidator>>,
     subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
 ) {
-    let peer_manager =
-        Arc::new(PeerManager::new(config.base.role, config.mempool.clone()));
+    let peer_manager = Arc::new(PeerManager::new());
 
     let smp = SharedMempool {
         mempool: mempool.clone(),

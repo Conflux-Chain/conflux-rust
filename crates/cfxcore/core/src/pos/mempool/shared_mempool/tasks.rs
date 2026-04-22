@@ -119,10 +119,6 @@ pub(crate) async fn process_transaction_broadcast(
 ) {
     diem_trace!("process_transaction_broadcast starts: peer={}", peer);
     timer.stop_and_record();
-    /*let _timer = counters::process_txn_submit_latency_timer(
-        peer.raw_network_id().as_str(),
-        peer.peer_id().short_str().as_str(),
-    );*/
     let results = process_incoming_transactions(
         &smp,
         transactions.clone(),
@@ -141,7 +137,6 @@ pub(crate) async fn process_transaction_broadcast(
             LogEntry::BroadcastACK,
             LogEvent::NetworkSendFail
         )
-        //.peer(&peer)
         .error(&e.into()));
         return;
     }
@@ -175,32 +170,11 @@ fn gen_ack_response(
         retry
     );
 
-    update_ack_counter(&peer, counters::SENT_LABEL, retry, backoff);
     MempoolSyncMsg::BroadcastTransactionsResponse {
         request_id,
         retry,
         backoff,
     }
-}
-
-pub(crate) fn update_ack_counter(
-    _peer: &NodeId, _direction_label: &str, _retry: bool, _backoff: bool,
-) {
-    /*
-    if retry {
-        counters::shared_mempool_ack_inc(
-            peer,
-            direction_label,
-            counters::RETRY_BROADCAST_LABEL,
-        );
-    }
-    if backoff {
-        counters::shared_mempool_ack_inc(
-            peer,
-            direction_label,
-            counters::BACKPRESSURE_BROADCAST_LABEL,
-        );
-    }*/
 }
 
 fn is_txn_retryable(result: SubmissionStatus) -> bool {
@@ -292,28 +266,7 @@ fn log_txn_process_results(
                 vm_status = vm_status,
                 sender = sender,
             );
-            /*counters::shared_mempool_transactions_processed_inc(
-                counters::VM_VALIDATION_LABEL,
-                &network,
-                &sender,
-            );*/
-            continue;
         }
-        /*
-        match mempool_status.code {
-            MempoolStatusCode::Accepted => {
-                counters::shared_mempool_transactions_processed_inc(
-                    counters::SUCCESS_LABEL,
-                    &network,
-                    &sender,
-                )
-            }
-            _ => counters::shared_mempool_transactions_processed_inc(
-                &mempool_status.code.to_string(),
-                &network,
-                &sender,
-            ),
-        }*/
     }
 }
 

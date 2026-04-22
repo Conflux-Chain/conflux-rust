@@ -225,7 +225,7 @@ impl PosLedgerDB {
         ]
     }
 
-    fn new_with_db(db: DB, _prune_window: Option<u64>) -> Self {
+    fn new_with_db(db: DB) -> Self {
         let db = Arc::new(db);
 
         PosLedgerDB {
@@ -240,14 +240,8 @@ impl PosLedgerDB {
     }
 
     pub fn open<P: AsRef<Path> + Clone>(
-        db_root_path: P, readonly: bool, prune_window: Option<u64>,
-        rocksdb_config: RocksdbConfig,
+        db_root_path: P, readonly: bool, rocksdb_config: RocksdbConfig,
     ) -> Result<Self> {
-        ensure!(
-            prune_window.is_none() || !readonly,
-            "Do not set prune_window when opening readonly.",
-        );
-
         let path = db_root_path.as_ref().join("pos-ledger-db");
         let instant = Instant::now();
 
@@ -271,7 +265,7 @@ impl PosLedgerDB {
             )?
         };
 
-        let ret = Self::new_with_db(db, prune_window);
+        let ret = Self::new_with_db(db);
         diem_info!(
             path = path,
             time_ms = %instant.elapsed().as_millis(),
@@ -280,13 +274,12 @@ impl PosLedgerDB {
         Ok(ret)
     }
 
-    /// This opens db in non-readonly mode, without the pruner.
+    /// This opens db in non-readonly mode.
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn new_for_test<P: AsRef<Path> + Clone>(db_root_path: P) -> Self {
         Self::open(
             db_root_path,
             false, /* readonly */
-            None,  /* pruner */
             RocksdbConfig::default(),
         )
         .expect("Unable to open DiemDB")
@@ -530,12 +523,6 @@ impl DbReader for PosLedgerDB {
         })
     }
 
-    fn get_accumulator_root_hash(&self, version: Version) -> Result<HashValue> {
-        gauged_api("get_accumulator_root_hash", || {
-            self.ledger_store.get_root_hash(version)
-        })
-    }
-
     fn get_pos_state(&self, block_id: &HashValue) -> Result<PosState> {
         diem_debug!("get_pos_state:{}", block_id);
         self.ledger_store.get_pos_state(block_id)
@@ -649,8 +636,7 @@ impl DbWriter for PosLedgerDB {
             }
 
             // Only increment counter if commit succeeds and there are at least
-            // one transaction written to the storage. That's also
-            // when we'd inform the pruner thread to work.
+            // one transaction written to the storage.
             if num_txns > 0 {
                 let last_version = first_version + num_txns - 1;
                 DIEM_STORAGE_COMMITTED_TXNS.inc_by(num_txns);

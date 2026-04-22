@@ -23,8 +23,6 @@ mod error;
 mod liveness;
 mod logging;
 pub(crate) mod network;
-#[cfg(test)]
-mod network_tests;
 mod pending_votes;
 mod persistent_liveness_storage;
 mod round_manager;

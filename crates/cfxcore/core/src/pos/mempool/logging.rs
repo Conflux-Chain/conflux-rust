@@ -10,7 +10,6 @@ use crate::pos::mempool::shared_mempool::{
     types::{CommitNotification, ConsensusRequest},
 };
 use anyhow::Error;
-use diem_config::network_id::{NetworkId, PeerNetworkId};
 use diem_crypto::HashValue;
 use diem_logger::Schema;
 use diem_types::{
@@ -84,9 +83,6 @@ pub struct LogSchema<'a> {
     #[schema(debug)]
     error: Option<&'a Error>,
     #[schema(display)]
-    peer: Option<&'a PeerNetworkId>,
-    is_upstream_peer: Option<bool>,
-    #[schema(display)]
     reconfig_update: Option<OnChainConfigPayload>,
     #[schema(display)]
     txns: Option<TxnsLog>,
@@ -96,7 +92,6 @@ pub struct LogSchema<'a> {
     #[schema(display)]
     state_sync_msg: Option<&'a CommitNotification>,
     network_level: Option<usize>,
-    upstream_network: Option<&'a NetworkId>,
     #[schema(debug)]
     batch_id: Option<&'a BatchId>,
     backpressure: Option<bool>,
@@ -114,15 +109,12 @@ impl<'a> LogSchema<'a> {
             name,
             event,
             error: None,
-            peer: None,
-            is_upstream_peer: None,
             reconfig_update: None,
             account: None,
             txns: None,
             consensus_msg: None,
             state_sync_msg: None,
             network_level: None,
-            upstream_network: None,
             batch_id: None,
             backpressure: None,
         }

@@ -420,10 +420,6 @@ impl LedgerStore {
             })
     }
 
-    pub fn get_root_hash(&self, version: Version) -> Result<HashValue> {
-        Accumulator::get_root_hash(self, version + 1)
-    }
-
     pub fn get_latest_pos_state(&self) -> Arc<PosState> {
         self.latest_pos_state.load().clone()
     }
