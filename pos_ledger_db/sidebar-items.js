@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["errors","metrics","schema"],"struct":["PosLedgerDB"]};
+window.SIDEBAR_ITEMS = {"mod":["errors","schema"],"struct":["PosLedgerDB"]};

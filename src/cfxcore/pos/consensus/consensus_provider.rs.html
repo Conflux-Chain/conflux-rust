@@ -27,7 +27,7 @@
 <a href=#27 id=27 data-nosnippet>27</a>};
 <a href=#28 id=28 data-nosnippet>28</a>
 <a href=#29 id=29 data-nosnippet>29</a><span class="kw">use super</span>::{
-<a href=#30 id=30 data-nosnippet>30</a>    counters, epoch_manager::EpochManager, network::NetworkReceivers,
+<a href=#30 id=30 data-nosnippet>30</a>    epoch_manager::EpochManager, network::NetworkReceivers,
 <a href=#31 id=31 data-nosnippet>31</a>    persistent_liveness_storage::StorageWriteProxy,
 <a href=#32 id=32 data-nosnippet>32</a>    state_computer::ExecutionProxy, txn_manager::MempoolProxy,
 <a href=#33 id=33 data-nosnippet>33</a>    util::time_service::ClockTimeService,
@@ -84,38 +84,37 @@
 <a href=#84 id=84 data-nosnippet>84</a>    <span class="kw">let </span>time_service =
 <a href=#85 id=85 data-nosnippet>85</a>        Arc::new(ClockTimeService::new(runtime.handle().clone()));
 <a href=#86 id=86 data-nosnippet>86</a>
-<a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">let </span>(timeout_sender, timeout_receiver) =
-<a href=#88 id=88 data-nosnippet>88</a>        channel::new(<span class="number">1_024</span>, <span class="kw-2">&amp;</span>counters::PENDING_ROUND_TIMEOUTS);
-<a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">let </span>(proposal_timeout_sender, proposal_timeout_receiver) =
-<a href=#90 id=90 data-nosnippet>90</a>        channel::new(<span class="number">1_024</span>, <span class="kw-2">&amp;</span>counters::PENDING_PROPOSAL_TIMEOUTS);
-<a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">let </span>(new_round_timeout_sender, new_round_timeout_receiver) =
-<a href=#92 id=92 data-nosnippet>92</a>        channel::new(<span class="number">1_024</span>, <span class="kw-2">&amp;</span>counters::PENDING_NEW_ROUND_TIMEOUTS);
-<a href=#93 id=93 data-nosnippet>93</a>
-<a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">let </span>epoch_mgr = EpochManager::new(
-<a href=#95 id=95 data-nosnippet>95</a>        node_config,
-<a href=#96 id=96 data-nosnippet>96</a>        time_service,
-<a href=#97 id=97 data-nosnippet>97</a>        network_sender,
-<a href=#98 id=98 data-nosnippet>98</a>        timeout_sender,
-<a href=#99 id=99 data-nosnippet>99</a>        proposal_timeout_sender,
-<a href=#100 id=100 data-nosnippet>100</a>        new_round_timeout_sender,
-<a href=#101 id=101 data-nosnippet>101</a>        txn_manager,
-<a href=#102 id=102 data-nosnippet>102</a>        state_computer,
-<a href=#103 id=103 data-nosnippet>103</a>        storage,
-<a href=#104 id=104 data-nosnippet>104</a>        pow_handler.clone(),
-<a href=#105 id=105 data-nosnippet>105</a>        author,
-<a href=#106 id=106 data-nosnippet>106</a>        tx_sender,
-<a href=#107 id=107 data-nosnippet>107</a>        started_as_voter,
-<a href=#108 id=108 data-nosnippet>108</a>    );
-<a href=#109 id=109 data-nosnippet>109</a>
-<a href=#110 id=110 data-nosnippet>110</a>    runtime.spawn(epoch_mgr.start(
-<a href=#111 id=111 data-nosnippet>111</a>        timeout_receiver,
-<a href=#112 id=112 data-nosnippet>112</a>        proposal_timeout_receiver,
-<a href=#113 id=113 data-nosnippet>113</a>        new_round_timeout_receiver,
-<a href=#114 id=114 data-nosnippet>114</a>        network_receiver,
-<a href=#115 id=115 data-nosnippet>115</a>        test_command_receiver,
-<a href=#116 id=116 data-nosnippet>116</a>        stopped.clone(),
-<a href=#117 id=117 data-nosnippet>117</a>    ));
-<a href=#118 id=118 data-nosnippet>118</a>
-<a href=#119 id=119 data-nosnippet>119</a>    <span class="macro">diem_debug!</span>(<span class="string">"Consensus started."</span>);
-<a href=#120 id=120 data-nosnippet>120</a>    (runtime, pow_handler, stopped, consensus_db)
-<a href=#121 id=121 data-nosnippet>121</a>}</code></pre></div></section></main></body></html>
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">let </span>(timeout_sender, timeout_receiver) = channel::new(<span class="number">1_024</span>);
+<a href=#88 id=88 data-nosnippet>88</a>    <span class="kw">let </span>(proposal_timeout_sender, proposal_timeout_receiver) =
+<a href=#89 id=89 data-nosnippet>89</a>        channel::new(<span class="number">1_024</span>);
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">let </span>(new_round_timeout_sender, new_round_timeout_receiver) =
+<a href=#91 id=91 data-nosnippet>91</a>        channel::new(<span class="number">1_024</span>);
+<a href=#92 id=92 data-nosnippet>92</a>
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">let </span>epoch_mgr = EpochManager::new(
+<a href=#94 id=94 data-nosnippet>94</a>        node_config,
+<a href=#95 id=95 data-nosnippet>95</a>        time_service,
+<a href=#96 id=96 data-nosnippet>96</a>        network_sender,
+<a href=#97 id=97 data-nosnippet>97</a>        timeout_sender,
+<a href=#98 id=98 data-nosnippet>98</a>        proposal_timeout_sender,
+<a href=#99 id=99 data-nosnippet>99</a>        new_round_timeout_sender,
+<a href=#100 id=100 data-nosnippet>100</a>        txn_manager,
+<a href=#101 id=101 data-nosnippet>101</a>        state_computer,
+<a href=#102 id=102 data-nosnippet>102</a>        storage,
+<a href=#103 id=103 data-nosnippet>103</a>        pow_handler.clone(),
+<a href=#104 id=104 data-nosnippet>104</a>        author,
+<a href=#105 id=105 data-nosnippet>105</a>        tx_sender,
+<a href=#106 id=106 data-nosnippet>106</a>        started_as_voter,
+<a href=#107 id=107 data-nosnippet>107</a>    );
+<a href=#108 id=108 data-nosnippet>108</a>
+<a href=#109 id=109 data-nosnippet>109</a>    runtime.spawn(epoch_mgr.start(
+<a href=#110 id=110 data-nosnippet>110</a>        timeout_receiver,
+<a href=#111 id=111 data-nosnippet>111</a>        proposal_timeout_receiver,
+<a href=#112 id=112 data-nosnippet>112</a>        new_round_timeout_receiver,
+<a href=#113 id=113 data-nosnippet>113</a>        network_receiver,
+<a href=#114 id=114 data-nosnippet>114</a>        test_command_receiver,
+<a href=#115 id=115 data-nosnippet>115</a>        stopped.clone(),
+<a href=#116 id=116 data-nosnippet>116</a>    ));
+<a href=#117 id=117 data-nosnippet>117</a>
+<a href=#118 id=118 data-nosnippet>118</a>    <span class="macro">diem_debug!</span>(<span class="string">"Consensus started."</span>);
+<a href=#119 id=119 data-nosnippet>119</a>    (runtime, pow_handler, stopped, consensus_db)
+<a href=#120 id=120 data-nosnippet>120</a>}</code></pre></div></section></main></body></html>

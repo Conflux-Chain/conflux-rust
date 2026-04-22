@@ -53,28 +53,11 @@
 <a href=#53 id=53 data-nosnippet>53</a>    State,
 <a href=#54 id=54 data-nosnippet>54</a>}
 <a href=#55 id=55 data-nosnippet>55</a>
-<a href=#56 id=56 data-nosnippet>56</a><span class="kw">impl </span>LogEntry {
-<a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">pub fn </span>as_str(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
-<a href=#58 id=58 data-nosnippet>58</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#59 id=59 data-nosnippet>59</a>            LogEntry::ConsensusState =&gt; <span class="string">"consensus_state"</span>,
-<a href=#60 id=60 data-nosnippet>60</a>            LogEntry::ConstructAndSignVote =&gt; <span class="string">"construct_and_sign_vote"</span>,
-<a href=#61 id=61 data-nosnippet>61</a>            LogEntry::Epoch =&gt; <span class="string">"epoch"</span>,
-<a href=#62 id=62 data-nosnippet>62</a>            LogEntry::Initialize =&gt; <span class="string">"initialize"</span>,
-<a href=#63 id=63 data-nosnippet>63</a>            LogEntry::LastVotedRound =&gt; <span class="string">"last_voted_round"</span>,
-<a href=#64 id=64 data-nosnippet>64</a>            LogEntry::KeyReconciliation =&gt; <span class="string">"key_reconciliation"</span>,
-<a href=#65 id=65 data-nosnippet>65</a>            LogEntry::PreferredRound =&gt; <span class="string">"preferred_round"</span>,
-<a href=#66 id=66 data-nosnippet>66</a>            LogEntry::SignProposal =&gt; <span class="string">"sign_proposal"</span>,
-<a href=#67 id=67 data-nosnippet>67</a>            LogEntry::SignTimeout =&gt; <span class="string">"sign_timeout"</span>,
-<a href=#68 id=68 data-nosnippet>68</a>            LogEntry::State =&gt; <span class="string">"state"</span>,
-<a href=#69 id=69 data-nosnippet>69</a>        }
-<a href=#70 id=70 data-nosnippet>70</a>    }
-<a href=#71 id=71 data-nosnippet>71</a>}
-<a href=#72 id=72 data-nosnippet>72</a>
-<a href=#73 id=73 data-nosnippet>73</a><span class="attr">#[derive(Clone, Copy, Serialize)]
-<a href=#74 id=74 data-nosnippet>74</a>#[serde(rename_all = <span class="string">"snake_case"</span>)]
-<a href=#75 id=75 data-nosnippet>75</a></span><span class="kw">pub enum </span>LogEvent {
-<a href=#76 id=76 data-nosnippet>76</a>    Error,
-<a href=#77 id=77 data-nosnippet>77</a>    Request,
-<a href=#78 id=78 data-nosnippet>78</a>    Success,
-<a href=#79 id=79 data-nosnippet>79</a>    Update,
-<a href=#80 id=80 data-nosnippet>80</a>}</code></pre></div></section></main></body></html>
+<a href=#56 id=56 data-nosnippet>56</a><span class="attr">#[derive(Clone, Copy, Serialize)]
+<a href=#57 id=57 data-nosnippet>57</a>#[serde(rename_all = <span class="string">"snake_case"</span>)]
+<a href=#58 id=58 data-nosnippet>58</a></span><span class="kw">pub enum </span>LogEvent {
+<a href=#59 id=59 data-nosnippet>59</a>    Error,
+<a href=#60 id=60 data-nosnippet>60</a>    Request,
+<a href=#61 id=61 data-nosnippet>61</a>    Success,
+<a href=#62 id=62 data-nosnippet>62</a>    Update,
+<a href=#63 id=63 data-nosnippet>63</a>}</code></pre></div></section></main></body></html>
