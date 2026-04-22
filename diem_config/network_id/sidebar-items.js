@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["NetworkId","PeerRole"],"struct":["NetworkContext","NodeNetworkId","PeerNetworkId"]};
