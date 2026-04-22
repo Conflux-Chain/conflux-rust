@@ -49,19 +49,8 @@ impl Mempool {
     }
 
     /// This function will be called once the transaction has been stored.
-    pub(crate) fn remove_transaction(
-        &mut self, sender: &AccountAddress, hash: HashValue, is_rejected: bool,
-    ) {
-        diem_trace!(
-            LogSchema::new(LogEntry::RemoveTxn)
-                .txns(TxnsLog::new_txn(*sender, hash)),
-            is_rejected = is_rejected
-        );
-        if is_rejected {
-            self.transactions.reject_transaction(&sender, hash);
-        } else {
-            self.transactions.commit_transaction(&sender, hash);
-        }
+    pub(crate) fn remove_transaction(&mut self, hash: HashValue) {
+        self.transactions.commit_transaction(hash);
     }
 
     /// Used to add a transaction to the Mempool.

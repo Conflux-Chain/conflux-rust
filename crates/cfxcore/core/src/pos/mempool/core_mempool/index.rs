@@ -65,10 +65,6 @@ impl AccountTransactions {
     pub(crate) fn iter(&self) -> AccountTransactionIter<'_> {
         self.normal_transaction.values()
     }
-
-    pub(crate) fn iter_pivot_decision(&self) -> AccountTransactionIter<'_> {
-        self.pivot_decision_transaction.values()
-    }
 }
 
 pub type TxnPointer = (AccountAddress, HashValue);

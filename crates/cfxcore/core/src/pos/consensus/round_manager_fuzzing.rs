@@ -157,7 +157,7 @@ fn create_node_for_fuzzing() -> RoundManager {
     let proposal_generator = ProposalGenerator::new(
         signer.author(),
         block_store.clone(),
-        Arc::new(MockTransactionManager::new(None)),
+        Arc::new(MockTransactionManager),
         time_service,
         1,
     );
@@ -179,7 +179,7 @@ fn create_node_for_fuzzing() -> RoundManager {
         proposal_generator,
         safety_rules,
         network,
-        Arc::new(MockTransactionManager::new(None)),
+        Arc::new(MockTransactionManager),
         storage,
         false,
     )
