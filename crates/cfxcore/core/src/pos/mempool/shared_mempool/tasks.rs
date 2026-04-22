@@ -136,28 +136,12 @@ pub(crate) async fn process_transaction_broadcast(
 fn gen_ack_response(
     request_id: Vec<u8>, results: Vec<SubmissionStatusBundle>, peer: &NodeId,
 ) -> MempoolSyncMsg {
-    let mut backoff = false;
-    let mut retry = false;
-    for (_, (mempool_status, _)) in results.into_iter() {
-        match mempool_status.code {
-            // Global pressure: ask the peer to back off broadcasts *and*
-            // retry this txn later.
-            MempoolStatusCode::MempoolIsFull => {
-                backoff = true;
-                retry = true;
-            }
-            // Per-sender cap hit: retry so the txn can land once a TTL GC
-            // sweep or commit frees a slot; no broad broadcast backoff.
-            MempoolStatusCode::TooManyTransactions => {
-                retry = true;
-            }
-            _ => {}
-        }
-
-        if backoff && retry {
-            break;
-        }
-    }
+    // There is no global-capacity cap, so `MempoolIsFull` is unreachable
+    // and the wire-level `backoff` signal is always off. Retry is driven
+    // purely by the per-sender cap: a GC sweep or commit will free a slot.
+    let retry = results.iter().any(|(_, (status, _))| {
+        matches!(status.code, MempoolStatusCode::TooManyTransactions)
+    });
 
     diem_trace!(
         "request[{:?}] from peer[{:?}] retry[{:?}]",
@@ -169,7 +153,7 @@ fn gen_ack_response(
     MempoolSyncMsg::BroadcastTransactionsResponse {
         request_id,
         retry,
-        backoff,
+        backoff: false,
     }
 }
 

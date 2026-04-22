@@ -20,12 +20,15 @@ impl TransactionValidator {
     ) -> Option<DiscardedVMStatus> {
         // This check is cheaper than signature verification, so we do not
         // need to verify signatures for old transactions.
+        let sender = tx.sender();
         let result = match tx.payload() {
             TransactionPayload::Election(election_payload) => {
-                pos_state.validate_election_simple(election_payload)
+                pos_state.validate_election_simple(&sender, election_payload)
             }
-            TransactionPayload::PivotDecision(pivot_decision) => {
-                pos_state.validate_pivot_decision_simple(pivot_decision)
+            TransactionPayload::PivotDecision(pivot_decision) => pos_state
+                .validate_pivot_decision_simple(&sender, pivot_decision),
+            TransactionPayload::Dispute(_) => {
+                pos_state.validate_dispute_simple(&sender)
             }
             _ => None,
         };
