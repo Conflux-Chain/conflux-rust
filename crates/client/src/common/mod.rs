@@ -26,6 +26,7 @@ use cfx_executor::machine::{Machine, VmFactory};
 use cfx_parameters::genesis::{
     DEV_GENESIS_KEY_PAIR_2, GENESIS_ACCOUNT_ADDRESS,
 };
+use cfx_rpc_cfx_types::apis::ApiSet;
 use cfx_storage::StorageManager;
 use cfx_tasks::TaskManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
@@ -525,6 +526,7 @@ pub fn initialize_not_light_node_modules(
         Arc<TokioRuntime>,
         Option<RpcServerHandle>,
         Option<RpcServerHandle>,
+        Option<RpcServerHandle>,
         TaskManager,
     ),
     String,
@@ -671,7 +673,7 @@ pub fn initialize_not_light_node_modules(
         blockgen.test_api(),
         txpool.clone(),
         maybe_txgen.clone(),
-        maybe_direct_txgen,
+        maybe_direct_txgen.clone(),
         conf.rpc_impl_config(),
         accounts.clone(),
     ));
@@ -708,8 +710,8 @@ pub fn initialize_not_light_node_modules(
             RpcExtractor,
         )?;
 
-        let rpc_tcp_server = super::rpc::start_tcp(
-            conf.tcp_config(),
+        let debug_rpc_ws_server = super::rpc::start_ws(
+            conf.local_ws_config(),
             setup_public_rpc_apis(
                 common_impl.clone(),
                 rpc_impl.clone(),
@@ -719,8 +721,8 @@ pub fn initialize_not_light_node_modules(
             RpcExtractor,
         )?;
 
-        let debug_rpc_ws_server = super::rpc::start_ws(
-            conf.local_ws_config(),
+        let rpc_tcp_server = super::rpc::start_tcp(
+            conf.tcp_config(),
             setup_public_rpc_apis(
                 common_impl.clone(),
                 rpc_impl.clone(),
@@ -774,23 +776,50 @@ pub fn initialize_not_light_node_modules(
 
     // Start V2 async core space RPC servers when using the new
     // implementation.
-    let cfx_rpc_server_handle = if !use_old_core_rpc {
-        tokio_runtime.block_on(launch_cfx_async_rpc_servers(
-            consensus.clone(),
-            sync.clone(),
-            txpool.clone(),
-            data_man.clone(),
-            network.clone(),
-            pos_verifier.clone(),
-            notifications.clone(),
-            task_executor.clone(),
-            accounts.clone(),
-            exit.clone(),
-            conf,
-        ))?
-    } else {
-        None
-    };
+    let (cfx_rpc_server_handle, debug_cfx_rpc_server_handle) =
+        if !use_old_core_rpc {
+            let cfx_rpc_server_handle =
+                tokio_runtime.block_on(launch_cfx_async_rpc_servers(
+                    consensus.clone(),
+                    sync.clone(),
+                    txpool.clone(),
+                    data_man.clone(),
+                    network.clone(),
+                    pos_verifier.clone(),
+                    notifications.clone(),
+                    task_executor.clone(),
+                    accounts.clone(),
+                    exit.clone(),
+                    blockgen.test_api(),
+                    maybe_txgen.clone(),
+                    maybe_direct_txgen.clone(),
+                    conf,
+                    conf.raw_conf.public_rpc_apis.clone(),
+                    false,
+                ))?;
+            let debug_cfx_rpc_server_handle =
+                tokio_runtime.block_on(launch_cfx_async_rpc_servers(
+                    consensus.clone(),
+                    sync.clone(),
+                    txpool.clone(),
+                    data_man.clone(),
+                    network.clone(),
+                    pos_verifier.clone(),
+                    notifications.clone(),
+                    task_executor.clone(),
+                    accounts.clone(),
+                    exit.clone(),
+                    blockgen.test_api(),
+                    maybe_txgen.clone(),
+                    maybe_direct_txgen.clone(),
+                    conf,
+                    ApiSet::All,
+                    true,
+                ))?;
+            (cfx_rpc_server_handle, debug_cfx_rpc_server_handle)
+        } else {
+            (None, None)
+        };
 
     // start pprf server, which is used to serve the pprof data for heap
     // profiling
@@ -825,6 +854,7 @@ pub fn initialize_not_light_node_modules(
         tokio_runtime,
         eth_rpc_server_handle,
         cfx_rpc_server_handle,
+        debug_cfx_rpc_server_handle,
         task_manager,
     ))
 }

@@ -37,5 +37,7 @@ cfx-addr = { workspace = true }
 primitives = { workspace = true }
 network = { workspace = true }
 parking_lot = { workspace = true }
+blockgen = { workspace = true }
+txgen = { workspace = true }
 
 [dev-dependencies]

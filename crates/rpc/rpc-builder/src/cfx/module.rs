@@ -28,6 +28,7 @@
 // DEALINGS IN THE SOFTWARE.
 use std::{collections::HashSet, fmt, str::FromStr};
 
+use cfx_rpc_cfx_types::apis::{Api, ApiSet};
 use serde::{Deserialize, Serialize, Serializer};
 use strum::{
     AsRefStr, EnumIter, IntoStaticStr, ParseError, VariantArray, VariantNames,
@@ -198,6 +199,48 @@ impl fmt::Display for RpcModuleSelection {
                 .map(|s| s.to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
+        )
+    }
+}
+
+impl From<Api> for CfxRpcModule {
+    fn from(value: Api) -> Self {
+        match value {
+            Api::Cfx => Self::Cfx,
+            Api::Debug => Self::Debug,
+            Api::Pubsub => Self::PubSub,
+            Api::Test => Self::Test,
+            Api::Trace => Self::Trace,
+            Api::TxPool => Self::Txpool,
+            Api::Pos => Self::Pos,
+        }
+    }
+}
+
+impl From<CfxRpcModule> for Api {
+    fn from(value: CfxRpcModule) -> Self {
+        match value {
+            CfxRpcModule::Cfx => Self::Cfx,
+            CfxRpcModule::Debug => Self::Debug,
+            CfxRpcModule::Pos => Self::Pos,
+            CfxRpcModule::Trace => Self::Trace,
+            CfxRpcModule::Txpool => Self::TxPool,
+            CfxRpcModule::Test => Self::Test,
+            CfxRpcModule::PubSub => Self::Pubsub,
+        }
+    }
+}
+
+impl From<ApiSet> for RpcModuleSelection {
+    fn from(value: ApiSet) -> Self {
+        Self::Selection(value.list_apis().into_iter().map(Into::into).collect())
+    }
+}
+
+impl From<RpcModuleSelection> for ApiSet {
+    fn from(value: RpcModuleSelection) -> Self {
+        ApiSet::List(
+            value.into_selection().into_iter().map(Into::into).collect(),
         )
     }
 }

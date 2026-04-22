@@ -1786,6 +1786,7 @@ name = "cfx-rpc-builder"
 version = "3.0.0"
 dependencies = [
  "alloy-primitives",
+ "blockgen",
  "cfx-addr",
  "cfx-rpc-cfx-api",
  "cfx-rpc-cfx-impl",
@@ -1808,6 +1809,7 @@ dependencies = [
  "strum 0.26.3",
  "thiserror 2.0.18",
  "tokio",
+ "txgen",
 ]
 
 [[package]]

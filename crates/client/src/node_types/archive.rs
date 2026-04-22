@@ -40,6 +40,9 @@ pub struct ArchiveClientExtraComponents {
     /// space RPC. Which use Rust async I/O. Only active when
     /// `core_space_rpc_use_old_impl` is false.
     pub cfx_rpc_server_handle: Option<RpcServerHandle>,
+    /// Debug handle for CFX RPC server with all APIs enabled when using the
+    /// new core space RPC implementation.
+    pub debug_cfx_rpc_server_handle: Option<RpcServerHandle>,
     pub tokio_runtime: Arc<TokioRuntime>,
     pub task_manager: TaskManager,
 }
@@ -82,6 +85,7 @@ impl ArchiveClient {
             tokio_runtime,
             eth_rpc_server_handle,
             cfx_rpc_server_handle,
+            debug_cfx_rpc_server_handle,
             task_manager,
         ) = initialize_not_light_node_modules(
             &mut conf,
@@ -105,6 +109,7 @@ impl ArchiveClient {
                 pow,
                 eth_rpc_server_handle,
                 cfx_rpc_server_handle,
+                debug_cfx_rpc_server_handle,
                 tokio_runtime,
                 task_manager,
             },
