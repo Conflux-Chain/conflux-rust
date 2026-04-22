@@ -12,9 +12,7 @@ use crate::pos::mempool::{
             TimelineIndex,
         },
         transaction::{MempoolTransaction, TimelineState},
-        ttl_cache::TtlCache,
     },
-    counters,
     logging::{LogEntry, LogEvent, LogSchema, TxnsLog},
 };
 use diem_config::config::MempoolConfig;
@@ -27,7 +25,7 @@ use diem_types::{
 };
 use std::{
     collections::{hash_map::Values, HashMap, HashSet},
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 
 /// TransactionStore is in-memory storage for all transactions in mempool.
@@ -135,7 +133,6 @@ impl TransactionStore {
         } else {
             self.transactions.insert(hash, txn, false);
         }
-        self.track_indices();
         diem_debug!(
             LogSchema::new(LogEntry::AddTxn)
                 .txns(TxnsLog::new_txn(address, hash)),
@@ -144,21 +141,6 @@ impl TransactionStore {
         );
 
         MempoolStatus::new(MempoolStatusCode::Accepted)
-    }
-
-    fn track_indices(&self) {
-        counters::core_mempool_index_size(
-            counters::SYSTEM_TTL_INDEX_LABEL,
-            self.system_ttl_index.size(),
-        );
-        counters::core_mempool_index_size(
-            counters::EXPIRATION_TIME_INDEX_LABEL,
-            self.expiration_time_index.size(),
-        );
-        counters::core_mempool_index_size(
-            counters::TIMELINE_INDEX_LABEL,
-            self.timeline_index.size(),
-        );
     }
 
     /// Handles transaction commit: deletes the transaction and cleans up
@@ -216,11 +198,9 @@ impl TransactionStore {
 
     /// Removes transaction from all indexes.
     fn index_remove(&mut self, txn: &MempoolTransaction) {
-        counters::CORE_MEMPOOL_REMOVED_TXNS.inc();
         self.system_ttl_index.remove(&txn);
         self.expiration_time_index.remove(&txn);
         self.timeline_index.remove(&txn);
-        self.track_indices();
     }
 
     /// Read `count` transactions from timeline since `timeline_id`.
@@ -254,44 +234,23 @@ impl TransactionStore {
     }
 
     /// Garbage collect old transactions.
-    pub(crate) fn gc_by_system_ttl(
-        &mut self,
-        metrics_cache: &TtlCache<(AccountAddress, HashValue), SystemTime>,
-    ) {
+    pub(crate) fn gc_by_system_ttl(&mut self) {
         let now = diem_infallible::duration_since_epoch();
-
-        self.gc(now, true, metrics_cache);
+        self.gc(now, true);
     }
 
     /// Garbage collect old transactions based on client-specified expiration
     /// time.
-    pub(crate) fn gc_by_expiration_time(
-        &mut self, block_time: Duration,
-        metrics_cache: &TtlCache<(AccountAddress, HashValue), SystemTime>,
-    ) {
-        self.gc(block_time, false, metrics_cache);
+    pub(crate) fn gc_by_expiration_time(&mut self, block_time: Duration) {
+        self.gc(block_time, false);
     }
 
-    fn gc(
-        &mut self, now: Duration, by_system_ttl: bool,
-        _metrics_cache: &TtlCache<(AccountAddress, HashValue), SystemTime>,
-    ) {
-        let (metric_label, index, log_event) = if by_system_ttl {
-            (
-                counters::GC_SYSTEM_TTL_LABEL,
-                &mut self.system_ttl_index,
-                LogEvent::SystemTTLExpiration,
-            )
+    fn gc(&mut self, now: Duration, by_system_ttl: bool) {
+        let (index, log_event) = if by_system_ttl {
+            (&mut self.system_ttl_index, LogEvent::SystemTTLExpiration)
         } else {
-            (
-                counters::GC_CLIENT_EXP_LABEL,
-                &mut self.expiration_time_index,
-                LogEvent::ClientExpiration,
-            )
+            (&mut self.expiration_time_index, LogEvent::ClientExpiration)
         };
-        counters::CORE_MEMPOOL_GC_EVENT_COUNT
-            .with_label_values(&[metric_label])
-            .inc();
 
         let mut gc_txns = index.gc(now);
         // sort the expired txns by order of sequence number per account
@@ -313,7 +272,6 @@ impl TransactionStore {
 
         diem_debug!(LogSchema::event_log(LogEntry::GCRemoveTxns, log_event)
             .txns(gc_txns_log));
-        self.track_indices();
     }
 
     pub(crate) fn iter(&self) -> AccountTransactionIter<'_> {

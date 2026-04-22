@@ -31,7 +31,7 @@ impl<T: Clone, U> SubscriptionService<T, U> {
     /// Returns the subscription object, and the receiving end of a channel that
     /// subscription will be sent to
     pub fn subscribe(name: &str, items: T) -> (Self, Receiver<(), U>) {
-        let (sender, receiver) = diem_channel::new(QueueStyle::LIFO, 1, None);
+        let (sender, receiver) = diem_channel::new(QueueStyle::LIFO, 1);
         (
             Self {
                 name: name.to_string(),

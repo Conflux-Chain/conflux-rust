@@ -6,12 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::pos::consensus::{
-    block_storage::{
-        block_tree::BlockTree,
-        tracing::{observe_block, BlockStage},
-        BlockReader,
-    },
-    counters,
+    block_storage::{block_tree::BlockTree, BlockReader},
     logging::{LogEvent, LogSchema},
     persistent_liveness_storage::{
         PersistentLivenessStorage, RecoveryData, RootInfo, RootMetadata,
@@ -27,9 +22,7 @@ use consensus_types::{
 use diem_crypto::HashValue;
 use diem_infallible::RwLock;
 use diem_logger::prelude::*;
-use diem_types::{
-    ledger_info::LedgerInfoWithSignatures, transaction::TransactionStatus,
-};
+use diem_types::ledger_info::LedgerInfoWithSignatures;
 use executor_types::{Error, StateComputeResult};
 use pow_types::PowInterface;
 use short_hex_str::AsShortHexStr;
@@ -37,40 +30,6 @@ use std::{collections::vec_deque::VecDeque, sync::Arc, time::Duration};
 
 #[path = "sync_manager.rs"]
 pub mod sync_manager;
-
-fn update_counters_for_committed_blocks(
-    blocks_to_commit: &[Arc<ExecutedBlock>],
-) {
-    for block in blocks_to_commit {
-        observe_block(block.block().timestamp_usecs(), BlockStage::COMMITTED);
-        let txn_status = block.compute_result().compute_status();
-        counters::NUM_TXNS_PER_BLOCK.observe(txn_status.len() as f64);
-        counters::COMMITTED_BLOCKS_COUNT.inc();
-        counters::LAST_COMMITTED_ROUND.set(block.round() as i64);
-        counters::LAST_COMMITTED_VERSION
-            .set(block.compute_result().num_leaves() as i64);
-
-        for status in txn_status.iter() {
-            match status {
-                TransactionStatus::Keep(_) => {
-                    counters::COMMITTED_TXNS_COUNT
-                        .with_label_values(&["success"])
-                        .inc();
-                }
-                TransactionStatus::Discard(_) => {
-                    counters::COMMITTED_TXNS_COUNT
-                        .with_label_values(&["failed"])
-                        .inc();
-                }
-                TransactionStatus::Retry => {
-                    counters::COMMITTED_TXNS_COUNT
-                        .with_label_values(&["retry"])
-                        .inc();
-                }
-            }
-        }
-    }
-}
 
 /// Responsible for maintaining all the blocks of payload and the dependencies
 /// of those blocks (parent and previous QC links).  It is expected to be
@@ -204,9 +163,6 @@ impl BlockStore {
                     )
                 });
         }
-        counters::LAST_COMMITTED_ROUND.set(block_store.root().round() as i64);
-        counters::LAST_COMMITTED_VERSION
-            .set(block_store.root().compute_result().num_leaves() as i64);
         block_store
     }
 
@@ -248,7 +204,6 @@ impl BlockStore {
             )
             .await
             .expect("Failed to persist commit");
-        update_counters_for_committed_blocks(&blocks_to_commit);
         let current_round = self.root().round();
         let committed_round = block_to_commit.round();
         diem_debug!(
@@ -330,7 +285,6 @@ impl BlockStore {
             block.parent_id(),
             catch_up_mode,
         )?;
-        observe_block(block.timestamp_usecs(), BlockStage::EXECUTED);
 
         Ok(ExecutedBlock::new(block, state_compute_result))
     }
@@ -355,10 +309,6 @@ impl BlockStore {
                     qc.certified_block().id(),
                     qc.certified_block(),
                     executed_block.block_info()
-                );
-                observe_block(
-                    executed_block.block().timestamp_usecs(),
-                    BlockStage::QC_ADDED,
                 );
             }
             None => {

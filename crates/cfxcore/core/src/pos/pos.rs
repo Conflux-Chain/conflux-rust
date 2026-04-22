@@ -151,23 +151,6 @@ pub fn setup_pos_environment(
     test_command_receiver: channel::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> PosDropHandle {
-    // TODO(lpl): Handle port conflict.
-    // let metrics_port = node_config.debug_interface.metrics_server_port;
-    // let metric_host = node_config.debug_interface.address.clone();
-    // thread::spawn(move || {
-    //     metric_server::start_server(metric_host, metrics_port, false)
-    // });
-    // let public_metrics_port =
-    //     node_config.debug_interface.public_metrics_server_port;
-    // let public_metric_host = node_config.debug_interface.address.clone();
-    // thread::spawn(move || {
-    //     metric_server::start_server(
-    //         public_metric_host,
-    //         public_metrics_port,
-    //         true,
-    //     )
-    // });
-
     let mut instant = Instant::now();
     let (pos_ledger_db, db_rw) = DbReaderWriter::wrap(
         PosLedgerDB::open(

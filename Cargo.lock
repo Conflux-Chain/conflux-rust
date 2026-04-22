@@ -884,12 +884,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "assert_approx_eq"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c07dab4369547dbe5114677b33fbbf724971019f3818172d59a97a61c774ffd"
-
-[[package]]
 name = "async-stream"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2223,7 +2217,6 @@ dependencies = [
  "diem-crypto",
  "diem-infallible",
  "diem-logger",
- "diem-metrics",
  "diem-temppath",
  "diem-types",
  "either",
@@ -2424,7 +2417,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "diem-infallible",
- "diem-metrics",
  "diem-types",
  "futures 0.3.30",
  "tokio",
@@ -2586,7 +2578,6 @@ dependencies = [
  "delegate 0.4.2",
  "diem-config",
  "diem-crypto",
- "diem-metrics",
  "diem-types",
  "dir",
  "fallible-iterator",
@@ -3398,30 +3389,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "diem-metrics"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "assert_approx_eq",
- "diem-logger",
- "diem-metrics-core",
- "futures 0.3.30",
- "hyper 0.14.32",
- "once_cell",
- "prometheus",
- "rusty-fork",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "diem-metrics-core"
-version = "0.1.0"
-dependencies = [
- "prometheus",
-]
-
-[[package]]
 name = "diem-proptest-helpers"
 version = "0.1.0"
 dependencies = [
@@ -3888,7 +3855,6 @@ dependencies = [
  "consensus-types",
  "diem-crypto",
  "diem-logger",
- "diem-metrics",
  "diem-state-view",
  "diem-types",
  "executor-types",
@@ -7013,7 +6979,6 @@ dependencies = [
  "diem-crypto",
  "diem-infallible",
  "diem-logger",
- "diem-metrics",
  "diem-proptest-helpers",
  "diem-temppath",
  "diem-types",
@@ -8271,7 +8236,6 @@ dependencies = [
  "diem-global-constants",
  "diem-infallible",
  "diem-logger",
- "diem-metrics-core",
  "diem-proptest-helpers",
  "diem-secure-storage",
  "diem-types",
@@ -8327,9 +8291,7 @@ dependencies = [
  "anyhow",
  "byteorder",
  "diem-logger",
- "diem-metrics",
  "diem-temppath",
- "once_cell",
  "proptest",
  "rocksdb",
 ]

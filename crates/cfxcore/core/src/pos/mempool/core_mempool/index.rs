@@ -129,8 +129,6 @@ impl TTLIndex {
             hash: txn.get_hash(),
         }
     }
-
-    pub(crate) fn size(&self) -> usize { self.data.len() }
 }
 
 #[allow(clippy::derive_ord_xor_partial_ord)]
@@ -218,6 +216,4 @@ impl TimelineIndex {
             self.timeline.remove(&timeline_id);
         }
     }
-
-    pub(crate) fn size(&self) -> usize { self.timeline.len() }
 }

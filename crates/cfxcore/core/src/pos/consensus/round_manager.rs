@@ -59,16 +59,12 @@ use crate::pos::{
 };
 
 use super::{
-    block_storage::{
-        tracing::{observe_block, BlockStage},
-        BlockReader, BlockRetriever, BlockStore,
-    },
-    counters,
+    block_storage::{BlockReader, BlockRetriever, BlockStore},
     error::VerifyError,
     liveness::{
         proposal_generator::ProposalGenerator,
         proposer_election::ProposerElection,
-        round_state::{NewRoundEvent, NewRoundReason, RoundState},
+        round_state::{NewRoundEvent, RoundState},
     },
     logging::{LogEvent, LogSchema},
     network::{
@@ -253,9 +249,6 @@ impl RoundManager {
         consensus_private_key: Option<ConfigKey<ConsensusPrivateKey>>,
         vrf_private_key: Option<ConfigKey<ConsensusVRFPrivateKey>>,
     ) -> Self {
-        counters::OP_COUNTERS
-            .gauge("sync_only")
-            .set(sync_only as i64);
         Self {
             epoch_state,
             block_store,
@@ -297,17 +290,6 @@ impl RoundManager {
     async fn process_new_round_event(
         &mut self, new_round_event: NewRoundEvent,
     ) -> anyhow::Result<()> {
-        counters::CURRENT_ROUND.set(new_round_event.round as i64);
-        counters::ROUND_TIMEOUT_MS
-            .set(new_round_event.timeout.as_millis() as i64);
-        match new_round_event.reason {
-            NewRoundReason::QCReady => {
-                counters::QC_ROUNDS_COUNT.inc();
-            }
-            NewRoundReason::Timeout => {
-                counters::TIMEOUT_ROUNDS_COUNT.inc();
-            }
-        };
         diem_debug!(
             self.new_log(LogEvent::NewRound),
             reason = new_round_event.reason
@@ -343,7 +325,6 @@ impl RoundManager {
                     ));
                     let mut network = self.network.clone();
                     network.broadcast(proposal_msg, vec![]).await;
-                    counters::PROPOSALS_COUNT.inc();
                 }
             }
         }
@@ -496,7 +477,6 @@ impl RoundManager {
                     .expect("threshold checked in is_valid_proposer"),
             )
         }
-        observe_block(signed_proposal.timestamp_usecs(), BlockStage::SIGNED);
         diem_debug!(self.new_log(LogEvent::Propose), "{}", signed_proposal);
         // return proposal
         Ok(ProposalMsg::new(
@@ -515,10 +495,6 @@ impl RoundManager {
             Err(anyhow::anyhow!("Injected error in process_proposal_msg"))
         });
 
-        observe_block(
-            proposal_msg.proposal().timestamp_usecs(),
-            BlockStage::RECEIVED,
-        );
         if self
             .ensure_round_and_sync_up(
                 proposal_msg.proposal().round(),
@@ -575,7 +551,6 @@ impl RoundManager {
     ) -> anyhow::Result<()> {
         let local_sync_info = self.block_store.sync_info();
         if help_remote && local_sync_info.has_newer_certificates(&sync_info) {
-            counters::SYNC_INFO_MSGS_SENT_COUNT.inc();
             diem_debug!(
                 self.new_log(LogEvent::HelpPeerSync).remote_peer(author),
                 "Remote peer has stale state {}, send it back {}",
@@ -820,7 +795,6 @@ impl RoundManager {
                         "Planning to vote for a NIL block {}",
                         nil_block
                     );
-                    counters::VOTE_NIL_COUNT.inc();
                     let nil_vote = self.execute_and_vote(nil_block).await?;
                     (false, nil_vote)
                 }
@@ -945,8 +919,6 @@ impl RoundManager {
             self.round_state.current_round_deadline(),
         );
 
-        observe_block(proposal.timestamp_usecs(), BlockStage::SYNCED);
-
         if self.proposer_election.is_random_election() {
             if self
                 .proposer_election
@@ -1018,11 +990,6 @@ impl RoundManager {
                 "[RoundManager] SafetyRules Rejected {}",
                 executed_block.block()
             ))?;
-        observe_block(
-            executed_block.block().timestamp_usecs(),
-            BlockStage::VOTED,
-        );
-
         self.storage
             .save_vote(&vote)
             .context("[RoundManager] Fail to persist last vote")?;
@@ -1167,10 +1134,6 @@ impl RoundManager {
     async fn new_qc_aggregated(
         &mut self, qc: Arc<QuorumCert>, preferred_peer: Author,
     ) -> anyhow::Result<()> {
-        observe_block(
-            qc.certified_block().timestamp_usecs(),
-            BlockStage::QC_AGGREGATED,
-        );
         let result = self
             .block_store
             .insert_quorum_cert(

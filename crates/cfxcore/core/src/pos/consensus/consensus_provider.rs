@@ -27,7 +27,7 @@ use crate::pos::{
 };
 
 use super::{
-    counters, epoch_manager::EpochManager, network::NetworkReceivers,
+    epoch_manager::EpochManager, network::NetworkReceivers,
     persistent_liveness_storage::StorageWriteProxy,
     state_computer::ExecutionProxy, txn_manager::MempoolProxy,
     util::time_service::ClockTimeService,
@@ -84,12 +84,11 @@ pub fn start_consensus(
     let time_service =
         Arc::new(ClockTimeService::new(runtime.handle().clone()));
 
-    let (timeout_sender, timeout_receiver) =
-        channel::new(1_024, &counters::PENDING_ROUND_TIMEOUTS);
+    let (timeout_sender, timeout_receiver) = channel::new(1_024);
     let (proposal_timeout_sender, proposal_timeout_receiver) =
-        channel::new(1_024, &counters::PENDING_PROPOSAL_TIMEOUTS);
+        channel::new(1_024);
     let (new_round_timeout_sender, new_round_timeout_receiver) =
-        channel::new(1_024, &counters::PENDING_NEW_ROUND_TIMEOUTS);
+        channel::new(1_024);
 
     let epoch_mgr = EpochManager::new(
         node_config,
