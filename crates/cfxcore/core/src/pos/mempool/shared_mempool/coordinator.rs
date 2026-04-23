@@ -10,7 +10,6 @@
 use crate::pos::{
     mempool::{
         core_mempool::{CoreMempool, TimelineState},
-        counters,
         logging::{LogEntry, LogEvent, LogSchema},
         network::{MempoolSyncMsg, NetworkReceivers},
         shared_mempool::{tasks, types::SharedMempool},
@@ -20,12 +19,11 @@ use crate::pos::{
 };
 use anyhow::Result;
 use bounded_executor::BoundedExecutor;
-use channel::diem_channel;
 use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::{
-    mempool_status::MempoolStatus, on_chain_config::OnChainConfigPayload,
-    transaction::SignedTransaction, vm_status::DiscardedVMStatus,
+    mempool_status::MempoolStatus, transaction::SignedTransaction,
+    vm_status::DiscardedVMStatus,
 };
 use futures::{
     channel::{mpsc, oneshot},
@@ -33,11 +31,7 @@ use futures::{
     StreamExt,
 };
 use network::node_table::NodeId;
-use std::{
-    collections::HashSet,
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 use tokio::{runtime::Handle, time::interval};
 use tokio_stream::wrappers::IntervalStream;
 
@@ -50,11 +44,7 @@ pub(crate) async fn coordinator(
         oneshot::Sender<Result<SubmissionStatus>>,
     )>,
     mut consensus_requests: mpsc::Receiver<ConsensusRequest>,
-    mut state_sync_requests: mpsc::Receiver<CommitNotification>,
-    mut mempool_reconfig_events: diem_channel::Receiver<
-        (),
-        OnChainConfigPayload,
-    >,
+    mut commit_notifications: mpsc::Receiver<CommitNotification>,
 ) {
     diem_info!(LogSchema::event_log(
         LogEntry::CoordinatorRuntime,
@@ -71,7 +61,6 @@ pub(crate) async fn coordinator(
         BoundedExecutor::new(workers_available, executor.clone());
 
     loop {
-        let _timer = counters::MAIN_LOOP.start_timer();
         ::futures::select! {
             (msg, callback) = client_events.select_next_some() => {
                 handle_client_event(&mut smp, &bounded_executor, msg, callback).await;
@@ -79,12 +68,9 @@ pub(crate) async fn coordinator(
             msg = consensus_requests.select_next_some() => {
                 tasks::process_consensus_request(smp.db_with_cache.clone(), &smp.mempool, msg).await;
             }
-            msg = state_sync_requests.select_next_some() => {
-                handle_state_sync_request(&mut smp, msg);
+            msg = commit_notifications.select_next_some() => {
+                handle_commit_notification(&mut smp, msg);
             }
-            config_update = mempool_reconfig_events.select_next_some() => {
-                handle_mempool_reconfig_event(&mut smp, &bounded_executor, config_update).await;
-            },
             (peer, backoff) = scheduled_broadcasts.select_next_some() => {
                 // diem_debug!("scheduled_broadcasts");
                 tasks::execute_broadcast(peer, backoff, &mut smp, &mut scheduled_broadcasts, &mut broadcasting_peers, executor.clone());
@@ -124,63 +110,29 @@ async fn handle_client_event(
     >,
 ) {
     diem_debug!("handle_client_event");
-    // This timer measures how long it took for the bounded executor to
-    // *schedule* the task.
-    let _timer = counters::task_spawn_latency_timer(
-        counters::CLIENT_EVENT_LABEL,
-        counters::SPAWN_LABEL,
-    );
-    // This timer measures how long it took for the task to go from scheduled to
-    // started.
-    let task_start_timer = counters::task_spawn_latency_timer(
-        counters::CLIENT_EVENT_LABEL,
-        counters::START_LABEL,
-    );
     bounded_executor
         .spawn(tasks::process_client_transaction_submission(
             smp.clone(),
             msg,
             callback,
-            task_start_timer,
         ))
         .await;
 }
 
-fn handle_state_sync_request(smp: &mut SharedMempool, msg: CommitNotification) {
-    let _timer = counters::task_spawn_latency_timer(
-        counters::STATE_SYNC_EVENT_LABEL,
-        counters::SPAWN_LABEL,
-    );
-    smp.update_pos_state();
-    tokio::spawn(tasks::process_state_sync_request(smp.mempool.clone(), msg));
-}
-
-async fn handle_mempool_reconfig_event(
-    smp: &mut SharedMempool, bounded_executor: &BoundedExecutor,
-    config_update: OnChainConfigPayload,
+fn handle_commit_notification(
+    smp: &mut SharedMempool, msg: CommitNotification,
 ) {
-    diem_info!(LogSchema::event_log(
-        LogEntry::ReconfigUpdate,
-        LogEvent::Received
+    smp.update_pos_state();
+    tokio::spawn(tasks::process_committed_transactions(
+        smp.mempool.clone(),
+        msg,
     ));
-    let _timer = counters::task_spawn_latency_timer(
-        counters::RECONFIG_EVENT_LABEL,
-        counters::SPAWN_LABEL,
-    );
-
-    bounded_executor
-        .spawn(tasks::process_config_update(
-            config_update,
-            smp.validator.clone(),
-        ))
-        .await;
 }
 
 async fn handle_mempool_sync_msg(
     bounded_executor: &BoundedExecutor, smp: &mut SharedMempool, peer: NodeId,
     msg: MempoolSyncMsg,
 ) {
-    counters::shared_mempool_event_inc("message");
     match msg {
         MempoolSyncMsg::BroadcastTransactionsRequest {
             request_id,
@@ -188,23 +140,6 @@ async fn handle_mempool_sync_msg(
         } => {
             let smp_clone = smp.clone();
             let timeline_state = TimelineState::NonQualified;
-            /*
-            match smp.peer_manager.is_upstream_peer(&peer, None) {
-                true => TimelineState::NonQualified,
-                false => TimelineState::NotReady,
-            };*/
-            // This timer measures how long it took for the bounded
-            // executor to *schedule* the task.
-            let _timer = counters::task_spawn_latency_timer(
-                counters::PEER_BROADCAST_EVENT_LABEL,
-                counters::SPAWN_LABEL,
-            );
-            // This timer measures how long it took for the task to go
-            // from scheduled to started.
-            let task_start_timer = counters::task_spawn_latency_timer(
-                counters::PEER_BROADCAST_EVENT_LABEL,
-                counters::START_LABEL,
-            );
             bounded_executor
                 .spawn(tasks::process_transaction_broadcast(
                     smp_clone,
@@ -212,7 +147,6 @@ async fn handle_mempool_sync_msg(
                     request_id,
                     timeline_state,
                     peer,
-                    task_start_timer,
                 ))
                 .await;
         }
@@ -221,14 +155,8 @@ async fn handle_mempool_sync_msg(
             retry,
             backoff,
         } => {
-            let ack_timestamp = SystemTime::now();
-            smp.peer_manager.process_broadcast_ack(
-                peer,
-                request_id,
-                retry,
-                backoff,
-                ack_timestamp,
-            );
+            smp.peer_manager
+                .process_broadcast_ack(peer, request_id, retry, backoff);
         }
     }
 }

@@ -52,8 +52,8 @@ pub trait StateComputer: Send + Sync {
         catch_up_mode: bool,
     ) -> Result<StateComputeResult, ExecutionError>;
 
-    /// Send a successful commit. A future is fulfilled when the state is
-    /// finalized.
+    /// Commit the given blocks and notify mempool to prune committed
+    /// transactions.
     async fn commit(
         &self, block_ids: Vec<HashValue>,
         finality_proof: LedgerInfoWithSignatures,

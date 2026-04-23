@@ -84,7 +84,7 @@ fn prepare_state_db(
     config: &StateDumpConfig,
 ) -> Result<(StateDbGeneric, H256), String> {
     println("Preparing state...");
-    let (data_man, _, _, consensus, sync_service, _, _, _, _, _, _) =
+    let (data_man, _, _, consensus, sync_service, _, _, _, _, _, _, _) =
         initialize_not_light_node_modules(
             conf,
             exit_cond_var,

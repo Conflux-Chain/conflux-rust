@@ -21,12 +21,9 @@ use crate::pos::{
 };
 use anyhow::Result;
 use cached_pos_ledger_db::CachedPosLedgerDB;
-use channel::diem_channel;
 use diem_config::config::NodeConfig;
 use diem_infallible::{Mutex, RwLock};
-use diem_types::{
-    on_chain_config::OnChainConfigPayload, transaction::SignedTransaction,
-};
+use diem_types::transaction::SignedTransaction;
 use futures::channel::{
     mpsc::{self, Receiver, UnboundedSender},
     oneshot,
@@ -50,14 +47,12 @@ pub(crate) fn start_shared_mempool(
         oneshot::Sender<Result<SubmissionStatus>>,
     )>,
     consensus_requests: mpsc::Receiver<ConsensusRequest>,
-    state_sync_requests: mpsc::Receiver<CommitNotification>,
-    mempool_reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
+    commit_notifications: mpsc::Receiver<CommitNotification>,
     db_with_cache: Arc<CachedPosLedgerDB>,
     validator: Arc<RwLock<TransactionValidator>>,
     subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
 ) {
-    let peer_manager =
-        Arc::new(PeerManager::new(config.base.role, config.mempool.clone()));
+    let peer_manager = Arc::new(PeerManager::new());
 
     let smp = SharedMempool {
         mempool: mempool.clone(),
@@ -76,8 +71,7 @@ pub(crate) fn start_shared_mempool(
         network_receivers,
         client_events,
         consensus_requests,
-        state_sync_requests,
-        mempool_reconfig_events,
+        commit_notifications,
     ));
 
     executor.spawn(gc_coordinator(
@@ -94,8 +88,7 @@ pub fn bootstrap(
         oneshot::Sender<Result<SubmissionStatus>>,
     )>,
     consensus_requests: Receiver<ConsensusRequest>,
-    state_sync_requests: Receiver<CommitNotification>,
-    mempool_reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
+    commit_notifications: Receiver<CommitNotification>,
 ) -> Runtime {
     let runtime = Builder::new_multi_thread()
         .thread_name("shared-mem")
@@ -112,8 +105,7 @@ pub fn bootstrap(
         network_receivers,
         client_events,
         consensus_requests,
-        state_sync_requests,
-        mempool_reconfig_events,
+        commit_notifications,
         db_with_cache,
         validator,
         vec![],

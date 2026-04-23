@@ -10,12 +10,10 @@ use crate::{
     keys::ConfigKey,
 };
 use cfx_types::U256;
-use diem_crypto::Uniform;
 use diem_types::{
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
     PeerId,
 };
-use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -59,34 +57,4 @@ pub struct SafetyRulesTestConfig {
     pub author: PeerId,
     pub consensus_key: Option<ConfigKey<ConsensusPrivateKey>>,
     pub execution_key: Option<ConfigKey<ConsensusPrivateKey>>,
-}
-
-impl SafetyRulesTestConfig {
-    pub fn new(author: PeerId) -> Self {
-        Self {
-            author,
-            consensus_key: None,
-            execution_key: None,
-        }
-    }
-
-    pub fn consensus_key(&mut self, key: ConsensusPrivateKey) {
-        self.consensus_key = Some(ConfigKey::new(key));
-    }
-
-    pub fn execution_key(&mut self, key: ConsensusPrivateKey) {
-        self.execution_key = Some(ConfigKey::new(key));
-    }
-
-    pub fn random_consensus_key(&mut self, rng: &mut StdRng) {
-        let privkey = ConsensusPrivateKey::generate(rng);
-        self.consensus_key =
-            Some(ConfigKey::<ConsensusPrivateKey>::new(privkey));
-    }
-
-    pub fn random_execution_key(&mut self, rng: &mut StdRng) {
-        let privkey = ConsensusPrivateKey::generate(rng);
-        self.execution_key =
-            Some(ConfigKey::<ConsensusPrivateKey>::new(privkey));
-    }
 }

@@ -488,6 +488,7 @@ pub fn initialize_not_light_node_modules(
         Arc<TokioRuntime>,
         Option<RpcServerHandle>,
         Option<RpcServerHandle>,
+        Option<RpcServerHandle>,
         TaskManager,
     ),
     String,
@@ -570,7 +571,7 @@ pub fn initialize_not_light_node_modules(
         ).expect("Memory usage thread start fails");
     }
 
-    let (maybe_txgen, _maybe_direct_txgen) = initialize_txgens(
+    let (maybe_txgen, maybe_direct_txgen) = initialize_txgens(
         consensus.clone(),
         txpool.clone(),
         sync.clone(),
@@ -652,7 +653,32 @@ pub fn initialize_not_light_node_modules(
             task_executor.clone(),
             accounts.clone(),
             exit.clone(),
+            blockgen.test_api(),
+            maybe_txgen.clone(),
+            maybe_direct_txgen.clone(),
             conf,
+            conf.raw_conf.public_rpc_apis.clone(),
+            false,
+        ))?;
+
+    let debug_cfx_rpc_server_handle =
+        tokio_runtime.block_on(launch_cfx_async_rpc_servers(
+            consensus.clone(),
+            sync.clone(),
+            txpool.clone(),
+            data_man.clone(),
+            network.clone(),
+            pos_verifier.clone(),
+            notifications.clone(),
+            task_executor.clone(),
+            accounts.clone(),
+            exit.clone(),
+            blockgen.test_api(),
+            maybe_txgen.clone(),
+            maybe_direct_txgen.clone(),
+            conf,
+            conf.raw_conf.public_rpc_apis.clone(),
+            false,
         ))?;
 
     // start pprf server, which is used to serve the pprof data for heap
@@ -682,6 +708,7 @@ pub fn initialize_not_light_node_modules(
         tokio_runtime,
         eth_rpc_server_handle,
         cfx_rpc_server_handle,
+        debug_cfx_rpc_server_handle,
         task_manager,
     ))
 }

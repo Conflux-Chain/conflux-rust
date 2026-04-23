@@ -40,7 +40,7 @@ impl MockTransactionManager {
         consensus_to_mempool_sender: Option<mpsc::Sender<ConsensusRequest>>,
     ) -> Self {
         let mempool_proxy =
-            consensus_to_mempool_sender.map(|s| MempoolProxy::new(s, 1, 1, 1));
+            consensus_to_mempool_sender.map(|s| MempoolProxy::new(s, 1, 1));
         Self {
             rejected_txns: vec![],
             mempool_proxy,

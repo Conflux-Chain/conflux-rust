@@ -15,7 +15,6 @@ use serde::{Deserialize, Serialize};
 use diem_crypto::{hash::TransactionAccumulatorHasher, HashValue};
 use diem_types::{
     block_info::PivotBlockDecision,
-    contract_event::ContractEvent,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
     proof::{accumulator::InMemoryAccumulator, AccumulatorExtensionProof},
@@ -49,16 +48,12 @@ pub trait BlockExecutor: Send {
     /// ```
     /// and only `C` and `E` have signatures, we will send `A`, `B` and `C` in
     /// the first batch, then `D` and `E` later in the another batch.
-    /// Commits a block and all its ancestors in a batch manner.
-    ///
-    /// Returns `Ok(Result<Vec<Transaction>, Vec<ContractEvents>)` if
-    /// successful, where `Vec<Transaction>` is a vector of transactions that
-    /// were kept from the submitted blocks, and `Vec<ContractEvents>` is a
-    /// vector of reconfiguration events in the submitted blocks
+    /// Commits a block and all its ancestors in a batch manner. Returns
+    /// the committed transactions so the caller can notify mempool.
     fn commit_blocks(
         &self, block_ids: Vec<HashValue>,
         ledger_info_with_sigs: LedgerInfoWithSignatures,
-    ) -> Result<(Vec<Transaction>, Vec<ContractEvent>), Error>;
+    ) -> Result<Vec<Transaction>, Error>;
 }
 
 /// A structure that summarizes the result of the execution needed for consensus

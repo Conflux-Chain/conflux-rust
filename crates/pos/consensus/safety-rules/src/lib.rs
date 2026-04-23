@@ -9,7 +9,6 @@
 
 mod configurable_validator_signer;
 mod consensus_state;
-mod counters;
 mod error;
 mod logging;
 mod persistent_safety_storage;

@@ -11,13 +11,11 @@ use futures::channel::{mpsc, oneshot};
 use tokio::runtime::{self, Runtime};
 
 use cached_pos_ledger_db::CachedPosLedgerDB;
-use channel::diem_channel;
 use consensus_types::db::LedgerBlockRW;
 use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
 use diem_types::{
-    account_address::AccountAddress, on_chain_config::OnChainConfigPayload,
-    transaction::SignedTransaction,
+    account_address::AccountAddress, transaction::SignedTransaction,
 };
 use executor::Executor;
 use storage_interface::DbReader;
@@ -26,11 +24,10 @@ use crate::pos::{
     mempool::{ConsensusRequest, SubmissionStatus},
     pow_handler::PowHandler,
     protocol::network_sender::NetworkSender,
-    state_sync::client::StateSyncClient,
 };
 
 use super::{
-    counters, epoch_manager::EpochManager, network::NetworkReceivers,
+    epoch_manager::EpochManager, network::NetworkReceivers,
     persistent_liveness_storage::StorageWriteProxy,
     state_computer::ExecutionProxy, txn_manager::MempoolProxy,
     util::time_service::ClockTimeService,
@@ -43,10 +40,11 @@ pub fn start_consensus(
     node_config: &NodeConfig, network_sender: NetworkSender,
     network_receiver: NetworkReceivers,
     consensus_to_mempool_sender: mpsc::Sender<ConsensusRequest>,
-    state_sync_client: StateSyncClient, pos_ledger_db: Arc<dyn DbReader>,
-    db_with_cache: Arc<CachedPosLedgerDB>,
-    reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
-    author: AccountAddress,
+    mempool_commit_sender: mpsc::Sender<
+        crate::pos::mempool::CommitNotification,
+    >,
+    mempool_commit_timeout_ms: u64, pos_ledger_db: Arc<dyn DbReader>,
+    db_with_cache: Arc<CachedPosLedgerDB>, author: AccountAddress,
     tx_sender: mpsc::Sender<(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
@@ -68,7 +66,6 @@ pub fn start_consensus(
         consensus_to_mempool_sender,
         node_config.consensus.mempool_poll_count,
         node_config.consensus.mempool_txn_pull_timeout_ms,
-        node_config.consensus.mempool_executed_txn_timeout_ms,
     ));
     let pow_handler = Arc::new(PowHandler::new(
         runtime.handle().clone(),
@@ -79,17 +76,19 @@ pub fn start_consensus(
         pow_handler.clone(),
         consensus_db.clone() as Arc<dyn LedgerBlockRW>,
     ));
-    let state_computer =
-        Arc::new(ExecutionProxy::new(executor, state_sync_client));
+    let state_computer = Arc::new(ExecutionProxy::new(
+        executor,
+        mempool_commit_sender,
+        mempool_commit_timeout_ms,
+    ));
     let time_service =
         Arc::new(ClockTimeService::new(runtime.handle().clone()));
 
-    let (timeout_sender, timeout_receiver) =
-        channel::new(1_024, &counters::PENDING_ROUND_TIMEOUTS);
+    let (timeout_sender, timeout_receiver) = channel::new(1_024);
     let (proposal_timeout_sender, proposal_timeout_receiver) =
-        channel::new(1_024, &counters::PENDING_PROPOSAL_TIMEOUTS);
+        channel::new(1_024);
     let (new_round_timeout_sender, new_round_timeout_receiver) =
-        channel::new(1_024, &counters::PENDING_NEW_ROUND_TIMEOUTS);
+        channel::new(1_024);
 
     let epoch_mgr = EpochManager::new(
         node_config,
@@ -101,7 +100,6 @@ pub fn start_consensus(
         txn_manager,
         state_computer,
         storage,
-        reconfig_events,
         pow_handler.clone(),
         author,
         tx_sender,

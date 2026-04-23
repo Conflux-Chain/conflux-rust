@@ -5,12 +5,16 @@ pub use crate::{
 };
 pub use module::{CfxRpcModule, RpcModuleSelection};
 
+use blockgen::BlockGeneratorTestApi;
 use cfx_rpc_cfx_api::{
-    DebugRpcServer, PosRpcServer, PubSubApiServer, TraceServer, TxPoolServer,
+    CfxRpcServer, DebugRpcServer, PosRpcServer, PubSubApiServer, TestRpcServer,
+    TraceServer, TxPoolServer,
 };
 use cfx_rpc_cfx_impl::{
-    DebugHandler, PosHandler, PubSubHandler, TraceHandler, TxPoolHandler,
+    CfxHandler, DebugHandler, PosHandler, PubSubHandler, TestHandler,
+    TraceHandler, TxPoolHandler,
 };
+use cfx_rpc_cfx_types::RpcImplConfiguration;
 use cfx_tasks::TaskExecutor;
 use cfxcore::{
     block_data_manager::BlockDataManager, consensus::pos_handler::PosVerifier,
@@ -30,12 +34,14 @@ use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::Arc,
 };
+use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
 pub const DEFAULT_HTTP_PORT: u16 = 12537;
 pub const DEFAULT_WS_PORT: u16 = 12538;
 
 #[derive(Clone)]
 pub struct RpcModuleBuilder {
+    rpc_impl_config: RpcImplConfiguration,
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
@@ -46,17 +52,24 @@ pub struct RpcModuleBuilder {
     notifications: Arc<Notifications>,
     accounts: Arc<AccountProvider>,
     exit: Arc<(Mutex<bool>, Condvar)>,
+    block_gen: BlockGeneratorTestApi,
+    maybe_txgen: Option<Arc<TransactionGenerator>>,
+    maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
 }
 
 impl RpcModuleBuilder {
     pub fn new(
-        consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-        tx_pool: SharedTransactionPool, executor: TaskExecutor,
-        data_man: Arc<BlockDataManager>, network: Arc<NetworkService>,
-        pos_handler: Arc<PosVerifier>, notifications: Arc<Notifications>,
-        accounts: Arc<AccountProvider>, exit: Arc<(Mutex<bool>, Condvar)>,
+        rpc_impl_config: RpcImplConfiguration, consensus: SharedConsensusGraph,
+        sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: TaskExecutor, data_man: Arc<BlockDataManager>,
+        network: Arc<NetworkService>, pos_handler: Arc<PosVerifier>,
+        notifications: Arc<Notifications>, accounts: Arc<AccountProvider>,
+        exit: Arc<(Mutex<bool>, Condvar)>, block_gen: BlockGeneratorTestApi,
+        maybe_txgen: Option<Arc<TransactionGenerator>>,
+        maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
     ) -> Self {
         Self {
+            rpc_impl_config,
             consensus,
             sync,
             tx_pool,
@@ -67,6 +80,9 @@ impl RpcModuleBuilder {
             notifications,
             accounts,
             exit,
+            block_gen,
+            maybe_txgen,
+            maybe_direct_txgen,
         }
     }
 
@@ -79,6 +95,7 @@ impl RpcModuleBuilder {
             let TransportRpcModuleConfig { http, ws } = module_config.clone();
 
             let Self {
+                rpc_impl_config,
                 consensus,
                 sync,
                 tx_pool,
@@ -89,9 +106,13 @@ impl RpcModuleBuilder {
                 notifications,
                 accounts,
                 exit,
+                block_gen,
+                maybe_txgen,
+                maybe_direct_txgen,
             } = self;
 
             let mut registry = RpcRegistryInner::new(
+                rpc_impl_config,
                 consensus,
                 sync,
                 tx_pool,
@@ -102,6 +123,9 @@ impl RpcModuleBuilder {
                 notifications,
                 accounts,
                 exit,
+                block_gen,
+                maybe_txgen,
+                maybe_direct_txgen,
             );
 
             modules.config = module_config;
@@ -115,6 +139,7 @@ impl RpcModuleBuilder {
 
 #[derive(Clone)]
 pub struct RpcRegistryInner {
+    rpc_impl_config: RpcImplConfiguration,
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
@@ -125,18 +150,25 @@ pub struct RpcRegistryInner {
     notifications: Arc<Notifications>,
     accounts: Arc<AccountProvider>,
     exit: Arc<(Mutex<bool>, Condvar)>,
+    block_gen: BlockGeneratorTestApi,
+    maybe_txgen: Option<Arc<TransactionGenerator>>,
+    maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
     modules: HashMap<CfxRpcModule, Methods>,
 }
 
 impl RpcRegistryInner {
     pub fn new(
-        consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-        tx_pool: SharedTransactionPool, executor: TaskExecutor,
-        data_man: Arc<BlockDataManager>, network: Arc<NetworkService>,
-        pos_handler: Arc<PosVerifier>, notifications: Arc<Notifications>,
-        accounts: Arc<AccountProvider>, exit: Arc<(Mutex<bool>, Condvar)>,
+        rpc_impl_config: RpcImplConfiguration, consensus: SharedConsensusGraph,
+        sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: TaskExecutor, data_man: Arc<BlockDataManager>,
+        network: Arc<NetworkService>, pos_handler: Arc<PosVerifier>,
+        notifications: Arc<Notifications>, accounts: Arc<AccountProvider>,
+        exit: Arc<(Mutex<bool>, Condvar)>, block_gen: BlockGeneratorTestApi,
+        maybe_txgen: Option<Arc<TransactionGenerator>>,
+        maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
     ) -> Self {
         Self {
+            rpc_impl_config,
             consensus,
             sync,
             tx_pool,
@@ -147,6 +179,9 @@ impl RpcRegistryInner {
             notifications,
             accounts,
             exit,
+            block_gen,
+            maybe_txgen,
+            maybe_direct_txgen,
             modules: Default::default(),
         }
     }
@@ -217,11 +252,31 @@ impl RpcRegistryInner {
                     )
                     .into_rpc()
                     .into(),
-                    CfxRpcModule::Cfx | CfxRpcModule::Test => {
-                        unimplemented!(
-                            "Cfx and Test modules require BlockGeneratorTestApi"
-                        )
-                    }
+                    CfxRpcModule::Cfx => CfxHandler::new(
+                        self.rpc_impl_config.clone(),
+                        self.consensus.clone(),
+                        self.sync.clone(),
+                        self.tx_pool.clone(),
+                        self.accounts.clone(),
+                        self.pos_handler.clone(),
+                        self.block_gen.clone(),
+                    )
+                    .into_rpc()
+                    .into(),
+                    CfxRpcModule::Test => TestHandler::new(
+                        self.exit.clone(),
+                        self.consensus.clone(),
+                        self.network.clone(),
+                        self.pos_handler.clone(),
+                        self.tx_pool.clone(),
+                        self.accounts.clone(),
+                        self.block_gen.clone(),
+                        self.maybe_txgen.clone(),
+                        self.maybe_direct_txgen.clone(),
+                        self.sync.clone(),
+                    )
+                    .into_rpc()
+                    .into(),
                 })
                 .clone()
         };

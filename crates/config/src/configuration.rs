@@ -4,7 +4,7 @@
 
 use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 
-use cfx_rpc_builder::{CfxRpcModuleSelection, RpcModuleSelection};
+use cfx_rpc_builder::RpcModuleSelection;
 use lazy_static::*;
 use log::{error, warn};
 use parking_lot::RwLock;
@@ -454,7 +454,6 @@ build_config! {
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
         (public_evm_rpc_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
-        (public_cfx_rpc_apis, (CfxRpcModuleSelection), CfxRpcModuleSelection::Standard, CfxRpcModuleSelection::from_str)
         (single_mpt_space, (Option<Space>), None, Space::from_str)
     }
 }
@@ -1158,6 +1157,21 @@ impl Configuration {
         )
     }
 
+    pub fn local_tcp_config(&self) -> TcpConfiguration {
+        TcpConfiguration::new(
+            Some((127, 0, 0, 1)),
+            self.raw_conf.jsonrpc_local_tcp_port,
+        )
+    }
+
+    pub fn local_ws_config(&self) -> WsConfiguration {
+        WsConfiguration::new(
+            Some((127, 0, 0, 1)),
+            self.raw_conf.jsonrpc_local_ws_port,
+            self.raw_conf.jsonrpc_ws_max_payload_bytes,
+        )
+    }
+
     pub fn http_config(&self) -> HttpConfiguration {
         HttpConfiguration::new(
             None,
@@ -1168,22 +1182,16 @@ impl Configuration {
         )
     }
 
-    pub fn cfx_http_config(&self) -> HttpConfiguration {
-        HttpConfiguration::new(
-            None,
-            self.raw_conf.jsonrpc_http_port,
-            self.raw_conf.jsonrpc_cors.clone(),
-            self.raw_conf.jsonrpc_http_keep_alive,
-            self.raw_conf.jsonrpc_http_threads,
-        )
-    }
-
-    pub fn cfx_ws_config(&self) -> WsConfiguration {
+    pub fn ws_config(&self) -> WsConfiguration {
         WsConfiguration::new(
             None,
             self.raw_conf.jsonrpc_ws_port,
             self.raw_conf.jsonrpc_ws_max_payload_bytes,
         )
+    }
+
+    pub fn tcp_config(&self) -> TcpConfiguration {
+        TcpConfiguration::new(None, self.raw_conf.jsonrpc_tcp_port)
     }
 
     pub fn eth_http_config(&self) -> HttpConfiguration {
@@ -1204,17 +1212,6 @@ impl Configuration {
         )
     }
 
-    pub fn local_tcp_config(&self) -> TcpConfiguration {
-        TcpConfiguration::new(
-            Some((127, 0, 0, 1)),
-            self.raw_conf.jsonrpc_local_tcp_port,
-        )
-    }
-
-    pub fn tcp_config(&self) -> TcpConfiguration {
-        TcpConfiguration::new(None, self.raw_conf.jsonrpc_tcp_port)
-    }
-
     pub fn jsonrpsee_server_builder(&self) -> ServerConfigBuilder {
         let builder = ServerConfigBuilder::default()
             .max_request_body_size(self.raw_conf.jsonrpc_max_request_body_size)
@@ -1230,22 +1227,6 @@ impl Configuration {
             );
 
         builder
-    }
-
-    pub fn local_ws_config(&self) -> WsConfiguration {
-        WsConfiguration::new(
-            Some((127, 0, 0, 1)),
-            self.raw_conf.jsonrpc_local_ws_port,
-            self.raw_conf.jsonrpc_ws_max_payload_bytes,
-        )
-    }
-
-    pub fn ws_config(&self) -> WsConfiguration {
-        WsConfiguration::new(
-            None,
-            self.raw_conf.jsonrpc_ws_port,
-            self.raw_conf.jsonrpc_ws_max_payload_bytes,
-        )
     }
 
     pub fn execution_config(&self) -> ConsensusExecutionConfiguration {

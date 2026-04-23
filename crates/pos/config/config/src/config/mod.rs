@@ -5,17 +5,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use rand::{rngs::StdRng, SeedableRng};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    fmt,
     fs::File,
     io::{Read, Write},
     path::{Path, PathBuf},
-    str::FromStr,
 };
-use thiserror::Error;
 
 mod consensus_config;
 pub use consensus_config::*;
@@ -29,8 +25,6 @@ mod mempool_config;
 pub use mempool_config::*;
 mod secure_backend_config;
 pub use secure_backend_config::*;
-mod state_sync_config;
-pub use state_sync_config::*;
 mod storage_config;
 pub use storage_config::*;
 mod safety_rules_config;
@@ -56,8 +50,6 @@ pub struct NodeConfig {
     #[serde(default)]
     pub mempool: MempoolConfig,
     #[serde(default)]
-    pub state_sync: StateSyncConfig,
-    #[serde(default)]
     pub storage: StorageConfig,
     #[serde(default)]
     pub test: Option<TestConfig>,
@@ -69,63 +61,15 @@ pub struct NodeConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct BaseConfig {
     data_dir: PathBuf,
-    pub role: RoleType,
 }
 
 impl Default for BaseConfig {
     fn default() -> BaseConfig {
         BaseConfig {
             data_dir: PathBuf::from("./pos_db"),
-            role: RoleType::Validator,
         }
     }
 }
-
-#[derive(Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RoleType {
-    Validator,
-    FullNode,
-}
-
-impl RoleType {
-    pub fn is_validator(self) -> bool { self == RoleType::Validator }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            RoleType::Validator => "validator",
-            RoleType::FullNode => "full_node",
-        }
-    }
-}
-
-impl FromStr for RoleType {
-    type Err = ParseRoleError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "validator" => Ok(RoleType::Validator),
-            "full_node" => Ok(RoleType::FullNode),
-            _ => Err(ParseRoleError(s.to_string())),
-        }
-    }
-}
-
-impl fmt::Debug for RoleType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self)
-    }
-}
-
-impl fmt::Display for RoleType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
-
-#[derive(Debug, Error)]
-#[error("Invalid node role: {0}")]
-pub struct ParseRoleError(String);
 
 impl NodeConfig {
     pub fn data_dir(&self) -> &Path { &self.base.data_dir }
@@ -151,57 +95,6 @@ impl NodeConfig {
     ) -> Result<(), Error> {
         self.save_config(&output_path)?;
         Ok(())
-    }
-
-    pub fn random() -> Self {
-        let mut rng = StdRng::from_seed([0u8; 32]);
-        Self::random_with_template(0, &NodeConfig::default(), &mut rng)
-    }
-
-    pub fn random_with_template(
-        idx: u32, template: &Self, rng: &mut StdRng,
-    ) -> Self {
-        let mut config = template.clone();
-        config.random_internal(idx, rng);
-        config
-    }
-
-    fn random_internal(&mut self, idx: u32, rng: &mut StdRng) {
-        let test = TestConfig::new_with_temp_dir(None);
-
-        if self.base.role == RoleType::Validator {
-            let peer_id = crate::utils::validator_owner_account_from_name(
-                idx.to_string().as_bytes(),
-            );
-
-            let mut safety_rules_test_config =
-                SafetyRulesTestConfig::new(peer_id);
-            safety_rules_test_config.random_consensus_key(rng);
-            self.consensus.safety_rules.test = Some(safety_rules_test_config);
-        }
-        self.set_data_dir(test.temp_dir().unwrap().to_path_buf());
-        self.test = Some(test);
-    }
-
-    fn default_config(serialized: &str, path: &'static str) -> Self {
-        let config = Self::parse(serialized)
-            .unwrap_or_else(|e| panic!("Error in {}: {}", path, e));
-        config
-    }
-
-    pub fn default_for_public_full_node() -> Self {
-        let contents = std::include_str!("test_data/public_full_node.yaml");
-        Self::default_config(contents, "default_for_public_full_node")
-    }
-
-    pub fn default_for_validator() -> Self {
-        let contents = std::include_str!("test_data/validator.yaml");
-        Self::default_config(contents, "default_for_validator")
-    }
-
-    pub fn default_for_validator_full_node() -> Self {
-        let contents = std::include_str!("test_data/validator_full_node.yaml");
-        Self::default_config(contents, "default_for_validator_full_node")
     }
 }
 
@@ -271,35 +164,6 @@ impl RootPath {
             self.root_path.join(file_path)
         } else {
             file_path.to_path_buf()
-        }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn verify_role_type_conversion() {
-        // Verify relationship between RoleType and as_string() is reflexive
-        let validator = RoleType::Validator;
-        let full_node = RoleType::FullNode;
-        let converted_validator =
-            RoleType::from_str(validator.as_str()).unwrap();
-        let converted_full_node =
-            RoleType::from_str(full_node.as_str()).unwrap();
-        assert_eq!(converted_validator, validator);
-        assert_eq!(converted_full_node, full_node);
-    }
-
-    #[test]
-    // TODO(joshlind): once the 'matches' crate becomes stable, clean this test
-    // up!
-    fn verify_parse_role_error_on_invalid_role() {
-        let invalid_role_type = "this is not a valid role type";
-        match RoleType::from_str(invalid_role_type) {
-            Err(ParseRoleError(_)) => { /* the expected error was thrown! */ }
-            _ => panic!("A ParseRoleError should have been thrown on the invalid role type!"),
         }
     }
 }

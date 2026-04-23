@@ -1602,6 +1602,7 @@ name = "cfx-rpc-builder"
 version = "3.0.0"
 dependencies = [
  "alloy-primitives",
+ "blockgen",
  "cfx-addr",
  "cfx-rpc-cfx-api",
  "cfx-rpc-cfx-impl",
@@ -1624,6 +1625,7 @@ dependencies = [
  "strum 0.26.3",
  "thiserror 2.0.18",
  "tokio",
+ "txgen",
 ]
 
 [[package]]
@@ -2044,7 +2046,6 @@ dependencies = [
  "diem-crypto",
  "diem-infallible",
  "diem-logger",
- "diem-metrics",
  "diem-temppath",
  "diem-types",
  "either",
@@ -2226,7 +2227,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "diem-infallible",
- "diem-metrics",
  "futures 0.3.30",
 ]
 
@@ -2858,10 +2858,7 @@ dependencies = [
  "diem-secure-storage",
  "diem-temppath",
  "diem-types",
- "if-addrs",
- "rand 0.8.5",
  "serde",
- "short-hex-str",
  "thiserror 1.0.63",
  "yaml_serde",
 ]
@@ -2877,7 +2874,6 @@ dependencies = [
  "cfx-types",
  "diem-crypto-derive",
  "diem-logger",
- "digest 0.9.0",
  "hex",
  "lazy_static",
  "mirai-annotations",
@@ -2937,28 +2933,6 @@ dependencies = [
  "prometheus",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "diem-metrics"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "diem-logger",
- "diem-metrics-core",
- "futures 0.3.30",
- "hyper 0.14.32",
- "once_cell",
- "prometheus",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "diem-metrics-core"
-version = "0.1.0"
-dependencies = [
- "prometheus",
 ]
 
 [[package]]
@@ -3371,7 +3345,6 @@ dependencies = [
  "consensus-types",
  "diem-crypto",
  "diem-logger",
- "diem-metrics",
  "diem-state-view",
  "diem-types",
  "executor-types",
@@ -4304,16 +4277,6 @@ checksum = "daca1df1c957320b2cf139ac61e7bd64fed304c5040df000a745aa1de3b4ef71"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
-]
-
-[[package]]
-name = "if-addrs"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf39cc0423ee66021dc5eccface85580e4a001e0c5288bae8bea7ecb69225e90"
-dependencies = [
- "libc",
- "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5976,7 +5939,6 @@ dependencies = [
  "diem-crypto",
  "diem-infallible",
  "diem-logger",
- "diem-metrics",
  "diem-types",
  "itertools 0.14.0",
  "num-derive",
@@ -6934,9 +6896,9 @@ checksum = "f87165f0995f63a9fbeea62b64d10b4d9d8e78ec6d7d51fb2125fda7bb36788f"
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.10"
+version = "0.103.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df33b2b81ac578cabaf06b89b0631153a3f416b0a886e8a7a1707fb51abbd1ef"
+checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -6978,7 +6940,6 @@ dependencies = [
  "diem-global-constants",
  "diem-infallible",
  "diem-logger",
- "diem-metrics-core",
  "diem-secure-storage",
  "diem-types",
  "log",
@@ -7030,8 +6991,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "diem-logger",
- "diem-metrics",
- "once_cell",
  "rocksdb",
 ]
 

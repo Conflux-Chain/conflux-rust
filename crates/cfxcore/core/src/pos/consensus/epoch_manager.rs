@@ -7,7 +7,6 @@
 
 use super::{
     block_storage::BlockStore,
-    counters,
     error::{error_kind, DbError},
     liveness::{
         proposal_generator::ProposalGenerator,
@@ -38,22 +37,19 @@ use crate::pos::{
     protocol::network_sender::NetworkSender,
 };
 use anyhow::{anyhow, bail, ensure, Context};
-use channel::diem_channel;
 use consensus_types::{
     common::{Author, Round},
     epoch_retrieval::EpochRetrievalRequest,
 };
 use diem_config::config::{ConsensusConfig, ConsensusProposerType, NodeConfig};
 use diem_crypto::HashValue;
-use diem_infallible::{duration_since_epoch, RwLock};
+use diem_infallible::RwLock;
 use diem_logger::prelude::*;
-use diem_metrics::monitor;
 use diem_types::{
     account_address::AccountAddress,
     block_info::PivotBlockDecision,
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
-    on_chain_config::{OnChainConfigPayload, ValidatorSet},
     transaction::{SignedTransaction, TransactionPayload},
 };
 use futures::{
@@ -112,7 +108,6 @@ pub struct EpochManager {
     storage: Arc<dyn PersistentLivenessStorage>,
     safety_rules: Arc<RwLock<SafetyRules>>,
     processor: Option<RoundProcessor>,
-    reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     // Conflux PoW handler
     pow_handler: Arc<dyn PowInterface>,
     election_control: Arc<AtomicBool>,
@@ -135,7 +130,6 @@ impl EpochManager {
         txn_manager: Arc<dyn TxnManager>,
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
-        reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
         pow_handler: Arc<dyn PowInterface>,
         author: AccountAddress,
         tx_sender: mpsc::Sender<(
@@ -162,7 +156,6 @@ impl EpochManager {
             storage,
             safety_rules: Arc::new(RwLock::new(safety_rules)),
             processor: None,
-            reconfig_events,
             pow_handler,
             election_control: Arc::new(AtomicBool::new(true)),
             tx_sender,
@@ -341,7 +334,6 @@ impl EpochManager {
         //         ledger_info
         //     ))?;
         for ledger_info in proof.get_all_ledger_infos() {
-            let mut new_epoch = false;
             match self.processor_mut() {
                 RoundProcessor::Recovery(_) => {
                     bail!("start_new_epoch for Recovery processor");
@@ -351,7 +343,9 @@ impl EpochManager {
                         == p.epoch_state().epoch
                     {
                         p.sync_to_ledger_info(&ledger_info, peer_id).await?;
-                        new_epoch = true;
+                        let epoch_state = self.latest_epoch_state();
+                        self.start_processor_with_epoch_state(epoch_state)
+                            .await;
                     } else {
                         diem_error!(
                             "Unexpected epoch change: me={} get={}",
@@ -361,12 +355,24 @@ impl EpochManager {
                     }
                 }
             }
-            if new_epoch {
-                monitor!("reconfig", self.expect_new_epoch().await);
-            }
         }
 
         Ok(())
+    }
+
+    /// Load the newest `EpochState` from the persisted PoS state.
+    ///
+    /// Must only be called after a commit has returned. Relies on
+    /// `LedgerStore::put_pos_state` having refreshed the `latest_pos_state`
+    /// cache for the just-committed block — see its invariant comment for
+    /// why that refresh is guaranteed (BFT commit serialisation + strict
+    /// monotonicity of `current_view`).
+    fn latest_epoch_state(&self) -> EpochState {
+        self.storage
+            .pos_ledger_db()
+            .get_latest_pos_state()
+            .epoch_state()
+            .clone()
     }
 
     async fn start_round_manager(
@@ -375,9 +381,6 @@ impl EpochManager {
         // Release the previous RoundManager, especially the SafetyRule client
         self.processor = None;
         let epoch = epoch_state.epoch;
-        counters::EPOCH.set(epoch_state.epoch as i64);
-        counters::CURRENT_EPOCH_VALIDATORS
-            .set(epoch_state.verifier().len() as i64);
         diem_info!(
             epoch = epoch_state.epoch,
             validators = epoch_state.verifier().to_string(),
@@ -505,27 +508,13 @@ impl EpochManager {
         diem_info!(epoch = epoch, "SyncProcessor started");
     }
 
-    async fn start_processor(&mut self, payload: OnChainConfigPayload) {
-        let epoch_state: EpochState = payload.get().unwrap_or_else(|_| {
-            let validator_set: ValidatorSet = payload.get().unwrap();
-            EpochState::new(
-                payload.epoch(),
-                (&validator_set).into(),
-                // genesis pivot decision
-                self.storage
-                    .pos_ledger_db()
-                    .get_latest_ledger_info()
-                    .expect("non-empty ledger info")
-                    .ledger_info()
-                    .pivot_decision()
-                    .unwrap()
-                    .block_hash
-                    .as_bytes()
-                    .to_vec(),
-            )
-        });
-        diem_debug!("start_processor: epoch_state={:?}", epoch_state);
-
+    async fn start_processor_with_epoch_state(
+        &mut self, epoch_state: EpochState,
+    ) {
+        diem_debug!(
+            "start_processor_with_epoch_state: epoch_state={:?}",
+            epoch_state
+        );
         match self.storage.start() {
             LivenessStorageData::RecoveryData(initial_data) => {
                 self.start_round_manager(initial_data, epoch_state).await
@@ -585,11 +574,8 @@ impl EpochManager {
                 if event.epoch() == self.epoch() {
                     return Ok(Some(event));
                 } else {
-                    monitor!(
-                        "process_different_epoch_consensus_msg",
-                        self.process_different_epoch(event.epoch(), peer_id)
-                            .await?
-                    );
+                    self.process_different_epoch(event.epoch(), peer_id)
+                        .await?;
                 }
             }
             ConsensusMsg::EpochChangeProof(proof) => {
@@ -602,10 +588,7 @@ impl EpochManager {
                     msg_epoch,
                 );
                 if msg_epoch == self.epoch() {
-                    monitor!(
-                        "process_epoch_proof",
-                        self.start_new_epoch(*proof, peer_id).await?
-                    );
+                    self.start_new_epoch(*proof, peer_id).await?;
                 } else {
                     debug!(
                         "[EpochManager] Unexpected epoch proof from epoch {}, local epoch {}",
@@ -619,10 +602,7 @@ impl EpochManager {
                     request.end_epoch <= self.epoch(),
                     "[EpochManager] Received EpochRetrievalRequest beyond what we have locally"
                 );
-                monitor!(
-                    "process_epoch_retrieval",
-                    self.process_epoch_retrieval(*request, peer_id).await?
-                );
+                self.process_epoch_retrieval(*request, peer_id).await?;
             }
             _ => {
                 bail!("[EpochManager] Unexpected messages: {:?}", msg);
@@ -653,17 +633,13 @@ impl EpochManager {
                 Ok(())
             }
             RoundProcessor::Normal(p) => match event {
-                VerifiedEvent::ProposalMsg(proposal) => monitor!(
-                    "process_proposal",
+                VerifiedEvent::ProposalMsg(proposal) => {
                     p.process_proposal_msg(*proposal).await
-                ),
-                VerifiedEvent::VoteMsg(vote) => {
-                    monitor!("process_vote", p.process_vote_msg(*vote).await)
                 }
-                VerifiedEvent::SyncInfo(sync_info) => monitor!(
-                    "process_sync_info",
+                VerifiedEvent::VoteMsg(vote) => p.process_vote_msg(*vote).await,
+                VerifiedEvent::SyncInfo(sync_info) => {
                     p.process_sync_info_msg(*sync_info, peer_id).await
-                ),
+                }
             },
         }
     }
@@ -739,17 +715,6 @@ impl EpochManager {
         }
     }
 
-    async fn expect_new_epoch(&mut self) {
-        diem_debug!("expect_new_epoch: start");
-        if let Some(payload) = self.reconfig_events.next().await {
-            diem_debug!("expect_new_epoch: receive event!");
-            self.start_processor(payload).await;
-            diem_debug!("expect_new_epoch: processor started!");
-        } else {
-            diem_error!("Reconfig sender dropped, unable to start new epoch.");
-        }
-    }
-
     pub async fn start(
         mut self, mut round_timeout_sender_rx: channel::Receiver<(u64, Round)>,
         mut proposal_timeout_sender_rx: channel::Receiver<(u64, Round)>,
@@ -758,37 +723,34 @@ impl EpochManager {
         mut test_command_receiver: channel::Receiver<TestCommand>,
         stopped: Arc<AtomicBool>,
     ) {
-        // initial start of the processor
-        self.expect_new_epoch().await;
+        self.start_processor_with_epoch_state(self.latest_epoch_state())
+            .await;
         diem_debug!("EpochManager main_loop starts");
         loop {
             if stopped.load(AtomicOrdering::SeqCst) {
                 break;
             }
-            let result = monitor!(
-                "main_loop",
-                select_biased! {
-                    command = test_command_receiver.select_next_some() => {
-                        self.process_test_command(command).await
-                    }
-                    round = round_timeout_sender_rx.select_next_some() => {
-                        monitor!("process_local_timeout", self.process_local_timeout(round).await)
-                    }
-                    round = proposal_timeout_sender_rx.select_next_some() => {
-                        monitor!("process_proposal_timeout", self.process_proposal_timeout(round).await)
-                    }
-                    round = new_round_timeout_sender_rx.select_next_some() => {
-                        monitor!("process_new_round_timeout", self.process_new_round_timeout(round).await)
-                    }
-                    msg = network_receivers.consensus_messages.select_next_some() => {
-                        let (peer, msg) = (msg.0, msg.1);
-                        monitor!("process_message", self.process_message(peer, msg).await.with_context(|| format!("from peer: {}", peer)))
-                    }
-                    block_retrieval = network_receivers.block_retrieval.select_next_some() => {
-                        monitor!("process_block_retrieval", self.process_block_retrieval(block_retrieval).await)
-                    }
+            let result = select_biased! {
+                command = test_command_receiver.select_next_some() => {
+                    self.process_test_command(command).await
                 }
-            );
+                round = round_timeout_sender_rx.select_next_some() => {
+                    self.process_local_timeout(round).await
+                }
+                round = proposal_timeout_sender_rx.select_next_some() => {
+                    self.process_proposal_timeout(round).await
+                }
+                round = new_round_timeout_sender_rx.select_next_some() => {
+                    self.process_new_round_timeout(round).await
+                }
+                msg = network_receivers.consensus_messages.select_next_some() => {
+                    let (peer, msg) = (msg.0, msg.1);
+                    self.process_message(peer, msg).await.with_context(|| format!("from peer: {}", peer))
+                }
+                block_retrieval = network_receivers.block_retrieval.select_next_some() => {
+                    self.process_block_retrieval(block_retrieval).await
+                }
+            };
             let round_state =
                 if let RoundProcessor::Normal(p) = self.processor_mut() {
                     Some(p.round_state())
@@ -798,17 +760,9 @@ impl EpochManager {
             match result {
                 Ok(_) => diem_trace!(RoundStateLogSchema::new(round_state)),
                 Err(e) => {
-                    counters::ERROR_COUNT.inc();
                     diem_error!(error = ?e, kind = error_kind(&e), RoundStateLogSchema::new(round_state));
                 }
             }
-
-            // Continually capture the time of consensus process to ensure that
-            // clock skew between validators is reasonable and to
-            // find any unusual (possibly byzantine) clock behavior.
-            counters::OP_COUNTERS
-                .gauge("time_since_epoch_ms")
-                .set(duration_since_epoch().as_millis() as i64);
         }
     }
 }

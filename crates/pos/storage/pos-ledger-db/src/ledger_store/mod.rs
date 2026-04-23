@@ -374,6 +374,16 @@ impl LedgerStore {
         )
     }
 
+    /// Persists `pos_state` under `block_hash` and updates the
+    /// `latest_pos_state` cache iff `pos_state.current_view()` strictly
+    /// exceeds the cached view.
+    ///
+    /// Invariant relied on by `EpochManager::latest_epoch_state`: BFT commits
+    /// are serialised and `current_view` is strictly monotonic across commits
+    /// (including across epoch boundaries), so every committed `pos_state`
+    /// replaces the cache. After a commit returns, a reader calling
+    /// `get_latest_pos_state` is guaranteed to observe the just-committed
+    /// `EpochState`.
     pub fn put_pos_state(
         &self, block_hash: &HashValue, pos_state: PosState, cs: &mut ChangeSet,
     ) -> Result<()> {
@@ -408,10 +418,6 @@ impl LedgerStore {
                 ))
                 .into()
             })
-    }
-
-    pub fn get_root_hash(&self, version: Version) -> Result<HashValue> {
-        Accumulator::get_root_hash(self, version + 1)
     }
 
     pub fn get_latest_pos_state(&self) -> Arc<PosState> {
