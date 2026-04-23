@@ -40,10 +40,6 @@ pub trait PersistentLivenessStorage: Send + Sync {
     /// Persist consensus' state
     fn save_vote(&self, vote: &Vote) -> Result<()>;
 
-    /// Construct data that can be recovered from ledger
-    #[allow(dead_code)]
-    fn recover_from_ledger(&self) -> LedgerRecoveryData;
-
     /// Construct necessary data to start consensus.
     fn start(&self) -> LivenessStorageData;
 
@@ -325,18 +321,6 @@ impl PersistentLivenessStorage for StorageWriteProxy {
 
     fn save_vote(&self, vote: &Vote) -> Result<()> {
         Ok(self.db.save_vote(bcs::to_bytes(vote)?)?)
-    }
-
-    fn recover_from_ledger(&self) -> LedgerRecoveryData {
-        let startup_info = self
-            .pos_ledger_db
-            .get_startup_info(true)
-            .expect("unable to read ledger info from storage")
-            .expect("startup info is None");
-
-        LedgerRecoveryData::new(
-            startup_info.latest_ledger_info.ledger_info().clone(),
-        )
     }
 
     fn start(&self) -> LivenessStorageData {

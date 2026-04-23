@@ -25,9 +25,6 @@ pub struct ConsensusConfig {
     // Timeout for consensus to get an ack from mempool after sending a
     // commit notification for committed transactions (in milliseconds).
     pub mempool_commit_timeout_ms: u64,
-    // Timeout for consensus to get an ack from mempool for executed
-    // transactions (in milliseconds)
-    pub mempool_executed_txn_timeout_ms: u64,
     // Timeout for consensus to pull transactions from mempool and get a
     // response (in milliseconds)
     pub mempool_txn_pull_timeout_ms: u64,
@@ -57,7 +54,6 @@ impl Default for ConsensusConfig {
             max_pruned_blocks_in_mem: 100,
             mempool_commit_timeout_ms: 5000,
             mempool_txn_pull_timeout_ms: 5000,
-            mempool_executed_txn_timeout_ms: 1000,
             // TODO(lpl): Decide value.
             // 60 epochs should have been generated in 4 minutes.
             round_initial_timeout_ms: 60_000,

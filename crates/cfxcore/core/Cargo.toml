@@ -83,7 +83,6 @@ diem-config = { workspace = true }
 diem-crypto = { workspace = true }
 diem-infallible = { workspace = true }
 diem-logger = { workspace = true }
-diem-metrics = { workspace = true }
 diem-types = { workspace = true }
 executor-types = { workspace = true }
 executor = { workspace = true }

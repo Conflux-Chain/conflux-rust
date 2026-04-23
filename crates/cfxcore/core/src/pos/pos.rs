@@ -36,7 +36,6 @@ use diem_types::{
     term_state::NodeID,
     transaction::SignedTransaction,
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
-    PeerId,
 };
 use executor::db_bootstrapper::maybe_bootstrap;
 use futures::channel::{
@@ -117,17 +116,6 @@ pub fn start_pos_consensus(
     // Let's now log some important information, since the logger is set up
     diem_info!(config = config, "Loaded Pos config");
 
-    /*if config.metrics.enabled {
-        for network in &config.full_node_networks {
-            let peer_id = network.peer_id();
-            setup_metrics(peer_id, &config);
-        }
-
-        if let Some(network) = config.validator_network.as_ref() {
-            let peer_id = network.peer_id();
-            setup_metrics(peer_id, &config);
-        }
-    }*/
     if fail::has_failpoints() {
         diem_warn!("Failpoints is enabled");
         if let Some(failpoints) = &config.failpoints {
@@ -153,15 +141,6 @@ pub fn start_pos_consensus(
     )
 }
 
-#[allow(unused)]
-fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
-    diem_metrics::dump_all_metrics_to_file_periodically(
-        &config.metrics.dir(),
-        &format!("{}.metrics", peer_id),
-        config.metrics.collection_interval_ms,
-    );
-}
-
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     protocol_config: ProtocolConfiguration,
@@ -172,29 +151,11 @@ pub fn setup_pos_environment(
     test_command_receiver: channel::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> PosDropHandle {
-    // TODO(lpl): Handle port conflict.
-    // let metrics_port = node_config.debug_interface.metrics_server_port;
-    // let metric_host = node_config.debug_interface.address.clone();
-    // thread::spawn(move || {
-    //     metric_server::start_server(metric_host, metrics_port, false)
-    // });
-    // let public_metrics_port =
-    //     node_config.debug_interface.public_metrics_server_port;
-    // let public_metric_host = node_config.debug_interface.address.clone();
-    // thread::spawn(move || {
-    //     metric_server::start_server(
-    //         public_metric_host,
-    //         public_metrics_port,
-    //         true,
-    //     )
-    // });
-
     let mut instant = Instant::now();
     let (pos_ledger_db, db_rw) = DbReaderWriter::wrap(
         PosLedgerDB::open(
             &node_config.storage.dir(),
             false, /* readonly */
-            node_config.storage.prune_window,
             node_config.storage.rocksdb_config,
         )
         .expect("DB should open."),

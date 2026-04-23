@@ -192,8 +192,7 @@ impl PosHandler {
             self.conf.pos_initial_nodes_path.as_str(),
         )?;
         let network = self.network.lock().take().expect("pos not initialized");
-        let (test_command_sender, test_command_receiver) =
-            channel::new_test(1024);
+        let (test_command_sender, test_command_receiver) = channel::new(1024);
 
         pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
             author: from_consensus_public_key(

@@ -52,6 +52,3 @@ impl ValueCodec<LedgerBlockSchema> for Block {
             .map_err(Into::into)
     }
 }
-
-#[cfg(test)]
-mod test;

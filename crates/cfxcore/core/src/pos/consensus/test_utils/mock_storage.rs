@@ -202,17 +202,13 @@ impl PersistentLivenessStorage for MockStorage {
         Ok(())
     }
 
-    fn recover_from_ledger(&self) -> LedgerRecoveryData {
-        self.get_ledger_recovery_data()
-    }
-
     fn start(&self) -> LivenessStorageData {
         match self.try_start() {
             Ok(recovery_data) => {
                 LivenessStorageData::RecoveryData(recovery_data)
             }
             Err(_) => LivenessStorageData::LedgerRecoveryData(
-                self.recover_from_ledger(),
+                self.get_ledger_recovery_data(),
             ),
         }
     }
@@ -255,14 +251,10 @@ impl PersistentLivenessStorage for EmptyStorage {
 
     fn save_vote(&self, _: &Vote) -> Result<()> { Ok(()) }
 
-    fn recover_from_ledger(&self) -> LedgerRecoveryData {
-        LedgerRecoveryData::new(LedgerInfo::mock_genesis(None))
-    }
-
     fn start(&self) -> LivenessStorageData {
         match RecoveryData::new(
             None,
-            self.recover_from_ledger(),
+            LedgerRecoveryData::new(LedgerInfo::mock_genesis(None)),
             vec![],
             RootMetadata::new_empty(),
             vec![],

@@ -14,7 +14,6 @@ use diem_logger::{prelude::*, Schema};
 use diem_types::validator_verifier::ValidatorVerifier;
 
 use crate::pos::consensus::{
-    counters,
     pending_votes::{PendingVotes, VoteReceptionResult},
     util::time_service::{SendTask, TimeService},
 };
@@ -210,13 +209,6 @@ impl RoundState {
         proposal_timeout_sender: channel::Sender<(u64, Round)>,
         new_round_timeout_sender: channel::Sender<(u64, Round)>,
     ) -> Self {
-        // Our counters are initialized lazily, so they're not going to appear
-        // in Prometheus if some conditions never happen. Invoking get()
-        // function enforces creation.
-        counters::QC_ROUNDS_COUNT.get();
-        counters::TIMEOUT_ROUNDS_COUNT.get();
-        counters::TIMEOUT_COUNT.get();
-
         Self {
             time_interval,
             highest_committed_round: 0,
@@ -244,7 +236,6 @@ impl RoundState {
     /// timeout and return true. Otherwise ignore and return false.
     pub fn process_local_timeout(&mut self, epoch_round: (u64, Round)) -> bool {
         diem_info!(round = epoch_round.1, "Local timeout");
-        counters::TIMEOUT_COUNT.inc();
         self.setup_timeout(epoch_round.0);
         true
     }
