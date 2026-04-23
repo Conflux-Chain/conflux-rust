@@ -5,7 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::error::{MempoolError, StateSyncError};
+use super::error::MempoolError;
 use anyhow::Result;
 use consensus_types::{block::Block, common::Payload};
 use diem_crypto::HashValue;
@@ -52,13 +52,4 @@ pub trait StateComputer: Send + Sync {
         &self, block_ids: Vec<HashValue>,
         finality_proof: LedgerInfoWithSignatures,
     ) -> Result<(), ExecutionError>;
-
-    /// Best effort state synchronization to the given target LedgerInfo.
-    /// In case of success (`Result::Ok`) the LI of storage is at the given
-    /// target. In case of failure (`Result::Error`) the LI of storage
-    /// remains unchanged, and the validator can assume there were no
-    /// modifications to the storage made.
-    async fn sync_to(
-        &self, target: LedgerInfoWithSignatures,
-    ) -> Result<(), StateSyncError>;
 }

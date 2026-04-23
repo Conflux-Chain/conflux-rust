@@ -9,8 +9,6 @@ use crate::pos::consensus::{
     block_storage::{BlockReader, BlockStore},
     logging::{LogEvent, LogSchema},
     network::{ConsensusMsg, ConsensusNetworkSender},
-    persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
-    state_replication::StateComputer,
 };
 use anyhow::{bail, format_err};
 use consensus_types::{
@@ -26,7 +24,7 @@ use diem_types::{
     ledger_info::LedgerInfoWithSignatures,
 };
 use rand::{prelude::*, rng};
-use std::{clone::Clone, sync::Arc, time::Duration};
+use std::{clone::Clone, time::Duration};
 
 pub const BLOCK_FETCH_BATCH_MAX_SIZE: u64 = 60;
 
@@ -184,51 +182,6 @@ impl BlockStore {
         }
 
         self.insert_single_quorum_cert(qc)
-    }
-
-    pub async fn fast_forward_sync<'a>(
-        highest_commit_cert: &'a QuorumCert, retriever: &'a mut BlockRetriever,
-        storage: Arc<dyn PersistentLivenessStorage>,
-        state_computer: Arc<dyn StateComputer>,
-    ) -> anyhow::Result<RecoveryData> {
-        diem_debug!(
-            LogSchema::new(LogEvent::StateSync)
-                .remote_peer(retriever.preferred_peer),
-            "Start state sync with peer to block: {}",
-            highest_commit_cert.commit_info(),
-        );
-
-        let blocks = retriever
-            .retrieve_block_for_qc(&highest_commit_cert, 3)
-            .await?;
-        assert_eq!(
-            blocks.last().expect("should have 3-chain").id(),
-            highest_commit_cert.commit_info().id(),
-        );
-        let mut quorum_certs = vec![];
-        quorum_certs.push(highest_commit_cert.clone());
-        quorum_certs.extend(
-            blocks
-                .iter()
-                .take(2)
-                .map(|block| block.quorum_cert().clone()),
-        );
-        for (i, block) in blocks.iter().enumerate() {
-            assert_eq!(block.id(), quorum_certs[i].certified_block().id());
-        }
-
-        // If a node restarts in the middle of state synchronization, it is
-        // going to try to catch up to the stored quorum certs as the
-        // new root.
-        storage.save_tree(blocks.clone(), quorum_certs.clone())?;
-        state_computer
-            .sync_to(highest_commit_cert.ledger_info().clone())
-            .await?;
-        let recovery_data = storage.start().expect_recovery_data(
-            "Failed to construct recovery data after fast forward sync",
-        );
-
-        Ok(recovery_data)
     }
 }
 
