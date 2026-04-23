@@ -145,9 +145,7 @@ impl TransactionStore {
 
     /// Handles transaction commit: deletes the transaction and cleans up
     /// its entries in the timeline and TTL indexes.
-    pub(crate) fn commit_transaction(
-        &mut self, _account: &AccountAddress, hash: HashValue,
-    ) {
+    pub(crate) fn commit_transaction(&mut self, hash: HashValue) {
         let mut txns_log = TxnsLog::new();
         if let Some(transaction) = self.transactions.remove(&hash) {
             txns_log.add(transaction.get_sender(), transaction.get_hash());
@@ -169,31 +167,6 @@ impl TransactionStore {
             }
         }
         diem_debug!(LogSchema::new(LogEntry::CleanCommittedTxn).txns(txns_log));
-    }
-
-    pub(crate) fn reject_transaction(
-        &mut self, account: &AccountAddress, _hash: HashValue,
-    ) {
-        let mut txns_log = TxnsLog::new();
-        let mut hashes = Vec::new();
-        for txn in self.transactions.iter() {
-            if txn.get_sender() == *account {
-                txns_log.add(txn.get_sender(), txn.get_hash());
-                hashes.push(txn.get_hash());
-            }
-        }
-        for txn in self.transactions.iter_pivot_decision() {
-            if txn.get_sender() == *account {
-                txns_log.add(txn.get_sender(), txn.get_hash());
-                hashes.push(txn.get_hash());
-            }
-        }
-        for hash in hashes {
-            if let Some(txn) = self.transactions.remove(&hash) {
-                self.index_remove(&txn);
-            }
-        }
-        diem_debug!(LogSchema::new(LogEntry::CleanRejectedTxn).txns(txns_log));
     }
 
     /// Removes transaction from all indexes.

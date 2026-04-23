@@ -5,17 +5,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::pos::mempool::{
-    ConsensusRequest, ConsensusResponse, TransactionExclusion,
-};
+use crate::pos::mempool::{ConsensusRequest, TransactionExclusion};
 
 use super::{error::MempoolError, state_replication::TxnManager};
 use anyhow::Result;
-use consensus_types::{block::Block, common::Payload};
+use consensus_types::common::Payload;
 use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use diem_types::validator_verifier::ValidatorVerifier;
-use executor_types::StateComputeResult;
 use fail::fail_point;
 use futures::channel::{mpsc, oneshot};
 use std::time::Duration;
@@ -54,13 +51,13 @@ impl MempoolProxy {
         parent_block_id: HashValue, validators: ValidatorVerifier,
     ) -> Result<Payload, MempoolError> {
         let (callback, callback_rcv) = oneshot::channel();
-        let req = ConsensusRequest::GetBlockRequest(
-            max_size,
-            exclude_txns.clone(),
+        let req = ConsensusRequest {
+            max_block_size: max_size,
+            exclude_txns,
             parent_block_id,
             validators,
             callback,
-        );
+        };
         // send to shared mempool
         self.consensus_to_mempool_sender
             .clone()
@@ -78,13 +75,9 @@ impl MempoolProxy {
             )
             .into()),
             Ok(resp) => {
-                match resp.map_err(|e| anyhow::anyhow!("{:?}", e))?? {
-                    ConsensusResponse::GetBlockResponse(txns) => Ok(txns),
-                    _ => Err(anyhow::anyhow!(
-                        "[consensus] did not receive expected GetBlockResponse"
-                    )
-                    .into()),
-                }
+                let response =
+                    resp.map_err(|e| anyhow::anyhow!("{:?}", e))??;
+                Ok(response.txns)
             }
         }
     }
@@ -133,13 +126,5 @@ impl TxnManager for MempoolProxy {
             "Pull txn from mempool"
         );
         Ok(txns)
-    }
-
-    // TODO: reject txns. Conflux-PoS never populates the reject list
-    // today, so `notify` is a no-op.
-    async fn notify(
-        &self, _block: &Block, _compute_results: &StateComputeResult,
-    ) -> Result<(), MempoolError> {
-        Ok(())
     }
 }

@@ -464,7 +464,6 @@ impl EpochManager {
             proposal_generator,
             self.safety_rules.clone(),
             network_sender,
-            self.txn_manager.clone(),
             self.storage.clone(),
             self.config.sync_only,
             self.tx_sender.clone(),
