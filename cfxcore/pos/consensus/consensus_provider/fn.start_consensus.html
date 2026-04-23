@@ -2,7 +2,7 @@
     node_config: &amp;<a class="struct" href="../../../../diem_config/config/struct.NodeConfig.html" title="struct diem_config::config::NodeConfig">NodeConfig</a>,
     network_sender: <a class="struct" href="../../protocol/network_sender/struct.NetworkSender.html" title="struct cfxcore::pos::protocol::network_sender::NetworkSender">NetworkSender</a>,
     network_receiver: NetworkReceivers,
-    consensus_to_mempool_sender: Sender&lt;<a class="enum" href="../../mempool/enum.ConsensusRequest.html" title="enum cfxcore::pos::mempool::ConsensusRequest">ConsensusRequest</a>&gt;,
+    consensus_to_mempool_sender: Sender&lt;<a class="struct" href="../../mempool/struct.ConsensusRequest.html" title="struct cfxcore::pos::mempool::ConsensusRequest">ConsensusRequest</a>&gt;,
     mempool_commit_sender: Sender&lt;<a class="struct" href="../../mempool/struct.CommitNotification.html" title="struct cfxcore::pos::mempool::CommitNotification">CommitNotification</a>&gt;,
     mempool_commit_timeout_ms: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
     pos_ledger_db: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;dyn <a class="trait" href="../../../../storage_interface/trait.DbReader.html" title="trait storage_interface::DbReader">DbReader</a>&gt;,

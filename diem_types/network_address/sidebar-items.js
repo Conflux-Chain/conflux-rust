@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["IpFilter","ParseError","Protocol"],"fn":["parse_dns_tcp","parse_handshake","parse_ip_tcp","parse_memory","parse_tcp"],"struct":["DnsName","EmptyError","NetworkAddress"]};
