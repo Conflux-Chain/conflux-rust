@@ -638,7 +638,7 @@ impl CfxRpcServer for CfxHandler {
         consensus_graph
             .get_height_from_epoch_number(epoch_num.into())
             .map(|h| h.into())
-            .map_err(|e| into_rpc_err(e.to_string()))
+            .map_err(|e| invalid_params_rpc_err(e, None::<()>))
     }
 
     async fn balance(
