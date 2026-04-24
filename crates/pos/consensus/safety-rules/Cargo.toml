@@ -18,6 +18,7 @@ diem-crypto = { workspace = true }
 diem-global-constants = { workspace = true }
 diem-logger = { workspace = true }
 diem-secure-storage = { workspace = true }
+diem-temppath = { workspace = true }
 diem-types = { workspace = true }
 serde = { version = "1.0.124", default-features = false }
 thiserror = { workspace = true }
@@ -25,7 +26,6 @@ log = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
-tempfile = { workspace = true }
 proptest = { workspace = true }
 
 consensus-types = { workspace = true, features = ["fuzzing"] }

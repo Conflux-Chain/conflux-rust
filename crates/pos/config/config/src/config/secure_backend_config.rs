@@ -5,7 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use diem_secure_storage::{OnDiskStorage, Storage};
+use diem_secure_storage::OnDiskStorage;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -41,8 +41,8 @@ impl OnDiskStorageConfig {
     }
 }
 
-impl From<&OnDiskStorageConfig> for Storage {
+impl From<&OnDiskStorageConfig> for OnDiskStorage {
     fn from(config: &OnDiskStorageConfig) -> Self {
-        Storage::from(OnDiskStorage::new(config.path()))
+        OnDiskStorage::new(config.path())
     }
 }

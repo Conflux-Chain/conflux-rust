@@ -34,12 +34,9 @@ pub fn create_safety_rules(
     >,
     export_consensus_key: bool,
 ) -> SafetyRules {
-    use diem_secure_storage::{KVStorage, Storage};
-    use std::convert::TryInto;
+    use diem_secure_storage::{KVStorage, OnDiskStorage};
 
-    let backend = &config.backend;
-    let internal_storage: Storage =
-        backend.try_into().expect("Unable to initialize storage");
+    let internal_storage: OnDiskStorage = (&config.backend).into();
     if let Err(error) = internal_storage.available() {
         panic!("Storage is not available: {:?}", error);
     }

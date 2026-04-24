@@ -17,14 +17,18 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-/// OnDiskStorage represents a key value store that is persisted to the local
-/// filesystem and is intended for single threads (or must be wrapped by a
-/// Arc<RwLock<>>). This provides no permission checks and simply offers a proof
-/// of concept to unblock building of applications without more complex data
-/// stores. Internally, it reads and writes all data to a file, which means that
-/// it must make copies of all key material which violates the Diem code base.
-/// It violates it because the anticipation is that data stores would securely
-/// handle key material. This should not be used in production.
+/// A key-value store persisted to a single JSON file.
+///
+/// The file is the source of truth: `get` reads it on every call and `set`
+/// rewrites it atomically (temp file + rename). Callers that need a fast
+/// per-read path cache one layer up (see
+/// `PersistentSafetyStorage::cached_safety_data`).
+///
+/// Tradeoffs inherited from Diem's non-Vault path:
+/// - No OS-level permission gating — relies on the file's Unix permissions.
+/// - Key material is held in plaintext in process memory — not an HSM.
+///
+/// Not thread-safe on its own; callers wrap it in `Arc<RwLock<_>>`.
 pub struct OnDiskStorage {
     file_path: PathBuf,
     temp_path: TempPath,
@@ -36,8 +40,8 @@ impl OnDiskStorage {
             File::create(&file_path).expect("Unable to create storage");
         }
 
-        // The parent will be one when only a filename is supplied. Therefore
-        // use the current working directory provided by PathBuf::new().
+        // The parent will be empty when only a filename is supplied; fall back
+        // to the current working directory.
         let file_dir = file_path
             .parent()
             .map_or(PathBuf::new(), |p| p.to_path_buf());
@@ -48,6 +52,8 @@ impl OnDiskStorage {
         }
     }
 
+    pub fn file_path(&self) -> &PathBuf { &self.file_path }
+
     fn read(&self) -> Result<HashMap<String, Value>, Error> {
         let mut file = File::open(&self.file_path)?;
         let mut contents = String::new();
@@ -55,8 +61,7 @@ impl OnDiskStorage {
         if contents.is_empty() {
             return Ok(HashMap::new());
         }
-        let data = serde_json::from_str(&contents)?;
-        Ok(data)
+        Ok(serde_json::from_str(&contents)?)
     }
 
     fn write(&self, data: &HashMap<String, Value>) -> Result<(), Error> {
@@ -66,8 +71,6 @@ impl OnDiskStorage {
         fs::rename(&self.temp_path, &self.file_path)?;
         Ok(())
     }
-
-    pub fn file_path(&self) -> &PathBuf { &self.file_path }
 }
 
 impl KVStorage for OnDiskStorage {
