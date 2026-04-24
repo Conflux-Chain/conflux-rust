@@ -12,10 +12,10 @@
 <a href=#12 id=12 data-nosnippet>12</a>        notify_subscribers, SharedMempool, SharedMempoolNotification,
 <a href=#13 id=13 data-nosnippet>13</a>    },
 <a href=#14 id=14 data-nosnippet>14</a>};
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>diem_infallible::Mutex;
-<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>diem_logger::prelude::<span class="kw-2">*</span>;
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>diem_types::transaction::SignedTransaction;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>network::node_table::NodeId;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>diem_logger::prelude::<span class="kw-2">*</span>;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>diem_types::transaction::SignedTransaction;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>network::node_table::NodeId;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>parking_lot::Mutex;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>serde::{Deserialize, Serialize};
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>std::{
 <a href=#21 id=21 data-nosnippet>21</a>    collections::{BTreeMap, BTreeSet, HashMap},

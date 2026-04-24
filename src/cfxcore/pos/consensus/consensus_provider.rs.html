@@ -49,72 +49,71 @@
 <a href=#49 id=49 data-nosnippet>49</a>        SignedTransaction,
 <a href=#50 id=50 data-nosnippet>50</a>        oneshot::Sender&lt;anyhow::Result&lt;SubmissionStatus&gt;&gt;,
 <a href=#51 id=51 data-nosnippet>51</a>    )&gt;,
-<a href=#52 id=52 data-nosnippet>52</a>    test_command_receiver: channel::Receiver&lt;TestCommand&gt;,
-<a href=#53 id=53 data-nosnippet>53</a>    started_as_voter: bool,
-<a href=#54 id=54 data-nosnippet>54</a>) -&gt; (Runtime, Arc&lt;PowHandler&gt;, Arc&lt;AtomicBool&gt;, Arc&lt;ConsensusDB&gt;) {
-<a href=#55 id=55 data-nosnippet>55</a>    <span class="kw">let </span>stopped = Arc::new(AtomicBool::new(<span class="bool-val">false</span>));
-<a href=#56 id=56 data-nosnippet>56</a>    <span class="kw">let </span>runtime = runtime::Builder::new_multi_thread()
-<a href=#57 id=57 data-nosnippet>57</a>        .thread_name(<span class="string">"consensus"</span>)
-<a href=#58 id=58 data-nosnippet>58</a>        .enable_all()
-<a href=#59 id=59 data-nosnippet>59</a>        <span class="comment">// TODO(lpl): This is for debugging.
-<a href=#60 id=60 data-nosnippet>60</a>        </span>.worker_threads(<span class="number">4</span>)
-<a href=#61 id=61 data-nosnippet>61</a>        .build()
-<a href=#62 id=62 data-nosnippet>62</a>        .expect(<span class="string">"Failed to create Tokio runtime!"</span>);
-<a href=#63 id=63 data-nosnippet>63</a>    <span class="kw">let </span>storage = Arc::new(StorageWriteProxy::new(node_config, pos_ledger_db));
-<a href=#64 id=64 data-nosnippet>64</a>    <span class="kw">let </span>consensus_db = storage.consensus_db();
-<a href=#65 id=65 data-nosnippet>65</a>    <span class="kw">let </span>txn_manager = Arc::new(MempoolProxy::new(
-<a href=#66 id=66 data-nosnippet>66</a>        consensus_to_mempool_sender,
-<a href=#67 id=67 data-nosnippet>67</a>        node_config.consensus.mempool_poll_count,
-<a href=#68 id=68 data-nosnippet>68</a>        node_config.consensus.mempool_txn_pull_timeout_ms,
-<a href=#69 id=69 data-nosnippet>69</a>    ));
-<a href=#70 id=70 data-nosnippet>70</a>    <span class="kw">let </span>pow_handler = Arc::new(PowHandler::new(
-<a href=#71 id=71 data-nosnippet>71</a>        runtime.handle().clone(),
-<a href=#72 id=72 data-nosnippet>72</a>        consensus_db.clone(),
-<a href=#73 id=73 data-nosnippet>73</a>    ));
-<a href=#74 id=74 data-nosnippet>74</a>    <span class="kw">let </span>executor = Box::new(Executor::new(
-<a href=#75 id=75 data-nosnippet>75</a>        db_with_cache,
-<a href=#76 id=76 data-nosnippet>76</a>        pow_handler.clone(),
-<a href=#77 id=77 data-nosnippet>77</a>        consensus_db.clone() <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>LedgerBlockRW&gt;,
-<a href=#78 id=78 data-nosnippet>78</a>    ));
-<a href=#79 id=79 data-nosnippet>79</a>    <span class="kw">let </span>state_computer = Arc::new(ExecutionProxy::new(
-<a href=#80 id=80 data-nosnippet>80</a>        executor,
-<a href=#81 id=81 data-nosnippet>81</a>        mempool_commit_sender,
-<a href=#82 id=82 data-nosnippet>82</a>        mempool_commit_timeout_ms,
-<a href=#83 id=83 data-nosnippet>83</a>    ));
-<a href=#84 id=84 data-nosnippet>84</a>    <span class="kw">let </span>time_service =
-<a href=#85 id=85 data-nosnippet>85</a>        Arc::new(ClockTimeService::new(runtime.handle().clone()));
-<a href=#86 id=86 data-nosnippet>86</a>
-<a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">let </span>(timeout_sender, timeout_receiver) = channel::new(<span class="number">1_024</span>);
-<a href=#88 id=88 data-nosnippet>88</a>    <span class="kw">let </span>(proposal_timeout_sender, proposal_timeout_receiver) =
-<a href=#89 id=89 data-nosnippet>89</a>        channel::new(<span class="number">1_024</span>);
-<a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">let </span>(new_round_timeout_sender, new_round_timeout_receiver) =
-<a href=#91 id=91 data-nosnippet>91</a>        channel::new(<span class="number">1_024</span>);
-<a href=#92 id=92 data-nosnippet>92</a>
-<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">let </span>epoch_mgr = EpochManager::new(
-<a href=#94 id=94 data-nosnippet>94</a>        node_config,
-<a href=#95 id=95 data-nosnippet>95</a>        time_service,
-<a href=#96 id=96 data-nosnippet>96</a>        network_sender,
-<a href=#97 id=97 data-nosnippet>97</a>        timeout_sender,
-<a href=#98 id=98 data-nosnippet>98</a>        proposal_timeout_sender,
-<a href=#99 id=99 data-nosnippet>99</a>        new_round_timeout_sender,
-<a href=#100 id=100 data-nosnippet>100</a>        txn_manager,
-<a href=#101 id=101 data-nosnippet>101</a>        state_computer,
-<a href=#102 id=102 data-nosnippet>102</a>        storage,
-<a href=#103 id=103 data-nosnippet>103</a>        pow_handler.clone(),
-<a href=#104 id=104 data-nosnippet>104</a>        author,
-<a href=#105 id=105 data-nosnippet>105</a>        tx_sender,
-<a href=#106 id=106 data-nosnippet>106</a>        started_as_voter,
-<a href=#107 id=107 data-nosnippet>107</a>    );
-<a href=#108 id=108 data-nosnippet>108</a>
-<a href=#109 id=109 data-nosnippet>109</a>    runtime.spawn(epoch_mgr.start(
-<a href=#110 id=110 data-nosnippet>110</a>        timeout_receiver,
-<a href=#111 id=111 data-nosnippet>111</a>        proposal_timeout_receiver,
-<a href=#112 id=112 data-nosnippet>112</a>        new_round_timeout_receiver,
-<a href=#113 id=113 data-nosnippet>113</a>        network_receiver,
-<a href=#114 id=114 data-nosnippet>114</a>        test_command_receiver,
-<a href=#115 id=115 data-nosnippet>115</a>        stopped.clone(),
-<a href=#116 id=116 data-nosnippet>116</a>    ));
-<a href=#117 id=117 data-nosnippet>117</a>
-<a href=#118 id=118 data-nosnippet>118</a>    <span class="macro">diem_debug!</span>(<span class="string">"Consensus started."</span>);
-<a href=#119 id=119 data-nosnippet>119</a>    (runtime, pow_handler, stopped, consensus_db)
-<a href=#120 id=120 data-nosnippet>120</a>}</code></pre></div></section></main></body></html>
+<a href=#52 id=52 data-nosnippet>52</a>    test_command_receiver: mpsc::Receiver&lt;TestCommand&gt;, started_as_voter: bool,
+<a href=#53 id=53 data-nosnippet>53</a>) -&gt; (Runtime, Arc&lt;PowHandler&gt;, Arc&lt;AtomicBool&gt;, Arc&lt;ConsensusDB&gt;) {
+<a href=#54 id=54 data-nosnippet>54</a>    <span class="kw">let </span>stopped = Arc::new(AtomicBool::new(<span class="bool-val">false</span>));
+<a href=#55 id=55 data-nosnippet>55</a>    <span class="kw">let </span>runtime = runtime::Builder::new_multi_thread()
+<a href=#56 id=56 data-nosnippet>56</a>        .thread_name(<span class="string">"consensus"</span>)
+<a href=#57 id=57 data-nosnippet>57</a>        .enable_all()
+<a href=#58 id=58 data-nosnippet>58</a>        <span class="comment">// TODO(lpl): This is for debugging.
+<a href=#59 id=59 data-nosnippet>59</a>        </span>.worker_threads(<span class="number">4</span>)
+<a href=#60 id=60 data-nosnippet>60</a>        .build()
+<a href=#61 id=61 data-nosnippet>61</a>        .expect(<span class="string">"Failed to create Tokio runtime!"</span>);
+<a href=#62 id=62 data-nosnippet>62</a>    <span class="kw">let </span>storage = Arc::new(StorageWriteProxy::new(node_config, pos_ledger_db));
+<a href=#63 id=63 data-nosnippet>63</a>    <span class="kw">let </span>consensus_db = storage.consensus_db();
+<a href=#64 id=64 data-nosnippet>64</a>    <span class="kw">let </span>txn_manager = Arc::new(MempoolProxy::new(
+<a href=#65 id=65 data-nosnippet>65</a>        consensus_to_mempool_sender,
+<a href=#66 id=66 data-nosnippet>66</a>        node_config.consensus.mempool_poll_count,
+<a href=#67 id=67 data-nosnippet>67</a>        node_config.consensus.mempool_txn_pull_timeout_ms,
+<a href=#68 id=68 data-nosnippet>68</a>    ));
+<a href=#69 id=69 data-nosnippet>69</a>    <span class="kw">let </span>pow_handler = Arc::new(PowHandler::new(
+<a href=#70 id=70 data-nosnippet>70</a>        runtime.handle().clone(),
+<a href=#71 id=71 data-nosnippet>71</a>        consensus_db.clone(),
+<a href=#72 id=72 data-nosnippet>72</a>    ));
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">let </span>executor = Box::new(Executor::new(
+<a href=#74 id=74 data-nosnippet>74</a>        db_with_cache,
+<a href=#75 id=75 data-nosnippet>75</a>        pow_handler.clone(),
+<a href=#76 id=76 data-nosnippet>76</a>        consensus_db.clone() <span class="kw">as </span>Arc&lt;<span class="kw">dyn </span>LedgerBlockRW&gt;,
+<a href=#77 id=77 data-nosnippet>77</a>    ));
+<a href=#78 id=78 data-nosnippet>78</a>    <span class="kw">let </span>state_computer = Arc::new(ExecutionProxy::new(
+<a href=#79 id=79 data-nosnippet>79</a>        executor,
+<a href=#80 id=80 data-nosnippet>80</a>        mempool_commit_sender,
+<a href=#81 id=81 data-nosnippet>81</a>        mempool_commit_timeout_ms,
+<a href=#82 id=82 data-nosnippet>82</a>    ));
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="kw">let </span>time_service =
+<a href=#84 id=84 data-nosnippet>84</a>        Arc::new(ClockTimeService::new(runtime.handle().clone()));
+<a href=#85 id=85 data-nosnippet>85</a>
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="kw">let </span>(timeout_sender, timeout_receiver) = mpsc::channel(<span class="number">1_024</span>);
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">let </span>(proposal_timeout_sender, proposal_timeout_receiver) =
+<a href=#88 id=88 data-nosnippet>88</a>        mpsc::channel(<span class="number">1_024</span>);
+<a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">let </span>(new_round_timeout_sender, new_round_timeout_receiver) =
+<a href=#90 id=90 data-nosnippet>90</a>        mpsc::channel(<span class="number">1_024</span>);
+<a href=#91 id=91 data-nosnippet>91</a>
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">let </span>epoch_mgr = EpochManager::new(
+<a href=#93 id=93 data-nosnippet>93</a>        node_config,
+<a href=#94 id=94 data-nosnippet>94</a>        time_service,
+<a href=#95 id=95 data-nosnippet>95</a>        network_sender,
+<a href=#96 id=96 data-nosnippet>96</a>        timeout_sender,
+<a href=#97 id=97 data-nosnippet>97</a>        proposal_timeout_sender,
+<a href=#98 id=98 data-nosnippet>98</a>        new_round_timeout_sender,
+<a href=#99 id=99 data-nosnippet>99</a>        txn_manager,
+<a href=#100 id=100 data-nosnippet>100</a>        state_computer,
+<a href=#101 id=101 data-nosnippet>101</a>        storage,
+<a href=#102 id=102 data-nosnippet>102</a>        pow_handler.clone(),
+<a href=#103 id=103 data-nosnippet>103</a>        author,
+<a href=#104 id=104 data-nosnippet>104</a>        tx_sender,
+<a href=#105 id=105 data-nosnippet>105</a>        started_as_voter,
+<a href=#106 id=106 data-nosnippet>106</a>    );
+<a href=#107 id=107 data-nosnippet>107</a>
+<a href=#108 id=108 data-nosnippet>108</a>    runtime.spawn(epoch_mgr.start(
+<a href=#109 id=109 data-nosnippet>109</a>        timeout_receiver,
+<a href=#110 id=110 data-nosnippet>110</a>        proposal_timeout_receiver,
+<a href=#111 id=111 data-nosnippet>111</a>        new_round_timeout_receiver,
+<a href=#112 id=112 data-nosnippet>112</a>        network_receiver,
+<a href=#113 id=113 data-nosnippet>113</a>        test_command_receiver,
+<a href=#114 id=114 data-nosnippet>114</a>        stopped.clone(),
+<a href=#115 id=115 data-nosnippet>115</a>    ));
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="macro">diem_debug!</span>(<span class="string">"Consensus started."</span>);
+<a href=#118 id=118 data-nosnippet>118</a>    (runtime, pow_handler, stopped, consensus_db)
+<a href=#119 id=119 data-nosnippet>119</a>}</code></pre></div></section></main></body></html>

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":["InputTooShortError","ShortHexStr"],"trait":["AsShortHexStr"]};

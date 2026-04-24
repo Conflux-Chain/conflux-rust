@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["duration_since_epoch"],"macro":["NonZeroUsize","checked"],"struct":["ArithmeticError","Mutex","MutexGuard","RwLock","RwLockReadGuard","RwLockWriteGuard"]};

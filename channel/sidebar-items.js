@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["new"],"mod":["diem_channel","message_queues"],"struct":["Receiver","Sender"]};
+window.SIDEBAR_ITEMS = {"mod":["diem_channel","message_queues"]};

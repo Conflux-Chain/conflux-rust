@@ -15,13 +15,13 @@
 <a href=#15 id=15 data-nosnippet>15</a>    common::{Author, Round},
 <a href=#16 id=16 data-nosnippet>16</a>    quorum_cert::QuorumCert,
 <a href=#17 id=17 data-nosnippet>17</a>};
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>diem_infallible::Mutex;
-<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>diem_logger::{debug <span class="kw">as </span>diem_debug, error <span class="kw">as </span>diem_error};
-<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>diem_types::{
-<a href=#21 id=21 data-nosnippet>21</a>    transaction::{RawTransaction, SignedTransaction, TransactionPayload},
-<a href=#22 id=22 data-nosnippet>22</a>    validator_config::ConsensusPrivateKey,
-<a href=#23 id=23 data-nosnippet>23</a>    validator_verifier::ValidatorVerifier,
-<a href=#24 id=24 data-nosnippet>24</a>};
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>diem_logger::{debug <span class="kw">as </span>diem_debug, error <span class="kw">as </span>diem_error};
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>diem_types::{
+<a href=#20 id=20 data-nosnippet>20</a>    transaction::{RawTransaction, SignedTransaction, TransactionPayload},
+<a href=#21 id=21 data-nosnippet>21</a>    validator_config::ConsensusPrivateKey,
+<a href=#22 id=22 data-nosnippet>22</a>    validator_verifier::ValidatorVerifier,
+<a href=#23 id=23 data-nosnippet>23</a>};
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>parking_lot::Mutex;
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>pow_types::PowInterface;
 <a href=#26 id=26 data-nosnippet>26</a>
 <a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span><span class="kw">crate</span>::pos::consensus::{

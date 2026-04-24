@@ -43,19 +43,19 @@
 <a href=#43 id=43 data-nosnippet>43</a>};
 <a href=#44 id=44 data-nosnippet>44</a><span class="kw">use </span>diem_config::config::{ConsensusConfig, ConsensusProposerType, NodeConfig};
 <a href=#45 id=45 data-nosnippet>45</a><span class="kw">use </span>diem_crypto::HashValue;
-<a href=#46 id=46 data-nosnippet>46</a><span class="kw">use </span>diem_infallible::RwLock;
-<a href=#47 id=47 data-nosnippet>47</a><span class="kw">use </span>diem_logger::prelude::<span class="kw-2">*</span>;
-<a href=#48 id=48 data-nosnippet>48</a><span class="kw">use </span>diem_types::{
-<a href=#49 id=49 data-nosnippet>49</a>    account_address::AccountAddress,
-<a href=#50 id=50 data-nosnippet>50</a>    block_info::PivotBlockDecision,
-<a href=#51 id=51 data-nosnippet>51</a>    epoch_change::EpochChangeProof,
-<a href=#52 id=52 data-nosnippet>52</a>    epoch_state::EpochState,
-<a href=#53 id=53 data-nosnippet>53</a>    transaction::{SignedTransaction, TransactionPayload},
-<a href=#54 id=54 data-nosnippet>54</a>};
-<a href=#55 id=55 data-nosnippet>55</a><span class="kw">use </span>futures::{
-<a href=#56 id=56 data-nosnippet>56</a>    channel::{mpsc, oneshot},
-<a href=#57 id=57 data-nosnippet>57</a>    select_biased, StreamExt,
-<a href=#58 id=58 data-nosnippet>58</a>};
+<a href=#46 id=46 data-nosnippet>46</a><span class="kw">use </span>diem_logger::prelude::<span class="kw-2">*</span>;
+<a href=#47 id=47 data-nosnippet>47</a><span class="kw">use </span>diem_types::{
+<a href=#48 id=48 data-nosnippet>48</a>    account_address::AccountAddress,
+<a href=#49 id=49 data-nosnippet>49</a>    block_info::PivotBlockDecision,
+<a href=#50 id=50 data-nosnippet>50</a>    epoch_change::EpochChangeProof,
+<a href=#51 id=51 data-nosnippet>51</a>    epoch_state::EpochState,
+<a href=#52 id=52 data-nosnippet>52</a>    transaction::{SignedTransaction, TransactionPayload},
+<a href=#53 id=53 data-nosnippet>53</a>};
+<a href=#54 id=54 data-nosnippet>54</a><span class="kw">use </span>futures::{
+<a href=#55 id=55 data-nosnippet>55</a>    channel::{mpsc, oneshot},
+<a href=#56 id=56 data-nosnippet>56</a>    select_biased, StreamExt,
+<a href=#57 id=57 data-nosnippet>57</a>};
+<a href=#58 id=58 data-nosnippet>58</a><span class="kw">use </span>parking_lot::RwLock;
 <a href=#59 id=59 data-nosnippet>59</a><span class="kw">use </span>pow_types::PowInterface;
 <a href=#60 id=60 data-nosnippet>60</a><span class="kw">use </span>safety_rules::SafetyRules;
 <a href=#61 id=61 data-nosnippet>61</a><span class="kw">use </span>std::{
@@ -98,11 +98,11 @@
 <a href=#98 id=98 data-nosnippet>98</a>    author: Author,
 <a href=#99 id=99 data-nosnippet>99</a>    config: ConsensusConfig,
 <a href=#100 id=100 data-nosnippet>100</a>    time_service: Arc&lt;<span class="kw">dyn </span>TimeService&gt;,
-<a href=#101 id=101 data-nosnippet>101</a>    <span class="comment">//self_sender: channel::Sender&lt;Event&lt;ConsensusMsg&gt;&gt;,
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="comment">//self_sender: mpsc::Sender&lt;Event&lt;ConsensusMsg&gt;&gt;,
 <a href=#102 id=102 data-nosnippet>102</a>    </span>network_sender: NetworkSender,
-<a href=#103 id=103 data-nosnippet>103</a>    timeout_sender: channel::Sender&lt;(u64, Round)&gt;,
-<a href=#104 id=104 data-nosnippet>104</a>    proposal_timeout_sender: channel::Sender&lt;(u64, Round)&gt;,
-<a href=#105 id=105 data-nosnippet>105</a>    new_round_timeout_sender: channel::Sender&lt;(u64, Round)&gt;,
+<a href=#103 id=103 data-nosnippet>103</a>    timeout_sender: mpsc::Sender&lt;(u64, Round)&gt;,
+<a href=#104 id=104 data-nosnippet>104</a>    proposal_timeout_sender: mpsc::Sender&lt;(u64, Round)&gt;,
+<a href=#105 id=105 data-nosnippet>105</a>    new_round_timeout_sender: mpsc::Sender&lt;(u64, Round)&gt;,
 <a href=#106 id=106 data-nosnippet>106</a>    txn_manager: Arc&lt;<span class="kw">dyn </span>TxnManager&gt;,
 <a href=#107 id=107 data-nosnippet>107</a>    state_computer: Arc&lt;<span class="kw">dyn </span>StateComputer&gt;,
 <a href=#108 id=108 data-nosnippet>108</a>    storage: Arc&lt;<span class="kw">dyn </span>PersistentLivenessStorage&gt;,
@@ -122,11 +122,11 @@
 <a href=#122 id=122 data-nosnippet>122</a>    <span class="kw">pub fn </span>new(
 <a href=#123 id=123 data-nosnippet>123</a>        node_config: <span class="kw-2">&amp;</span>NodeConfig,
 <a href=#124 id=124 data-nosnippet>124</a>        time_service: Arc&lt;<span class="kw">dyn </span>TimeService&gt;,
-<a href=#125 id=125 data-nosnippet>125</a>        <span class="comment">//self_sender: channel::Sender&lt;Event&lt;ConsensusMsg&gt;&gt;,
+<a href=#125 id=125 data-nosnippet>125</a>        <span class="comment">//self_sender: mpsc::Sender&lt;Event&lt;ConsensusMsg&gt;&gt;,
 <a href=#126 id=126 data-nosnippet>126</a>        </span>network_sender: NetworkSender,
-<a href=#127 id=127 data-nosnippet>127</a>        timeout_sender: channel::Sender&lt;(u64, Round)&gt;,
-<a href=#128 id=128 data-nosnippet>128</a>        proposal_timeout_sender: channel::Sender&lt;(u64, Round)&gt;,
-<a href=#129 id=129 data-nosnippet>129</a>        new_round_timeout_sender: channel::Sender&lt;(u64, Round)&gt;,
+<a href=#127 id=127 data-nosnippet>127</a>        timeout_sender: mpsc::Sender&lt;(u64, Round)&gt;,
+<a href=#128 id=128 data-nosnippet>128</a>        proposal_timeout_sender: mpsc::Sender&lt;(u64, Round)&gt;,
+<a href=#129 id=129 data-nosnippet>129</a>        new_round_timeout_sender: mpsc::Sender&lt;(u64, Round)&gt;,
 <a href=#130 id=130 data-nosnippet>130</a>        txn_manager: Arc&lt;<span class="kw">dyn </span>TxnManager&gt;,
 <a href=#131 id=131 data-nosnippet>131</a>        state_computer: Arc&lt;<span class="kw">dyn </span>StateComputer&gt;,
 <a href=#132 id=132 data-nosnippet>132</a>        storage: Arc&lt;<span class="kw">dyn </span>PersistentLivenessStorage&gt;,
@@ -178,9 +178,9 @@
 <a href=#178 id=178 data-nosnippet>178</a>
 <a href=#179 id=179 data-nosnippet>179</a>    <span class="kw">fn </span>create_round_state(
 <a href=#180 id=180 data-nosnippet>180</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, time_service: Arc&lt;<span class="kw">dyn </span>TimeService&gt;,
-<a href=#181 id=181 data-nosnippet>181</a>        timeout_sender: channel::Sender&lt;(u64, Round)&gt;,
-<a href=#182 id=182 data-nosnippet>182</a>        proposal_timeout_sender: channel::Sender&lt;(u64, Round)&gt;,
-<a href=#183 id=183 data-nosnippet>183</a>        new_round_timeout_sender: channel::Sender&lt;(u64, Round)&gt;, epoch: u64,
+<a href=#181 id=181 data-nosnippet>181</a>        timeout_sender: mpsc::Sender&lt;(u64, Round)&gt;,
+<a href=#182 id=182 data-nosnippet>182</a>        proposal_timeout_sender: mpsc::Sender&lt;(u64, Round)&gt;,
+<a href=#183 id=183 data-nosnippet>183</a>        new_round_timeout_sender: mpsc::Sender&lt;(u64, Round)&gt;, epoch: u64,
 <a href=#184 id=184 data-nosnippet>184</a>    ) -&gt; RoundState {
 <a href=#185 id=185 data-nosnippet>185</a>        <span class="comment">// 1.5^6 ~= 11
 <a href=#186 id=186 data-nosnippet>186</a>        // Timeout goes from initial_timeout to initial_timeout*11 in 6 steps
@@ -715,11 +715,11 @@
 <a href=#715 id=715 data-nosnippet>715</a>    }
 <a href=#716 id=716 data-nosnippet>716</a>
 <a href=#717 id=717 data-nosnippet>717</a>    <span class="kw">pub async fn </span>start(
-<a href=#718 id=718 data-nosnippet>718</a>        <span class="kw-2">mut </span><span class="self">self</span>, <span class="kw-2">mut </span>round_timeout_sender_rx: channel::Receiver&lt;(u64, Round)&gt;,
-<a href=#719 id=719 data-nosnippet>719</a>        <span class="kw-2">mut </span>proposal_timeout_sender_rx: channel::Receiver&lt;(u64, Round)&gt;,
-<a href=#720 id=720 data-nosnippet>720</a>        <span class="kw-2">mut </span>new_round_timeout_sender_rx: channel::Receiver&lt;(u64, Round)&gt;,
+<a href=#718 id=718 data-nosnippet>718</a>        <span class="kw-2">mut </span><span class="self">self</span>, <span class="kw-2">mut </span>round_timeout_sender_rx: mpsc::Receiver&lt;(u64, Round)&gt;,
+<a href=#719 id=719 data-nosnippet>719</a>        <span class="kw-2">mut </span>proposal_timeout_sender_rx: mpsc::Receiver&lt;(u64, Round)&gt;,
+<a href=#720 id=720 data-nosnippet>720</a>        <span class="kw-2">mut </span>new_round_timeout_sender_rx: mpsc::Receiver&lt;(u64, Round)&gt;,
 <a href=#721 id=721 data-nosnippet>721</a>        <span class="kw-2">mut </span>network_receivers: NetworkReceivers,
-<a href=#722 id=722 data-nosnippet>722</a>        <span class="kw-2">mut </span>test_command_receiver: channel::Receiver&lt;TestCommand&gt;,
+<a href=#722 id=722 data-nosnippet>722</a>        <span class="kw-2">mut </span>test_command_receiver: mpsc::Receiver&lt;TestCommand&gt;,
 <a href=#723 id=723 data-nosnippet>723</a>        stopped: Arc&lt;AtomicBool&gt;,
 <a href=#724 id=724 data-nosnippet>724</a>    ) {
 <a href=#725 id=725 data-nosnippet>725</a>        <span class="self">self</span>.start_processor_with_epoch_state(<span class="self">self</span>.latest_epoch_state())
