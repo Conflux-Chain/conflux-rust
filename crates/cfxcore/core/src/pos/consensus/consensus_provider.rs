@@ -20,7 +20,7 @@ use storage_interface::DbReader;
 
 use crate::pos::{
     mempool::{ConsensusRequest, SubmissionStatus},
-    pos::PosRuntimeKeys,
+    pos::{PosChainParams, PosNodeKeys},
     pow_handler::PowHandler,
     protocol::network_sender::NetworkSender,
 };
@@ -43,7 +43,8 @@ pub fn start_consensus(
         crate::pos::mempool::CommitNotification,
     >,
     mempool_commit_timeout_ms: u64, pos_ledger_db: Arc<dyn DbReader>,
-    db_with_cache: Arc<CachedPosLedgerDB>, pos_keys: PosRuntimeKeys,
+    db_with_cache: Arc<CachedPosLedgerDB>, node_keys: PosNodeKeys,
+    chain_params: PosChainParams,
     tx_sender: mpsc::Sender<(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
@@ -99,7 +100,8 @@ pub fn start_consensus(
         state_computer,
         storage,
         pow_handler.clone(),
-        pos_keys,
+        node_keys,
+        chain_params,
         tx_sender,
         started_as_voter,
     );

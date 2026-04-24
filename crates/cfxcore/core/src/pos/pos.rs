@@ -61,16 +61,26 @@ use tokio::runtime::Runtime;
 const AC_SMP_CHANNEL_BUFFER_SIZE: usize = 1_024;
 const INTRA_NODE_CHANNEL_BUFFER_SIZE: usize = 1;
 
-/// Runtime keys and parameters that used to live inside `NodeConfig` but are
-/// always overwritten at startup from the main Conflux TOML / network. They
-/// live here (not in `NodeConfig`) so the YAML never looks like it controls
-/// them.
-pub struct PosRuntimeKeys {
+/// This validator's identity and signing secrets.
+///
+/// These used to live inside `SafetyRulesConfig.test` / `.vrf_private_key`,
+/// but they are supplied by the Conflux-side TOML and have nothing to do
+/// with per-chain parameters.
+pub struct PosNodeKeys {
     pub author: AccountAddress,
     pub consensus_private_key: ConsensusPrivateKey,
     pub vrf_private_key: ConsensusVRFPrivateKey,
-    pub vrf_proposal_threshold: U256,
+}
+
+/// Chain-wide PoS consensus parameters that every validator must agree on.
+///
+/// These used to live inside `ConsensusConfig.chain_id` /
+/// `SafetyRulesConfig.vrf_proposal_threshold`, but they are not per-operator
+/// choices — they're constants of the chain, derived from the network (for
+/// `chain_id`) or fixed by protocol (for `vrf_proposal_threshold`).
+pub struct PosChainParams {
     pub chain_id: ChainId,
+    pub vrf_proposal_threshold: U256,
 }
 
 pub struct PosDropHandle {
@@ -90,8 +100,8 @@ pub struct PosDropHandle {
 
 pub fn start_pos_consensus(
     config: &NodeConfig, network: Arc<NetworkService>,
-    protocol_config: ProtocolConfiguration, pos_keys: PosRuntimeKeys,
-    pos_genesis_state: GenesisPosState,
+    protocol_config: ProtocolConfiguration, node_keys: PosNodeKeys,
+    chain_params: PosChainParams, pos_genesis_state: GenesisPosState,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
     test_command_receiver: mpsc::Receiver<TestCommand>,
@@ -143,7 +153,8 @@ pub fn start_pos_consensus(
         &config,
         network,
         protocol_config,
-        pos_keys,
+        node_keys,
+        chain_params,
         pos_genesis_state,
         consensus_network_receiver,
         mempool_network_receiver,
@@ -154,8 +165,8 @@ pub fn start_pos_consensus(
 
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
-    protocol_config: ProtocolConfiguration, pos_keys: PosRuntimeKeys,
-    pos_genesis_state: GenesisPosState,
+    protocol_config: ProtocolConfiguration, node_keys: PosNodeKeys,
+    chain_params: PosChainParams, pos_genesis_state: GenesisPosState,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
     test_command_receiver: mpsc::Receiver<TestCommand>,
@@ -226,7 +237,7 @@ pub fn setup_pos_environment(
 
     // Initialize and start consensus.
     instant = Instant::now();
-    debug!("pos author: {:?}", pos_keys.author);
+    debug!("pos author: {:?}", node_keys.author);
     let (consensus_runtime, pow_handler, stopped, consensus_db) =
         start_consensus(
             node_config,
@@ -237,7 +248,8 @@ pub fn setup_pos_environment(
             node_config.consensus.mempool_commit_timeout_ms,
             pos_ledger_db.clone(),
             db_with_cache.clone(),
-            pos_keys,
+            node_keys,
+            chain_params,
             mp_client_sender.clone(),
             test_command_receiver,
             protocol_config.pos_started_as_voter,

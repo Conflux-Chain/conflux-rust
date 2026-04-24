@@ -34,7 +34,7 @@ use super::{
 use crate::pos::{
     consensus::{liveness::vrf_proposer_election::VrfProposer, TestCommand},
     mempool::SubmissionStatus,
-    pos::PosRuntimeKeys,
+    pos::{PosChainParams, PosNodeKeys},
     protocol::network_sender::NetworkSender,
 };
 use anyhow::{anyhow, bail, ensure, Context};
@@ -142,7 +142,8 @@ impl EpochManager {
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
         pow_handler: Arc<dyn PowInterface>,
-        pos_keys: PosRuntimeKeys,
+        node_keys: PosNodeKeys,
+        chain_params: PosChainParams,
         tx_sender: mpsc::Sender<(
             SignedTransaction,
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
@@ -151,13 +152,15 @@ impl EpochManager {
     ) -> Self {
         let config = node_config.consensus.clone();
         let sr_config = &node_config.consensus.safety_rules;
-        let PosRuntimeKeys {
+        let PosNodeKeys {
             author,
             consensus_private_key,
             vrf_private_key,
-            vrf_proposal_threshold,
+        } = node_keys;
+        let PosChainParams {
             chain_id,
-        } = pos_keys;
+            vrf_proposal_threshold,
+        } = chain_params;
         let safety_rules = safety_rules::create_safety_rules(
             sr_config,
             author,

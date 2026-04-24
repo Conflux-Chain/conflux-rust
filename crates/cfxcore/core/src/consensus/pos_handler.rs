@@ -31,7 +31,9 @@ use crate::{
             NetworkReceivers as MemPoolNetworkReceivers,
             NetworkTask as MempoolNetworkTask,
         },
-        pos::{start_pos_consensus, PosDropHandle, PosRuntimeKeys},
+        pos::{
+            start_pos_consensus, PosChainParams, PosDropHandle, PosNodeKeys,
+        },
         protocol::sync_protocol::HotStuffSynchronizationProtocol,
     },
     sync::ProtocolConfiguration,
@@ -195,22 +197,25 @@ impl PosHandler {
         let (test_command_sender, test_command_receiver) =
             futures_mpsc::channel(1024);
 
-        let pos_keys = PosRuntimeKeys {
+        let node_keys = PosNodeKeys {
             author: from_consensus_public_key(
                 &self.conf.bls_key.public_key(),
                 &self.conf.vrf_key.public_key(),
             ),
             consensus_private_key: self.conf.bls_key.private_key(),
             vrf_private_key: self.conf.vrf_key.private_key(),
-            vrf_proposal_threshold: self.conf.vrf_proposal_threshold,
+        };
+        let chain_params = PosChainParams {
             chain_id: ChainId::new(network.network_id()),
+            vrf_proposal_threshold: self.conf.vrf_proposal_threshold,
         };
 
         let pos_drop_handle = start_pos_consensus(
             &pos_config,
             network,
             self.conf.protocol_conf.clone(),
-            pos_keys,
+            node_keys,
+            chain_params,
             pos_genesis,
             self.consensus_network_receiver
                 .lock()
