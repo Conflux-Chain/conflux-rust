@@ -28,14 +28,16 @@ use crate::{
 };
 
 use cached_pos_ledger_db::CachedPosLedgerDB;
+use cfx_types::U256;
 use diem_config::config::NodeConfig;
 use diem_logger::{prelude::*, Writer};
 use diem_types::{
-    account_address::{from_consensus_public_key, AccountAddress},
+    account_address::AccountAddress,
     block_info::PivotBlockDecision,
+    chain_id::ChainId,
     term_state::NodeID,
     transaction::SignedTransaction,
-    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
+    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use executor::db_bootstrapper::maybe_bootstrap;
 use futures::channel::{
@@ -59,6 +61,18 @@ use tokio::runtime::Runtime;
 const AC_SMP_CHANNEL_BUFFER_SIZE: usize = 1_024;
 const INTRA_NODE_CHANNEL_BUFFER_SIZE: usize = 1;
 
+/// Runtime keys and parameters that used to live inside `NodeConfig` but are
+/// always overwritten at startup from the main Conflux TOML / network. They
+/// live here (not in `NodeConfig`) so the YAML never looks like it controls
+/// them.
+pub struct PosRuntimeKeys {
+    pub author: AccountAddress,
+    pub consensus_private_key: ConsensusPrivateKey,
+    pub vrf_private_key: ConsensusVRFPrivateKey,
+    pub vrf_proposal_threshold: U256,
+    pub chain_id: ChainId,
+}
+
 pub struct PosDropHandle {
     // pow handler
     pub pow_handler: Arc<PowHandler>,
@@ -76,8 +90,7 @@ pub struct PosDropHandle {
 
 pub fn start_pos_consensus(
     config: &NodeConfig, network: Arc<NetworkService>,
-    protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
+    protocol_config: ProtocolConfiguration, pos_keys: PosRuntimeKeys,
     pos_genesis_state: GenesisPosState,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
@@ -130,7 +143,7 @@ pub fn start_pos_consensus(
         &config,
         network,
         protocol_config,
-        own_pos_public_key,
+        pos_keys,
         pos_genesis_state,
         consensus_network_receiver,
         mempool_network_receiver,
@@ -141,8 +154,7 @@ pub fn start_pos_consensus(
 
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
-    protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
+    protocol_config: ProtocolConfiguration, pos_keys: PosRuntimeKeys,
     pos_genesis_state: GenesisPosState,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
@@ -214,7 +226,7 @@ pub fn setup_pos_environment(
 
     // Initialize and start consensus.
     instant = Instant::now();
-    debug!("own_pos_public_key: {:?}", own_pos_public_key);
+    debug!("pos author: {:?}", pos_keys.author);
     let (consensus_runtime, pow_handler, stopped, consensus_db) =
         start_consensus(
             node_config,
@@ -225,12 +237,7 @@ pub fn setup_pos_environment(
             node_config.consensus.mempool_commit_timeout_ms,
             pos_ledger_db.clone(),
             db_with_cache.clone(),
-            own_pos_public_key.map_or_else(
-                || AccountAddress::random(),
-                |public_key| {
-                    from_consensus_public_key(&public_key.0, &public_key.1)
-                },
-            ),
+            pos_keys,
             mp_client_sender.clone(),
             test_command_receiver,
             protocol_config.pos_started_as_voter,

@@ -34,22 +34,29 @@ use super::{
 use crate::pos::{
     consensus::{liveness::vrf_proposer_election::VrfProposer, TestCommand},
     mempool::SubmissionStatus,
+    pos::PosRuntimeKeys,
     protocol::network_sender::NetworkSender,
 };
 use anyhow::{anyhow, bail, ensure, Context};
+use cfx_types::U256;
 use consensus_types::{
     common::{Author, Round},
     epoch_retrieval::EpochRetrievalRequest,
 };
-use diem_config::config::{ConsensusConfig, ConsensusProposerType, NodeConfig};
+use diem_config::{
+    config::{ConsensusConfig, ConsensusProposerType, NodeConfig},
+    keys::ConfigKey,
+};
 use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
     block_info::PivotBlockDecision,
+    chain_id::ChainId,
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     transaction::{SignedTransaction, TransactionPayload},
+    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use futures::{
     channel::{mpsc, oneshot},
@@ -97,6 +104,10 @@ impl LivenessStorageData {
 pub struct EpochManager {
     author: Author,
     config: ConsensusConfig,
+    consensus_private_key: ConsensusPrivateKey,
+    vrf_private_key: ConsensusVRFPrivateKey,
+    vrf_proposal_threshold: U256,
+    chain_id: ChainId,
     time_service: Arc<dyn TimeService>,
     //self_sender: mpsc::Sender<Event<ConsensusMsg>>,
     network_sender: NetworkSender,
@@ -131,7 +142,7 @@ impl EpochManager {
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
         pow_handler: Arc<dyn PowInterface>,
-        author: AccountAddress,
+        pos_keys: PosRuntimeKeys,
         tx_sender: mpsc::Sender<(
             SignedTransaction,
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
@@ -140,11 +151,28 @@ impl EpochManager {
     ) -> Self {
         let config = node_config.consensus.clone();
         let sr_config = &node_config.consensus.safety_rules;
-        let safety_rules = safety_rules::create_safety_rules(sr_config);
+        let PosRuntimeKeys {
+            author,
+            consensus_private_key,
+            vrf_private_key,
+            vrf_proposal_threshold,
+            chain_id,
+        } = pos_keys;
+        let safety_rules = safety_rules::create_safety_rules(
+            sr_config,
+            author,
+            consensus_private_key.clone(),
+            Some(vrf_private_key.clone()),
+            /* export_consensus_key */ true,
+        );
         diem_debug!("EpochManager.author={:?}", author);
         Self {
             author,
             config,
+            consensus_private_key,
+            vrf_private_key,
+            vrf_proposal_threshold,
+            chain_id,
             time_service,
             //self_sender,
             network_sender,
@@ -232,15 +260,8 @@ impl EpochManager {
             }
             ConsensusProposerType::VrfProposer => Box::new(VrfProposer::new(
                 self.author,
-                self.config
-                    .safety_rules
-                    .vrf_private_key
-                    .as_ref()
-                    .expect(
-                        "VRF private key mush be set for VRF leader election",
-                    )
-                    .private_key(),
-                self.config.safety_rules.vrf_proposal_threshold,
+                self.vrf_private_key.clone(),
+                self.vrf_proposal_threshold,
                 epoch_state.clone(),
             )),
         }
@@ -414,27 +435,15 @@ impl EpochManager {
         // proposers) and by event processor (to update their status).
         let proposal_generator =
             match epoch_state.verifier().get_public_key(&self.author) {
-                Some(_public_key) => {
-                    let private_key = self
-                        .config
-                        .safety_rules
-                        .test
-                        .as_ref()
-                        .expect("test config set")
-                        .consensus_key
-                        .as_ref()
-                        .expect("private key set in pos")
-                        .private_key();
-                    Some(ProposalGenerator::new(
-                        self.author,
-                        block_store.clone(),
-                        self.txn_manager.clone(),
-                        self.time_service.clone(),
-                        self.config.max_block_size,
-                        self.pow_handler.clone(),
-                        private_key,
-                    ))
-                }
+                Some(_public_key) => Some(ProposalGenerator::new(
+                    self.author,
+                    block_store.clone(),
+                    self.txn_manager.clone(),
+                    self.time_service.clone(),
+                    self.config.max_block_size,
+                    self.pow_handler.clone(),
+                    self.consensus_private_key.clone(),
+                )),
                 None => None,
             };
 
@@ -467,15 +476,11 @@ impl EpochManager {
             self.storage.clone(),
             self.config.sync_only,
             self.tx_sender.clone(),
-            self.config.chain_id,
+            self.chain_id,
             self.is_voting,
             self.election_control.clone(),
-            self.config
-                .safety_rules
-                .test
-                .as_ref()
-                .and_then(|config| config.consensus_key.clone()),
-            self.config.safety_rules.vrf_private_key.clone(),
+            Some(ConfigKey::new(self.consensus_private_key.clone())),
+            Some(ConfigKey::new(self.vrf_private_key.clone())),
         );
         processor.start(last_vote).await;
         self.processor = Some(RoundProcessor::Normal(processor));
@@ -850,16 +855,7 @@ impl EpochManager {
         &mut self, block_id: HashValue,
     ) -> anyhow::Result<()> {
         diem_debug!("force_vote_proposal: {:?}", block_id);
-        let bls_key = self
-            .config
-            .safety_rules
-            .test
-            .as_ref()
-            .expect("test config set")
-            .consensus_key
-            .as_ref()
-            .expect("private key set in pos")
-            .private_key();
+        let bls_key = self.consensus_private_key.clone();
         let author = self.author;
         match self.processor_mut() {
             RoundProcessor::Normal(p) => {
@@ -873,16 +869,7 @@ impl EpochManager {
         &mut self, round: Round, parent_block_id: HashValue,
         payload: Vec<TransactionPayload>,
     ) -> anyhow::Result<()> {
-        let bls_key = self
-            .config
-            .safety_rules
-            .test
-            .as_ref()
-            .expect("test config set")
-            .consensus_key
-            .as_ref()
-            .expect("private key set in pos")
-            .private_key();
+        let bls_key = self.consensus_private_key.clone();
         match self.processor_mut() {
             RoundProcessor::Normal(p) => {
                 p.force_propose(round, parent_block_id, payload, &bls_key)

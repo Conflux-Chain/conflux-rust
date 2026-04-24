@@ -12,7 +12,6 @@ mod crypto_storage;
 mod error;
 mod in_memory;
 mod kv_storage;
-mod namespaced_storage;
 mod on_disk;
 mod storage;
 
@@ -22,7 +21,6 @@ pub use crate::{
     error::Error,
     in_memory::InMemoryStorage,
     kv_storage::{GetResponse, KVStorage},
-    namespaced_storage::NamespacedStorage,
     on_disk::OnDiskStorage,
     storage::Storage,
 };

@@ -14,14 +14,13 @@ use cached_pos_ledger_db::CachedPosLedgerDB;
 use consensus_types::db::LedgerBlockRW;
 use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
-use diem_types::{
-    account_address::AccountAddress, transaction::SignedTransaction,
-};
+use diem_types::transaction::SignedTransaction;
 use executor::Executor;
 use storage_interface::DbReader;
 
 use crate::pos::{
     mempool::{ConsensusRequest, SubmissionStatus},
+    pos::PosRuntimeKeys,
     pow_handler::PowHandler,
     protocol::network_sender::NetworkSender,
 };
@@ -44,7 +43,7 @@ pub fn start_consensus(
         crate::pos::mempool::CommitNotification,
     >,
     mempool_commit_timeout_ms: u64, pos_ledger_db: Arc<dyn DbReader>,
-    db_with_cache: Arc<CachedPosLedgerDB>, author: AccountAddress,
+    db_with_cache: Arc<CachedPosLedgerDB>, pos_keys: PosRuntimeKeys,
     tx_sender: mpsc::Sender<(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
@@ -100,7 +99,7 @@ pub fn start_consensus(
         state_computer,
         storage,
         pow_handler.clone(),
-        author,
+        pos_keys,
         tx_sender,
         started_as_voter,
     );

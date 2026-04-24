@@ -5,51 +5,28 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{config::SecureBackend, keys::ConfigKey};
-use cfx_types::U256;
-use diem_types::{
-    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
-    PeerId,
-};
+use crate::config::OnDiskStorageConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SafetyRulesConfig {
-    pub backend: SecureBackend,
-    pub test: Option<SafetyRulesTestConfig>,
-    pub export_consensus_key: bool,
+    pub backend: OnDiskStorageConfig,
     pub enable_cached_safety_data: bool,
-
-    pub vrf_private_key: Option<ConfigKey<ConsensusVRFPrivateKey>>,
-    pub vrf_proposal_threshold: U256,
 }
 
 impl Default for SafetyRulesConfig {
     fn default() -> Self {
         Self {
-            backend: SecureBackend::OnDiskStorage(Default::default()),
-            test: None,
-            export_consensus_key: false,
+            backend: OnDiskStorageConfig::default(),
             enable_cached_safety_data: true,
-            vrf_private_key: None,
-            vrf_proposal_threshold: U256::MAX,
         }
     }
 }
 
 impl SafetyRulesConfig {
     pub fn set_data_dir(&mut self, data_dir: PathBuf) {
-        if let SecureBackend::OnDiskStorage(backend) = &mut self.backend {
-            backend.set_data_dir(data_dir);
-        }
+        self.backend.set_data_dir(data_dir);
     }
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct SafetyRulesTestConfig {
-    pub author: PeerId,
-    pub consensus_key: Option<ConfigKey<ConsensusPrivateKey>>,
-    pub execution_key: Option<ConfigKey<ConsensusPrivateKey>>,
 }

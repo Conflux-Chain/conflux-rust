@@ -5,28 +5,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use diem_secure_storage::{
-    InMemoryStorage, NamespacedStorage, OnDiskStorage, Storage,
-};
+use diem_secure_storage::{OnDiskStorage, Storage};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case", tag = "type")]
-pub enum SecureBackend {
-    InMemoryStorage,
-    OnDiskStorage(OnDiskStorageConfig),
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct OnDiskStorageConfig {
     // Required path for on disk storage
     pub path: PathBuf,
-    /// A namespace is an optional portion of the path to a key stored within
-    /// OnDiskStorage. For example, a key, S, without a namespace would be
-    /// available in S, with a namespace, N, it would be in N/S.
-    pub namespace: Option<String>,
     #[serde(skip)]
     data_dir: PathBuf,
 }
@@ -34,7 +21,6 @@ pub struct OnDiskStorageConfig {
 impl Default for OnDiskStorageConfig {
     fn default() -> Self {
         Self {
-            namespace: None,
             path: PathBuf::from("secure_storage.json"),
             data_dir: PathBuf::from("/opt/diem/data"),
         }
@@ -55,23 +41,8 @@ impl OnDiskStorageConfig {
     }
 }
 
-impl From<&SecureBackend> for Storage {
-    fn from(backend: &SecureBackend) -> Self {
-        match backend {
-            SecureBackend::InMemoryStorage => {
-                Storage::from(InMemoryStorage::new())
-            }
-            SecureBackend::OnDiskStorage(config) => {
-                let storage = Storage::from(OnDiskStorage::new(config.path()));
-                if let Some(namespace) = &config.namespace {
-                    Storage::from(NamespacedStorage::new(
-                        storage,
-                        namespace.clone(),
-                    ))
-                } else {
-                    storage
-                }
-            }
-        }
+impl From<&OnDiskStorageConfig> for Storage {
+    fn from(config: &OnDiskStorageConfig) -> Self {
+        Storage::from(OnDiskStorage::new(config.path()))
     }
 }

@@ -21,10 +21,6 @@ both `KVStorage` and `CryptoStorage`:
 - `InMemory`: A simple in-memory storage engine, primarily used for testing.
 - `OnDisk`: An on-disk storage engine backed by a single file on local disk.
 
-In addition, this crate also offers a `NamespacedStorage` wrapper around secure
-storage implementations. Using the NamespacedStorage wrapper, different entities
-can share the same secure storage instance under different namespaces.
-
 ## How is this module organized?
 ```
     secure/storage/

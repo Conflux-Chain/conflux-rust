@@ -7,7 +7,7 @@
 
 use crate::config::SafetyRulesConfig;
 use diem_types::{
-    account_address::AccountAddress, block_info::Round, chain_id::ChainId,
+    account_address::AccountAddress, block_info::Round,
     validator_verifier::ValidatorVerifier,
 };
 use serde::{Deserialize, Serialize};
@@ -41,8 +41,6 @@ pub struct ConsensusConfig {
     // how many times to wait for txns from mempool when propose
     pub mempool_poll_count: u64,
 
-    pub chain_id: ChainId,
-
     pub hardcoded_epoch_committee: BTreeMap<u64, ValidatorVerifier>,
 }
 
@@ -63,7 +61,6 @@ impl Default for ConsensusConfig {
             safety_rules: SafetyRulesConfig::default(),
             sync_only: false,
             mempool_poll_count: 1,
-            chain_id: Default::default(),
             hardcoded_epoch_committee: Default::default(),
         }
     }
