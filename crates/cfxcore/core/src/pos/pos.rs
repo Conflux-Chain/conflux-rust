@@ -81,11 +81,9 @@ pub fn start_pos_consensus(
     pos_genesis_state: GenesisPosState,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
-    test_command_receiver: channel::Receiver<TestCommand>,
+    test_command_receiver: mpsc::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> PosDropHandle {
-    crash_handler::setup_panic_handler();
-
     let mut logger = diem_logger::Logger::new();
     logger
         .channel_size(config.logger.chan_size)
@@ -148,7 +146,7 @@ pub fn setup_pos_environment(
     pos_genesis_state: GenesisPosState,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
-    test_command_receiver: channel::Receiver<TestCommand>,
+    test_command_receiver: mpsc::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> PosDropHandle {
     let mut instant = Instant::now();

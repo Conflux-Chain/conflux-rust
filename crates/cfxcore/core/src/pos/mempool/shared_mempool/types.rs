@@ -21,7 +21,6 @@ use anyhow::Result;
 use cached_pos_ledger_db::CachedPosLedgerDB;
 use diem_config::config::MempoolConfig;
 use diem_crypto::HashValue;
-use diem_infallible::{Mutex, RwLock};
 use diem_types::{
     account_address::AccountAddress, mempool_status::MempoolStatus,
     term_state::PosState, transaction::SignedTransaction,
@@ -36,6 +35,7 @@ use futures::{
     task::{Context, Poll},
 };
 use network::node_table::NodeId;
+use parking_lot::{Mutex, RwLock};
 use std::{fmt, pin::Pin, sync::Arc, task::Waker, time::Instant};
 use tokio::runtime::Handle;
 

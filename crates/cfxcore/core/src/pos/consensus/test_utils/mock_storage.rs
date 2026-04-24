@@ -18,11 +18,11 @@ use consensus_types::{
     timeout_certificate::TimeoutCertificate, vote::Vote,
 };
 use diem_crypto::HashValue;
-use diem_infallible::Mutex;
 use diem_types::{
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
     on_chain_config::ValidatorSet,
 };
+use parking_lot::Mutex;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,

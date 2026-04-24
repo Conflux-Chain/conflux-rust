@@ -47,7 +47,7 @@ prop_compose! {
         Block::new_proposal(
             vec![],
             round,
-            diem_infallible::duration_since_epoch().as_micros() as u64,
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("System time is before UNIX_EPOCH").as_micros() as u64,
             parent_qc,
             &signer,
         )
@@ -92,7 +92,7 @@ prop_compose! {
                     block.payload().unwrap().clone(),
                     block.author().unwrap(),
                     block.round(),
-                    diem_infallible::duration_since_epoch().as_micros() as u64,
+                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("System time is before UNIX_EPOCH").as_micros() as u64,
                     block.quorum_cert().clone(),
                 ),
                 signature: Some(block.signature().unwrap().clone()),

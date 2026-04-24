@@ -20,10 +20,8 @@ thiserror = "1.0.24"
 
 bcs = "0.1.2"
 diem-crypto = { workspace = true }
-diem-infallible = { workspace = true }
 diem-logger = { workspace = true }
 diem-temppath = { workspace = true }
-diem-time-service = { workspace = true }
 diem-types = { workspace = true }
 
 [dev-dependencies]

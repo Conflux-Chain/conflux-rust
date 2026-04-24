@@ -884,28 +884,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-stream"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad445822218ce64be7a341abfb0b1ea43b5c23aa83902542a4542e78309d8e5e"
-dependencies = [
- "async-stream-impl",
- "futures-core",
- "pin-project-lite",
-]
-
-[[package]]
-name = "async-stream-impl"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4655ae1a7b0cdf149156f780c5bf3f1352bc53cbd9e0a361a7ef7b22947e965"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "async-trait"
 version = "0.1.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1461,10 +1439,10 @@ dependencies = [
  "anyhow",
  "consensus-types",
  "diem-crypto",
- "diem-infallible",
  "diem-logger",
  "diem-types",
  "executor-types",
+ "parking_lot 0.12.1",
  "serde",
  "storage-interface",
 ]
@@ -2210,12 +2188,10 @@ dependencies = [
  "channel",
  "clap",
  "consensus-types",
- "crash-handler",
  "dag",
  "db",
  "diem-config",
  "diem-crypto",
- "diem-infallible",
  "diem-logger",
  "diem-temppath",
  "diem-types",
@@ -2228,6 +2204,7 @@ dependencies = [
  "geth-tracer",
  "hashbrown 0.7.2",
  "heap-map",
+ "hex",
  "hibitset",
  "itertools 0.14.0",
  "jsonrpc-core",
@@ -2270,7 +2247,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "short-hex-str",
  "siphasher 0.3.10",
  "slab",
  "smart-default",
@@ -2279,7 +2255,6 @@ dependencies = [
  "storage-interface",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "subscription-service",
  "thiserror 2.0.18",
  "threadpool",
  "throttling",
@@ -2416,9 +2391,9 @@ name = "channel"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "diem-infallible",
  "diem-types",
  "futures 0.3.30",
+ "parking_lot 0.12.1",
  "tokio",
 ]
 
@@ -2713,14 +2688,13 @@ dependencies = [
  "bcs",
  "diem-crypto",
  "diem-crypto-derive",
- "diem-infallible",
  "diem-types",
  "executor-types",
+ "hex",
  "mirai-annotations",
  "proptest",
  "rustc-hex",
  "serde",
- "short-hex-str",
 ]
 
 [[package]]
@@ -2811,16 +2785,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28d997bd5e24a5928dd43e46dc529867e207907fe0b239c3477d924f7f2ca320"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "crash-handler"
-version = "0.1.0"
-dependencies = [
- "backtrace",
- "diem-logger",
- "serde",
- "toml 0.5.11",
 ]
 
 [[package]]
@@ -3358,10 +3322,6 @@ name = "diem-global-constants"
 version = "0.1.0"
 
 [[package]]
-name = "diem-infallible"
-version = "0.1.0"
-
-[[package]]
 name = "diem-log-derive"
 version = "0.1.0"
 dependencies = [
@@ -3376,7 +3336,6 @@ version = "0.1.0"
 dependencies = [
  "backtrace",
  "chrono",
- "diem-infallible",
  "diem-log-derive",
  "erased-serde",
  "hostname",
@@ -3389,15 +3348,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "diem-proptest-helpers"
-version = "0.1.0"
-dependencies = [
- "crossbeam",
- "proptest",
- "proptest-derive",
-]
-
-[[package]]
 name = "diem-secure-storage"
 version = "0.1.0"
 dependencies = [
@@ -3405,10 +3355,8 @@ dependencies = [
  "bcs",
  "chrono",
  "diem-crypto",
- "diem-infallible",
  "diem-logger",
  "diem-temppath",
- "diem-time-service",
  "diem-types",
  "enum_dispatch",
  "rand 0.8.5",
@@ -3431,19 +3379,6 @@ version = "0.1.0"
 dependencies = [
  "hex",
  "rand 0.8.5",
-]
-
-[[package]]
-name = "diem-time-service"
-version = "0.1.0"
-dependencies = [
- "diem-infallible",
- "enum_dispatch",
- "futures 0.3.30",
- "pin-project",
- "thiserror 1.0.63",
- "tokio",
- "tokio-test",
 ]
 
 [[package]]
@@ -6977,9 +6912,7 @@ dependencies = [
  "byteorder",
  "diem-config",
  "diem-crypto",
- "diem-infallible",
  "diem-logger",
- "diem-proptest-helpers",
  "diem-temppath",
  "diem-types",
  "itertools 0.14.0",
@@ -8234,9 +8167,7 @@ dependencies = [
  "diem-config",
  "diem-crypto",
  "diem-global-constants",
- "diem-infallible",
  "diem-logger",
- "diem-proptest-helpers",
  "diem-secure-storage",
  "diem-types",
  "log",
@@ -8739,18 +8670,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
-name = "short-hex-str"
-version = "0.1.0"
-dependencies = [
- "hex",
- "mirai-annotations",
- "proptest",
- "serde",
- "static_assertions",
- "thiserror 1.0.63",
-]
-
-[[package]]
 name = "signal-hook-registry"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9096,15 +9015,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.114",
-]
-
-[[package]]
-name = "subscription-service"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "channel",
- "diem-types",
 ]
 
 [[package]]
@@ -9519,19 +9429,6 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-util 0.7.7",
-]
-
-[[package]]
-name = "tokio-test"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53474327ae5e166530d17f2d956afcb4f8a004de581b3cae10f12006bc8163e3"
-dependencies = [
- "async-stream",
- "bytes 1.11.1",
- "futures-core",
- "tokio",
- "tokio-stream",
 ]
 
 [[package]]

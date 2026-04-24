@@ -49,8 +49,7 @@ pub fn start_consensus(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
     )>,
-    test_command_receiver: channel::Receiver<TestCommand>,
-    started_as_voter: bool,
+    test_command_receiver: mpsc::Receiver<TestCommand>, started_as_voter: bool,
 ) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>, Arc<ConsensusDB>) {
     let stopped = Arc::new(AtomicBool::new(false));
     let runtime = runtime::Builder::new_multi_thread()
@@ -84,11 +83,11 @@ pub fn start_consensus(
     let time_service =
         Arc::new(ClockTimeService::new(runtime.handle().clone()));
 
-    let (timeout_sender, timeout_receiver) = channel::new(1_024);
+    let (timeout_sender, timeout_receiver) = mpsc::channel(1_024);
     let (proposal_timeout_sender, proposal_timeout_receiver) =
-        channel::new(1_024);
+        mpsc::channel(1_024);
     let (new_round_timeout_sender, new_round_timeout_receiver) =
-        channel::new(1_024);
+        mpsc::channel(1_024);
 
     let epoch_mgr = EpochManager::new(
         node_config,

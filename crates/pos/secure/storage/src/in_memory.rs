@@ -6,9 +6,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{CryptoKVStorage, Error, GetResponse, KVStorage};
-use diem_time_service::{TimeService, TimeServiceTrait};
 use serde::{de::DeserializeOwned, Serialize};
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 /// InMemoryStorage represents a key value store that is purely in memory and
 /// intended for single threads (or must be wrapped by a Arc<RwLock<>>). This
@@ -21,20 +23,10 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct InMemoryStorage {
     data: HashMap<String, Vec<u8>>,
-    time_service: TimeService,
 }
 
 impl InMemoryStorage {
-    pub fn new() -> Self { Self::new_with_time_service(TimeService::real()) }
-}
-
-impl InMemoryStorage {
-    pub fn new_with_time_service(time_service: TimeService) -> Self {
-        Self {
-            data: HashMap::new(),
-            time_service,
-        }
-    }
+    pub fn new() -> Self { Self::default() }
 }
 
 impl KVStorage for InMemoryStorage {
@@ -52,7 +44,10 @@ impl KVStorage for InMemoryStorage {
     }
 
     fn set<V: Serialize>(&mut self, key: &str, value: V) -> Result<(), Error> {
-        let now = self.time_service.now_secs();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH")
+            .as_secs();
         self.data.insert(
             key.to_string(),
             serde_json::to_vec(&GetResponse::new(value, now))?,

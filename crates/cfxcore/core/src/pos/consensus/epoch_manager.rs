@@ -43,7 +43,6 @@ use consensus_types::{
 };
 use diem_config::config::{ConsensusConfig, ConsensusProposerType, NodeConfig};
 use diem_crypto::HashValue;
-use diem_infallible::RwLock;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
@@ -56,6 +55,7 @@ use futures::{
     channel::{mpsc, oneshot},
     select_biased, StreamExt,
 };
+use parking_lot::RwLock;
 use pow_types::PowInterface;
 use safety_rules::SafetyRules;
 use std::{
@@ -98,11 +98,11 @@ pub struct EpochManager {
     author: Author,
     config: ConsensusConfig,
     time_service: Arc<dyn TimeService>,
-    //self_sender: channel::Sender<Event<ConsensusMsg>>,
+    //self_sender: mpsc::Sender<Event<ConsensusMsg>>,
     network_sender: NetworkSender,
-    timeout_sender: channel::Sender<(u64, Round)>,
-    proposal_timeout_sender: channel::Sender<(u64, Round)>,
-    new_round_timeout_sender: channel::Sender<(u64, Round)>,
+    timeout_sender: mpsc::Sender<(u64, Round)>,
+    proposal_timeout_sender: mpsc::Sender<(u64, Round)>,
+    new_round_timeout_sender: mpsc::Sender<(u64, Round)>,
     txn_manager: Arc<dyn TxnManager>,
     state_computer: Arc<dyn StateComputer>,
     storage: Arc<dyn PersistentLivenessStorage>,
@@ -122,11 +122,11 @@ impl EpochManager {
     pub fn new(
         node_config: &NodeConfig,
         time_service: Arc<dyn TimeService>,
-        //self_sender: channel::Sender<Event<ConsensusMsg>>,
+        //self_sender: mpsc::Sender<Event<ConsensusMsg>>,
         network_sender: NetworkSender,
-        timeout_sender: channel::Sender<(u64, Round)>,
-        proposal_timeout_sender: channel::Sender<(u64, Round)>,
-        new_round_timeout_sender: channel::Sender<(u64, Round)>,
+        timeout_sender: mpsc::Sender<(u64, Round)>,
+        proposal_timeout_sender: mpsc::Sender<(u64, Round)>,
+        new_round_timeout_sender: mpsc::Sender<(u64, Round)>,
         txn_manager: Arc<dyn TxnManager>,
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
@@ -178,9 +178,9 @@ impl EpochManager {
 
     fn create_round_state(
         &self, time_service: Arc<dyn TimeService>,
-        timeout_sender: channel::Sender<(u64, Round)>,
-        proposal_timeout_sender: channel::Sender<(u64, Round)>,
-        new_round_timeout_sender: channel::Sender<(u64, Round)>, epoch: u64,
+        timeout_sender: mpsc::Sender<(u64, Round)>,
+        proposal_timeout_sender: mpsc::Sender<(u64, Round)>,
+        new_round_timeout_sender: mpsc::Sender<(u64, Round)>, epoch: u64,
     ) -> RoundState {
         // 1.5^6 ~= 11
         // Timeout goes from initial_timeout to initial_timeout*11 in 6 steps
@@ -715,11 +715,11 @@ impl EpochManager {
     }
 
     pub async fn start(
-        mut self, mut round_timeout_sender_rx: channel::Receiver<(u64, Round)>,
-        mut proposal_timeout_sender_rx: channel::Receiver<(u64, Round)>,
-        mut new_round_timeout_sender_rx: channel::Receiver<(u64, Round)>,
+        mut self, mut round_timeout_sender_rx: mpsc::Receiver<(u64, Round)>,
+        mut proposal_timeout_sender_rx: mpsc::Receiver<(u64, Round)>,
+        mut new_round_timeout_sender_rx: mpsc::Receiver<(u64, Round)>,
         mut network_receivers: NetworkReceivers,
-        mut test_command_receiver: channel::Receiver<TestCommand>,
+        mut test_command_receiver: mpsc::Receiver<TestCommand>,
         stopped: Arc<AtomicBool>,
     ) {
         self.start_processor_with_epoch_state(self.latest_epoch_state())

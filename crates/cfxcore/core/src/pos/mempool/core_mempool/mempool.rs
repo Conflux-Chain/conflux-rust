@@ -61,7 +61,9 @@ impl Mempool {
         diem_trace!(LogSchema::new(LogEntry::AddTxn)
             .txns(TxnsLog::new_txn(txn.sender(), txn.hash())),);
 
-        let expiration_time = diem_infallible::duration_since_epoch()
+        let expiration_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH")
             + self.system_transaction_timeout;
 
         let txn_info =

@@ -6,7 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use diem_logger::prelude::*;
-use futures::{Future, FutureExt, SinkExt};
+use futures::{channel::mpsc, Future, FutureExt, SinkExt};
 use std::{pin::Pin, thread, time::Duration};
 
 use tokio::runtime::Handle;
@@ -65,7 +65,7 @@ pub trait ScheduledTask: Send {
 pub struct SendTask<T>
 where T: Send + 'static
 {
-    sender: Option<channel::Sender<T>>,
+    sender: Option<mpsc::Sender<T>>,
     message: Option<T>,
 }
 
@@ -73,9 +73,7 @@ impl<T> SendTask<T>
 where T: Send + 'static
 {
     /// Makes new SendTask for given sender and message and wraps it to Box
-    pub fn make(
-        sender: channel::Sender<T>, message: T,
-    ) -> Box<dyn ScheduledTask> {
+    pub fn make(sender: mpsc::Sender<T>, message: T) -> Box<dyn ScheduledTask> {
         Box::new(SendTask {
             sender: Some(sender),
             message: Some(message),
@@ -121,7 +119,9 @@ impl TimeService for ClockTimeService {
     }
 
     fn get_current_timestamp(&self) -> Duration {
-        diem_infallible::duration_since_epoch()
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH")
     }
 
     fn sleep(&self, t: Duration) { thread::sleep(t) }
