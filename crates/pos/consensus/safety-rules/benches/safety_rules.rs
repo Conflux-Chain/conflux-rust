@@ -8,9 +8,9 @@
 use consensus_types::block::block_test_utils;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use diem_secure_storage::OnDiskStorage;
-use diem_temppath::TempPath;
 use diem_types::validator_signer::ValidatorSigner;
 use safety_rules::{test_utils, PersistentSafetyStorage, SafetyRules};
+use tempfile::NamedTempFile;
 
 /// Execute an in order series of blocks (0 <- 1 <- 2 <- 3 and commit 0 and
 /// continue to rotate left, appending new blocks on the right, committing the
@@ -71,7 +71,11 @@ fn lsr(mut safety_rules: SafetyRules, signer: ValidatorSigner, n: u64) {
 
 fn on_disk(n: u64) {
     let signer = ValidatorSigner::from_int(0);
-    let file_path = TempPath::new().path().to_path_buf();
+    let file_path = NamedTempFile::new()
+        .unwrap()
+        .into_temp_path()
+        .keep()
+        .unwrap();
     let storage = PersistentSafetyStorage::initialize(
         OnDiskStorage::new(file_path),
         signer.author(),

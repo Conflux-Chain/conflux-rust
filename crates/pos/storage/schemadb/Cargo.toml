@@ -17,4 +17,4 @@ rocksdb = { workspace = true }
 [dev-dependencies]
 byteorder = "1.4.3"
 proptest = "1.0.0"
-diem-temppath = { workspace = true }
+tempfile = { workspace = true }

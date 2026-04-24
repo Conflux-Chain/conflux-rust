@@ -6,14 +6,13 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{CryptoKVStorage, Error, GetResponse, KVStorage};
-use diem_temppath::TempPath;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
 use std::{
     collections::HashMap,
-    fs::{self, File},
+    fs::File,
     io::{Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -31,7 +30,6 @@ use std::{
 /// Not thread-safe on its own; callers wrap it in `Arc<RwLock<_>>`.
 pub struct OnDiskStorage {
     file_path: PathBuf,
-    temp_path: TempPath,
 }
 
 impl OnDiskStorage {
@@ -39,17 +37,7 @@ impl OnDiskStorage {
         if !file_path.exists() {
             File::create(&file_path).expect("Unable to create storage");
         }
-
-        // The parent will be empty when only a filename is supplied; fall back
-        // to the current working directory.
-        let file_dir = file_path
-            .parent()
-            .map_or(PathBuf::new(), |p| p.to_path_buf());
-
-        Self {
-            file_path,
-            temp_path: TempPath::new_with_temp_dir(file_dir),
-        }
+        Self { file_path }
     }
 
     pub fn file_path(&self) -> &PathBuf { &self.file_path }
@@ -66,9 +54,13 @@ impl OnDiskStorage {
 
     fn write(&self, data: &HashMap<String, Value>) -> Result<(), Error> {
         let contents = serde_json::to_vec(data)?;
-        let mut file = File::create(self.temp_path.path())?;
-        file.write_all(&contents)?;
-        fs::rename(&self.temp_path, &self.file_path)?;
+        let dir = self.file_path.parent().unwrap_or_else(|| Path::new("."));
+        let mut temp = tempfile::Builder::new()
+            .tempfile_in(dir)
+            .map_err(Error::from)?;
+        temp.write_all(&contents).map_err(Error::from)?;
+        temp.persist(&self.file_path)
+            .map_err(|e| Error::from(e.error))?;
         Ok(())
     }
 }

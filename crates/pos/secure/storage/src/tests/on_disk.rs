@@ -6,11 +6,15 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{tests::suite, OnDiskStorage};
-use diem_temppath::TempPath;
+use tempfile::NamedTempFile;
 
 #[test]
 fn on_disk() {
-    let path_buf = TempPath::new().path().to_path_buf();
+    let path_buf = NamedTempFile::new()
+        .unwrap()
+        .into_temp_path()
+        .keep()
+        .unwrap();
     let mut storage = OnDiskStorage::new(path_buf);
     suite::execute_all_storage_tests(&mut storage);
 }

@@ -70,7 +70,6 @@ members = [
     "crates/rpc/rpc-cfx-api",
     "crates/pos/common/bounded-executor",
     "crates/pos/common/logger",
-    "crates/pos/common/temppath",
     "crates/pos/config/global-constants",
     "crates/pos/consensus/consensus-types",
     "crates/pos/config/config",
@@ -193,7 +192,6 @@ bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 #diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
 channel = { path = "./crates/pos/common/channel" }
 diem-logger = { path = "./crates/pos/common/logger" }
-diem-temppath = { path = "./crates/pos/common/temppath" }
 diem-global-constants = { path = "./crates/pos/config/global-constants" }
 diem-config = { path = "./crates/pos/config/config" }
 consensus-types = { path = "./crates/pos/consensus/consensus-types" }

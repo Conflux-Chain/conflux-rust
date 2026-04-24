@@ -21,7 +21,6 @@ use diem_crypto::{
     traits::SigningKey,
 };
 use diem_secure_storage::OnDiskStorage;
-use diem_temppath::TempPath;
 use diem_types::{
     block_info::BlockInfo,
     epoch_state::EpochState,
@@ -35,6 +34,7 @@ use std::{
     collections::BTreeMap,
     time::{SystemTime, UNIX_EPOCH},
 };
+use tempfile::NamedTempFile;
 
 pub type Proof = AccumulatorExtensionProof<TransactionAccumulatorHasher>;
 
@@ -230,7 +230,11 @@ pub fn validator_signers_to_ledger_info(
 }
 
 pub fn test_storage(signer: &ValidatorSigner) -> PersistentSafetyStorage {
-    let file_path = TempPath::new().path().to_path_buf();
+    let file_path = NamedTempFile::new()
+        .unwrap()
+        .into_temp_path()
+        .keep()
+        .unwrap();
     PersistentSafetyStorage::initialize(
         OnDiskStorage::new(file_path),
         signer.author(),
