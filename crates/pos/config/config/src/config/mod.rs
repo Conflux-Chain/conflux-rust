@@ -19,8 +19,6 @@ mod error;
 pub use error::*;
 mod logger_config;
 pub use logger_config::*;
-mod metrics_config;
-pub use metrics_config::*;
 mod mempool_config;
 pub use mempool_config::*;
 mod secure_backend_config;
@@ -29,8 +27,6 @@ mod storage_config;
 pub use storage_config::*;
 mod safety_rules_config;
 pub use safety_rules_config::*;
-mod test_config;
-pub use test_config::*;
 
 /// Config pulls in configuration information from the config file.
 /// This is used to set up the nodes and configure various parameters.
@@ -46,13 +42,9 @@ pub struct NodeConfig {
     #[serde(default)]
     pub logger: LoggerConfig,
     #[serde(default)]
-    pub metrics: MetricsConfig,
-    #[serde(default)]
     pub mempool: MempoolConfig,
     #[serde(default)]
     pub storage: StorageConfig,
-    #[serde(default)]
-    pub test: Option<TestConfig>,
     #[serde(default)]
     pub failpoints: Option<HashMap<String, String>>,
 }
@@ -77,7 +69,6 @@ impl NodeConfig {
     pub fn set_data_dir(&mut self, data_dir: PathBuf) {
         self.base.data_dir = data_dir.clone();
         self.consensus.set_data_dir(data_dir.clone());
-        self.metrics.set_data_dir(data_dir.clone());
         self.storage.set_data_dir(data_dir);
     }
 

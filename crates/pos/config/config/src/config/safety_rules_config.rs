@@ -5,10 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    config::{LoggerConfig, SecureBackend},
-    keys::ConfigKey,
-};
+use crate::{config::SecureBackend, keys::ConfigKey};
 use cfx_types::U256;
 use diem_types::{
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
@@ -21,7 +18,6 @@ use std::path::PathBuf;
 #[serde(default, deny_unknown_fields)]
 pub struct SafetyRulesConfig {
     pub backend: SecureBackend,
-    pub logger: LoggerConfig,
     pub test: Option<SafetyRulesTestConfig>,
     pub export_consensus_key: bool,
     pub enable_cached_safety_data: bool,
@@ -34,7 +30,6 @@ impl Default for SafetyRulesConfig {
     fn default() -> Self {
         Self {
             backend: SecureBackend::OnDiskStorage(Default::default()),
-            logger: LoggerConfig::default(),
             test: None,
             export_consensus_key: false,
             enable_cached_safety_data: true,
