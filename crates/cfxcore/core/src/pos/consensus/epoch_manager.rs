@@ -104,8 +104,8 @@ impl LivenessStorageData {
 pub struct EpochManager {
     author: Author,
     config: ConsensusConfig,
-    consensus_private_key: ConsensusPrivateKey,
-    vrf_private_key: ConsensusVRFPrivateKey,
+    consensus_private_key: ConfigKey<ConsensusPrivateKey>,
+    vrf_private_key: ConfigKey<ConsensusVRFPrivateKey>,
     vrf_proposal_threshold: U256,
     chain_id: ChainId,
     time_service: Arc<dyn TimeService>,
@@ -161,11 +161,13 @@ impl EpochManager {
             chain_id,
             vrf_proposal_threshold,
         } = chain_params;
+        let consensus_private_key = ConfigKey::new(consensus_private_key);
+        let vrf_private_key = ConfigKey::new(vrf_private_key);
         let safety_rules = safety_rules::create_safety_rules(
             sr_config,
             author,
-            consensus_private_key.clone(),
-            Some(vrf_private_key.clone()),
+            consensus_private_key.private_key(),
+            Some(vrf_private_key.private_key()),
             /* export_consensus_key */ true,
         );
         diem_debug!("EpochManager.author={:?}", author);
@@ -263,7 +265,7 @@ impl EpochManager {
             }
             ConsensusProposerType::VrfProposer => Box::new(VrfProposer::new(
                 self.author,
-                self.vrf_private_key.clone(),
+                self.vrf_private_key.private_key(),
                 self.vrf_proposal_threshold,
                 epoch_state.clone(),
             )),
@@ -445,7 +447,7 @@ impl EpochManager {
                     self.time_service.clone(),
                     self.config.max_block_size,
                     self.pow_handler.clone(),
-                    self.consensus_private_key.clone(),
+                    self.consensus_private_key.private_key(),
                 )),
                 None => None,
             };
@@ -482,8 +484,8 @@ impl EpochManager {
             self.chain_id,
             self.is_voting,
             self.election_control.clone(),
-            Some(ConfigKey::new(self.consensus_private_key.clone())),
-            Some(ConfigKey::new(self.vrf_private_key.clone())),
+            Some(self.consensus_private_key.clone()),
+            Some(self.vrf_private_key.clone()),
         );
         processor.start(last_vote).await;
         self.processor = Some(RoundProcessor::Normal(processor));
@@ -858,7 +860,7 @@ impl EpochManager {
         &mut self, block_id: HashValue,
     ) -> anyhow::Result<()> {
         diem_debug!("force_vote_proposal: {:?}", block_id);
-        let bls_key = self.consensus_private_key.clone();
+        let bls_key = self.consensus_private_key.private_key();
         let author = self.author;
         match self.processor_mut() {
             RoundProcessor::Normal(p) => {
@@ -872,7 +874,7 @@ impl EpochManager {
         &mut self, round: Round, parent_block_id: HashValue,
         payload: Vec<TransactionPayload>,
     ) -> anyhow::Result<()> {
-        let bls_key = self.consensus_private_key.clone();
+        let bls_key = self.consensus_private_key.private_key();
         match self.processor_mut() {
             RoundProcessor::Normal(p) => {
                 p.force_propose(round, parent_block_id, payload, &bls_key)
