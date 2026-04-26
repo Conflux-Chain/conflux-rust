@@ -1757,21 +1757,30 @@ name = "cfx-rpc-builder"
 version = "3.0.0"
 dependencies = [
  "alloy-primitives",
+ "blockgen",
+ "cfx-addr",
+ "cfx-rpc-cfx-api",
+ "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-api",
  "cfx-rpc-eth-impl",
  "cfx-rpc-middlewares",
  "cfx-tasks",
  "cfxcore",
+ "cfxcore-accounts",
  "jsonrpsee",
  "jsonrpsee-core",
  "jsonrpsee-types",
  "log",
+ "network",
+ "parking_lot 0.12.1",
+ "primitives",
  "rand 0.9.3",
  "serde",
  "strum 0.26.3",
  "thiserror 2.0.18",
  "tokio",
+ "txgen",
 ]
 
 [[package]]
@@ -1790,7 +1799,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-impl"
-version = "0.1.0"
+version = "3.0.0"
 dependencies = [
  "async-trait",
  "bigdecimal",

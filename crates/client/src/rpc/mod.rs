@@ -2,12 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use blockgen::BlockGeneratorTestApi;
 use cfx_rpc_builder::{
-    RpcModuleBuilder, RpcServerConfig, RpcServerHandle,
-    TransportRpcModuleConfig,
+    CfxRpcModuleBuilder, CfxRpcModuleSelection, CfxRpcServerConfig,
+    CfxTransportRpcModuleConfig, RpcModuleBuilder, RpcServerConfig,
+    RpcServerHandle, TransportRpcModuleConfig,
 };
 use cfx_tasks::TaskExecutor;
 use cfxcore::{
+    block_data_manager::BlockDataManager, consensus::pos_handler::PosVerifier,
     Notifications, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
@@ -25,7 +28,10 @@ use jsonrpc_ws_server::{
 };
 pub use jsonrpsee::server::ServerBuilder;
 use log::{info, warn};
+use network::NetworkService;
+use parking_lot::Mutex;
 use std::sync::Arc;
+use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
 mod authcodes;
 pub mod errors;
@@ -465,6 +471,92 @@ pub async fn launch_async_rpc_servers(
     let throttling_conf_file = conf.raw_conf.throttling_conf.clone();
     let server_handle = server_config
         .start(&transport_rpc_modules, throttling_conf_file, enable_metrics)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(Some(server_handle))
+}
+
+// start core space rpc server v2(async)
+pub async fn launch_cfx_async_rpc_servers(
+    consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
+    tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
+    network: Arc<NetworkService>, pos_handler: Arc<PosVerifier>,
+    notifications: Arc<Notifications>, executor: TaskExecutor,
+    accounts: Arc<cfxcore_accounts::AccountProvider>,
+    exit: Arc<(parking_lot::Mutex<bool>, parking_lot::Condvar)>,
+    block_gen: BlockGeneratorTestApi,
+    maybe_txgen: Option<Arc<TransactionGenerator>>,
+    maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
+    conf: &Configuration, apis: ApiSet, is_debug: bool,
+) -> Result<Option<RpcServerHandle>, String> {
+    let (http_config, ws_config) = if !is_debug {
+        (conf.http_config(), conf.ws_config())
+    } else {
+        (conf.local_http_config(), conf.local_ws_config())
+    };
+
+    let (transport_rpc_module_config, server_config) =
+        match (http_config.enabled, ws_config.enabled) {
+            (true, true) => {
+                let transport_rpc_module_config =
+                    CfxTransportRpcModuleConfig::set_http(apis.clone())
+                        .with_ws(apis.clone());
+
+                let server_config =
+                    CfxRpcServerConfig::http(conf.jsonrpsee_server_builder())
+                        .with_ws(conf.jsonrpsee_server_builder())
+                        .with_http_address(http_config.address)
+                        .with_ws_address(ws_config.address);
+                (transport_rpc_module_config, server_config)
+            }
+            (true, false) => {
+                let transport_rpc_module_config =
+                    CfxTransportRpcModuleConfig::set_http(apis.clone());
+                let server_config =
+                    CfxRpcServerConfig::http(conf.jsonrpsee_server_builder())
+                        .with_http_address(http_config.address);
+                (transport_rpc_module_config, server_config)
+            }
+            (false, true) => {
+                let transport_rpc_module_config =
+                    CfxTransportRpcModuleConfig::set_ws(apis.clone());
+                let server_config =
+                    CfxRpcServerConfig::ws(conf.jsonrpsee_server_builder())
+                        .with_ws_address(ws_config.address);
+                (transport_rpc_module_config, server_config)
+            }
+            _ => return Ok(None),
+        };
+
+    info!(
+        "Enabled cfx async rpc modules: {:?}",
+        CfxRpcModuleSelection::from(apis).into_selection()
+    );
+
+    let rpc_conf = conf.rpc_impl_config();
+    let rpc_module_builder = CfxRpcModuleBuilder::new(
+        rpc_conf,
+        consensus,
+        sync,
+        tx_pool,
+        executor,
+        data_man,
+        network,
+        pos_handler,
+        notifications,
+        accounts,
+        exit,
+        block_gen,
+        maybe_txgen,
+        maybe_direct_txgen,
+    );
+
+    let transport_rpc_modules =
+        rpc_module_builder.build(transport_rpc_module_config);
+
+    let server_handle = server_config
+        .start(&transport_rpc_modules)
         .await
         .map_err(|e| e.to_string())?;
 

@@ -32,7 +32,7 @@
 
 use std::fmt::Write;
 
-use jsonrpsee_types::SubscriptionId;
+use jsonrpsee::{core::traits::IdProvider, types::SubscriptionId};
 
 /// An [`IdProvider`](jsonrpsee_core::traits::IdProvider) for ethereum
 /// subscription ids.
@@ -40,9 +40,9 @@ use jsonrpsee_types::SubscriptionId;
 /// Returns new hex-string [QUANTITY](https://ethereum.org/en/developers/docs/apis/json-rpc/#quantities-encoding) ids
 #[derive(Debug, Clone, Copy, Default)]
 #[non_exhaustive]
-pub struct EthSubscriptionIdProvider;
+pub struct SubscriptionIdProvider;
 
-impl jsonrpsee_core::traits::IdProvider for EthSubscriptionIdProvider {
+impl IdProvider for SubscriptionIdProvider {
     fn next_id(&self) -> SubscriptionId<'static> {
         to_quantity(rand::random::<u128>())
     }
