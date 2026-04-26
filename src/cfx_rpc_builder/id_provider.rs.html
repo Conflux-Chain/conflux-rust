@@ -32,7 +32,7 @@
 <a href=#32 id=32 data-nosnippet>32</a>
 <a href=#33 id=33 data-nosnippet>33</a></span><span class="kw">use </span>std::fmt::Write;
 <a href=#34 id=34 data-nosnippet>34</a>
-<a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span>jsonrpsee_types::SubscriptionId;
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span>jsonrpsee::{core::traits::IdProvider, types::SubscriptionId};
 <a href=#36 id=36 data-nosnippet>36</a>
 <a href=#37 id=37 data-nosnippet>37</a><span class="doccomment">/// An [`IdProvider`](jsonrpsee_core::traits::IdProvider) for ethereum
 <a href=#38 id=38 data-nosnippet>38</a>/// subscription ids.
@@ -40,9 +40,9 @@
 <a href=#40 id=40 data-nosnippet>40</a>/// Returns new hex-string [QUANTITY](https://ethereum.org/en/developers/docs/apis/json-rpc/#quantities-encoding) ids
 <a href=#41 id=41 data-nosnippet>41</a></span><span class="attr">#[derive(Debug, Clone, Copy, Default)]
 <a href=#42 id=42 data-nosnippet>42</a>#[non_exhaustive]
-<a href=#43 id=43 data-nosnippet>43</a></span><span class="kw">pub struct </span>EthSubscriptionIdProvider;
+<a href=#43 id=43 data-nosnippet>43</a></span><span class="kw">pub struct </span>SubscriptionIdProvider;
 <a href=#44 id=44 data-nosnippet>44</a>
-<a href=#45 id=45 data-nosnippet>45</a><span class="kw">impl </span>jsonrpsee_core::traits::IdProvider <span class="kw">for </span>EthSubscriptionIdProvider {
+<a href=#45 id=45 data-nosnippet>45</a><span class="kw">impl </span>IdProvider <span class="kw">for </span>SubscriptionIdProvider {
 <a href=#46 id=46 data-nosnippet>46</a>    <span class="kw">fn </span>next_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SubscriptionId&lt;<span class="lifetime">'static</span>&gt; {
 <a href=#47 id=47 data-nosnippet>47</a>        to_quantity(rand::random::&lt;u128&gt;())
 <a href=#48 id=48 data-nosnippet>48</a>    }

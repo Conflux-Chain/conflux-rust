@@ -1,5 +1,5 @@
 (function() {
-    var implementors = Object.fromEntries([["cfx_rpc_builder",[["impl VariantArray for <a class=\"enum\" href=\"cfx_rpc_builder/enum.EthRpcModule.html\" title=\"enum cfx_rpc_builder::EthRpcModule\">EthRpcModule</a>"]]]]);
+    var implementors = Object.fromEntries([["cfx_rpc_builder",[["impl VariantArray for <a class=\"enum\" href=\"cfx_rpc_builder/enum.CfxRpcModule.html\" title=\"enum cfx_rpc_builder::CfxRpcModule\">CfxRpcModule</a>"]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {
