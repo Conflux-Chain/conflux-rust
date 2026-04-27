@@ -220,12 +220,15 @@ impl SnapshotManifestRequest {
         let mut blame_count = trusted_block.blame();
         let mut deferred_block_hash = block_hash;
         for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
+            // A peer-supplied `trusted_blame_block` may sit in our DB while
+            // an ancestor within DEFERRED_STATE_EPOCH_COUNT is still missing
+            // (headers can land in DB before they become header-graph-ready).
+            // Bail out instead of panicking the IO worker thread.
             deferred_block_hash = *ctx
                 .manager
                 .graph
                 .data_man
-                .block_header_by_hash(&deferred_block_hash)
-                .expect("All headers exist")
+                .block_header_by_hash(&deferred_block_hash)?
                 .parent_hash();
         }
 
@@ -283,12 +286,13 @@ impl SnapshotManifestRequest {
                     break;
                 }
                 block_hash = *block.parent_hash();
+                // Same out-of-order persistence reason as the DEFERRED loop
+                // above: bail rather than panic.
                 deferred_block_hash = *ctx
                     .manager
                     .graph
                     .data_man
-                    .block_header_by_hash(&deferred_block_hash)
-                    .expect("All headers received")
+                    .block_header_by_hash(&deferred_block_hash)?
                     .parent_hash();
             } else {
                 warn!(
