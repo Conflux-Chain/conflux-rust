@@ -23,6 +23,7 @@ use cfx_executor::machine::{Machine, VmFactory};
 use cfx_parameters::genesis::{
     DEV_GENESIS_KEY_PAIR_2, GENESIS_ACCOUNT_ADDRESS,
 };
+use cfx_rpc_cfx_types::apis::ApiSet;
 use cfx_storage::StorageManager;
 use cfx_tasks::TaskManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
@@ -678,8 +679,8 @@ pub fn initialize_not_light_node_modules(
             maybe_txgen.clone(),
             maybe_direct_txgen.clone(),
             conf,
-            conf.raw_conf.public_rpc_apis.clone(),
-            false,
+            ApiSet::All,
+            true,
         ))?;
 
     // start pprf server, which is used to serve the pprof data for heap
