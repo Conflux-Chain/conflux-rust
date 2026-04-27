@@ -13,14 +13,15 @@
 //! Internally, it uses the `PerKeyQueue` to store messages
 use crate::message_queues::{PerKeyQueue, QueueStyle};
 use anyhow::{ensure, Result};
-use diem_infallible::{Mutex, NonZeroUsize};
 use futures::{
     channel::oneshot,
     stream::{FusedStream, Stream},
 };
+use parking_lot::Mutex;
 use std::{
     fmt::{Debug, Formatter},
     hash::Hash,
+    num::NonZeroUsize,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll, Waker},
@@ -208,10 +209,8 @@ impl<K: Eq + Hash + Clone, M> FusedStream for Receiver<K, M> {
 pub fn new<K: Eq + Hash + Clone, M>(
     queue_style: QueueStyle, max_queue_size_per_key: usize,
 ) -> (Sender<K, M>, Receiver<K, M>) {
-    let max_queue_size_per_key = NonZeroUsize!(
-        max_queue_size_per_key,
-        "diem_channel cannot be of size 0"
-    );
+    let max_queue_size_per_key = NonZeroUsize::new(max_queue_size_per_key)
+        .expect("diem_channel cannot be of size 0");
     let shared_state = Arc::new(Mutex::new(SharedState {
         internal_queue: PerKeyQueue::new(queue_style, max_queue_size_per_key),
         waker: None,

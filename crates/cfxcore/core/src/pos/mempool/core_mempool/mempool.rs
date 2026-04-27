@@ -49,19 +49,8 @@ impl Mempool {
     }
 
     /// This function will be called once the transaction has been stored.
-    pub(crate) fn remove_transaction(
-        &mut self, sender: &AccountAddress, hash: HashValue, is_rejected: bool,
-    ) {
-        diem_trace!(
-            LogSchema::new(LogEntry::RemoveTxn)
-                .txns(TxnsLog::new_txn(*sender, hash)),
-            is_rejected = is_rejected
-        );
-        if is_rejected {
-            self.transactions.reject_transaction(&sender, hash);
-        } else {
-            self.transactions.commit_transaction(&sender, hash);
-        }
+    pub(crate) fn remove_transaction(&mut self, hash: HashValue) {
+        self.transactions.commit_transaction(hash);
     }
 
     /// Used to add a transaction to the Mempool.
@@ -72,7 +61,9 @@ impl Mempool {
         diem_trace!(LogSchema::new(LogEntry::AddTxn)
             .txns(TxnsLog::new_txn(txn.sender(), txn.hash())),);
 
-        let expiration_time = diem_infallible::duration_since_epoch()
+        let expiration_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH")
             + self.system_transaction_timeout;
 
         let txn_info =

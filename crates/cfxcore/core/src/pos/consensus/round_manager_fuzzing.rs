@@ -23,9 +23,8 @@ use super::{
         mock_time_service::SimulatedTimeService, time_service::TimeService,
     },
 };
-use channel::{self, diem_channel, message_queues::QueueStyle};
+use channel::{diem_channel, message_queues::QueueStyle};
 use consensus_types::proposal_msg::ProposalMsg;
-use diem_infallible::RwLock;
 use diem_types::{
     epoch_state::EpochState, ledger_info::LedgerInfo,
     on_chain_config::ValidatorSet, validator_info::ValidatorInfo,
@@ -37,6 +36,7 @@ use network::{
     protocols::network::NewNetworkSender,
 };
 use once_cell::sync::Lazy;
+use parking_lot::RwLock;
 use safety_rules::{test_utils, SafetyRules};
 use std::{sync::Arc, time::Duration};
 use tokio::runtime::Runtime;
@@ -96,7 +96,7 @@ fn make_initial_epoch_state(signer: &ValidatorSigner) -> EpochState {
 fn create_round_state() -> RoundState {
     let base_timeout = std::time::Duration::new(60, 0);
     let time_interval = Box::new(ExponentialTimeInterval::fixed(base_timeout));
-    let (round_timeout_sender, _) = channel::new(1_024);
+    let (round_timeout_sender, _) = mpsc::channel(1_024);
     let time_service = Arc::new(SimulatedTimeService::new());
     RoundState::new(time_interval, time_service, round_timeout_sender)
 }
@@ -133,7 +133,7 @@ fn create_node_for_fuzzing() -> RoundManager {
         PeerManagerRequestSender::new(network_reqs_tx),
         ConnectionRequestSender::new(connection_reqs_tx),
     );
-    let (self_sender, _self_receiver) = channel::new(8);
+    let (self_sender, _self_receiver) = mpsc::channel(8);
 
     let epoch_state = EpochState {
         epoch: 1,
@@ -157,7 +157,7 @@ fn create_node_for_fuzzing() -> RoundManager {
     let proposal_generator = ProposalGenerator::new(
         signer.author(),
         block_store.clone(),
-        Arc::new(MockTransactionManager::new(None)),
+        Arc::new(MockTransactionManager),
         time_service,
         1,
     );
@@ -179,7 +179,7 @@ fn create_node_for_fuzzing() -> RoundManager {
         proposal_generator,
         safety_rules,
         network,
-        Arc::new(MockTransactionManager::new(None)),
+        Arc::new(MockTransactionManager),
         storage,
         false,
     )

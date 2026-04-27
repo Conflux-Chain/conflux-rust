@@ -21,7 +21,6 @@ use crate::pos::mempool::{
 };
 use anyhow::Result;
 use cached_pos_ledger_db::CachedPosLedgerDB;
-use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::{
     mempool_status::{MempoolStatus, MempoolStatusCode},
@@ -29,6 +28,7 @@ use diem_types::{
 };
 use futures::{channel::oneshot, stream::FuturesUnordered};
 use network::node_table::NodeId;
+use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::{
     cmp,
@@ -257,8 +257,7 @@ pub(crate) async fn process_committed_transactions(
         LogEvent::Received
     )
     .state_sync_msg(&req));
-    commit_txns(&mempool, req.transactions, req.block_timestamp_usecs, false)
-        .await;
+    commit_txns(&mempool, req.transactions, req.block_timestamp_usecs).await;
     if req.callback.send(Ok(CommitResponse::success())).is_err() {
         diem_error!(LogSchema::event_log(
             LogEntry::StateSyncCommit,
@@ -276,48 +275,41 @@ pub(crate) async fn process_consensus_request(
             .consensus_msg(&req)
     );
 
-    let (resp, callback) = match req {
-        ConsensusRequest::GetBlockRequest(
-            max_block_size,
-            transactions,
-            parent_block_id,
+    let ConsensusRequest {
+        max_block_size,
+        exclude_txns,
+        parent_block_id,
+        validators,
+        callback,
+    } = req;
+    let exclude_transactions: HashSet<TxnPointer> = exclude_txns
+        .iter()
+        .map(|txn| (txn.sender, txn.hash))
+        .collect();
+    let mut txns;
+    {
+        let mut mempool = mempool.lock();
+        // gc before pulling block as extra protection against txns that
+        // may expire in consensus Note: this gc
+        // operation relies on the fact that consensus uses the system
+        // time to determine block timestamp
+        let curr_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH");
+        mempool.gc_by_expiration_time(curr_time);
+        let block_size = cmp::max(max_block_size, 1);
+        let pos_state = db
+            .get_pos_state(&parent_block_id)
+            .expect("pos_state should exist");
+        txns = mempool.get_block(
+            block_size,
+            exclude_transactions,
+            &pos_state,
             validators,
-            callback,
-        ) => {
-            let exclude_transactions: HashSet<TxnPointer> = transactions
-                .iter()
-                .map(|txn| (txn.sender, txn.hash))
-                .collect();
-            let mut txns;
-            {
-                let mut mempool = mempool.lock();
-                // gc before pulling block as extra protection against txns that
-                // may expire in consensus Note: this gc
-                // operation relies on the fact that consensus uses the system
-                // time to determine block timestamp
-                let curr_time = diem_infallible::duration_since_epoch();
-                mempool.gc_by_expiration_time(curr_time);
-                let block_size = cmp::max(max_block_size, 1);
-                let pos_state = db
-                    .get_pos_state(&parent_block_id)
-                    .expect("pos_state should exist");
-                txns = mempool.get_block(
-                    block_size,
-                    exclude_transactions,
-                    &pos_state,
-                    validators,
-                );
-            }
-            let pulled_block =
-                txns.drain(..).map(SignedTransaction::into).collect();
-
-            (ConsensusResponse::GetBlockResponse(pulled_block), callback)
-        }
-        ConsensusRequest::RejectNotification(transactions, callback) => {
-            commit_txns(mempool, transactions, 0, true).await;
-            (ConsensusResponse::CommitResponse(), callback)
-        }
-    };
+        );
+    }
+    let pulled_block = txns.drain(..).map(SignedTransaction::into).collect();
+    let resp = ConsensusResponse { txns: pulled_block };
     if callback.send(Ok(resp)).is_err() {
         diem_error!(LogSchema::event_log(
             LogEntry::Consensus,
@@ -328,16 +320,12 @@ pub(crate) async fn process_consensus_request(
 
 async fn commit_txns(
     mempool: &Mutex<CoreMempool>, transactions: Vec<CommittedTransaction>,
-    block_timestamp_usecs: u64, is_rejected: bool,
+    block_timestamp_usecs: u64,
 ) {
     let mut pool = mempool.lock();
 
     for transaction in transactions {
-        pool.remove_transaction(
-            &transaction.sender,
-            transaction.hash,
-            is_rejected,
-        );
+        pool.remove_transaction(transaction.hash);
     }
 
     if block_timestamp_usecs > 0 {

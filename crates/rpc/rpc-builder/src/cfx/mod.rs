@@ -7,12 +7,12 @@ pub use module::{CfxRpcModule, RpcModuleSelection};
 
 use blockgen::BlockGeneratorTestApi;
 use cfx_rpc_cfx_api::{
-    CfxRpcServer, DebugRpcServer, PosRpcServer, PubSubApiServer, TestRpcServer,
-    TraceServer, TxPoolServer,
+    CfxDebugRpcServer, CfxFilterRpcServer, CfxRpcServer, DebugRpcServer,
+    PosRpcServer, PubSubApiServer, TestRpcServer, TraceServer, TxPoolServer,
 };
 use cfx_rpc_cfx_impl::{
-    CfxHandler, DebugHandler, PosHandler, PubSubHandler, TestHandler,
-    TraceHandler, TxPoolHandler,
+    CfxFilterHandler, CfxHandler, DebugHandler, PosHandler, PubSubHandler,
+    TestHandler, TraceHandler, TxPoolHandler,
 };
 use cfx_rpc_cfx_types::RpcImplConfiguration;
 use cfx_tasks::TaskExecutor;
@@ -210,17 +210,32 @@ impl RpcRegistryInner {
             self.modules
                 .entry(namespace)
                 .or_insert_with(|| match namespace {
-                    CfxRpcModule::Debug => DebugHandler::new(
-                        self.tx_pool.clone(),
-                        self.consensus.clone(),
-                        self.sync.clone(),
-                        self.network.clone(),
-                        self.accounts.clone(),
-                        self.pos_handler.clone(),
-                        self.exit.clone(),
-                    )
-                    .into_rpc()
-                    .into(),
+                    CfxRpcModule::Debug => {
+                        let mut methods = DebugHandler::new(
+                            self.tx_pool.clone(),
+                            self.consensus.clone(),
+                            self.sync.clone(),
+                            self.network.clone(),
+                            self.accounts.clone(),
+                            self.pos_handler.clone(),
+                            self.exit.clone(),
+                        )
+                        .into_rpc();
+                        methods
+                            .merge(CfxDebugRpcServer::into_rpc(
+                                CfxHandler::new(
+                                    self.rpc_impl_config.clone(),
+                                    self.consensus.clone(),
+                                    self.sync.clone(),
+                                    self.tx_pool.clone(),
+                                    self.accounts.clone(),
+                                    self.pos_handler.clone(),
+                                    self.block_gen.clone(),
+                                ),
+                            ))
+                            .expect("No conflicts");
+                        methods.into()
+                    }
                     CfxRpcModule::Pos => {
                         let handler = PosHandler::new(
                             self.pos_handler.clone(),
@@ -252,17 +267,40 @@ impl RpcRegistryInner {
                     )
                     .into_rpc()
                     .into(),
-                    CfxRpcModule::Cfx => CfxHandler::new(
-                        self.rpc_impl_config.clone(),
-                        self.consensus.clone(),
-                        self.sync.clone(),
-                        self.tx_pool.clone(),
-                        self.accounts.clone(),
-                        self.pos_handler.clone(),
-                        self.block_gen.clone(),
-                    )
-                    .into_rpc()
-                    .into(),
+                    CfxRpcModule::Cfx => {
+                        let mut module =
+                            CfxRpcServer::into_rpc(CfxHandler::new(
+                                self.rpc_impl_config.clone(),
+                                self.consensus.clone(),
+                                self.sync.clone(),
+                                self.tx_pool.clone(),
+                                self.accounts.clone(),
+                                self.pos_handler.clone(),
+                                self.block_gen.clone(),
+                            ));
+                        if self
+                            .rpc_impl_config
+                            .poll_lifetime_in_seconds
+                            .is_some()
+                        {
+                            let filter_module =
+                                CfxFilterHandler::new_with_task_executor(
+                                    self.consensus.clone(),
+                                    self.tx_pool.clone(),
+                                    self.notifications.epochs_ordered.clone(),
+                                    self.executor.clone(),
+                                    self.rpc_impl_config
+                                        .poll_lifetime_in_seconds
+                                        .unwrap(),
+                                    self.rpc_impl_config
+                                        .get_logs_filter_max_limit,
+                                    *self.network.get_network_type(),
+                                )
+                                .into_rpc();
+                            module.merge(filter_module).expect("No conflicts");
+                        }
+                        module.into()
+                    }
                     CfxRpcModule::Test => TestHandler::new(
                         self.exit.clone(),
                         self.consensus.clone(),

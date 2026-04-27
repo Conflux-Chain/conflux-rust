@@ -27,8 +27,6 @@ bcs = "0.1.2"
 diem-config = { workspace = true }
 diem-crypto = { workspace = true }
 diem-logger = { workspace = true }
-diem-infallible = { workspace = true }
-diem-proptest-helpers = { workspace = true, optional = true }
 diem-temppath = { workspace = true, optional = true }
 diem-types = { workspace = true }
 schemadb = { workspace = true }
@@ -39,7 +37,6 @@ proptest = "1.0.0"
 proptest-derive = "0.5.1"
 rand = "0.8.3"
 
-diem-proptest-helpers = { workspace = true }
 diem-temppath = { workspace = true }
 diem-types = { workspace = true, features = ["fuzzing"] }
 move-core-types = { workspace = true }
@@ -49,7 +46,6 @@ default = []
 fuzzing = [
     "proptest",
     "proptest-derive",
-    "diem-proptest-helpers",
     "diem-temppath",
     "diem-crypto/fuzzing",
     "diem-types/fuzzing",

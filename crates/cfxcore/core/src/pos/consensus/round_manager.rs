@@ -13,9 +13,9 @@ use std::{
     time::Duration,
 };
 
-use diem_infallible::RwLock;
+use parking_lot::RwLock;
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use fail::fail_point;
 use futures::{
     channel::{mpsc, oneshot},
@@ -36,7 +36,6 @@ use consensus_types::{
 };
 use diem_config::keys::ConfigKey;
 use diem_crypto::{hash::CryptoHash, HashValue, SigningKey, VRFPrivateKey};
-use diem_infallible::checked;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::{from_consensus_public_key, AccountAddress},
@@ -72,7 +71,7 @@ use super::{
     },
     pending_votes::VoteReceptionResult,
     persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
-    state_replication::{StateComputer, TxnManager},
+    state_replication::StateComputer,
 };
 
 #[derive(Serialize, Clone)]
@@ -217,7 +216,6 @@ pub struct RoundManager {
     proposal_generator: Option<ProposalGenerator>,
     safety_rules: Arc<RwLock<SafetyRules>>,
     network: ConsensusNetworkSender,
-    txn_manager: Arc<dyn TxnManager>,
     storage: Arc<dyn PersistentLivenessStorage>,
     sync_only: bool,
     tx_sender: mpsc::Sender<(
@@ -239,7 +237,7 @@ impl RoundManager {
         proposer_election: Box<dyn ProposerElection + Send + Sync>,
         proposal_generator: Option<ProposalGenerator>,
         safety_rules: Arc<RwLock<SafetyRules>>,
-        network: ConsensusNetworkSender, txn_manager: Arc<dyn TxnManager>,
+        network: ConsensusNetworkSender,
         storage: Arc<dyn PersistentLivenessStorage>, sync_only: bool,
         tx_sender: mpsc::Sender<(
             SignedTransaction,
@@ -257,7 +255,6 @@ impl RoundManager {
             proposal_generator,
             is_voting,
             safety_rules,
-            txn_manager,
             network,
             storage,
             sync_only,
@@ -678,7 +675,10 @@ impl RoundManager {
         // To avoid a ping-pong cycle between two peers that move forward
         // together.
         self.ensure_round_and_sync_up(
-            checked!((sync_info.highest_round()) + 1)?,
+            sync_info
+                .highest_round()
+                .checked_add(1)
+                .ok_or_else(|| anyhow!("round overflow"))?,
             &sync_info,
             peer,
             false,
@@ -956,17 +956,6 @@ impl RoundManager {
             .block_store
             .execute_and_insert_block(proposed_block, false, false)
             .context("[RoundManager] Failed to execute_and_insert the block")?;
-        // notify mempool about failed txn
-        let compute_result = executed_block.compute_result();
-        if let Err(e) = self
-            .txn_manager
-            .notify(executed_block.block(), compute_result)
-            .await
-        {
-            diem_error!(
-                error = ?e, "[RoundManager] Failed to notify mempool of rejected txns",
-            );
-        }
 
         // Short circuit if already voted.
         ensure!(

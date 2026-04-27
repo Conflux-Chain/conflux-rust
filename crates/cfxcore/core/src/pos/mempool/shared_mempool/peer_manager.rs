@@ -12,10 +12,10 @@ use crate::pos::mempool::{
         notify_subscribers, SharedMempool, SharedMempoolNotification,
     },
 };
-use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::transaction::SignedTransaction;
 use network::node_table::NodeId;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},

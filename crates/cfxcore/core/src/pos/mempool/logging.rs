@@ -142,7 +142,6 @@ pub enum LogEntry {
     MempoolFullEvictedTxn,
     GCRemoveTxns,
     CleanCommittedTxn,
-    CleanRejectedTxn,
     ProcessReadyTxns,
     DBError,
     UpstreamNetwork,
