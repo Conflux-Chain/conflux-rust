@@ -1,9 +1,0 @@
-(function() {
-    var implementors = Object.fromEntries([["diem_secure_storage",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/convert/trait.TryInto.html\" title=\"trait core::convert::TryInto\">TryInto</a>&lt;<a class=\"struct\" href=\"diem_secure_storage/struct.InMemoryStorage.html\" title=\"struct diem_secure_storage::InMemoryStorage\">InMemoryStorage</a>&gt; for <a class=\"enum\" href=\"diem_secure_storage/enum.Storage.html\" title=\"enum diem_secure_storage::Storage\">Storage</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/convert/trait.TryInto.html\" title=\"trait core::convert::TryInto\">TryInto</a>&lt;<a class=\"struct\" href=\"diem_secure_storage/struct.NamespacedStorage.html\" title=\"struct diem_secure_storage::NamespacedStorage\">NamespacedStorage</a>&gt; for <a class=\"enum\" href=\"diem_secure_storage/enum.Storage.html\" title=\"enum diem_secure_storage::Storage\">Storage</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/convert/trait.TryInto.html\" title=\"trait core::convert::TryInto\">TryInto</a>&lt;<a class=\"struct\" href=\"diem_secure_storage/struct.OnDiskStorage.html\" title=\"struct diem_secure_storage::OnDiskStorage\">OnDiskStorage</a>&gt; for <a class=\"enum\" href=\"diem_secure_storage/enum.Storage.html\" title=\"enum diem_secure_storage::Storage\">Storage</a>"]]]]);
-    if (window.register_implementors) {
-        window.register_implementors(implementors);
-    } else {
-        window.pending_implementors = implementors;
-    }
-})()
-//{"start":57,"fragment_lengths":[1336]}
