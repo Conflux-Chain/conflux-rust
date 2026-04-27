@@ -34,7 +34,7 @@ use std::{
     collections::BTreeMap,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tempfile::NamedTempFile;
+use tempfile::TempDir;
 
 pub type Proof = AccumulatorExtensionProof<TransactionAccumulatorHasher>;
 
@@ -229,36 +229,42 @@ pub fn validator_signers_to_ledger_info(
     LedgerInfo::mock_genesis(Some(validator_set))
 }
 
-pub fn test_storage(signer: &ValidatorSigner) -> PersistentSafetyStorage {
-    let file_path = NamedTempFile::new()
-        .unwrap()
-        .into_temp_path()
-        .keep()
-        .unwrap();
-    PersistentSafetyStorage::initialize(
+/// Returns a freshly initialized `PersistentSafetyStorage` plus the `TempDir`
+/// backing it. Callers must keep the `TempDir` alive for the storage's
+/// lifetime — when it drops, the on-disk file is removed.
+pub fn test_storage(
+    signer: &ValidatorSigner,
+) -> (TempDir, PersistentSafetyStorage) {
+    let dir = TempDir::new().unwrap();
+    let file_path = dir.path().join("storage.json");
+    let storage = PersistentSafetyStorage::initialize(
         OnDiskStorage::new(file_path),
         signer.author(),
         signer.private_key().clone(),
         true,
-    )
+    );
+    (dir, storage)
 }
 
 /// Returns a safety rules instance for testing purposes.
-pub fn test_safety_rules() -> SafetyRules {
+pub fn test_safety_rules() -> (TempDir, SafetyRules) {
     let signer = ValidatorSigner::from_int(0);
-    let storage = test_storage(&signer);
+    let (dir, storage) = test_storage(&signer);
     let (epoch_state, _) = make_genesis(&signer);
 
     let mut safety_rules =
         SafetyRules::new(storage, false, None, Default::default());
     safety_rules.initialize(&epoch_state).unwrap();
-    safety_rules
+    (dir, safety_rules)
 }
 
 /// Returns a safety rules instance that has not been initialized for testing
 /// purposes.
-pub fn test_safety_rules_uninitialized() -> SafetyRules {
+pub fn test_safety_rules_uninitialized() -> (TempDir, SafetyRules) {
     let signer = ValidatorSigner::from_int(0);
-    let storage = test_storage(&signer);
-    SafetyRules::new(storage, false, None, Default::default())
+    let (dir, storage) = test_storage(&signer);
+    (
+        dir,
+        SafetyRules::new(storage, false, None, Default::default()),
+    )
 }

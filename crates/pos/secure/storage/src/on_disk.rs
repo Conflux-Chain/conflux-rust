@@ -55,10 +55,8 @@ impl OnDiskStorage {
     fn write(&self, data: &HashMap<String, Value>) -> Result<(), Error> {
         let contents = serde_json::to_vec(data)?;
         let dir = self.file_path.parent().unwrap_or_else(|| Path::new("."));
-        let mut temp = tempfile::Builder::new()
-            .tempfile_in(dir)
-            .map_err(Error::from)?;
-        temp.write_all(&contents).map_err(Error::from)?;
+        let mut temp = tempfile::Builder::new().tempfile_in(dir)?;
+        temp.write_all(&contents)?;
         temp.persist(&self.file_path)
             .map_err(|e| Error::from(e.error))?;
         Ok(())
