@@ -1774,7 +1774,6 @@ dependencies = [
  "diem-config",
  "diem-crypto",
  "diem-logger",
- "diem-temppath",
  "diem-types",
  "either",
  "executor",
@@ -2543,7 +2542,6 @@ dependencies = [
  "diem-global-constants",
  "diem-logger",
  "diem-secure-storage",
- "diem-temppath",
  "diem-types",
  "serde",
  "thiserror 1.0.63",
@@ -2626,11 +2624,11 @@ dependencies = [
  "chrono",
  "diem-crypto",
  "diem-logger",
- "diem-temppath",
  "diem-types",
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 1.0.63",
 ]
 
@@ -2640,14 +2638,6 @@ version = "0.1.0"
 dependencies = [
  "diem-crypto",
  "diem-types",
-]
-
-[[package]]
-name = "diem-temppath"
-version = "0.1.0"
-dependencies = [
- "hex",
- "rand 0.8.5",
 ]
 
 [[package]]
@@ -6182,7 +6172,6 @@ dependencies = [
  "diem-global-constants",
  "diem-logger",
  "diem-secure-storage",
- "diem-temppath",
  "diem-types",
  "log",
  "once_cell",
