@@ -8,7 +8,6 @@
 use super::*;
 use crate::PosLedgerDB;
 use diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
-use diem_proptest_helpers::Index;
 use diem_temppath::TempPath;
 use diem_types::{
     account_address::AccountAddress,

@@ -42,8 +42,8 @@ use cfx_rpc_eth_types::FeeHistory;
 use cfx_rpc_primitives::U64 as HexU64;
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::{
     call_execution_error, internal_error, internal_error_with_data,
-    invalid_params, invalid_params_check, invalid_params_msg,
-    invalid_params_rpc_err, pivot_assumption_failed,
+    invalid_params, invalid_params_check, invalid_params_detail,
+    invalid_params_msg, invalid_params_rpc_err, pivot_assumption_failed,
     request_rejected_in_catch_up_mode,
 };
 use cfx_statedb::{
@@ -168,27 +168,7 @@ impl CfxHandler {
                 Ok(EpochNumber::Num(U64::from(epoch_number)))
             }
             Some(BlockHashOrEpochNumber::EpochNumber(epoch_number)) => {
-                Ok(match epoch_number {
-                    PrimitiveEpochNumber::Number(n) => {
-                        EpochNumber::Num(cfx_types::U64::from(n))
-                    }
-                    PrimitiveEpochNumber::Earliest => EpochNumber::Earliest,
-                    PrimitiveEpochNumber::LatestCheckpoint => {
-                        EpochNumber::LatestCheckpoint
-                    }
-                    PrimitiveEpochNumber::LatestFinalized => {
-                        EpochNumber::LatestFinalized
-                    }
-                    PrimitiveEpochNumber::LatestConfirmed => {
-                        EpochNumber::LatestConfirmed
-                    }
-                    PrimitiveEpochNumber::LatestState => {
-                        EpochNumber::LatestState
-                    }
-                    PrimitiveEpochNumber::LatestMined => {
-                        EpochNumber::LatestMined
-                    }
-                })
+                Ok(epoch_number)
             }
             None => Ok(EpochNumber::LatestState),
         }
@@ -441,11 +421,11 @@ impl CfxHandler {
         match (signed_trans.len(), failed_trans.len()) {
             (0, 0) => {
                 debug!("insert_new_transactions ignores inserted transactions");
-                bail!(invalid_params("tx", Some("tx already exist")))
+                bail!(invalid_params_detail("tx", "tx already exist"))
             }
             (0, 1) => {
                 let tx_err = failed_trans.values().next().unwrap();
-                bail!(invalid_params("tx", Some(tx_err.to_string())))
+                bail!(invalid_params_detail("tx", tx_err.to_string()))
             }
             (1, 0) => {
                 let tx_hash = signed_trans[0].hash();
@@ -471,9 +451,8 @@ impl CfxHandler {
             let nonce = consensus_graph.next_nonce(
                 Address::from(tx.from.clone().ok_or("from should have")?)
                     .with_native_space(),
-                BlockHashOrEpochNumber::EpochNumber(
-                    PrimitiveEpochNumber::LatestState,
-                ),
+                BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
+                    .into(),
                 "internal EpochNumber::LatestState",
             )?;
             tx.nonce.replace(nonce.into());
@@ -659,7 +638,7 @@ impl CfxRpcServer for CfxHandler {
         consensus_graph
             .get_height_from_epoch_number(epoch_num.into())
             .map(|h| h.into())
-            .map_err(|e| into_rpc_err(e.to_string()))
+            .map_err(|e| invalid_params_rpc_err(e, None::<()>))
     }
 
     async fn balance(
@@ -1040,7 +1019,7 @@ impl CfxRpcServer for CfxHandler {
         self.check_address_network(addr.network)?;
         let consensus_graph = self.consensus_graph();
         let num = num.unwrap_or(BlockHashOrEpochNumber::EpochNumber(
-            PrimitiveEpochNumber::LatestState,
+            EpochNumber::LatestState,
         ));
         info!(
             "RPC Request: cfx_getNextNonce address={:?} epoch_num={:?}",
@@ -1064,9 +1043,9 @@ impl CfxRpcServer for CfxHandler {
         )?;
 
         if tx.recover_public().is_err() {
-            return Err(invalid_params_rpc_err(
+            return Err(invalid_params_detail(
                 "tx",
-                Some("Can not recover pubkey for Ethereum like tx"),
+                "Can not recover pubkey for Ethereum like tx",
             ));
         }
 
@@ -1657,9 +1636,9 @@ impl CfxRpcServer for CfxHandler {
         let (epoch_later_number, overflow) =
             epoch_height.overflowing_add(REWARD_EPOCH_COUNT.into());
         if overflow {
-            return Err(invalid_params_rpc_err(
-                "Epoch number overflows!",
-                None::<bool>,
+            return Err(invalid_params(
+                "epoch",
+                Some("Epoch number overflows!"),
             ));
         }
         let epoch_later = match self.consensus.get_hash_from_epoch_number(
@@ -1671,9 +1650,9 @@ impl CfxRpcServer for CfxHandler {
                     "get_block_reward_info: get_hash_from_epoch_number returns error: {}",
                     e
                 );
-                return Err(invalid_params_rpc_err(
-                    "Reward not calculated yet!",
-                    None::<bool>,
+                return Err(invalid_params(
+                    "epoch",
+                    Some("Reward not calculated yet!"),
                 ));
             }
         };

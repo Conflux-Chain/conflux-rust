@@ -2,10 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use blockgen::BlockGeneratorTestApi;
 use cfx_rpc_builder::{
-    CfxRpcModuleBuilder, CfxRpcServerConfig, CfxTransportRpcModuleConfig,
-    RpcModuleBuilder, RpcServerConfig, RpcServerHandle,
-    TransportRpcModuleConfig,
+    CfxRpcModuleBuilder, CfxRpcModuleSelection, CfxRpcServerConfig,
+    CfxTransportRpcModuleConfig, RpcModuleBuilder, RpcServerConfig,
+    RpcServerHandle, TransportRpcModuleConfig,
 };
 use cfx_tasks::TaskExecutor;
 use cfxcore::{
@@ -28,7 +29,9 @@ use jsonrpc_ws_server::{
 pub use jsonrpsee::server::ServerBuilder;
 use log::{info, warn};
 use network::NetworkService;
+use parking_lot::Mutex;
 use std::sync::Arc;
+use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
 mod authcodes;
 pub mod errors;
@@ -480,11 +483,18 @@ pub async fn launch_cfx_async_rpc_servers(
     tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
     network: Arc<NetworkService>, pos_handler: Arc<PosVerifier>,
     notifications: Arc<Notifications>, executor: TaskExecutor,
-    conf: &Configuration,
+    accounts: Arc<cfxcore_accounts::AccountProvider>,
+    exit: Arc<(parking_lot::Mutex<bool>, parking_lot::Condvar)>,
+    block_gen: BlockGeneratorTestApi,
+    maybe_txgen: Option<Arc<TransactionGenerator>>,
+    maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
+    conf: &Configuration, apis: ApiSet, is_debug: bool,
 ) -> Result<Option<RpcServerHandle>, String> {
-    let http_config = conf.cfx_http_config();
-    let ws_config = conf.cfx_ws_config();
-    let apis = conf.raw_conf.public_cfx_rpc_apis.clone();
+    let (http_config, ws_config) = if !is_debug {
+        (conf.http_config(), conf.ws_config())
+    } else {
+        (conf.local_http_config(), conf.local_ws_config())
+    };
 
     let (transport_rpc_module_config, server_config) =
         match (http_config.enabled, ws_config.enabled) {
@@ -519,9 +529,14 @@ pub async fn launch_cfx_async_rpc_servers(
             _ => return Ok(None),
         };
 
-    info!("Enabled cfx async rpc modules: {:?}", apis.into_selection());
+    info!(
+        "Enabled cfx async rpc modules: {:?}",
+        CfxRpcModuleSelection::from(apis).into_selection()
+    );
 
+    let rpc_conf = conf.rpc_impl_config();
     let rpc_module_builder = CfxRpcModuleBuilder::new(
+        rpc_conf,
         consensus,
         sync,
         tx_pool,
@@ -530,6 +545,11 @@ pub async fn launch_cfx_async_rpc_servers(
         network,
         pos_handler,
         notifications,
+        accounts,
+        exit,
+        block_gen,
+        maybe_txgen,
+        maybe_direct_txgen,
     );
 
     let transport_rpc_modules =

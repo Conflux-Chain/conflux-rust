@@ -27,6 +27,7 @@ cfx-rpc-eth-api = { workspace = true }
 cfx-rpc-cfx-impl = { workspace = true }
 cfx-rpc-cfx-api = { workspace = true }
 cfxcore = { workspace = true }
+cfxcore-accounts = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 log = { workspace = true }
 cfx-rpc-middlewares = { workspace = true }
@@ -36,5 +37,7 @@ cfx-addr = { workspace = true }
 primitives = { workspace = true }
 network = { workspace = true }
 parking_lot = { workspace = true }
+blockgen = { workspace = true }
+txgen = { workspace = true }
 
 [dev-dependencies]

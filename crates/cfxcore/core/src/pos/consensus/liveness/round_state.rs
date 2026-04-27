@@ -7,6 +7,7 @@
 
 use std::{fmt, sync::Arc, time::Duration};
 
+use futures::channel::mpsc;
 use serde::Serialize;
 
 use consensus_types::{common::Round, sync_info::SyncInfo, vote::Vote};
@@ -14,7 +15,6 @@ use diem_logger::{prelude::*, Schema};
 use diem_types::validator_verifier::ValidatorVerifier;
 
 use crate::pos::consensus::{
-    counters,
     pending_votes::{PendingVotes, VoteReceptionResult},
     util::time_service::{SendTask, TimeService},
 };
@@ -166,11 +166,11 @@ pub struct RoundState {
     // Service for timer
     time_service: Arc<dyn TimeService>,
     // To send local timeout events to the subscriber (e.g., SMR)
-    timeout_sender: channel::Sender<(u64, Round)>,
+    timeout_sender: mpsc::Sender<(u64, Round)>,
     // To send timeout events for proposal selection to the subscriber (e.g.,
     // SMR)
-    proposal_timeout_sender: channel::Sender<(u64, Round)>,
-    new_round_timeout_sender: channel::Sender<(u64, Round)>,
+    proposal_timeout_sender: mpsc::Sender<(u64, Round)>,
+    new_round_timeout_sender: mpsc::Sender<(u64, Round)>,
     new_round_sent: bool,
     // Votes received for the current round.
     pending_votes: PendingVotes,
@@ -206,17 +206,10 @@ impl RoundState {
     pub fn new(
         time_interval: Box<dyn RoundTimeInterval>,
         time_service: Arc<dyn TimeService>,
-        timeout_sender: channel::Sender<(u64, Round)>,
-        proposal_timeout_sender: channel::Sender<(u64, Round)>,
-        new_round_timeout_sender: channel::Sender<(u64, Round)>,
+        timeout_sender: mpsc::Sender<(u64, Round)>,
+        proposal_timeout_sender: mpsc::Sender<(u64, Round)>,
+        new_round_timeout_sender: mpsc::Sender<(u64, Round)>,
     ) -> Self {
-        // Our counters are initialized lazily, so they're not going to appear
-        // in Prometheus if some conditions never happen. Invoking get()
-        // function enforces creation.
-        counters::QC_ROUNDS_COUNT.get();
-        counters::TIMEOUT_ROUNDS_COUNT.get();
-        counters::TIMEOUT_COUNT.get();
-
         Self {
             time_interval,
             highest_committed_round: 0,
@@ -244,7 +237,6 @@ impl RoundState {
     /// timeout and return true. Otherwise ignore and return false.
     pub fn process_local_timeout(&mut self, epoch_round: (u64, Round)) -> bool {
         diem_info!(round = epoch_round.1, "Local timeout");
-        counters::TIMEOUT_COUNT.inc();
         self.setup_timeout(epoch_round.0);
         true
     }

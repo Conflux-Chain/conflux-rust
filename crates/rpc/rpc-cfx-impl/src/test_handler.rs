@@ -2,64 +2,42 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{collections::HashSet, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use blockgen::BlockGeneratorTestApi;
 use cfx_rpc_cfx_api::TestRpcServer;
 use cfx_rpc_cfx_types::{
-    blame_info::BlameInfo,
-    block::{Block, BlockTransactions},
-    pos::{Block as PosBlock, Decision},
-    receipt::Receipt,
-    transaction::{PackedOrExecuted, Transaction as RpcTransaction},
-    Block as RpcBlock, Bytes,
+    blame_info::BlameInfo, block::Block, pos::Block as PosBlock, Bytes,
 };
-use cfx_rpc_utils::error::jsonrpsee_error_helpers::{
-    internal_error, internal_error_with_data,
-};
-use cfx_types::{Space, H256, U256, U64};
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::internal_error_with_data;
+use cfx_types::{H256, U256, U64};
 use cfxcore::{
-    block_data_manager::{BlockDataManager, DataVersionTuple},
-    consensus::{pos_handler::PosVerifier, ConsensusGraphInner},
-    genesis_block::register_transaction,
-    pow, SharedConsensusGraph, SharedSynchronizationService,
+    consensus::pos_handler::PosVerifier, SharedConsensusGraph,
+    SharedSynchronizationService, SharedTransactionPool,
 };
+use cfxcore_accounts::AccountProvider;
 use diem_types::{
-    account_address::{from_consensus_public_key, AccountAddress},
-    block_info::PivotBlockDecision,
-    transaction::TransactionPayload,
+    account_address::AccountAddress, transaction::TransactionPayload,
 };
 use jsonrpsee::{
     core::RpcResult,
     types::{
-        error::{
-            INTERNAL_ERROR_CODE, INVALID_PARAMS_CODE, METHOD_NOT_FOUND_CODE,
-        },
+        error::{INVALID_PARAMS_CODE, METHOD_NOT_FOUND_CODE},
         ErrorObjectOwned,
     },
 };
-use log::{info, warn};
-use network::{
-    node_table::{NodeEndpoint, NodeEntry, NodeId},
-    NetworkService, PeerInfo,
-};
+use log::info;
+use network::{node_table::NodeId, NetworkService, PeerInfo};
 use parking_lot::{Condvar, Mutex};
-use primitives::{
-    Block as PrimitiveBlock, SignedTransaction, TransactionIndex,
-    TransactionStatus, TransactionWithSignature,
-};
+use primitives::{SignedTransaction, TransactionWithSignature};
 use random_crash::*;
 use rlp::Rlp;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
-use crate::hash_value_to_h256;
+use crate::common::CommonRpcImpl;
 
 pub struct TestHandler {
-    exit: Arc<(Mutex<bool>, Condvar)>,
-    consensus: SharedConsensusGraph,
-    data_man: Arc<BlockDataManager>,
-    network: Arc<NetworkService>,
-    pos_handler: Arc<PosVerifier>,
+    common: CommonRpcImpl,
     block_gen: BlockGeneratorTestApi,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
@@ -70,18 +48,22 @@ impl TestHandler {
     pub fn new(
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, pos_handler: Arc<PosVerifier>,
+        tx_pool: SharedTransactionPool, accounts: Arc<AccountProvider>,
         block_gen: BlockGeneratorTestApi,
         maybe_txgen: Option<Arc<TransactionGenerator>>,
         maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
         sync: SharedSynchronizationService,
     ) -> Self {
-        let data_man = consensus.data_manager().clone();
-        TestHandler {
+        let common = CommonRpcImpl::new(
             exit,
             consensus,
-            data_man,
             network,
+            tx_pool,
+            accounts,
             pos_handler,
+        );
+        TestHandler {
+            common,
             block_gen,
             maybe_txgen,
             maybe_direct_txgen,
@@ -127,287 +109,16 @@ impl TestHandler {
 
         Ok(transactions)
     }
-
-    fn build_rpc_block(
-        &self, b: &PrimitiveBlock, consensus_inner: &ConsensusGraphInner,
-        include_txs: bool,
-    ) -> Result<RpcBlock, String> {
-        let network = *self.network.get_network_type();
-        let block_hash = b.block_header.hash();
-
-        let epoch_number = consensus_inner
-            .get_block_epoch_number(&block_hash)
-            .or_else(|| self.data_man.block_epoch_number(&block_hash))
-            .map(Into::into);
-
-        let block_number = self
-            .consensus
-            .get_block_number(&block_hash)?
-            .map(Into::into);
-
-        let _tx_len = b.transactions.len();
-
-        let (gas_used, transactions) = {
-            let maybe_results = consensus_inner
-                .block_execution_results_by_hash(&b.hash(), false);
-
-            let gas_used_sum = match maybe_results {
-                Some(DataVersionTuple(_, ref execution_result)) => {
-                    let mut total_gas_used = U256::zero();
-                    let mut prev_acc_gas_used = U256::zero();
-                    for (idx, tx) in b.transactions.iter().enumerate() {
-                        let receipt =
-                            &execution_result.block_receipts.receipts[idx];
-                        if tx.space() == Space::Native {
-                            total_gas_used += receipt.accumulated_gas_used
-                                - prev_acc_gas_used;
-                        }
-                        prev_acc_gas_used = receipt.accumulated_gas_used;
-                    }
-                    Some(total_gas_used)
-                }
-                None => None,
-            };
-
-            let transactions = match include_txs {
-                false => BlockTransactions::Hashes(
-                    b.transaction_hashes(Some(Space::Native)),
-                ),
-                true => {
-                    let maybe_results = consensus_inner
-                        .block_execution_results_by_hash(&b.hash(), false);
-                    let tx_vec = match maybe_results {
-                        Some(DataVersionTuple(_, ref execution_result)) => {
-                            let maybe_state_root = self
-                                .data_man
-                                .get_executed_state_root(&b.hash());
-
-                            b.transactions
-                                .iter()
-                                .enumerate()
-                                .filter(|(_idx, tx)| {
-                                    tx.space() == Space::Native
-                                })
-                                .enumerate()
-                                .map(|(new_index, (original_index, tx))| {
-                                    let receipt = execution_result
-                                        .block_receipts
-                                        .receipts
-                                        .get(original_index)
-                                        .unwrap();
-                                    let prior_gas_used =
-                                        if original_index == 0 {
-                                            U256::zero()
-                                        } else {
-                                            execution_result
-                                                .block_receipts
-                                                .receipts[original_index - 1]
-                                                .accumulated_gas_used
-                                        };
-                                    match receipt.outcome_status {
-                                        TransactionStatus::Success
-                                        | TransactionStatus::Failure => {
-                                            let tx_index = TransactionIndex {
-                                                block_hash: b.hash(),
-                                                real_index: original_index,
-                                                is_phantom: false,
-                                                rpc_index: Some(new_index),
-                                            };
-                                            let tx_exec_error_msg =
-                                                &execution_result
-                                                    .block_receipts
-                                                    .tx_execution_error_messages
-                                                    [original_index];
-                                            RpcTransaction::from_signed(
-                                                tx,
-                                                Some(
-                                                    PackedOrExecuted::Executed(
-                                                        Receipt::new(
-                                                            (**tx).clone(),
-                                                            receipt.clone(),
-                                                            tx_index,
-                                                            prior_gas_used,
-                                                            epoch_number,
-                                                            b.block_header
-                                                                .base_price(),
-                                                            maybe_state_root,
-                                                            if tx_exec_error_msg
-                                                                .is_empty()
-                                                            {
-                                                                None
-                                                            } else {
-                                                                Some(
-                                                                    tx_exec_error_msg
-                                                                        .clone(),
-                                                                )
-                                                            },
-                                                            network,
-                                                            false,
-                                                            false,
-                                                        )?,
-                                                    ),
-                                                ),
-                                                network,
-                                            )
-                                        }
-                                        TransactionStatus::Skipped => {
-                                            RpcTransaction::from_signed(
-                                                tx, None, network,
-                                            )
-                                        }
-                                    }
-                                })
-                                .collect::<Result<_, _>>()?
-                        }
-                        None => b
-                            .transactions
-                            .iter()
-                            .filter(|tx| tx.space() == Space::Native)
-                            .map(|x| {
-                                RpcTransaction::from_signed(x, None, network)
-                            })
-                            .collect::<Result<_, _>>()?,
-                    };
-                    BlockTransactions::Full(tx_vec)
-                }
-            };
-
-            (gas_used_sum, transactions)
-        };
-
-        let base_fee_per_gas: Option<U256> =
-            b.block_header.base_price().map(|x| x[Space::Native]).into();
-        let gas_limit: U256 = b.block_header.core_space_gas_limit();
-
-        Ok(RpcBlock {
-            hash: H256::from(block_hash),
-            parent_hash: H256::from(b.block_header.parent_hash().clone()),
-            height: b.block_header.height().into(),
-            miner: cfx_rpc_cfx_types::address::RpcAddress::try_from_h160(
-                *b.block_header.author(),
-                network,
-            )?,
-            deferred_state_root: H256::from(
-                b.block_header.deferred_state_root().clone(),
-            ),
-            deferred_receipts_root: H256::from(
-                b.block_header.deferred_receipts_root().clone(),
-            ),
-            deferred_logs_bloom_hash: H256::from(
-                b.block_header.deferred_logs_bloom_hash().clone(),
-            ),
-            blame: U64::from(b.block_header.blame()),
-            transactions_root: H256::from(
-                b.block_header.transactions_root().clone(),
-            ),
-            epoch_number: epoch_number.map(|e| U256::from(e)),
-            block_number,
-            gas_used,
-            gas_limit,
-            base_fee_per_gas,
-            timestamp: b.block_header.timestamp().into(),
-            difficulty: b.block_header.difficulty().clone().into(),
-            pow_quality: b
-                .block_header
-                .pow_hash
-                .map(|h| pow::pow_hash_to_quality(&h, &b.block_header.nonce())),
-            adaptive: b.block_header.adaptive(),
-            referee_hashes: b
-                .block_header
-                .referee_hashes()
-                .iter()
-                .map(|x| H256::from(*x))
-                .collect(),
-            nonce: b.block_header.nonce().into(),
-            transactions,
-            custom: b
-                .block_header
-                .custom()
-                .clone()
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-            size: Some(b.size().into()),
-            pos_reference: b.block_header.pos_reference().clone(),
-        })
-    }
 }
 
 impl TestRpcServer for TestHandler {
-    fn say_hello(&self) -> RpcResult<String> { Ok("Hello, world".into()) }
+    fn say_hello(&self) -> RpcResult<String> { self.common.say_hello() }
 
     fn get_block_count(&self) -> RpcResult<u64> {
-        info!("RPC Request: get_block_count()");
-        let count = self.consensus.block_count();
-        info!("RPC Response: get_block_count={}", count);
-        Ok(count)
+        self.common.get_block_count()
     }
 
-    fn get_goodput(&self) -> RpcResult<String> {
-        info!("RPC Request: get_goodput");
-        let mut all_block_set = HashSet::new();
-        for epoch_number in 1..self.consensus.best_epoch_number() {
-            for block_hash in self
-                .consensus
-                .get_block_hashes_by_epoch(epoch_number.into())
-                .map_err(|_| internal_error())?
-            {
-                all_block_set.insert(block_hash);
-            }
-        }
-        let mut set = HashSet::new();
-        let mut min = std::u64::MAX;
-        let mut max: u64 = 0;
-        for key in &all_block_set {
-            if let Some(block) =
-                self.data_man.block_by_hash(key, false /* update_cache */)
-            {
-                let timestamp = block.block_header.timestamp();
-                if timestamp < min && timestamp > 0 {
-                    min = timestamp;
-                }
-                if timestamp > max {
-                    max = timestamp;
-                }
-                for transaction in &block.transactions {
-                    set.insert(transaction.hash());
-                }
-            }
-        }
-        if max != min {
-            let lower_bound = min + ((max - min) as f64 * 0.3) as u64;
-            let upper_bound = min + ((max - min) as f64 * 0.8) as u64;
-            let mut ranged_set = HashSet::new();
-            for key in &all_block_set {
-                if let Some(block) = self
-                    .data_man
-                    .block_by_hash(key, false /* update_cache */)
-                {
-                    let timestamp = block.block_header.timestamp();
-                    if timestamp > lower_bound && timestamp < upper_bound {
-                        for transaction in &block.transactions {
-                            ranged_set.insert(transaction.hash());
-                        }
-                    }
-                }
-            }
-            if upper_bound != lower_bound {
-                Ok(format!(
-                    "full: {}, ranged: {}",
-                    set.len() as isize / (max - min) as isize,
-                    ranged_set.len() as isize
-                        / (upper_bound - lower_bound) as isize
-                ))
-            } else {
-                Ok(format!(
-                    "full: {}",
-                    set.len() as isize / (max - min) as isize
-                ))
-            }
-        } else {
-            Ok("-1".to_string())
-        }
-    }
+    fn get_goodput(&self) -> RpcResult<String> { self.common.get_goodput() }
 
     fn generate_empty_blocks(&self, num_blocks: usize) -> RpcResult<Vec<H256>> {
         info!("RPC Request: generate({:?})", num_blocks);
@@ -448,72 +159,27 @@ impl TestRpcServer for TestHandler {
     }
 
     fn add_peer(&self, id: NodeId, addr: SocketAddr) -> RpcResult<()> {
-        let node = NodeEntry {
-            id,
-            endpoint: NodeEndpoint {
-                address: addr,
-                udp_port: addr.port(),
-            },
-        };
-        info!("RPC Request: add_peer({:?})", node.clone());
-        self.network.add_peer(node).map_err(|_| internal_error())
+        self.common.add_peer(id, addr)
     }
 
     fn drop_peer(&self, id: NodeId, addr: SocketAddr) -> RpcResult<()> {
-        let node = NodeEntry {
-            id,
-            endpoint: NodeEndpoint {
-                address: addr,
-                udp_port: addr.port(),
-            },
-        };
-        info!("RPC Request: drop_peer({:?})", node.clone());
-        self.network.drop_peer(node).map_err(|_| internal_error())
+        self.common.drop_peer(id, addr)
     }
 
     fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>> {
-        info!("RPC Request: get_peer_info");
-        Ok(self.network.get_peer_info().unwrap_or_default())
+        self.common.get_peer_info()
     }
 
-    fn chain(&self) -> RpcResult<Vec<Block>> {
-        info!("RPC Request: test_getChain");
-        let consensus_graph = &*self.consensus;
-        let inner = &*consensus_graph.inner.read();
+    fn chain(&self) -> RpcResult<Vec<Block>> { self.common.chain() }
 
-        let result: Result<Vec<_>, String> = inner
-            .all_blocks_with_topo_order()
-            .iter()
-            .map(|hash| {
-                let block = self
-                    .data_man
-                    .block_by_hash(hash, false /* update_cache */)
-                    .expect("Error to get block by hash");
-                self.build_rpc_block(&*block, inner, true)
-            })
-            .collect();
-
-        result.map_err(|e| {
-            ErrorObjectOwned::owned(INTERNAL_ERROR_CODE, e, None::<()>)
-        })
-    }
-
-    fn stop(&self) -> RpcResult<()> {
-        *self.exit.0.lock() = true;
-        self.exit.1.notify_all();
-        Ok(())
-    }
+    fn stop(&self) -> RpcResult<()> { self.common.stop() }
 
     fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>> {
-        self.network
-            .sign_challenge(challenge)
-            .map_err(|_| internal_error())
+        self.common.get_nodeid(challenge)
     }
 
     fn add_latency(&self, id: NodeId, latency_ms: f64) -> RpcResult<()> {
-        self.network
-            .add_latency(id, latency_ms)
-            .map_err(|_| internal_error())
+        self.common.add_latency(id, latency_ms)
     }
 
     fn generate_one_block(
@@ -542,7 +208,7 @@ impl TestRpcServer for TestHandler {
                         &mut block_size_limit,
                         num_txs_simple,
                         num_txs_erc20,
-                        self.consensus.best_chain_id().in_native_space(),
+                        self.common.consensus.best_chain_id().in_native_space(),
                     );
                 Ok(self.block_gen.generate_block(
                     num_txs,
@@ -612,7 +278,7 @@ impl TestRpcServer for TestHandler {
     }
 
     fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)> {
-        let consensus_graph = &*self.consensus;
+        let consensus_graph = &*self.common.consensus;
         let status = consensus_graph
             .data_man
             .local_block_info_by_hash(&block_hash)
@@ -649,7 +315,8 @@ impl TestRpcServer for TestHandler {
     fn get_pivot_chain_and_weight(
         &self, height_range: Option<(u64, u64)>,
     ) -> RpcResult<Vec<(H256, U256)>> {
-        self.consensus
+        self.common
+            .consensus
             .inner
             .read()
             .get_pivot_chain_and_weight(height_range)
@@ -658,6 +325,7 @@ impl TestRpcServer for TestHandler {
 
     fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)> {
         let commitment = self
+            .common
             .consensus
             .data_manager()
             .get_epoch_execution_commitment(&block_hash)
@@ -707,166 +375,61 @@ impl TestRpcServer for TestHandler {
         Ok(())
     }
 
-    fn save_node_db(&self) -> RpcResult<()> {
-        self.network.save_node_db();
-        Ok(())
-    }
+    fn save_node_db(&self) -> RpcResult<()> { self.common.save_node_db() }
 
     fn pos_register(
         &self, voting_power: U64, version: Option<u8>,
     ) -> RpcResult<(Bytes, AccountAddress)> {
-        let legacy = version.map_or(false, |x| x == 0);
-        let tx = register_transaction(
-            self.pos_handler.config().bls_key.private_key(),
-            self.pos_handler.config().vrf_key.public_key(),
-            voting_power.as_u64(),
-            0,
-            legacy,
-        );
-        let identifier = from_consensus_public_key(
-            &self.pos_handler.config().bls_key.public_key(),
-            &self.pos_handler.config().vrf_key.public_key(),
-        );
-        Ok((tx.data.into(), identifier))
+        self.common.pos_register(voting_power, version)
     }
 
     fn pos_update_voting_power(
-        &self, _pos_account: AccountAddress, _increased_voting_power: U64,
+        &self, pos_account: AccountAddress, increased_voting_power: U64,
     ) -> RpcResult<()> {
-        unimplemented!()
+        self.common
+            .pos_update_voting_power(pos_account, increased_voting_power)
     }
 
     fn pos_stop_election(&self) -> RpcResult<Option<u64>> {
-        self.pos_handler.stop_election().map_err(|e| {
-            warn!("stop_election: err={:?}", e);
-            internal_error()
-        })
+        self.common.pos_stop_election()
     }
 
     fn pos_start_voting(&self, initialize: bool) -> RpcResult<()> {
-        info!("RPC Request: pos_start_voting, initialize={}", initialize);
-        self.pos_handler.start_voting(initialize).map_err(|e| {
-            warn!("start_voting: err={:?}", e);
-            internal_error_with_data(e.to_string())
-        })
+        self.common.pos_start_voting(initialize)
     }
 
-    fn pos_stop_voting(&self) -> RpcResult<()> {
-        info!("RPC Request: pos_stop_voting");
-        self.pos_handler.stop_voting().map_err(|e| {
-            warn!("stop_voting: err={:?}", e);
-            internal_error_with_data(e.to_string())
-        })
-    }
+    fn pos_stop_voting(&self) -> RpcResult<()> { self.common.pos_stop_voting() }
 
     fn pos_voting_status(&self) -> RpcResult<bool> {
-        self.pos_handler.voting_status().map_err(|e| {
-            warn!("voting_status: err={:?}", e);
-            internal_error_with_data(e.to_string())
-        })
+        self.common.pos_voting_status()
     }
 
-    fn pos_start(&self) -> RpcResult<()> {
-        self.pos_handler
-            .initialize(self.consensus.clone())
-            .map_err(internal_error_with_data)
-    }
+    fn pos_start(&self) -> RpcResult<()> { self.common.pos_start() }
 
     fn pos_force_vote_proposal(&self, block_id: H256) -> RpcResult<()> {
-        if !self.network.is_test_mode() {
-            return Err(internal_error());
-        }
-        self.pos_handler.force_vote_proposal(block_id).map_err(|e| {
-            warn!("force_vote_proposal: err={:?}", e);
-            internal_error()
-        })
+        self.common.pos_force_vote_proposal(block_id)
     }
 
     fn pos_force_propose(
         &self, round: U64, parent_block_id: H256,
         payload: Vec<TransactionPayload>,
     ) -> RpcResult<()> {
-        if !self.network.is_test_mode() {
-            return Err(internal_error());
-        }
-        self.pos_handler
-            .force_propose(round, parent_block_id, payload)
-            .map_err(|e| {
-                warn!("pos_force_propose: err={:?}", e);
-                internal_error()
-            })
+        self.common
+            .pos_force_propose(round, parent_block_id, payload)
     }
 
     fn pos_trigger_timeout(&self, timeout_type: String) -> RpcResult<()> {
-        if !self.network.is_test_mode() {
-            return Err(internal_error());
-        }
-        self.pos_handler.trigger_timeout(timeout_type).map_err(|e| {
-            warn!("pos_trigger_timeout: err={:?}", e);
-            internal_error()
-        })
+        self.common.pos_trigger_timeout(timeout_type)
     }
 
     fn pos_force_sign_pivot_decision(
         &self, block_hash: H256, height: U64,
     ) -> RpcResult<()> {
-        if !self.network.is_test_mode() {
-            return Err(internal_error());
-        }
-        self.pos_handler
-            .force_sign_pivot_decision(PivotBlockDecision {
-                block_hash,
-                height: height.as_u64(),
-            })
-            .map_err(|e| {
-                warn!("pos_force_sign_pivot_decision: err={:?}", e);
-                internal_error()
-            })
+        self.common
+            .pos_force_sign_pivot_decision(block_hash, height)
     }
 
     fn pos_get_chosen_proposal(&self) -> RpcResult<Option<PosBlock>> {
-        let maybe_block = self
-            .pos_handler
-            .get_chosen_proposal()
-            .map_err(|e| {
-                warn!("pos_get_chosen_proposal: err={:?}", e);
-                internal_error()
-            })?
-            .and_then(|b| {
-                let block_hash = b.id();
-                self.pos_handler
-                    .cached_db()
-                    .get_block(&block_hash)
-                    .ok()
-                    .map(|executed_block| {
-                        let executed_block = executed_block.lock();
-                        PosBlock {
-                            hash: hash_value_to_h256(b.id()),
-                            epoch: U64::from(b.epoch()),
-                            round: U64::from(b.round()),
-                            last_tx_number: executed_block
-                                .output()
-                                .version()
-                                .unwrap_or_default()
-                                .into(),
-                            miner: b.author().map(|a| H256::from(a.to_u8())),
-                            parent_hash: hash_value_to_h256(b.parent_id()),
-                            timestamp: U64::from(b.timestamp_usecs()),
-                            pivot_decision: executed_block
-                                .output()
-                                .pivot_block()
-                                .as_ref()
-                                .map(|d| Decision::from(d)),
-                            height: executed_block
-                                .output()
-                                .executed_trees()
-                                .pos_state()
-                                .current_view()
-                                .into(),
-                            signatures: vec![],
-                        }
-                    })
-            });
-        Ok(maybe_block)
+        self.common.pos_get_chosen_proposal()
     }
 }

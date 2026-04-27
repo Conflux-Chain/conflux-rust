@@ -15,7 +15,6 @@
 
 /// A BLS signature wrapper
 pub mod bls;
-pub mod compat;
 /// A Elliptic Curve VRF wrapper
 pub mod ec_vrf;
 pub mod error;

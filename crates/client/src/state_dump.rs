@@ -102,6 +102,7 @@ fn prepare_state_db(
         _,
         _,
         _,
+        _,
     ) = initialize_not_light_node_modules(
         conf,
         exit_cond_var,

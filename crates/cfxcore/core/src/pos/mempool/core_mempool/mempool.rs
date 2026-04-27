@@ -12,9 +12,7 @@ use crate::pos::mempool::{
         index::TxnPointer,
         transaction::{MempoolTransaction, TimelineState},
         transaction_store::TransactionStore,
-        ttl_cache::TtlCache,
     },
-    counters,
     logging::{LogEntry, LogSchema, TxnsLog},
 };
 use diem_config::config::NodeConfig;
@@ -25,26 +23,18 @@ use diem_types::{
     mempool_status::MempoolStatus,
     term_state::PosState,
     transaction::{
-        authenticator::TransactionAuthenticator, GovernanceRole,
-        SignedTransaction, TransactionPayload,
+        authenticator::TransactionAuthenticator, SignedTransaction,
+        TransactionPayload,
     },
     validator_verifier::ValidatorVerifier,
 };
 use executor::vm::verify_dispute;
-use std::{
-    collections::HashSet,
-    time::{Duration, SystemTime},
-};
+use std::{collections::HashSet, time::Duration};
 
 pub struct Mempool {
     // Stores the metadata of all transactions in mempool (of all states).
     pub transactions: TransactionStore,
 
-    // For each transaction, an entry with a timestamp is added when the
-    // transaction enters mempool. This is used to measure e2e latency of
-    // transactions in the system, as well as the time it takes to pick it
-    // up by consensus.
-    pub(crate) metrics_cache: TtlCache<(AccountAddress, HashValue), SystemTime>,
     pub system_transaction_timeout: Duration,
 }
 
@@ -52,10 +42,6 @@ impl Mempool {
     pub fn new(config: &NodeConfig) -> Self {
         Mempool {
             transactions: TransactionStore::new(&config.mempool),
-            metrics_cache: TtlCache::new(
-                config.mempool.capacity,
-                Duration::from_secs(100),
-            ),
             system_transaction_timeout: Duration::from_secs(
                 config.mempool.system_transaction_timeout_secs,
             ),
@@ -63,66 +49,25 @@ impl Mempool {
     }
 
     /// This function will be called once the transaction has been stored.
-    pub(crate) fn remove_transaction(
-        &mut self, sender: &AccountAddress, hash: HashValue, is_rejected: bool,
-    ) {
-        diem_trace!(
-            LogSchema::new(LogEntry::RemoveTxn)
-                .txns(TxnsLog::new_txn(*sender, hash)),
-            is_rejected = is_rejected
-        );
-        let metric_label = if is_rejected {
-            counters::COMMIT_REJECTED_LABEL
-        } else {
-            counters::COMMIT_ACCEPTED_LABEL
-        };
-        self.log_latency(*sender, hash, metric_label);
-        self.metrics_cache.remove(&(*sender, hash));
-
-        if is_rejected {
-            self.transactions.reject_transaction(&sender, hash);
-        } else {
-            self.transactions.commit_transaction(&sender, hash);
-        }
-    }
-
-    fn log_latency(
-        &mut self, account: AccountAddress, hash: HashValue, metric: &str,
-    ) {
-        if let Some(&creation_time) = self.metrics_cache.get(&(account, hash)) {
-            if let Ok(time_delta) =
-                SystemTime::now().duration_since(creation_time)
-            {
-                counters::CORE_MEMPOOL_TXN_COMMIT_LATENCY
-                    .with_label_values(&[metric])
-                    .observe(time_delta.as_secs_f64());
-            }
-        }
+    pub(crate) fn remove_transaction(&mut self, hash: HashValue) {
+        self.transactions.commit_transaction(hash);
     }
 
     /// Used to add a transaction to the Mempool.
     /// Performs basic validation: checks account's sequence number.
     pub(crate) fn add_txn(
-        &mut self, txn: SignedTransaction, ranking_score: u64,
-        timeline_state: TimelineState, governance_role: GovernanceRole,
+        &mut self, txn: SignedTransaction, timeline_state: TimelineState,
     ) -> MempoolStatus {
         diem_trace!(LogSchema::new(LogEntry::AddTxn)
             .txns(TxnsLog::new_txn(txn.sender(), txn.hash())),);
 
-        let expiration_time = diem_infallible::duration_since_epoch()
+        let expiration_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH")
             + self.system_transaction_timeout;
-        if timeline_state != TimelineState::NonQualified {
-            self.metrics_cache
-                .insert((txn.sender(), txn.hash()), SystemTime::now());
-        }
 
-        let txn_info = MempoolTransaction::new(
-            txn,
-            expiration_time,
-            ranking_score,
-            timeline_state,
-            governance_role,
-        );
+        let txn_info =
+            MempoolTransaction::new(txn, expiration_time, timeline_state);
 
         self.transactions.insert(txn_info)
     }
@@ -138,16 +83,8 @@ impl Mempool {
     ) -> Vec<SignedTransaction> {
         let mut block = vec![];
         let mut block_log = TxnsLog::new();
-        // Helper DS. Helps to mitigate scenarios where account submits several
-        // transactions with increasing gas price (e.g. user submits
-        // transactions with sequence number 1, 2 and gas_price 1, 10
-        // respectively) Later txn has higher gas price and will be
-        // observed first in priority index iterator, but can't be
-        // executed before first txn. Once observed, such txn will be saved in
-        // `skipped` DS and rechecked once it's ancestor becomes available
         let seen_size = seen.len();
         let mut txn_walked = 0usize;
-        // iterate all normal transaction
         for txn in self.transactions.iter() {
             txn_walked += 1;
             if seen.contains(&TxnPointer::from(txn)) {
@@ -256,29 +193,16 @@ impl Mempool {
             result_size = block.len(),
             block_size = block.len()
         );
-        for transaction in &block {
-            self.log_latency(
-                transaction.sender(),
-                transaction.hash(),
-                counters::GET_BLOCK_STAGE_LABEL,
-            );
-        }
         block
     }
 
     /// Periodic core mempool garbage collection.
-    /// Removes all expired transactions and clears expired entries in metrics
-    /// cache and sequence number cache.
-    pub(crate) fn gc(&mut self) {
-        let now = SystemTime::now();
-        self.transactions.gc_by_system_ttl(&self.metrics_cache);
-        self.metrics_cache.gc(now);
-    }
+    /// Removes all expired transactions.
+    pub(crate) fn gc(&mut self) { self.transactions.gc_by_system_ttl(); }
 
     /// Garbage collection based on client-specified expiration time.
     pub(crate) fn gc_by_expiration_time(&mut self, block_time: Duration) {
-        self.transactions
-            .gc_by_expiration_time(block_time, &self.metrics_cache);
+        self.transactions.gc_by_expiration_time(block_time);
     }
 
     /// Read `count` transactions from timeline since `timeline_id`.
