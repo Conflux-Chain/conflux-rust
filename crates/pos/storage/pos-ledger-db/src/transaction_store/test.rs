@@ -7,14 +7,13 @@
 
 use super::*;
 use crate::PosLedgerDB;
-use diem_proptest_helpers::Index;
 use diem_temppath::TempPath;
 use diem_types::{
     block_metadata::BlockMetadata,
     proptest_types::{AccountInfoUniverse, SignatureCheckedTransactionGen},
     transaction::{SignedTransaction, Transaction},
 };
-use proptest::{collection::vec, prelude::*};
+use proptest::{collection::vec, prelude::*, sample::Index};
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(10))]
@@ -119,7 +118,7 @@ fn init_store(
         .into_iter()
         .map(|(index, gen)| {
             Transaction::UserTransaction(
-                gen.materialize(*index, &mut universe).into_inner(),
+                gen.materialize(index, &mut universe).into_inner(),
             )
         })
         .collect::<Vec<_>>();

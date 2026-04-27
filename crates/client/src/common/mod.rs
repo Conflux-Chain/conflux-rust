@@ -23,6 +23,7 @@ use cfx_executor::machine::{Machine, VmFactory};
 use cfx_parameters::genesis::{
     DEV_GENESIS_KEY_PAIR_2, GENESIS_ACCOUNT_ADDRESS,
 };
+use cfx_rpc_cfx_types::apis::ApiSet;
 use cfx_storage::StorageManager;
 use cfx_tasks::TaskManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
@@ -68,6 +69,7 @@ use crate::{
 use cfx_mallocator_utils::start_pprf_server;
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 
+pub mod panic_handler;
 pub mod shutdown_handler;
 
 /// Hold all top-level components for a type of client.
@@ -488,6 +490,7 @@ pub fn initialize_not_light_node_modules(
         Arc<TokioRuntime>,
         Option<RpcServerHandle>,
         Option<RpcServerHandle>,
+        Option<RpcServerHandle>,
         TaskManager,
     ),
     String,
@@ -570,7 +573,7 @@ pub fn initialize_not_light_node_modules(
         ).expect("Memory usage thread start fails");
     }
 
-    let (maybe_txgen, _maybe_direct_txgen) = initialize_txgens(
+    let (maybe_txgen, maybe_direct_txgen) = initialize_txgens(
         consensus.clone(),
         txpool.clone(),
         sync.clone(),
@@ -652,7 +655,32 @@ pub fn initialize_not_light_node_modules(
             task_executor.clone(),
             accounts.clone(),
             exit.clone(),
+            blockgen.test_api(),
+            maybe_txgen.clone(),
+            maybe_direct_txgen.clone(),
             conf,
+            conf.raw_conf.public_rpc_apis.clone(),
+            false,
+        ))?;
+
+    let debug_cfx_rpc_server_handle =
+        tokio_runtime.block_on(launch_cfx_async_rpc_servers(
+            consensus.clone(),
+            sync.clone(),
+            txpool.clone(),
+            data_man.clone(),
+            network.clone(),
+            pos_verifier.clone(),
+            notifications.clone(),
+            task_executor.clone(),
+            accounts.clone(),
+            exit.clone(),
+            blockgen.test_api(),
+            maybe_txgen.clone(),
+            maybe_direct_txgen.clone(),
+            conf,
+            ApiSet::All,
+            true,
         ))?;
 
     // start pprf server, which is used to serve the pprof data for heap
@@ -682,6 +710,7 @@ pub fn initialize_not_light_node_modules(
         tokio_runtime,
         eth_rpc_server_handle,
         cfx_rpc_server_handle,
+        debug_cfx_rpc_server_handle,
         task_manager,
     ))
 }

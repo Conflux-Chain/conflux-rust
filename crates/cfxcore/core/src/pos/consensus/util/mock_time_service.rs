@@ -6,8 +6,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::pos::consensus::util::time_service::{ScheduledTask, TimeService};
-use diem_infallible::Mutex;
 use diem_logger::prelude::*;
+use parking_lot::Mutex;
 use std::{sync::Arc, time::Duration};
 
 /// SimulatedTimeService implements TimeService, however it does not depend on

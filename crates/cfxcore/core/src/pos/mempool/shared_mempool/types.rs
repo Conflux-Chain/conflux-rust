@@ -19,15 +19,12 @@ use crate::pos::{
 };
 use anyhow::Result;
 use cached_pos_ledger_db::CachedPosLedgerDB;
-use channel::diem_channel::Receiver;
 use diem_config::config::MempoolConfig;
 use diem_crypto::HashValue;
-use diem_infallible::{Mutex, RwLock};
 use diem_types::{
     account_address::AccountAddress, mempool_status::MempoolStatus,
-    on_chain_config::OnChainConfigPayload, term_state::PosState,
-    transaction::SignedTransaction, validator_verifier::ValidatorVerifier,
-    vm_status::DiscardedVMStatus,
+    term_state::PosState, transaction::SignedTransaction,
+    validator_verifier::ValidatorVerifier, vm_status::DiscardedVMStatus,
 };
 use futures::{
     channel::{
@@ -38,8 +35,8 @@ use futures::{
     task::{Context, Poll},
 };
 use network::node_table::NodeId;
+use parking_lot::{Mutex, RwLock};
 use std::{fmt, pin::Pin, sync::Arc, task::Waker, time::Instant};
-use subscription_service::ReconfigSubscription;
 use tokio::runtime::Handle;
 
 /// Struct that owns all dependencies required by shared mempool routines.
@@ -132,63 +129,32 @@ impl Future for ScheduledBroadcast {
     }
 }
 
-/// Message sent from consensus to mempool.
-pub enum ConsensusRequest {
-    /// Request to pull block to submit to consensus.
-    GetBlockRequest(
-        // max block size
-        u64,
-        // transactions to exclude from requested block
-        Vec<TransactionExclusion>,
-        // parent block id
-        HashValue,
-        // current validators
-        ValidatorVerifier,
-        oneshot::Sender<Result<ConsensusResponse>>,
-    ),
-    /// Notifications about *rejected* committed txns.
-    RejectNotification(
-        Vec<CommittedTransaction>,
-        oneshot::Sender<Result<ConsensusResponse>>,
-    ),
+/// Consensus asking mempool to pull a block to submit to consensus.
+pub struct ConsensusRequest {
+    pub max_block_size: u64,
+    pub exclude_txns: Vec<TransactionExclusion>,
+    pub parent_block_id: HashValue,
+    pub validators: ValidatorVerifier,
+    pub callback: oneshot::Sender<Result<ConsensusResponse>>,
 }
 
 impl fmt::Display for ConsensusRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let payload = match self {
-            ConsensusRequest::GetBlockRequest(
-                block_size,
-                excluded_txns,
-                parent_block_id,
-                _,
-                _,
-            ) => {
-                let mut txns_str = "".to_string();
-                for tx in excluded_txns.iter() {
-                    txns_str += &format!("{} ", tx);
-                }
-                format!(
-                    "GetBlockRequest [block_size: {}, excluded_txns: {}, parent_block_id: {}]",
-                    block_size, txns_str, parent_block_id
-                )
-            }
-            ConsensusRequest::RejectNotification(rejected_txns, _) => {
-                let mut txns_str = "".to_string();
-                for tx in rejected_txns.iter() {
-                    txns_str += &format!("{} ", tx);
-                }
-                format!("RejectNotification [rejected_txns: {}]", txns_str)
-            }
-        };
-        write!(f, "{}", payload)
+        let mut txns_str = "".to_string();
+        for tx in self.exclude_txns.iter() {
+            txns_str += &format!("{} ", tx);
+        }
+        write!(
+            f,
+            "GetBlockRequest [block_size: {}, excluded_txns: {}, parent_block_id: {}]",
+            self.max_block_size, txns_str, self.parent_block_id
+        )
     }
 }
 
-/// Response sent from mempool to consensus.
-pub enum ConsensusResponse {
-    /// Block to submit to consensus
-    GetBlockResponse(Vec<SignedTransaction>),
-    CommitResponse(),
+/// Block of transactions returned from mempool to consensus.
+pub struct ConsensusResponse {
+    pub txns: Vec<SignedTransaction>,
 }
 
 /// Notification from state sync to mempool of commit event.
@@ -271,13 +237,3 @@ pub type MempoolClientSender = mpsc::Sender<(
     SignedTransaction,
     oneshot::Sender<Result<SubmissionStatus>>,
 )>;
-
-/// The mempool reconfig subscription no longer subscribes to any specific
-/// on-chain configs. Previously it subscribed to `DiemVersion` and `VMConfig`,
-/// but those Diem config types were dead code in Conflux PoS (commented out
-/// of `ON_CHAIN_CONFIG_REGISTRY` and never populated) so removing them has
-/// no behavioral effect.
-pub fn gen_mempool_reconfig_subscription(
-) -> (ReconfigSubscription, Receiver<(), OnChainConfigPayload>) {
-    ReconfigSubscription::subscribe_all("mempool", vec![], vec![])
-}

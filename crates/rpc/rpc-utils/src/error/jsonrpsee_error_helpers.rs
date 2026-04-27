@@ -6,6 +6,7 @@ use jsonrpsee::types::error::{
     INVALID_PARAMS_CODE, INVALID_REQUEST_CODE,
 };
 use serde::Serialize;
+use std::fmt;
 
 pub fn invalid_params_msg(param: &str) -> ErrorObjectOwned {
     let data: Option<bool> = None;
@@ -16,6 +17,16 @@ pub fn invalid_params<S: Serialize>(
     param: &str, data: Option<S>,
 ) -> ErrorObjectOwned {
     invalid_params_rpc_err(format!("Invalid parameters: {}", param), data)
+}
+
+pub fn invalid_params_detail<T: fmt::Debug>(
+    param: &str, details: T,
+) -> ErrorObjectOwned {
+    ErrorObjectOwned::owned(
+        INVALID_PARAMS_CODE,
+        format!("Invalid parameters: {} {:?}", param, details),
+        Some(format!("{:?}", details)),
+    )
 }
 
 pub fn invalid_params_rpc_err<S: Serialize>(

@@ -17,14 +17,11 @@
 
 mod block_storage;
 mod consensusdb;
-mod counters;
 mod epoch_manager;
 mod error;
 mod liveness;
 mod logging;
 pub(crate) mod network;
-#[cfg(test)]
-mod network_tests;
 mod pending_votes;
 mod persistent_liveness_storage;
 mod round_manager;
@@ -42,6 +39,4 @@ pub use self::network::NetworkTask;
 pub use consensusdb::ConsensusDB;
 #[cfg(feature = "fuzzing")]
 pub use round_manager::round_manager_fuzzing;
-pub use util::{
-    config_subscription::gen_consensus_reconfig_subscription, TestCommand,
-};
+pub use util::TestCommand;

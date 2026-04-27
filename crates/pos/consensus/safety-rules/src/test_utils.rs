@@ -20,8 +20,8 @@ use diem_crypto::{
     hash::{CryptoHash, TransactionAccumulatorHasher},
     traits::SigningKey,
 };
-use diem_infallible::duration_since_epoch;
-use diem_secure_storage::{InMemoryStorage, Storage};
+use diem_secure_storage::OnDiskStorage;
+use diem_temppath::TempPath;
 use diem_types::{
     block_info::BlockInfo,
     epoch_state::EpochState,
@@ -31,7 +31,10 @@ use diem_types::{
     validator_info::ValidatorInfo,
     validator_signer::ValidatorSigner,
 };
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 pub type Proof = AccumulatorExtensionProof<TransactionAccumulatorHasher>;
 
@@ -65,7 +68,10 @@ pub fn make_proposal_with_qc_and_proof(
         Block::new_proposal(
             payload,
             round,
-            duration_since_epoch().as_secs(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("System time is before UNIX_EPOCH")
+                .as_secs(),
             qc,
             validator_signer,
         ),
@@ -224,9 +230,9 @@ pub fn validator_signers_to_ledger_info(
 }
 
 pub fn test_storage(signer: &ValidatorSigner) -> PersistentSafetyStorage {
-    let storage = Storage::from(InMemoryStorage::new());
+    let file_path = TempPath::new().path().to_path_buf();
     PersistentSafetyStorage::initialize(
-        storage,
+        OnDiskStorage::new(file_path),
         signer.author(),
         signer.private_key().clone(),
         true,

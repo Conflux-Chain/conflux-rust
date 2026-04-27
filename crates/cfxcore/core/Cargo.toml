@@ -48,6 +48,7 @@ priority-send-queue = { workspace = true }
 rand = { workspace = true }
 rand_08 = { workspace = true }
 rand_xorshift = { workspace = true }
+hex = { workspace = true }
 rangetools = { workspace = true }
 rayon = { workspace = true }
 rlp = { workspace = true }
@@ -80,9 +81,7 @@ mirai-annotations = { workspace = true, default-features = false }
 bounded-executor = { workspace = true }
 diem-config = { workspace = true }
 diem-crypto = { workspace = true }
-diem-infallible = { workspace = true }
 diem-logger = { workspace = true }
-diem-metrics = { workspace = true }
 diem-types = { workspace = true }
 executor-types = { workspace = true }
 executor = { workspace = true }
@@ -92,8 +91,6 @@ pos-ledger-db = { workspace = true }
 cached-pos-ledger-db = { workspace = true }
 schemadb = { workspace = true }
 storage-interface = { workspace = true }
-short-hex-str = { workspace = true }
-subscription-service = { workspace = true }
 fail = { workspace = true }
 anyhow = { workspace = true }
 once_cell = { workspace = true }
@@ -102,7 +99,6 @@ pow-types = { workspace = true }
 proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
 diem-temppath = { workspace = true }
-crash-handler = { workspace = true }
 heap-map = { workspace = true }
 treap-map = { workspace = true }
 cfx-packing-pool = { workspace = true }

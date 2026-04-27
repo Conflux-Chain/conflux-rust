@@ -1277,10 +1277,10 @@ dependencies = [
  "anyhow",
  "consensus-types",
  "diem-crypto",
- "diem-infallible",
  "diem-logger",
  "diem-types",
  "executor-types",
+ "parking_lot 0.12.3",
  "serde",
  "storage-interface",
 ]
@@ -1464,7 +1464,7 @@ dependencies = [
  "rlp-derive",
  "serde",
  "serde_derive",
- "toml 0.8.19",
+ "toml",
 ]
 
 [[package]]
@@ -1768,14 +1768,11 @@ dependencies = [
  "channel",
  "clap",
  "consensus-types",
- "crash-handler",
  "dag",
  "db",
  "diem-config",
  "diem-crypto",
- "diem-infallible",
  "diem-logger",
- "diem-metrics",
  "diem-temppath",
  "diem-types",
  "either",
@@ -1787,6 +1784,7 @@ dependencies = [
  "geth-tracer",
  "hashbrown 0.7.2",
  "heap-map",
+ "hex",
  "hibitset",
  "itertools 0.14.0",
  "jsonrpsee",
@@ -1826,7 +1824,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "short-hex-str",
  "siphasher 0.3.10",
  "slab",
  "smart-default",
@@ -1835,14 +1832,13 @@ dependencies = [
  "storage-interface",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "subscription-service",
  "thiserror 2.0.18",
  "threadpool",
  "throttling",
  "tiny-keccak",
  "tokio",
  "tokio-stream",
- "toml 0.8.19",
+ "toml",
  "treap-map",
  "unexpected",
 ]
@@ -1955,9 +1951,8 @@ name = "channel"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "diem-infallible",
- "diem-metrics",
  "futures 0.3.30",
+ "parking_lot 0.12.3",
 ]
 
 [[package]]
@@ -2065,13 +2060,12 @@ dependencies = [
  "bcs",
  "diem-crypto",
  "diem-crypto-derive",
- "diem-infallible",
  "diem-types",
  "executor-types",
+ "hex",
  "mirai-annotations",
  "rustc-hex",
  "serde",
- "short-hex-str",
 ]
 
 [[package]]
@@ -2157,16 +2151,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28d997bd5e24a5928dd43e46dc529867e207907fe0b239c3477d924f7f2ca320"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "crash-handler"
-version = "0.1.0"
-dependencies = [
- "backtrace",
- "diem-logger",
- "serde",
- "toml 0.5.11",
 ]
 
 [[package]]
@@ -2559,10 +2543,7 @@ dependencies = [
  "diem-secure-storage",
  "diem-temppath",
  "diem-types",
- "if-addrs",
- "rand 0.8.5",
  "serde",
- "short-hex-str",
  "thiserror 1.0.63",
  "yaml_serde",
 ]
@@ -2578,7 +2559,6 @@ dependencies = [
  "cfx-types",
  "diem-crypto-derive",
  "diem-logger",
- "digest 0.9.0",
  "hex",
  "lazy_static",
  "mirai-annotations",
@@ -2610,10 +2590,6 @@ name = "diem-global-constants"
 version = "0.1.0"
 
 [[package]]
-name = "diem-infallible"
-version = "0.1.0"
-
-[[package]]
 name = "diem-log-derive"
 version = "0.1.0"
 dependencies = [
@@ -2628,7 +2604,6 @@ version = "0.1.0"
 dependencies = [
  "backtrace",
  "chrono",
- "diem-infallible",
  "diem-log-derive",
  "erased-serde",
  "hostname",
@@ -2641,28 +2616,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "diem-metrics"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "diem-logger",
- "diem-metrics-core",
- "futures 0.3.30",
- "hyper 0.14.32",
- "once_cell",
- "prometheus",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "diem-metrics-core"
-version = "0.1.0"
-dependencies = [
- "prometheus",
-]
-
-[[package]]
 name = "diem-secure-storage"
 version = "0.1.0"
 dependencies = [
@@ -2670,12 +2623,9 @@ dependencies = [
  "bcs",
  "chrono",
  "diem-crypto",
- "diem-infallible",
  "diem-logger",
  "diem-temppath",
- "diem-time-service",
  "diem-types",
- "enum_dispatch",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -2696,15 +2646,6 @@ version = "0.1.0"
 dependencies = [
  "hex",
  "rand 0.8.5",
-]
-
-[[package]]
-name = "diem-time-service"
-version = "0.1.0"
-dependencies = [
- "diem-infallible",
- "enum_dispatch",
- "thiserror 1.0.63",
 ]
 
 [[package]]
@@ -2918,18 +2859,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "enum_dispatch"
-version = "0.3.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11f36e95862220b211a6e2aa5eca09b4fa391b13cd52ceb8035a24bf65a79de2"
-dependencies = [
- "once_cell",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2998,7 +2927,6 @@ dependencies = [
  "consensus-types",
  "diem-crypto",
  "diem-logger",
- "diem-metrics",
  "diem-state-view",
  "diem-types",
  "executor-types",
@@ -3873,16 +3801,6 @@ checksum = "daca1df1c957320b2cf139ac61e7bd64fed304c5040df000a745aa1de3b4ef71"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
-]
-
-[[package]]
-name = "if-addrs"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf39cc0423ee66021dc5eccface85580e4a001e0c5288bae8bea7ecb69225e90"
-dependencies = [
- "libc",
- "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5336,9 +5254,7 @@ dependencies = [
  "byteorder",
  "diem-config",
  "diem-crypto",
- "diem-infallible",
  "diem-logger",
- "diem-metrics",
  "diem-types",
  "itertools 0.14.0",
  "num-derive",
@@ -6247,10 +6163,9 @@ dependencies = [
  "diem-config",
  "diem-crypto",
  "diem-global-constants",
- "diem-infallible",
  "diem-logger",
- "diem-metrics-core",
  "diem-secure-storage",
+ "diem-temppath",
  "diem-types",
  "log",
  "once_cell",
@@ -6292,8 +6207,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "diem-logger",
- "diem-metrics",
- "once_cell",
  "rocksdb",
 ]
 
@@ -6679,16 +6592,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
-name = "short-hex-str"
-version = "0.1.0"
-dependencies = [
- "mirai-annotations",
- "serde",
- "static_assertions",
- "thiserror 1.0.63",
-]
-
-[[package]]
 name = "signal-hook-registry"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6976,15 +6879,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "subscription-service"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "channel",
- "diem-types",
-]
-
-[[package]]
 name = "substrate-bn"
 version = "0.6.0"
 source = "git+https://github.com/paritytech/bn?rev=63f8c587356a67b33c7396af98e065b66fca5dda#63f8c587356a67b33c7396af98e065b66fca5dda"
@@ -7159,7 +7053,7 @@ dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
  "parking_lot 0.12.3",
- "toml 0.8.19",
+ "toml",
 ]
 
 [[package]]
@@ -7304,15 +7198,6 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "toml"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
-dependencies = [
- "serde",
 ]
 
 [[package]]
