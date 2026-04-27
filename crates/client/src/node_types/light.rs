@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use cfx_rpc_cfx_types::apis::ApiSet;
 use parking_lot::{Condvar, Mutex};
 use secret_store::SecretStore;
 
@@ -24,6 +25,7 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 pub struct LightClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
     pub cfx_rpc_server_handle: Option<RpcServerHandle>,
+    pub debug_cfx_rpc_server_handle: Option<RpcServerHandle>,
     pub light: Arc<LightQueryService>,
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
@@ -86,10 +88,27 @@ impl LightClient {
                 data_man.clone(),
                 network.clone(),
                 pos_verifier.clone(),
+                accounts.clone(),
+                light.clone(),
+                exit.clone(),
+                &conf,
+                conf.raw_conf.public_rpc_apis.clone(),
+                false,
+            ))?;
+
+        let debug_cfx_rpc_server_handle =
+            tokio_runtime.block_on(launch_cfx_light_async_rpc_servers(
+                consensus.clone(),
+                txpool.clone(),
+                data_man.clone(),
+                network.clone(),
+                pos_verifier.clone(),
                 accounts,
                 light.clone(),
                 exit,
                 &conf,
+                ApiSet::All,
+                true,
             ))?;
 
         network.start();
@@ -101,6 +120,7 @@ impl LightClient {
             other_components: LightClientExtraComponents {
                 consensus,
                 cfx_rpc_server_handle,
+                debug_cfx_rpc_server_handle,
                 light,
                 secret_store,
                 txpool,

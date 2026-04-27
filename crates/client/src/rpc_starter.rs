@@ -188,7 +188,7 @@ pub async fn launch_cfx_light_async_rpc_servers(
     pos_handler: Arc<PosVerifier>,
     accounts: Arc<cfxcore_accounts::AccountProvider>,
     light: Arc<LightQueryService>, exit: Arc<(Mutex<bool>, Condvar)>,
-    conf: &Configuration,
+    conf: &Configuration, apis: ApiSet, is_debug: bool,
 ) -> Result<Option<RpcServerHandle>, String> {
     use cfx_rpc_cfx_impl::{
         common::CommonRpcImpl,
@@ -198,10 +198,12 @@ pub async fn launch_cfx_light_async_rpc_servers(
         },
     };
 
-    let http_config = conf.http_config();
-    let ws_config = conf.ws_config();
-    let apis =
-        CfxRpcModuleSelection::from(conf.raw_conf.public_rpc_apis.clone());
+    let (http_config, ws_config) = if is_debug {
+        (conf.local_http_config(), conf.local_ws_config())
+    } else {
+        (conf.http_config(), conf.ws_config())
+    };
+    let apis = CfxRpcModuleSelection::from(apis);
 
     let server_config = match (http_config.enabled, ws_config.enabled) {
         (true, true) => {
@@ -268,6 +270,7 @@ pub async fn launch_cfx_light_async_rpc_servers(
                     .expect("No conflicts for Test module");
             }
             CfxRpcModule::PubSub => {
+                // TODO
                 warn!(
                     "Light node PubSub not yet supported \
                      in async RPC"
