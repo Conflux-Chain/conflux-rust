@@ -20,42 +20,38 @@ pub use crate::{
     safety_rules::SafetyRules,
 };
 
-/// Create a SafetyRules instance from config.
+/// Create a SafetyRules instance.
+///
+/// The author and keys are threaded directly from the runtime rather than read
+/// from `SafetyRulesConfig`, because they're always overwritten from
+/// Conflux-side config at startup.
 pub fn create_safety_rules(
     config: &diem_config::config::SafetyRulesConfig,
+    author: diem_types::PeerId,
+    consensus_private_key: diem_types::validator_config::ConsensusPrivateKey,
+    vrf_private_key: Option<
+        diem_types::validator_config::ConsensusVRFPrivateKey,
+    >,
+    export_consensus_key: bool,
 ) -> SafetyRules {
-    use diem_secure_storage::{KVStorage, Storage};
-    use std::convert::TryInto;
+    use diem_secure_storage::{KVStorage, OnDiskStorage};
 
-    let backend = &config.backend;
-    let internal_storage: Storage =
-        backend.try_into().expect("Unable to initialize storage");
+    let internal_storage: OnDiskStorage = (&config.backend).into();
     if let Err(error) = internal_storage.available() {
         panic!("Storage is not available: {:?}", error);
     }
 
-    let persistent_storage = if let Some(test_config) = &config.test {
-        let author = test_config.author;
-        let consensus_private_key = test_config
-            .consensus_key
-            .as_ref()
-            .expect("Missing consensus key in test config")
-            .private_key();
-        PersistentSafetyStorage::initialize(
-            internal_storage,
-            author,
-            consensus_private_key,
-            config.enable_cached_safety_data,
-        )
-    } else {
-        panic!("Remote consensus key storage not supported!")
-    };
+    let persistent_storage = PersistentSafetyStorage::initialize(
+        internal_storage,
+        author,
+        consensus_private_key,
+        config.enable_cached_safety_data,
+    );
 
-    let author = config.test.as_ref().map(|c| c.author).unwrap_or_default();
     SafetyRules::new(
         persistent_storage,
-        config.export_consensus_key,
-        config.vrf_private_key.as_ref().map(|key| key.private_key()),
+        export_consensus_key,
+        vrf_private_key,
         author,
     )
 }

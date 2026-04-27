@@ -20,7 +20,8 @@ use diem_crypto::{
     hash::{CryptoHash, TransactionAccumulatorHasher},
     traits::SigningKey,
 };
-use diem_secure_storage::{InMemoryStorage, Storage};
+use diem_secure_storage::OnDiskStorage;
+use diem_temppath::TempPath;
 use diem_types::{
     block_info::BlockInfo,
     epoch_state::EpochState,
@@ -229,9 +230,9 @@ pub fn validator_signers_to_ledger_info(
 }
 
 pub fn test_storage(signer: &ValidatorSigner) -> PersistentSafetyStorage {
-    let storage = Storage::from(InMemoryStorage::new());
+    let file_path = TempPath::new().path().to_path_buf();
     PersistentSafetyStorage::initialize(
-        storage,
+        OnDiskStorage::new(file_path),
         signer.author(),
         signer.private_key().clone(),
         true,

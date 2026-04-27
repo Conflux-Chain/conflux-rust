@@ -14,27 +14,25 @@ use diem_global_constants::{
     CONSENSUS_KEY, EXECUTION_KEY, OWNER_ACCOUNT, SAFETY_DATA,
 };
 use diem_logger::prelude::*;
-use diem_secure_storage::{CryptoStorage, KVStorage, OnDiskStorage, Storage};
+use diem_secure_storage::{CryptoStorage, KVStorage, OnDiskStorage};
 use diem_types::validator_config::{
     ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
 };
 use serde::Serialize;
 use std::{convert::TryFrom, fs};
 
-/// SafetyRules needs an abstract storage interface to act as a common utility
-/// for storing persistent data to local disk, cloud, secrets managers, or even
-/// memory (for tests) Any set function is expected to sync to the remote system
-/// before returning.
+/// Wraps `OnDiskStorage` with the safety-rules-specific schema
+/// (`SAFETY_DATA`, `OWNER_ACCOUNT`) and a single-key in-memory cache over the
+/// hot `SAFETY_DATA` read.
 ///
-/// Note: cached_safety_data is a local in-memory copy of SafetyData. As
-/// SafetyData should only ever be used by safety rules, we maintain an
-/// in-memory copy to avoid issuing reads to the internal storage if the
-/// SafetyData hasn't changed. On writes, we update the cache and internal
-/// storage.
+/// `cached_safety_data` is a local copy of the `SafetyData` entry. Every vote
+/// reads it; caching at this layer keeps the per-vote path off of disk. On
+/// writes, both the cache and the on-disk file are updated; on write error
+/// the cache is invalidated so the next read goes back through to disk.
 pub struct PersistentSafetyStorage {
     enable_cached_safety_data: bool,
     cached_safety_data: Option<SafetyData>,
-    internal_store: Storage,
+    internal_store: OnDiskStorage,
     private_key: ConsensusPrivateKey,
 }
 
@@ -42,7 +40,7 @@ impl PersistentSafetyStorage {
     /// Use this to instantiate a PersistentStorage for a new data store, one
     /// that has no SafetyRules values set.
     pub fn initialize(
-        mut internal_store: Storage, author: Author,
+        mut internal_store: OnDiskStorage, author: Author,
         private_key: ConsensusPrivateKey, enable_cached_safety_data: bool,
     ) -> Self {
         let geneisis_safety_data = SafetyData::new(1, 0, 0, None);
@@ -64,63 +62,43 @@ impl PersistentSafetyStorage {
     pub fn replace_with_suffix(
         &mut self, new_storage_suffix: &str,
     ) -> Result<(), Error> {
-        match &mut self.internal_store {
-            Storage::OnDiskStorage(disk_storage) => {
-                let new_path =
-                    disk_storage.file_path().with_extension(new_storage_suffix);
-                if !new_path.exists() {
-                    return Err(Error::SecureStorageUnexpectedError(format!(
-                        "new secure storage path incorrect: {:?}",
-                        new_path
-                    )));
-                }
-                let new_disk_storage = OnDiskStorage::new(new_path.clone());
-                let old_account: Author =
-                    disk_storage.get(OWNER_ACCOUNT)?.value;
-                let new_account: Author =
-                    new_disk_storage.get(OWNER_ACCOUNT)?.value;
-                if old_account != new_account {
-                    return Err(Error::SecureStorageUnexpectedError(format!(
-                        "current: {}, new: {}",
-                        old_account, new_account
-                    )));
-                }
-                // Replace the old secure storage file with the new one.
-                fs::rename(&new_path, disk_storage.file_path())
-                    .map_err(|e| Error::InternalError(e.to_string()))?;
-                // Just replacing file should be sufficient. We create a new
-                // instance here in case we have any cached data
-                // within `OnDiskStorage` in future.
-                *disk_storage =
-                    OnDiskStorage::new(disk_storage.file_path().clone());
-                self.cached_safety_data = disk_storage.get(SAFETY_DATA)?.value;
-                Ok(())
-            }
-            _ => Err(Error::InternalError(
-                "unsupported secure storage type".to_string(),
-            )),
+        let current_path = self.internal_store.file_path().clone();
+        let new_path = current_path.with_extension(new_storage_suffix);
+        if !new_path.exists() {
+            return Err(Error::SecureStorageUnexpectedError(format!(
+                "new secure storage path incorrect: {:?}",
+                new_path
+            )));
         }
+        let new_disk_storage = OnDiskStorage::new(new_path.clone());
+        let old_account: Author = self.internal_store.get(OWNER_ACCOUNT)?.value;
+        let new_account: Author = new_disk_storage.get(OWNER_ACCOUNT)?.value;
+        if old_account != new_account {
+            return Err(Error::SecureStorageUnexpectedError(format!(
+                "current: {}, new: {}",
+                old_account, new_account
+            )));
+        }
+        fs::rename(&new_path, &current_path)
+            .map_err(|e| Error::InternalError(e.to_string()))?;
+        self.internal_store = OnDiskStorage::new(current_path);
+        self.cached_safety_data = self.internal_store.get(SAFETY_DATA)?.value;
+        Ok(())
     }
 
     pub fn save_to_suffix(
         &mut self, new_storage_suffix: &str,
     ) -> Result<(), Error> {
-        match &self.internal_store {
-            Storage::OnDiskStorage(disk_storage) => {
-                let new_path =
-                    disk_storage.file_path().with_extension(new_storage_suffix);
-                fs::rename(disk_storage.file_path(), &new_path)
-                    .map_err(|e| Error::InternalError(e.to_string()))?;
-                Ok(())
-            }
-            _ => Err(Error::InternalError(
-                "unsupported secure storage type".to_string(),
-            )),
-        }
+        let current_path = self.internal_store.file_path();
+        let new_path = current_path.with_extension(new_storage_suffix);
+        fs::rename(current_path, &new_path)
+            .map_err(|e| Error::InternalError(e.to_string()))?;
+        Ok(())
     }
 
     fn initialize_(
-        internal_store: &mut Storage, safety_data: SafetyData, author: Author,
+        internal_store: &mut OnDiskStorage, safety_data: SafetyData,
+        author: Author,
     ) -> Result<SafetyData, Error> {
         // Attempting to re-initialize existing storage. This can happen in
         // environments like cluster test. Rather than be rigid here,
@@ -201,7 +179,7 @@ impl PersistentSafetyStorage {
     }
 
     #[cfg(any(test, feature = "testing"))]
-    pub fn internal_store(&mut self) -> &mut Storage {
+    pub fn internal_store(&mut self) -> &mut OnDiskStorage {
         &mut self.internal_store
     }
 }
@@ -209,20 +187,13 @@ impl PersistentSafetyStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use diem_secure_storage::InMemoryStorage;
+    use crate::test_utils::test_storage;
     use diem_types::validator_signer::ValidatorSigner;
 
     #[test]
     fn test() {
-        let consensus_private_key =
-            ValidatorSigner::from_int(0).private_key().clone();
-        let storage = Storage::from(InMemoryStorage::new());
-        let mut safety_storage = PersistentSafetyStorage::initialize(
-            storage,
-            Author::random(),
-            consensus_private_key,
-            true,
-        );
+        let signer = ValidatorSigner::from_int(0);
+        let mut safety_storage = test_storage(&signer);
 
         let safety_data = safety_storage.safety_data().unwrap();
         assert_eq!(safety_data.epoch, 1);

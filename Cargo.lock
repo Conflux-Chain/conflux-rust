@@ -3367,7 +3367,6 @@ dependencies = [
  "diem-logger",
  "diem-temppath",
  "diem-types",
- "enum_dispatch",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -3662,18 +3661,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.114",
-]
-
-[[package]]
-name = "enum_dispatch"
-version = "0.3.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11f36e95862220b211a6e2aa5eca09b4fa391b13cd52ceb8035a24bf65a79de2"
-dependencies = [
- "once_cell",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -8178,13 +8165,13 @@ dependencies = [
  "diem-global-constants",
  "diem-logger",
  "diem-secure-storage",
+ "diem-temppath",
  "diem-types",
  "log",
  "once_cell",
  "proptest",
  "rand 0.8.5",
  "serde",
- "tempfile",
  "thiserror 2.0.18",
 ]
 
