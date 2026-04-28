@@ -16,6 +16,7 @@ use crate::{
     rpc_starter::launch_cfx_light_async_rpc_servers,
 };
 use blockgen::BlockGenerator;
+use cfx_tasks::TaskManager;
 use cfxcore::{
     pow::PowComputer, ConsensusGraph, LightQueryService, NodeType,
     TransactionPool,
@@ -72,12 +73,16 @@ impl LightClient {
             sync_graph.clone(),
             network.clone(),
             conf.raw_conf.throttling_conf.clone(),
-            notifications,
+            notifications.clone(),
             conf.light_node_config(),
         ));
         light.register().unwrap();
 
         sync_graph.recover_graph_from_db();
+
+        // Create task executor for async RPC
+        let task_manager = TaskManager::new(tokio_runtime.handle().clone());
+        let task_executor = task_manager.executor();
 
         // Start the new jsonrpsee-based core space RPC
         // servers for the light node.
@@ -91,6 +96,8 @@ impl LightClient {
                 accounts.clone(),
                 light.clone(),
                 exit.clone(),
+                task_executor.clone(),
+                notifications.clone(),
                 &conf,
                 conf.raw_conf.public_rpc_apis.clone(),
                 false,
@@ -106,6 +113,8 @@ impl LightClient {
                 accounts,
                 light.clone(),
                 exit,
+                task_executor,
+                notifications,
                 &conf,
                 ApiSet::All,
                 true,
