@@ -1010,7 +1010,7 @@ impl CfxRpcServer for CfxHandler {
 
     async fn best_block_hash(&self) -> RpcResult<H256> {
         info!("RPC Request: cfx_getBestBlockHash()");
-        Ok(self.consensus.best_block_hash().into())
+        Ok(self.consensus.best_block_hash())
     }
 
     async fn next_nonce(

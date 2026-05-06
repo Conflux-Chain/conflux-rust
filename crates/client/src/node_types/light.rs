@@ -7,6 +7,7 @@ use std::sync::Arc;
 use cfx_rpc_cfx_types::apis::ApiSet;
 use parking_lot::{Condvar, Mutex};
 use secret_store::SecretStore;
+use tokio::runtime::Runtime as TokioRuntime;
 
 use cfx_rpc_builder::RpcServerHandle;
 
@@ -31,6 +32,15 @@ pub struct LightClientExtraComponents {
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
+    /// Keep the tokio runtime alive for the lifetime of the node so that the
+    /// jsonrpsee server (and any other tasks spawned on this runtime) keeps
+    /// processing requests. Without this, the runtime would be dropped at the
+    /// end of `LightClient::start`, silently cancelling the RPC accept loop
+    /// and causing every RPC call (e.g. `cfx_getBestBlockHash`) to hang.
+    pub tokio_runtime: Arc<TokioRuntime>,
+    /// Keep the task manager alive so that tasks spawned via its executor
+    /// (e.g. async RPC handlers, pubsub) are not shut down prematurely.
+    pub task_manager: TaskManager,
 }
 
 impl MallocSizeOf for LightClientExtraComponents {
@@ -134,6 +144,8 @@ impl LightClient {
                 secret_store,
                 txpool,
                 pow,
+                tokio_runtime,
+                task_manager,
             },
         }))
     }
