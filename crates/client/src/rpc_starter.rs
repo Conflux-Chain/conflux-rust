@@ -11,7 +11,8 @@ use cfx_rpc_builder::{
     TransportRpcModuleConfig,
 };
 use cfx_rpc_cfx_api::{
-    CfxDebugRpcServer, CfxRpcServer, DebugRpcServer, TestRpcServer,
+    CfxDebugRpcServer, CfxRpcServer, DebugRpcServer, PubSubApiServer,
+    TestRpcServer,
 };
 use cfx_rpc_cfx_types::apis::ApiSet;
 use cfx_tasks::TaskExecutor;
@@ -188,7 +189,8 @@ pub async fn launch_cfx_light_async_rpc_servers(
     pos_handler: Arc<PosVerifier>,
     accounts: Arc<cfxcore_accounts::AccountProvider>,
     light: Arc<LightQueryService>, exit: Arc<(Mutex<bool>, Condvar)>,
-    conf: &Configuration,
+    executor: TaskExecutor, notifications: Arc<Notifications>,
+    conf: &Configuration, apis: ApiSet, is_debug: bool,
 ) -> Result<Option<RpcServerHandle>, String> {
     use cfx_rpc_cfx_impl::{
         common::CommonRpcImpl,
@@ -196,12 +198,15 @@ pub async fn launch_cfx_light_async_rpc_servers(
             LightCfxHandler, LightDebugHandler, LightTestHandler,
             RpcImpl as LightRpcImpl,
         },
+        PubSubHandler,
     };
 
-    let http_config = conf.http_config();
-    let ws_config = conf.ws_config();
-    let apis =
-        CfxRpcModuleSelection::from(conf.raw_conf.public_rpc_apis.clone());
+    let (http_config, ws_config) = if is_debug {
+        (conf.local_http_config(), conf.local_ws_config())
+    } else {
+        (conf.http_config(), conf.ws_config())
+    };
+    let apis = CfxRpcModuleSelection::from(apis);
 
     let server_config = match (http_config.enabled, ws_config.enabled) {
         (true, true) => {
@@ -224,14 +229,18 @@ pub async fn launch_cfx_light_async_rpc_servers(
     let common_rpc_impl = Arc::new(CommonRpcImpl::new(
         exit,
         consensus.clone(),
-        network,
+        network.clone(),
         tx_pool,
         accounts.clone(),
-        pos_handler,
+        pos_handler.clone(),
     ));
 
-    let light_rpc_impl =
-        Arc::new(LightRpcImpl::new(light, accounts, consensus, data_man));
+    let light_rpc_impl = Arc::new(LightRpcImpl::new(
+        light,
+        accounts,
+        consensus.clone(),
+        data_man,
+    ));
 
     let mut module = RpcModule::new(());
 
@@ -268,10 +277,15 @@ pub async fn launch_cfx_light_async_rpc_servers(
                     .expect("No conflicts for Test module");
             }
             CfxRpcModule::PubSub => {
-                warn!(
-                    "Light node PubSub not yet supported \
-                     in async RPC"
+                let pubsub_handler = PubSubHandler::new(
+                    notifications.clone(),
+                    executor.clone(),
+                    consensus.clone(),
+                    *network.get_network_type(),
                 );
+                module
+                    .merge(PubSubApiServer::into_rpc(pubsub_handler))
+                    .expect("No conflicts for PubSub module");
             }
             CfxRpcModule::Trace => {
                 warn!("Light nodes do not support trace RPC");

@@ -4,8 +4,10 @@
 
 use std::sync::Arc;
 
+use cfx_rpc_cfx_types::apis::ApiSet;
 use parking_lot::{Condvar, Mutex};
 use secret_store::SecretStore;
+use tokio::runtime::Runtime as TokioRuntime;
 
 use cfx_rpc_builder::RpcServerHandle;
 
@@ -15,6 +17,7 @@ use crate::{
     rpc_starter::launch_cfx_light_async_rpc_servers,
 };
 use blockgen::BlockGenerator;
+use cfx_tasks::TaskManager;
 use cfxcore::{
     pow::PowComputer, ConsensusGraph, LightQueryService, NodeType,
     TransactionPool,
@@ -24,10 +27,20 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 pub struct LightClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
     pub cfx_rpc_server_handle: Option<RpcServerHandle>,
+    pub debug_cfx_rpc_server_handle: Option<RpcServerHandle>,
     pub light: Arc<LightQueryService>,
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
+    /// Keep the tokio runtime alive for the lifetime of the node so that the
+    /// jsonrpsee server (and any other tasks spawned on this runtime) keeps
+    /// processing requests. Without this, the runtime would be dropped at the
+    /// end of `LightClient::start`, silently cancelling the RPC accept loop
+    /// and causing every RPC call (e.g. `cfx_getBestBlockHash`) to hang.
+    pub tokio_runtime: Arc<TokioRuntime>,
+    /// Keep the task manager alive so that tasks spawned via its executor
+    /// (e.g. async RPC handlers, pubsub) are not shut down prematurely.
+    pub task_manager: TaskManager,
 }
 
 impl MallocSizeOf for LightClientExtraComponents {
@@ -70,12 +83,16 @@ impl LightClient {
             sync_graph.clone(),
             network.clone(),
             conf.raw_conf.throttling_conf.clone(),
-            notifications,
+            notifications.clone(),
             conf.light_node_config(),
         ));
         light.register().unwrap();
 
         sync_graph.recover_graph_from_db();
+
+        // Create task executor for async RPC
+        let task_manager = TaskManager::new(tokio_runtime.handle().clone());
+        let task_executor = task_manager.executor();
 
         // Start the new jsonrpsee-based core space RPC
         // servers for the light node.
@@ -86,10 +103,31 @@ impl LightClient {
                 data_man.clone(),
                 network.clone(),
                 pos_verifier.clone(),
+                accounts.clone(),
+                light.clone(),
+                exit.clone(),
+                task_executor.clone(),
+                notifications.clone(),
+                &conf,
+                conf.raw_conf.public_rpc_apis.clone(),
+                false,
+            ))?;
+
+        let debug_cfx_rpc_server_handle =
+            tokio_runtime.block_on(launch_cfx_light_async_rpc_servers(
+                consensus.clone(),
+                txpool.clone(),
+                data_man.clone(),
+                network.clone(),
+                pos_verifier.clone(),
                 accounts,
                 light.clone(),
                 exit,
+                task_executor,
+                notifications,
                 &conf,
+                ApiSet::All,
+                true,
             ))?;
 
         network.start();
@@ -101,10 +139,13 @@ impl LightClient {
             other_components: LightClientExtraComponents {
                 consensus,
                 cfx_rpc_server_handle,
+                debug_cfx_rpc_server_handle,
                 light,
                 secret_store,
                 txpool,
                 pow,
+                tokio_runtime,
+                task_manager,
             },
         }))
     }
