@@ -97,7 +97,7 @@ The RPC implementation for eSpace is mainly located in the [crates/rpc](../../cr
 - [rpc-builder](../../crates/rpc/rpc-builder/): Logic for RPC interface registration and service startup.
 - [rpc-utils](../../crates/rpc/rpc-utils/): Implementation of common utilities, such as error code definitions.
 
-The RPC implementation for Core Space is located in the [crates/client](../../crates/client) crate, developed using [jsonrpc-core](https://github.com/paritytech/jsonrpc)e. The core code is in the src/rpc directory.
+The core code is in the src/rpc directory.
 
 ### Stratum
 

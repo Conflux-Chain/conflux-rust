@@ -104,7 +104,7 @@ build_config! {
         //
         // `dev` mode is for users to run a single node that automatically
         //     generates blocks with fixed intervals
-        //     * You are expected to also set `jsonrpc_ws_port`, `jsonrpc_tcp_port`,
+        //     * You are expected to also set `jsonrpc_ws_port`,
         //       and `jsonrpc_http_port` if you want RPC functionalities.
         //     * generate blocks automatically without PoW.
         //     * Skip catch-up mode even there is no peer
