@@ -7,7 +7,9 @@ use alloy_rpc_types_trace::geth::{
 use async_trait::async_trait;
 use cfx_rpc_eth_api::DebugApiServer;
 use cfx_rpc_eth_types::{BlockId, BlockProperties, TransactionRequest};
-use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::{
+    invalid_params, invalid_params_msg,
+};
 use cfx_types::{AddressSpaceUtil, Space, H256, U256};
 use cfxcore::{
     errors::Error as CoreError, ConsensusGraph, SharedConsensusGraph,
@@ -64,10 +66,7 @@ impl DebugApi {
         opts: Option<GethDebugTracingCallOptions>,
     ) -> Result<GethTrace, CoreError> {
         if request.from.is_none() {
-            return Err(CoreError::InvalidParam(
-                "from is required".to_string(),
-                Default::default(),
-            ));
+            return Err(invalid_params("from", Some("from is required")).into());
         }
 
         let opts = opts.unwrap_or_default();
@@ -104,11 +103,7 @@ impl DebugApi {
 
         // construct blocks from call_request
         let chain_id = self.consensus.best_chain_id();
-        // debug trace call has a fixed large gas limit.
-        let signed_tx = request.sign_call(
-            chain_id.in_evm_space(),
-            self.max_estimation_gas_limit,
-        )?;
+
         let epoch_blocks = self
             .consensus_graph()
             .data_man
@@ -120,6 +115,45 @@ impl DebugApi {
         let pivot_block = epoch_blocks
             .last()
             .ok_or(CoreError::Msg("should have block".to_string()))?;
+
+        request.unset_zero_gas_and_price();
+
+        let base_price = pivot_block
+            .block_header
+            .base_price()
+            .unwrap_or_default()
+            .in_space(Space::Ethereum)
+            .clone();
+
+        if !request.has_gas_price() {
+            request.gas_price = Some(base_price);
+        } else {
+            if let Some(gas_price) = request.gas_price {
+                if gas_price < base_price {
+                    return Err(invalid_params(
+                        "gasPrice",
+                        Some("gas price cannot be lower than base price"),
+                    )
+                    .into());
+                }
+            }
+
+            if let Some(gas_price) = request.max_fee_per_gas {
+                if gas_price < base_price {
+                    return Err(invalid_params(
+                        "maxFeePerGas",
+                        Some("max fee per gas cannot be lower than base price"),
+                    )
+                    .into());
+                }
+            }
+        }
+
+        // debug trace call has a fixed large gas limit.
+        let signed_tx = request.sign_call(
+            chain_id.in_evm_space(),
+            self.max_estimation_gas_limit,
+        )?;
 
         let header = BlockHeaderBuilder::new()
             .with_base_price(pivot_block.block_header.base_price())

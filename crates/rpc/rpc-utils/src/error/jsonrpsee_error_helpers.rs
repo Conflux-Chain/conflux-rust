@@ -8,17 +8,21 @@ use jsonrpsee::types::error::{
 use serde::Serialize;
 use std::fmt;
 
+// error message have prefix "Invalid parameters: "
 pub fn invalid_params_msg(param: &str) -> ErrorObjectOwned {
     let data: Option<bool> = None;
     invalid_params_rpc_err(format!("Invalid parameters: {}", param), data)
 }
 
+// error message have prefix "Invalid parameters: "
 pub fn invalid_params<S: Serialize>(
     param: &str, data: Option<S>,
 ) -> ErrorObjectOwned {
     invalid_params_rpc_err(format!("Invalid parameters: {}", param), data)
 }
 
+// error message have prefix "Invalid parameters: " and details in the message
+// and data
 pub fn invalid_params_detail<T: fmt::Debug>(
     param: &str, details: T,
 ) -> ErrorObjectOwned {
