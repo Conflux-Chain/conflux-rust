@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn test() {
         let signer = ValidatorSigner::from_int(0);
-        let mut safety_storage = test_storage(&signer);
+        let (_dir, mut safety_storage) = test_storage(&signer);
 
         let safety_data = safety_storage.safety_data().unwrap();
         assert_eq!(safety_data.epoch, 1);

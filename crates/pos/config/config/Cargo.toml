@@ -19,7 +19,6 @@ diem-crypto = { workspace = true }
 diem-global-constants = { workspace = true }
 diem-logger = { workspace = true }
 diem-secure-storage = { workspace = true }
-diem-temppath = { workspace = true }
 diem-types = { workspace = true }
 cfx-types = { workspace = true }
 
