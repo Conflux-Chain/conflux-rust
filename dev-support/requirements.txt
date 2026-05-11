@@ -207,7 +207,7 @@ pygments==2.19.1
     # via
     #   pytest
     #   rich
-pyjwt==2.10.1
+pyjwt==2.12.0
     # via ethereum-execution-spec-tests
 pytest==9.0.3
     # via
