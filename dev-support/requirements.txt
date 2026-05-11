@@ -318,7 +318,7 @@ urllib3==1.26.20
     #   requests-unixsocket2
 wcwidth==0.2.13
     # via prompt-toolkit
-web3==7.11.1
+web3==7.15.0
     # via
     #   conflux-rust-tests (pyproject.toml)
     #   conflux-web3
