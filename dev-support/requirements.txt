@@ -123,7 +123,7 @@ frozenlist==1.7.0
     #   aiosignal
 gitdb==4.0.12
     # via gitpython
-gitpython==3.1.44
+gitpython==3.1.50
     # via
     #   ethereum-execution-spec-tests
     #   ethereum-spec-evm-resolver
