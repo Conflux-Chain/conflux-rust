@@ -311,7 +311,7 @@ typing-extensions==4.13.2
     #   web3
 typing-inspection==0.4.1
     # via pydantic
-urllib3==1.26.20
+urllib3==2.6.3
     # via
     #   ethereum-spec-evm-resolver
     #   requests
