@@ -2,7 +2,7 @@
 #    uv pip compile pyproject.toml -o ./dev-support/requirements.txt
 aiohappyeyeballs==2.6.1
     # via aiohttp
-aiohttp==3.12.12
+aiohttp==3.13.4
     # via web3
 aiosignal==1.3.2
     # via aiohttp
