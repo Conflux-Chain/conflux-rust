@@ -209,7 +209,7 @@ pygments==2.19.1
     #   rich
 pyjwt==2.10.1
     # via ethereum-execution-spec-tests
-pytest==8.4.0
+pytest==9.0.3
     # via
     #   conflux-rust-tests (pyproject.toml)
     #   ethereum-execution-spec-tests
