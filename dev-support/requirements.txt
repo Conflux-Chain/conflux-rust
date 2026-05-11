@@ -246,7 +246,7 @@ questionary==2.1.0
     # via ethereum-execution-spec-tests
 regex==2024.11.6
     # via parsimonious
-requests==2.32.4
+requests==2.33.0
     # via
     #   conflux-rust-tests (pyproject.toml)
     #   ethereum-execution-spec-tests
