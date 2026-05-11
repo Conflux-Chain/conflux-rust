@@ -203,7 +203,7 @@ pydantic==2.11.5
     #   web3
 pydantic-core==2.33.2
     # via pydantic
-pygments==2.19.1
+pygments==2.20.0
     # via
     #   pytest
     #   rich
