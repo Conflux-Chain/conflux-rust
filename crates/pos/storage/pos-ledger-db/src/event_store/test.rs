@@ -21,7 +21,7 @@ use proptest::{
     prelude::*,
     strategy::Union,
 };
-use rand::Rng;
+use rand_08::Rng;
 use std::collections::HashMap;
 use tempfile::TempDir;
 

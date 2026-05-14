@@ -7,7 +7,7 @@ use diem_crypto::{
     PrivateKey, Signature, ValidCryptoMaterial,
 };
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
-use rand::{rngs::ThreadRng, thread_rng};
+use rand_08::{rngs::ThreadRng, thread_rng};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 

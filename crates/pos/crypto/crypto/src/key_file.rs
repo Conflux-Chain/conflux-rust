@@ -5,7 +5,7 @@ use pkcs8::{
     AlgorithmIdentifier, EncryptedPrivateKeyDocument, ObjectIdentifier,
     PrivateKeyInfo,
 };
-use rand::{prelude::StdRng, rngs::OsRng, SeedableRng};
+use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use serde::{de::DeserializeOwned, Serialize};
 
 const OID: &str = "1.0.0";

@@ -5,7 +5,7 @@ use diem_crypto::{
     ec_vrf::EcVrfPrivateKey, traits::Uniform, vrf_number_with_nonce, HashValue,
     VRFPrivateKey, VRFProof,
 };
-use rand::{random, rngs::ThreadRng, thread_rng};
+use rand_08::{random, rngs::ThreadRng, thread_rng};
 
 fn compute(c: &mut Criterion) {
     let mut csprng: ThreadRng = thread_rng();

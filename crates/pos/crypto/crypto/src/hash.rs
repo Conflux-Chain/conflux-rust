@@ -120,7 +120,7 @@ use mirai_annotations::*;
 use once_cell::sync::{Lazy, OnceCell};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
-use rand::{rngs::OsRng, Rng};
+use rand_08::{rngs::OsRng, Rng};
 use serde::{de, ser};
 use std::{
     self,
