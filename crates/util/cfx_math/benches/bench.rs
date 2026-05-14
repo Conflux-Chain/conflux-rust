@@ -5,37 +5,37 @@ use cfx_math::{
 use cfx_types::U256;
 use criterion::{criterion_group, criterion_main, Criterion};
 use num::integer::Roots;
-use rand_08::{Rng, SeedableRng};
+use rand::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
 
 fn bench_nth_root<N: RootDegree>(c: &mut Criterion) {
     c.bench_function(&format!("u64 {}-th root", N::USIZE), move |b| {
-        let mut rng = XorShiftRng::from_seed([0u8; 16]);
-        b.iter(|| nth_root::<N, u64>(rng.gen()));
+        let mut rng = XorShiftRng::from_os_rng();
+        b.iter(|| nth_root::<N, u64>(rng.random()));
     });
 
     c.bench_function(&format!("u64 {}-th baseline", N::USIZE), move |b| {
-        let mut rng = XorShiftRng::from_seed([0u8; 16]);
-        b.iter(|| rng.gen::<u64>().nth_root(N::U32));
+        let mut rng = XorShiftRng::from_os_rng();
+        b.iter(|| rng.random::<u64>().nth_root(N::U32));
     });
 
     c.bench_function(&format!("u128 {}-th root", N::USIZE), move |b| {
-        let mut rng = XorShiftRng::from_seed([0u8; 16]);
-        b.iter(|| nth_root::<N, u128>(rng.gen()));
+        let mut rng = XorShiftRng::from_os_rng();
+        b.iter(|| nth_root::<N, u128>(rng.random()));
     });
     c.bench_function(&format!("u128 {}-th baseline", N::USIZE), move |b| {
-        let mut rng = XorShiftRng::from_seed([0u8; 16]);
-        b.iter(|| rng.gen::<u128>().nth_root(N::U32));
+        let mut rng = XorShiftRng::from_os_rng();
+        b.iter(|| rng.random::<u128>().nth_root(N::U32));
     });
 
     c.bench_function(&format!("u192 {}-th root", N::USIZE), move |b| {
-        let mut rng = XorShiftRng::from_seed([0u8; 16]);
-        b.iter(|| nth_root::<N, U256>(U256(rng.gen()) >> 64));
+        let mut rng = XorShiftRng::from_os_rng();
+        b.iter(|| nth_root::<N, U256>(U256(rng.random()) >> 64));
     });
 
     c.bench_function(&format!("u256 {}-th root", N::USIZE), move |b| {
-        let mut rng = XorShiftRng::from_seed([0u8; 16]);
-        b.iter(|| nth_root::<N, U256>(U256(rng.gen())));
+        let mut rng = XorShiftRng::from_os_rng();
+        b.iter(|| nth_root::<N, U256>(U256(rng.random())));
     });
 }
 
@@ -46,23 +46,23 @@ where
     (N, typenum::U20): RootInvParams,
 {
     c.bench_function(&format!("{}-th inv root (10 bit)", N::USIZE), move |b| {
-        let mut rng = XorShiftRng::from_seed([0u8; 16]);
+        let mut rng = XorShiftRng::from_os_rng();
         b.iter(|| {
-            nth_inv_root::<N, typenum::U10>(U256::from(rng.gen::<u64>()))
+            nth_inv_root::<N, typenum::U10>(U256::from(rng.random::<u64>()))
         });
     });
 
     c.bench_function(&format!("{}-th inv root (15 bit)", N::USIZE), move |b| {
-        let mut rng = XorShiftRng::from_seed([0u8; 16]);
+        let mut rng = XorShiftRng::from_os_rng();
         b.iter(|| {
-            nth_inv_root::<N, typenum::U15>(U256::from(rng.gen::<u64>()))
+            nth_inv_root::<N, typenum::U15>(U256::from(rng.random::<u64>()))
         });
     });
 
     c.bench_function(&format!("{}-th inv root (20 bit)", N::USIZE), move |b| {
-        let mut rng = XorShiftRng::from_seed([0u8; 16]);
+        let mut rng = XorShiftRng::from_os_rng();
         b.iter(|| {
-            nth_inv_root::<N, typenum::U20>(U256::from(rng.gen::<u64>()))
+            nth_inv_root::<N, typenum::U20>(U256::from(rng.random::<u64>()))
         });
     });
 }

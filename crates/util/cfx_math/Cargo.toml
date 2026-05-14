@@ -13,7 +13,7 @@ unroll = { workspace = true }
 typenum = { workspace = true }
 
 [dev-dependencies]
-rand_08 = { workspace = true }
+rand = { workspace = true, features = ["os_rng"] }
 criterion = { workspace = true }
 static_assertions = { workspace = true }
 rand_xorshift = { workspace = true }

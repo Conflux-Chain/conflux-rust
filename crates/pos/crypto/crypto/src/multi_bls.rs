@@ -23,7 +23,7 @@ use diem_crypto_derive::{
     DeserializeKey, SerializeKey, SilentDebug, SilentDisplay,
 };
 use mirai_annotations::*;
-use rand::Rng;
+use rand_08::Rng;
 use serde::Serialize;
 use std::fmt;
 
@@ -144,7 +144,7 @@ impl SigningKey for MultiBLSPrivateKey {
 // Generating a random K out-of N key for testing.
 impl Uniform for MultiBLSPrivateKey {
     fn generate<R>(rng: &mut R) -> Self
-    where R: ::rand::RngCore + ::rand::CryptoRng {
+    where R: ::rand_08::RngCore + ::rand_08::CryptoRng {
         let num_of_keys = rng.gen_range(1..=MAX_NUM_OF_KEYS);
         let mut private_keys: Vec<BLSPrivateKey> =
             Vec::with_capacity(num_of_keys);

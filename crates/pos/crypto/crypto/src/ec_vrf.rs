@@ -206,7 +206,7 @@ impl ValidCryptoMaterial for EcVrfProof {
 // Reuse ec group in VRF_CONTEXT?
 impl Uniform for EcVrfPrivateKey {
     fn generate<R>(_rng: &mut R) -> Self
-    where R: ::rand::RngCore + ::rand::CryptoRng {
+    where R: ::rand_08::RngCore + ::rand_08::CryptoRng {
         let ec_group = ec::EcGroup::from_curve_name(Nid::SECP256K1).unwrap();
         Self(
             ec::EcKey::generate(&ec_group)

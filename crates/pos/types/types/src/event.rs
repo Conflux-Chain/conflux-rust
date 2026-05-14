@@ -8,7 +8,7 @@
 use crate::account_address::AccountAddress;
 use hex::FromHex;
 #[cfg(any(test, feature = "fuzzing"))]
-use rand::{rngs::OsRng, RngCore};
+use rand_08::{rngs::OsRng, RngCore};
 use serde::{de, ser, Deserialize, Serialize};
 use std::{
     convert::{TryFrom, TryInto},

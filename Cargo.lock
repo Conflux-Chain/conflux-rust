@@ -1697,7 +1697,7 @@ dependencies = [
  "cfx-types",
  "criterion",
  "num",
- "rand 0.8.6",
+ "rand 0.9.3",
  "rand_xorshift 0.4.0",
  "static_assertions",
  "typenum",

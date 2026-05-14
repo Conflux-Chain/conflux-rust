@@ -35,7 +35,7 @@ tempfile = { workspace = true, optional = true }
 [dev-dependencies]
 proptest = "1.0.0"
 proptest-derive = "0.5.1"
-rand = "0.8.3"
+rand_08 = { workspace = true }
 tempfile = { workspace = true }
 
 diem-types = { workspace = true, features = ["fuzzing"] }

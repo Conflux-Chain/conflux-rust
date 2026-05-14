@@ -29,7 +29,7 @@ use diem_types::{
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
 use proptest::prelude::*;
-use rand::{rngs::StdRng, SeedableRng};
+use rand_08::{rngs::StdRng, SeedableRng};
 
 const MAX_BLOCK_SIZE: usize = 10000;
 const MAX_NUM_ADDR_TO_VALIDATOR_INFO: usize = 10;

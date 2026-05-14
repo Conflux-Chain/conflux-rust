@@ -6,7 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use hex::FromHex;
-use rand::{rngs::OsRng, Rng};
+use rand_08::{rngs::OsRng, Rng};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use std::{convert::TryFrom, fmt, str::FromStr};
 

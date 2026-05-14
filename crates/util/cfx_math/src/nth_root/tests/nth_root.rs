@@ -58,7 +58,7 @@ fn test_nth_root_single<N: RootDegree, I: NthRoot>(input: I) {
 fn test_nth_root_u64() {
     test_border_case::<u64>();
     for _ in 0..100_000 {
-        test_different_data(rand_08::random::<u64>());
+        test_different_data(rand::random::<u64>());
     }
 }
 
@@ -66,7 +66,7 @@ fn test_nth_root_u64() {
 fn test_nth_root_u128() {
     test_border_case::<u128>();
     for _ in 0..12_000 {
-        test_different_data(rand_08::random::<u128>());
+        test_different_data(rand::random::<u128>());
     }
 }
 
@@ -74,7 +74,7 @@ fn test_nth_root_u128() {
 fn test_nth_root_u256() {
     test_border_case::<U256>();
     for _ in 0..900 {
-        test_different_data(U256(rand_08::random::<[u64; 4]>()));
+        test_different_data(U256(rand::random::<[u64; 4]>()));
     }
 }
 
@@ -82,6 +82,6 @@ fn test_nth_root_u256() {
 fn test_nth_root_u512() {
     test_border_case::<U512>();
     for _ in 0..150 {
-        test_different_data(U512(rand_08::random::<[u64; 8]>()));
+        test_different_data(U512(rand::random::<[u64; 8]>()));
     }
 }
