@@ -5,7 +5,7 @@ use cfx_types::{U256, U512};
 use typenum::*;
 
 fn test_different_data() {
-    let input = U256(rand::random::<[u64; 4]>());
+    let input = U256(rand_08::random::<[u64; 4]>());
     for i in 0..256 {
         test_multiple_const(input >> i);
         test_multiple_const(U256::MAX - (input >> i));

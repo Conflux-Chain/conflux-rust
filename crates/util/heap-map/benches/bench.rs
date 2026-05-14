@@ -9,17 +9,17 @@ use std::hint::black_box;
 fn bench_heapmap_insert(c: &mut Criterion) {
     let mut heapmap = HeapMap::<usize, u64>::new();
     const SIZE: usize = 1000000usize;
-    let key = || rand::random::<usize>() % (SIZE * 2);
+    let key = || rand_08::random::<usize>() % (SIZE * 2);
     for _ in 0..SIZE {
-        heapmap.insert(&key(), rand::random());
+        heapmap.insert(&key(), rand_08::random());
     }
     c.bench_function("Heapmap insert/remove", move |b| {
         b.iter(|| {
             let value = if heapmap.len() > SIZE {
-                black_box(rand::random::<u64>());
+                black_box(rand_08::random::<u64>());
                 heapmap.remove(&key())
             } else {
-                heapmap.insert(&key(), rand::random())
+                heapmap.insert(&key(), rand_08::random())
             };
             black_box(value)
         });
@@ -28,9 +28,9 @@ fn bench_heapmap_insert(c: &mut Criterion) {
 
 fn bench_overhead(c: &mut Criterion) {
     const SIZE: usize = 1000000usize;
-    let key = || rand::random::<usize>() % (SIZE * 2);
+    let key = || rand_08::random::<usize>() % (SIZE * 2);
     c.bench_function("Pick random input cost", move |b| {
-        b.iter(|| black_box((key(), rand::random::<u64>())))
+        b.iter(|| black_box((key(), rand_08::random::<u64>())))
     });
 }
 

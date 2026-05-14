@@ -5,7 +5,7 @@ use cfx_math::{
 use cfx_types::U256;
 use criterion::{criterion_group, criterion_main, Criterion};
 use num::integer::Roots;
-use rand::{Rng, SeedableRng};
+use rand_08::{Rng, SeedableRng};
 use rand_xorshift::XorShiftRng;
 
 fn bench_nth_root<N: RootDegree>(c: &mut Criterion) {
