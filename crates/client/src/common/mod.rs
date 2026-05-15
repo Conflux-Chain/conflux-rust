@@ -169,7 +169,7 @@ pub fn initialize_common_modules(
         let key_path = Path::new(&conf.raw_conf.pos_private_key_path);
 
         let read_pos_password = |prompt: &str| -> Result<Vec<u8>, String> {
-            match rpassword::read_password_from_tty(Some(prompt)) {
+            match rpassword::prompt_password(prompt) {
                 Ok(password) => Ok(password.into_bytes()),
                 Err(e) => {
                     let mut msg = format!("{:?}", e);
