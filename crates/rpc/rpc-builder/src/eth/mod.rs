@@ -33,7 +33,6 @@ pub use crate::{
     error::*, id_provider::SubscriptionIdProvider, RpcServerHandle,
 };
 use cfx_rpc_middlewares::{Logger, Metrics, Throttle};
-use log::debug;
 pub use module::{EthRpcModule, RpcModuleSelection};
 
 use cfx_rpc_cfx_types::RpcImplConfiguration;
@@ -460,9 +459,6 @@ impl RpcServerConfig {
         self, modules: &TransportRpcModules,
         throttling_conf_file: Option<String>, enable_metrics: bool,
     ) -> Result<RpcServerHandle, RpcError> {
-        // TODO: handle enable metrics
-        debug!("enable metrics: {}", enable_metrics);
-
         let rpc_middleware = RpcServiceBuilder::new()
             .layer_fn(move |s| {
                 Throttle::new(
@@ -471,7 +467,7 @@ impl RpcServerConfig {
                     s,
                 )
             })
-            .layer_fn(|s| Metrics::new(s))
+            .layer_fn(move |s| Metrics::new(s, enable_metrics))
             .layer_fn(|s| Logger::new(s));
 
         let http_socket_addr = self.http_addr.unwrap_or(SocketAddr::V4(

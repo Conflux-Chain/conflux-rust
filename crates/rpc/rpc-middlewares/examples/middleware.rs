@@ -122,7 +122,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
         .layer_fn(move |s| {
             Throttle::new(Some(config_path.to_str().unwrap()), "test", s)
         })
-        .layer_fn(|s| Metrics::new(s));
+        .layer_fn(|s| Metrics::new(s, true));
 
     let server = Server::builder()
         .set_rpc_middleware(rpc_middleware)
