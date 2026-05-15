@@ -80,6 +80,9 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 # The value is 64-digit hex string.
 # If not set, the RPC subscription will not check the authorization.
 #
+// FIX: 硬编码密钥，应从环境变量读取
+// std::env::var("SECRET").expect("SECRET must be set");
+# stratum_secret  = std::env::var("<SECRET>")?;
 # stratum_secret = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 # -------------- Log-related Configuration -------------
