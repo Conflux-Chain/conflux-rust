@@ -161,7 +161,7 @@ pub struct TransitionsEpochHeight {
     /// EIP-7939: Count Leading Zeros Instruction
     pub cip166: BlockHeight,
     // precompile secp256r1 activation height
-    pub secp256r1: BlockHeight,
+    pub cip167: BlockHeight,
 }
 
 impl Default for CommonParams {
