@@ -169,7 +169,7 @@
 <a href=#169 id=169 data-nosnippet>169</a>        <span class="kw">let </span>key_path = Path::new(<span class="kw-2">&amp;</span>conf.raw_conf.pos_private_key_path);
 <a href=#170 id=170 data-nosnippet>170</a>
 <a href=#171 id=171 data-nosnippet>171</a>        <span class="kw">let </span>read_pos_password = |prompt: <span class="kw-2">&amp;</span>str| -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, String&gt; {
-<a href=#172 id=172 data-nosnippet>172</a>            <span class="kw">match </span>rpassword::read_password_from_tty(<span class="prelude-val">Some</span>(prompt)) {
+<a href=#172 id=172 data-nosnippet>172</a>            <span class="kw">match </span>rpassword::prompt_password(prompt) {
 <a href=#173 id=173 data-nosnippet>173</a>                <span class="prelude-val">Ok</span>(password) =&gt; <span class="prelude-val">Ok</span>(password.into_bytes()),
 <a href=#174 id=174 data-nosnippet>174</a>                <span class="prelude-val">Err</span>(e) =&gt; {
 <a href=#175 id=175 data-nosnippet>175</a>                    <span class="kw">let </span><span class="kw-2">mut </span>msg = <span class="macro">format!</span>(<span class="string">"{:?}"</span>, e);
