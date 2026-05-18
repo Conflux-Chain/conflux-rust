@@ -1375,7 +1375,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-config"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "cfx-addr",
  "cfx-executor",
@@ -1563,7 +1563,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-parity-trace-types"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
@@ -1581,7 +1581,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "alloy-rpc-types-trace",
  "async-trait",
@@ -1624,7 +1624,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-builder"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "alloy-primitives",
  "cfx-rpc",
@@ -1665,7 +1665,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-types"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "bls-signatures",
  "cfx-addr",
@@ -1692,7 +1692,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-common-impl"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "cfx-addr",
  "cfx-parity-trace-types",
@@ -1704,7 +1704,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-api"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "alloy-rpc-types-trace",
  "cfx-rpc-eth-types",
@@ -1715,7 +1715,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-types"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "alloy-rpc-types",
  "cfx-bytes",
@@ -1739,7 +1739,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-middlewares"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "anyhow",
  "cfx-rpc-utils",
@@ -1759,7 +1759,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-primitives"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "rustc-hex",
  "serde",
@@ -1769,7 +1769,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -1846,7 +1846,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-tasks"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -1870,7 +1870,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-util-macros"
-version = "3.0.3"
+version = "3.0.3-fix"
 
 [[package]]
 name = "cfx-vm-interpreter"
@@ -1913,7 +1913,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -2027,14 +2027,14 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-errors"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "cfxcore-pow"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "cfx-parameters",
  "cfx-types",
@@ -2049,7 +2049,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-types"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "cfx-bytes",
  "cfx-execute-helper",
@@ -3138,7 +3138,7 @@ dependencies = [
 
 [[package]]
 name = "eest_types"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "cfx-rpc-primitives",
  "cfx-types",
@@ -3684,7 +3684,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -7320,7 +7320,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "3.0.3"
+version = "3.0.3-fix"
 dependencies = [
  "alloy-primitives",
  "cfx-types",
