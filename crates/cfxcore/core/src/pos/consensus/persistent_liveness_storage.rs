@@ -40,10 +40,6 @@ pub trait PersistentLivenessStorage: Send + Sync {
     /// Persist consensus' state
     fn save_vote(&self, vote: &Vote) -> Result<()>;
 
-    /// Construct data that can be recovered from ledger
-    #[allow(dead_code)]
-    fn recover_from_ledger(&self) -> LedgerRecoveryData;
-
     /// Construct necessary data to start consensus.
     fn start(&self) -> LivenessStorageData;
 
@@ -58,13 +54,6 @@ pub trait PersistentLivenessStorage: Send + Sync {
     }
 
     fn get_ledger_block(&self, _block_id: &HashValue) -> Result<Option<Block>> {
-        unimplemented!()
-    }
-
-    #[allow(dead_code)]
-    fn prune_staking_events(
-        &self, _committed_pivot_decision: &PivotBlockDecision,
-    ) -> Result<()> {
         unimplemented!()
     }
 
@@ -334,18 +323,6 @@ impl PersistentLivenessStorage for StorageWriteProxy {
         Ok(self.db.save_vote(bcs::to_bytes(vote)?)?)
     }
 
-    fn recover_from_ledger(&self) -> LedgerRecoveryData {
-        let startup_info = self
-            .pos_ledger_db
-            .get_startup_info(true)
-            .expect("unable to read ledger info from storage")
-            .expect("startup info is None");
-
-        LedgerRecoveryData::new(
-            startup_info.latest_ledger_info.ledger_info().clone(),
-        )
-    }
-
     fn start(&self) -> LivenessStorageData {
         diem_info!("Start consensus recovery.");
         let raw_data = self
@@ -459,13 +436,5 @@ impl PersistentLivenessStorage for StorageWriteProxy {
 
     fn get_ledger_block(&self, block_id: &HashValue) -> Result<Option<Block>> {
         Ok(self.db.get_ledger_block(block_id)?)
-    }
-
-    fn prune_staking_events(
-        &self, committed_pivot_decision: &PivotBlockDecision,
-    ) -> Result<()> {
-        Ok(self
-            .db
-            .delete_staking_events_before(committed_pivot_decision.height)?)
     }
 }

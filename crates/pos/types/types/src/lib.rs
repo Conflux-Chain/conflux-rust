@@ -9,7 +9,6 @@
 
 pub use account_address::AccountAddress as PeerId;
 
-pub mod access_path;
 pub mod account_address;
 pub mod account_config;
 pub mod block_info;
@@ -21,7 +20,6 @@ pub mod epoch_state;
 pub mod event;
 pub mod ledger_info;
 pub mod mempool_status;
-pub mod network_address;
 pub mod on_chain_config;
 pub mod proof;
 #[cfg(any(test, feature = "fuzzing"))]
@@ -34,7 +32,6 @@ pub mod validator_info;
 pub mod validator_signer;
 pub mod validator_verifier;
 pub mod vm_status;
-pub mod write_set;
 
 pub mod committed_block;
 pub mod reward_distribution_event;

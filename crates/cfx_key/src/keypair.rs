@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::{Address, Error, Public, Secret, SECP256K1};
+use super::{math::pubkey_to_public, Address, Error, Public, Secret};
 use cfx_crypto::crypto::keccak::Keccak256;
 use cfx_types::address_util::AddressUtil;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use secp256k1::key;
+use secp256k1::{PublicKey, SecretKey, SECP256K1};
 use std::fmt;
 
 pub fn public_to_address(public: &Public, type_nibble: bool) -> Address {
@@ -62,32 +62,21 @@ impl fmt::Display for KeyPair {
 impl KeyPair {
     /// Create a pair from secret key
     pub fn from_secret(secret: Secret) -> Result<KeyPair, Error> {
-        let context = &SECP256K1;
-        let s: key::SecretKey =
-            key::SecretKey::from_slice(context, &secret[..])?;
-        let pub_key = key::PublicKey::from_secret_key(context, &s)?;
-        let serialized = pub_key.serialize_vec(context, false);
-
-        let mut public = Public::default();
-        public.as_bytes_mut().copy_from_slice(&serialized[1..65]);
-
-        let keypair = KeyPair { secret, public };
-
-        Ok(keypair)
+        let s = SecretKey::from_slice(&secret[..])?;
+        let public =
+            pubkey_to_public(&PublicKey::from_secret_key(SECP256K1, &s));
+        Ok(KeyPair { secret, public })
     }
 
     pub fn from_secret_slice(slice: &[u8]) -> Result<KeyPair, Error> {
         Self::from_secret(Secret::from_unsafe_slice(slice)?)
     }
 
-    pub fn from_keypair(sec: key::SecretKey, publ: key::PublicKey) -> Self {
-        let context = &SECP256K1;
-        let serialized = publ.serialize_vec(context, false);
-        let secret = Secret::from(sec);
-        let mut public = Public::default();
-        public.as_bytes_mut().copy_from_slice(&serialized[1..65]);
-
-        KeyPair { secret, public }
+    pub fn from_keypair(sec: SecretKey, publ: PublicKey) -> Self {
+        KeyPair {
+            secret: Secret::from(sec),
+            public: pubkey_to_public(&publ),
+        }
     }
 
     pub fn secret(&self) -> &Secret { &self.secret }

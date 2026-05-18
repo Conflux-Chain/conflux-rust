@@ -42,6 +42,13 @@ impl TransactionStore {
     pub fn get_block_metadata(
         &self, version: Version,
     ) -> Result<Option<(Version, BlockMetadata)>> {
+        // Version 0 is always the genesis transaction, which carries no
+        // block metadata. Short-circuit without deserializing: pre-cleanup
+        // DBs hold a `WriteSetPayload`-based genesis record that would fail
+        // to decode against the post-PR Transaction enum.
+        if version == 0 {
+            return Ok(None);
+        }
         // Maximum TPS from benchmark is around 1000.
         const MAX_VERSIONS_TO_SEARCH: usize = 1000 * 3;
 

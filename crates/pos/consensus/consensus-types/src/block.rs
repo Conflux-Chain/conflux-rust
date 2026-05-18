@@ -12,7 +12,6 @@ use crate::{
 };
 use anyhow::{bail, ensure, format_err};
 use diem_crypto::{hash::CryptoHash, HashValue};
-use diem_infallible::duration_since_epoch;
 use diem_types::{
     account_address::AccountAddress,
     block_info::{BlockInfo, PivotBlockDecision},
@@ -26,7 +25,10 @@ use diem_types::{
 };
 use mirai_annotations::debug_checked_verify_eq;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::fmt::{self, Display, Formatter};
+use std::{
+    fmt::{self, Display, Formatter},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[path = "block_test_utils.rs"]
 #[cfg(any(test, feature = "fuzzing"))]
@@ -308,7 +310,9 @@ impl Block {
                 "Blocks must have strictly increasing timestamps"
             );
 
-            let current_ts = duration_since_epoch();
+            let current_ts = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("System time is before UNIX_EPOCH");
 
             // we can say that too far is 5 minutes in the future
             const TIMEBOUND: u64 = 300_000_000;

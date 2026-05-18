@@ -1,8 +1,9 @@
 use cfx_bytes::Bytes;
 use cfx_types::{Address, AddressWithSpace, H256, U256};
-use cfx_vm_types::CODE_PREFIX_7702;
 use keccak_hash::{keccak, KECCAK_EMPTY};
-use primitives::{storage::STORAGE_LAYOUT_REGULAR_V0, CodeInfo};
+use primitives::{
+    storage::STORAGE_LAYOUT_REGULAR_V0, CodeInfo, CODE_PREFIX_7702,
+};
 use std::sync::Arc;
 
 use super::OverlayAccount;

@@ -6,7 +6,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::Error;
-use enum_dispatch::enum_dispatch;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// A secure key/value storage engine. Create takes a policy that is enforced
@@ -14,7 +13,6 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 /// the backend can translate into a unique and private token for another
 /// service. Hence get and set internally will pass the current service private
 /// token to the backend to gain its permissions.
-#[enum_dispatch]
 pub trait KVStorage {
     /// Returns an error if the backend service is not online and available.
     fn available(&self) -> Result<(), Error>;

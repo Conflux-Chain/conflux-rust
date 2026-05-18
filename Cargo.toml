@@ -48,6 +48,7 @@ members = [
     "crates/util/metrics",
     "crates/util/priority-send-queue",
     "crates/util/random_crash",
+    "crates/util/rlp_compat",
     "crates/util/sha3-macro",
     "crates/execution/solidity-abi",
     "crates/execution/solidity-abi-derive",
@@ -69,16 +70,7 @@ members = [
     "crates/rpc/rpc-cfx-impl",
     "crates/rpc/rpc-cfx-api",
     "crates/pos/common/bounded-executor",
-    "crates/pos/common/crash-handler",
-    "crates/pos/common/infallible",
     "crates/pos/common/logger",
-    "crates/pos/common/metrics",
-    "crates/pos/common/metrics-core",
-    "crates/pos/common/proptest-helpers",
-    "crates/pos/common/short-hex-str",
-    "crates/pos/common/subscription-service",
-    "crates/pos/common/temppath",
-    "crates/pos/common/time-service",
     "crates/pos/config/global-constants",
     "crates/pos/consensus/consensus-types",
     "crates/pos/config/config",
@@ -120,9 +112,6 @@ edition = "2021"
 
 [profile.test]
 debug-assertions = true
-
-[profile.test.package]
-parity-secp256k1 = { opt-level = 3 }
 
 [profile.bench]
 debug-assertions = true
@@ -203,16 +192,7 @@ cfx-rpc-middlewares = { path = "./crates/rpc/rpc-middlewares" }
 bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 #diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
 channel = { path = "./crates/pos/common/channel" }
-crash-handler = { path = "./crates/pos/common/crash-handler" }
-diem-infallible = { path = "./crates/pos/common/infallible" }
 diem-logger = { path = "./crates/pos/common/logger" }
-diem-metrics = { path = "./crates/pos/common/metrics" }
-diem-metrics-core = { path = "./crates/pos/common/metrics-core" }
-diem-proptest-helpers = { path = "./crates/pos/common/proptest-helpers" }
-short-hex-str = { path = "./crates/pos/common/short-hex-str" }
-subscription-service = { path = "./crates/pos/common/subscription-service" }
-diem-temppath = { path = "./crates/pos/common/temppath" }
-diem-time-service = { path = "./crates/pos/common/time-service" }
 diem-global-constants = { path = "./crates/pos/config/global-constants" }
 diem-config = { path = "./crates/pos/config/config" }
 consensus-types = { path = "./crates/pos/consensus/consensus-types" }
@@ -333,7 +313,7 @@ bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", 
     "blst",
 ] }
 blst = "0.3"
-#secp256k1 = "0.30.0"
+secp256k1 = { version = "0.30", features = ["recovery", "global-context", "rand"] }
 #rustls = "0.21"
 hashbrown = "0.7"
 vrf = "0.2"
@@ -376,7 +356,7 @@ strum_macros = "0.26"
 toml = "0.8"
 app_dirs = "1.2.1"
 slab = "0.4"
-rpassword = "5.0.1"
+rpassword = "7.5"
 static_assertions = "1.1.0"
 transient-hashmap = "0.4"
 num_cpus = "1.17"
@@ -442,13 +422,13 @@ duration-str = "0.17"
 # parity crates
 rlp = "0.6"
 rlp_derive = { package = "rlp-derive", version = "0.2.0" }
+rlp-compat = { path = "./crates/util/rlp_compat" }
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 ethereum-types = "0.16.0"
 parity-wordlist = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 parity-path = "0.1"
-parity-secp256k1 = { git = "https://github.com/paritytech/rust-secp256k1.git" }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev = "b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
 substrate-bn = { git = "https://github.com/paritytech/bn", rev = "63f8c587356a67b33c7396af98e065b66fca5dda", default-features = false }
 ethcore-bytes = "0.1.1"
@@ -465,7 +445,7 @@ sqlite3-sys = "0.12"
 kvdb = "0.13"
 influx_db_client = "0.5.1"
 # conflux forked crates
-rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "d0cd089bc092ec77b65a5262d453848f57abe3c3" }
+rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "672b02bc21874a5e91705f3642dac3614a7a8f9e" }
 
 [patch.crates-io]
 # use a forked version to fix a vulnerability(introduced by failure) in vrf-rs, can be removed after the upstream is fixed

@@ -18,10 +18,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{u256_to_h256_be, Address, Space, U256};
+use cfx_types::{u256_to_h256_be, Space, U256};
 use cfx_vm_types::{self as vm, Spec};
-use std::{cmp, sync::Arc};
-use vm::{BlockHashSource, CODE_PREFIX_7702};
+use primitives::extract_7702_payload;
+use std::cmp;
+use vm::BlockHashSource;
 
 use super::{
     instructions::{self, Instruction, InstructionInfo},
@@ -623,7 +624,9 @@ fn calc_call_gas<Gas: CostType>(
         return Ok(call_gas);
     }
 
-    let Some(delegated_address) = delegated_address(context.extcode(&address)?)
+    let maybe_code = context.extcode(&address)?;
+    let Some(delegated_address) =
+        maybe_code.and_then(|code| extract_7702_payload(&code))
     else {
         return Ok(call_gas);
     };
@@ -634,21 +637,6 @@ fn calc_call_gas<Gas: CostType>(
         } else {
             spec.cold_account_access_cost
         })
-}
-
-fn delegated_address(extcode: Option<Arc<Vec<u8>>>) -> Option<Address> {
-    let code = extcode?;
-    if !code.starts_with(CODE_PREFIX_7702) {
-        return None;
-    }
-
-    let (_prefix, payload) = code.split_at(CODE_PREFIX_7702.len());
-
-    if payload.len() == Address::len_bytes() {
-        Some(Address::from_slice(payload))
-    } else {
-        None
-    }
 }
 
 #[test]

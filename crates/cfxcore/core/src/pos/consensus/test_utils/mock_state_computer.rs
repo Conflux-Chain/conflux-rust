@@ -12,11 +12,11 @@ use crate::pos::consensus::{
 use anyhow::{format_err, Result};
 use consensus_types::{block::Block, common::Payload};
 use diem_crypto::{hash::ACCUMULATOR_PLACEHOLDER_HASH, HashValue};
-use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::ledger_info::LedgerInfoWithSignatures;
 use executor_types::{Error, StateComputeResult};
 use futures::channel::mpsc;
+use parking_lot::Mutex;
 use std::{collections::HashMap, sync::Arc};
 
 pub struct MockStateComputer {

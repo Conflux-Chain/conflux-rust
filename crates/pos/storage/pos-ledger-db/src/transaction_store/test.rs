@@ -7,14 +7,13 @@
 
 use super::*;
 use crate::PosLedgerDB;
-use diem_proptest_helpers::Index;
-use diem_temppath::TempPath;
 use diem_types::{
     block_metadata::BlockMetadata,
     proptest_types::{AccountInfoUniverse, SignatureCheckedTransactionGen},
     transaction::{SignedTransaction, Transaction},
 };
-use proptest::{collection::vec, prelude::*};
+use proptest::{collection::vec, prelude::*, sample::Index};
+use tempfile::TempDir;
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(10))]
@@ -27,7 +26,7 @@ proptest! {
             1..10
         ),
     ) {
-        let tmp_dir = TempPath::new();
+        let tmp_dir = TempDir::new().unwrap();
         let db = PosLedgerDB::new_for_test(&tmp_dir);
         let store = &db.transaction_store;
         let txns = init_store(universe, gens, &store);
@@ -63,28 +62,36 @@ proptest! {
             1..100,
         )
     ) {
-        let tmp_dir = TempPath::new();
+        let tmp_dir = TempDir::new().unwrap();
         let db = PosLedgerDB::new_for_test(&tmp_dir);
         let store = &db.transaction_store;
 
+        // Store a placeholder at version 0 (genesis) and real txns
+        // starting from version 1, matching production layout.
         let mut cs = ChangeSet::new();
-        for (ver, txn) in txns.iter().enumerate() {
+        let genesis = Transaction::GenesisTransaction(vec![]);
+        store.put_transaction(0, &genesis, &mut cs).unwrap();
+        for (idx, txn) in txns.iter().enumerate() {
             store
-                .put_transaction(ver as Version, &txn, &mut cs)
+                .put_transaction((idx + 1) as Version, &txn, &mut cs)
                 .unwrap();
         }
         store.db.write_schemas(cs.batch, true).unwrap();
 
+        // Version 0 (genesis) should return None.
+        prop_assert!(store.get_block_metadata(0).unwrap().is_none());
+
         let mut timestamp = 0;
         let mut block_meta_ver = 0;
         let mut seen_any_block = false;
-        for (ver, txn) in txns.into_iter().enumerate() {
+        for (idx, txn) in txns.into_iter().enumerate() {
+            let ver = (idx + 1) as Version;
             if let Transaction::BlockMetadata(b) = txn {
                 timestamp = b.into_inner().1;
-                block_meta_ver = ver as Version;
+                block_meta_ver = ver;
                 seen_any_block = true;
             }
-            let block_meta_opt = store.get_block_metadata(ver as Version).unwrap();
+            let block_meta_opt = store.get_block_metadata(ver).unwrap();
             if seen_any_block {
                 let (v, block_meta) = block_meta_opt.unwrap();
                 prop_assert_eq!(
@@ -111,7 +118,7 @@ fn init_store(
         .into_iter()
         .map(|(index, gen)| {
             Transaction::UserTransaction(
-                gen.materialize(*index, &mut universe).into_inner(),
+                gen.materialize(index, &mut universe).into_inner(),
             )
         })
         .collect::<Vec<_>>();

@@ -61,14 +61,11 @@ conf_file = open(os.path.join(cwd, "pos_config.yaml"), "w")
 conf_file.write("""
 base:
   #data_dir: ./pos_db
-  role: validator
 consensus:
   round_initial_timeout_ms: 60000
   safety_rules:
     service:
       type: local
-execution:
-  genesis_file_location: ./genesis_file
 logger:
   file: ./log/pos.log
   level: INFO

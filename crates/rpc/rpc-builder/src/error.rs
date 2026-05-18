@@ -26,7 +26,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
-use crate::EthRpcModule;
+use crate::eth::EthRpcModule;
 use std::{
     collections::HashSet,
     io::{self, ErrorKind},
@@ -71,7 +71,7 @@ impl std::fmt::Display for ServerKind {
 
 /// Rpc Server related errors
 #[derive(Debug, thiserror::Error)]
-pub enum RpcError {
+pub enum RpcError<T = EthRpcModule> {
     /// Thrown during server start.
     #[error("Failed to start {kind} server: {error}")]
     ServerError {
@@ -94,7 +94,7 @@ pub enum RpcError {
     /// Http and WS server configured on the same port but with conflicting
     /// settings.
     #[error(transparent)]
-    WsHttpSamePortError(#[from] WsHttpSamePortError),
+    WsHttpSamePortError(#[from] WsHttpSamePortError<T>),
     /// Thrown when IPC server fails to start.
     // #[error(transparent)]
     // IpcServerError(#[from] IpcServerStartError),
@@ -103,7 +103,7 @@ pub enum RpcError {
     Custom(String),
 }
 
-impl RpcError {
+impl<T> RpcError<T> {
     /// Converts an [`io::Error`] to a more descriptive `RpcError`.
     pub fn server_error(io_error: io::Error, kind: ServerKind) -> Self {
         if io_error.kind() == ErrorKind::AddrInUse {
@@ -121,16 +121,16 @@ impl RpcError {
 
 /// Conflicting modules between http and ws servers.
 #[derive(Debug)]
-pub struct ConflictingModules {
+pub struct ConflictingModules<T = EthRpcModule> {
     /// Modules present in both http and ws.
-    pub overlap: HashSet<EthRpcModule>,
+    pub overlap: HashSet<T>,
     /// Modules present in http but not in ws.
-    pub http_not_ws: HashSet<EthRpcModule>,
+    pub http_not_ws: HashSet<T>,
     /// Modules present in ws but not in http.
-    pub ws_not_http: HashSet<EthRpcModule>,
+    pub ws_not_http: HashSet<T>,
 }
 
-impl std::fmt::Display for ConflictingModules {
+impl<T: std::fmt::Debug> std::fmt::Display for ConflictingModules<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -146,7 +146,7 @@ impl std::fmt::Display for ConflictingModules {
 
 /// Errors when trying to launch ws and http server on the same port.
 #[derive(Debug, thiserror::Error)]
-pub enum WsHttpSamePortError {
+pub enum WsHttpSamePortError<T = EthRpcModule> {
     /// Ws and http server configured on same port but with different cors
     /// domains.
     #[error(
@@ -161,7 +161,7 @@ pub enum WsHttpSamePortError {
     },
     /// Ws and http server configured on same port but with different modules.
     #[error("{0}")]
-    ConflictingModules(Box<ConflictingModules>),
+    ConflictingModules(Box<ConflictingModules<T>>),
 }
 
 #[cfg(test)]
@@ -182,7 +182,7 @@ mod tests {
         ];
 
         for kind in &kinds {
-            let err = RpcError::AddressAlreadyInUse {
+            let err: RpcError<EthRpcModule> = RpcError::AddressAlreadyInUse {
                 kind: *kind,
                 error: io::Error::from(ErrorKind::AddrInUse),
             };

@@ -79,16 +79,10 @@ impl NetworkTask {
     /// Establishes the initial connections with the peers and returns the
     /// receivers.
     pub fn new() -> (NetworkTask, NetworkReceivers) {
-        let (mempool_sync_message_tx, mempool_sync_message) = diem_channel::new(
-            QueueStyle::LIFO,
-            1,
-            None, //Some(&counters::CONSENSUS_CHANNEL_MSGS),
-        );
-        let (network_events_tx, network_events) = diem_channel::new(
-            QueueStyle::LIFO,
-            1,
-            None, //Some(&counters::CONSENSUS_CHANNEL_MSGS),
-        );
+        let (mempool_sync_message_tx, mempool_sync_message) =
+            diem_channel::new(QueueStyle::LIFO, 1);
+        let (network_events_tx, network_events) =
+            diem_channel::new(QueueStyle::LIFO, 1);
         (
             NetworkTask {
                 mempool_sync_message_tx,

@@ -224,8 +224,7 @@ impl SnapshotManifestRequest {
                 .manager
                 .graph
                 .data_man
-                .block_header_by_hash(&deferred_block_hash)
-                .expect("All headers exist")
+                .block_header_by_hash(&deferred_block_hash)?
                 .parent_hash();
         }
 
@@ -287,8 +286,7 @@ impl SnapshotManifestRequest {
                     .manager
                     .graph
                     .data_man
-                    .block_header_by_hash(&deferred_block_hash)
-                    .expect("All headers received")
+                    .block_header_by_hash(&deferred_block_hash)?
                     .parent_hash();
             } else {
                 warn!(

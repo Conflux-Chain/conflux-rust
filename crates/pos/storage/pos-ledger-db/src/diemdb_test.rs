@@ -8,13 +8,13 @@
 use super::*;
 use crate::test_helper::arb_blocks_to_commit;
 use diem_crypto::hash::CryptoHash;
-use diem_temppath::TempPath;
 use diem_types::{
     contract_event::ContractEvent, event::EventKey, vm_status::KeptVMStatus,
 };
 use proptest::prelude::*;
 use std::collections::HashMap;
 use storage_interface::Order;
+use tempfile::TempDir;
 
 fn verify_epochs(
     db: &PosLedgerDB, ledger_infos_with_sigs: &[LedgerInfoWithSignatures],
@@ -74,7 +74,7 @@ fn verify_epochs(
 pub fn test_save_blocks_impl(
     input: Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>,
 ) {
-    let tmp_dir = TempPath::new();
+    let tmp_dir = TempDir::new().unwrap();
     let db = PosLedgerDB::new_for_test(&tmp_dir);
 
     let num_batches = input.len();
@@ -134,7 +134,7 @@ pub fn test_save_blocks_impl(
 fn test_sync_transactions_impl(
     input: Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>,
 ) {
-    let tmp_dir = TempPath::new();
+    let tmp_dir = TempDir::new().unwrap();
     let db = PosLedgerDB::new_for_test(&tmp_dir);
 
     let num_batches = input.len();
@@ -387,7 +387,7 @@ fn test_get_first_seq_num_and_limit() {
 
 #[test]
 fn test_get_latest_tree_state() {
-    let tmp_dir = TempPath::new();
+    let tmp_dir = TempDir::new().unwrap();
     let db = PosLedgerDB::new_for_test(&tmp_dir);
 
     // entirely empty db
