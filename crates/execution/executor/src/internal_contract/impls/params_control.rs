@@ -220,7 +220,10 @@ pub fn total_votes(
 
     let state = &context.state;
 
-    let votes_entries = if version + 1 == current_voting_version {
+    let votes_entries = if version
+        .checked_add(1)
+        .map_or(false, |x| x == current_voting_version)
+    {
         SETTLED_VOTES_ENTRIES.as_ref()
     } else if version == current_voting_version {
         CURRENT_VOTES_ENTRIES.as_ref()
