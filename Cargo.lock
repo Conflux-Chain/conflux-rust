@@ -7075,6 +7075,7 @@ dependencies = [
  "once_cell",
  "rand 0.9.3",
  "rlp 0.4.6",
+ "rlp-compat",
  "rlp-derive",
  "serde",
  "serde_derive",
@@ -7883,6 +7884,26 @@ checksum = "bb919243f34364b6bd2fc10ef797edbfa75f33c252e7998527479c6d6b47e1ec"
 dependencies = [
  "bytes 1.11.1",
  "rustc-hex",
+]
+
+[[package]]
+name = "rlp"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa24e92bb2a83198bb76d661a71df9f7076b8c420b8696e4d3d97d50d94479e3"
+dependencies = [
+ "bytes 1.11.1",
+ "rustc-hex",
+]
+
+[[package]]
+name = "rlp-compat"
+version = "0.1.0"
+dependencies = [
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "rlp 0.4.6",
+ "rlp 0.6.1",
 ]
 
 [[package]]

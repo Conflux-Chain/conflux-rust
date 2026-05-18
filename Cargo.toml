@@ -48,6 +48,7 @@ members = [
     "crates/util/metrics",
     "crates/util/priority-send-queue",
     "crates/util/random_crash",
+    "crates/util/rlp_compat",
     "crates/util/sha3-macro",
     "crates/execution/solidity-abi",
     "crates/execution/solidity-abi-derive",
@@ -421,6 +422,7 @@ duration-str = "0.17"
 # parity crates
 rlp = "0.4.0"
 rlp_derive = { package = "rlp-derive", version = "0.2.0" }
+rlp-compat = { path = "./crates/util/rlp_compat" }
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }

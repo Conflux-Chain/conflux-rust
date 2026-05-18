@@ -5391,6 +5391,7 @@ dependencies = [
  "once_cell",
  "rand 0.9.3",
  "rlp 0.4.6",
+ "rlp-compat",
  "rlp-derive",
  "serde",
  "serde_derive",
@@ -6002,6 +6003,15 @@ checksum = "bb919243f34364b6bd2fc10ef797edbfa75f33c252e7998527479c6d6b47e1ec"
 dependencies = [
  "bytes",
  "rustc-hex",
+]
+
+[[package]]
+name = "rlp-compat"
+version = "0.1.0"
+dependencies = [
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "rlp 0.4.6",
 ]
 
 [[package]]

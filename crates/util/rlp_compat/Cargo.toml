@@ -1,0 +1,16 @@
+[package]
+name = "rlp-compat"
+version = "0.1.0"
+edition = "2021"
+license-file.workspace = true
+
+[dependencies]
+rlp = { workspace = true }
+malloc_size_of = { workspace = true }
+malloc_size_of_derive = { workspace = true }
+
+[dev-dependencies]
+# Compared against in tests. The main `rlp` dep is 0.4 today (used as the
+# 0.4 reference) and becomes 0.6 after the upgrade; at that point, swap
+# this dev-dep to `rlp_04` to keep side-by-side coverage.
+rlp_06 = { package = "rlp", version = "0.6" }
