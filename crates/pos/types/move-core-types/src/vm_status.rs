@@ -208,6 +208,14 @@ pub enum StatusCode {
     PIVOT_DECISION_HEIGHT_TOO_OLD = 33,
     PIVOT_DECISION_SENDER_NOT_REGISTERED = 34,
     DISPUTE_SENDER_NOT_REGISTERED = 35,
+    // The submitter's authenticator BLS public key does not match the
+    // one registered in `node_map` for `tx.sender()`. This is the bind
+    // that makes `tx.sender()` a non-forgeable identity at admission.
+    AUTHENTICATOR_KEY_MISMATCH = 36,
+    // Payload type that never legitimately enters via mempool gossip
+    // (Register / Retire / UpdateVotingPower — proposer-built from PoW
+    // staking events and pushed directly into block payloads).
+    PAYLOAD_NOT_ALLOWED_VIA_MEMPOOL = 37,
 
     // Runtime Errors: 4000-4999
     EXECUTED = 4001,
