@@ -1553,7 +1553,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-config"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "cfx-addr",
  "cfx-executor",
@@ -1704,7 +1704,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-mallocator-utils"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "axum",
  "cfg-if 1.0.0",
@@ -1765,7 +1765,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-parity-trace-types"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
@@ -1783,7 +1783,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-builder"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "alloy-primitives",
  "cfx-rpc-cfx-types",
@@ -1805,7 +1805,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-api"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-types",
@@ -1873,7 +1873,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-types"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "bls-signatures",
  "cfx-addr",
@@ -1904,7 +1904,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-common-impl"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "cfx-addr",
  "cfx-parity-trace-types",
@@ -1916,7 +1916,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-api"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "alloy-rpc-types-trace",
  "cfx-rpc-eth-types",
@@ -1927,7 +1927,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-impl"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "alloy-rpc-types-trace",
  "async-trait",
@@ -1969,7 +1969,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-types"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "alloy-rpc-types",
  "cfx-bytes",
@@ -1993,7 +1993,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-middlewares"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "anyhow",
  "cfx-rpc-utils",
@@ -2013,7 +2013,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-primitives"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "rustc-hex",
  "serde",
@@ -2023,7 +2023,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -2115,7 +2115,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-tasks"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -2141,7 +2141,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-util-macros"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 
 [[package]]
 name = "cfx-vm-interpreter"
@@ -2185,7 +2185,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -2316,14 +2316,14 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-errors"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "cfxcore-pow"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "cfx-parameters",
  "cfx-types",
@@ -2338,7 +2338,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-types"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "cfx-bytes",
  "cfx-execute-helper",
@@ -2545,7 +2545,7 @@ checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
 name = "client"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "alloy-rpc-types-trace",
  "app_dirs",
@@ -2676,7 +2676,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "bcs",
  "bls-signatures",
@@ -3663,7 +3663,7 @@ dependencies = [
 
 [[package]]
 name = "eest_types"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "cfx-rpc-primitives",
  "cfx-types",
@@ -4248,7 +4248,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -8546,7 +8546,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "3.0.4-testnet"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "alloy-primitives",
  "cfx-types",
