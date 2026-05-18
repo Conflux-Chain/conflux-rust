@@ -109,6 +109,8 @@ pub struct NodeData {
 
 impl NodeData {
     pub fn lock_status(&self) -> &NodeLockStatus { &self.lock_status }
+
+    pub fn public_key(&self) -> &ConsensusPublicKey { &self.public_key }
 }
 
 /// A node becomes its voting power number of ElectionNodes for election.
@@ -629,8 +631,28 @@ impl PosState {
 
 /// Read-only functions use in `TransactionValidator`
 impl PosState {
+    /// Look up the registered BLS public key for `addr` and verify it
+    /// matches `auth_pk`. This is what makes `tx.sender()` a non-forgeable
+    /// identity at admission: `raw_txn.sender` is otherwise a free-form
+    /// field, but pairing it with the authenticator pubkey + node_map
+    /// constrains it to a slot the submitter actually controls.
+    fn check_sender_owns_auth_key(
+        &self, sender: &AccountAddress, auth_pk: &ConsensusPublicKey,
+        not_registered: DiscardedVMStatus,
+    ) -> Option<DiscardedVMStatus> {
+        let node = match self.node_map.get(sender) {
+            Some(node) => node,
+            None => return Some(not_registered),
+        };
+        if node.public_key() != auth_pk {
+            return Some(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH);
+        }
+        None
+    }
+
     pub fn validate_election_simple(
-        &self, sender: &AccountAddress, election_tx: &ElectionPayload,
+        &self, sender: &AccountAddress, auth_pk: &ConsensusPublicKey,
+        election_tx: &ElectionPayload,
     ) -> Option<DiscardedVMStatus> {
         let node_id = NodeID::new(
             election_tx.public_key.clone(),
@@ -641,17 +663,24 @@ impl PosState {
             node_id.addr,
             election_tx.target_term
         );
-        // Guard against a fresh outer keypair wrapping a legit payload to
-        // bypass the per-sender cap.
+        // sender must be the addr derived from the payload's declared
+        // keys, AND the submitter must hold the BLS private key
+        // registered at that addr. Together these mean a forged sender
+        // gets rejected, and a registered submitter cannot impersonate
+        // another node's slot by stuffing someone else's payload keys.
         if *sender != node_id.addr {
             return Some(DiscardedVMStatus::ELECTION_SIGNER_MISMATCH);
         }
-        let node = match self.node_map.get(&node_id.addr) {
-            Some(node) => node,
-            None => {
-                return Some(DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE);
-            }
-        };
+        if let Some(err) = self.check_sender_owns_auth_key(
+            sender,
+            auth_pk,
+            DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
+        ) {
+            return Some(err);
+        }
+        // Safe to unwrap: check_sender_owns_auth_key returned None, so
+        // the entry exists.
+        let node = self.node_map.get(&node_id.addr).unwrap();
 
         let target_view = match POS_STATE_CONFIG
             .get_starting_view_for_term(election_tx.target_term)
@@ -677,20 +706,23 @@ impl PosState {
     }
 
     pub fn validate_pivot_decision_simple(
-        &self, sender: &AccountAddress, pivot_decision_tx: &PivotBlockDecision,
+        &self, sender: &AccountAddress, auth_pk: &ConsensusPublicKey,
+        pivot_decision_tx: &PivotBlockDecision,
     ) -> Option<DiscardedVMStatus> {
-        // Registered-node check, not active-committee: mempool gossip is
-        // the sole propagation path for individual PivotDecision
-        // signatures (one per validator per round), and a committee
-        // check would drop newly-joined members' signatures at every
-        // term boundary until lagged receivers catch up. PoS collateral
-        // at registration keeps fresh-keypair spam infeasible.
-        // TODO: tighten to active committee if production lag data
-        // shows term-boundary windows are small enough to tolerate.
-        if !self.node_map.contains_key(sender) {
-            return Some(
-                DiscardedVMStatus::PIVOT_DECISION_SENDER_NOT_REGISTERED,
-            );
+        // Registered-node check (not active-committee): mempool gossip
+        // is the sole propagation path for individual PivotDecision
+        // signatures (one per validator per round). A committee check
+        // would drop newly-joined members' signatures at every term
+        // boundary until lagged receivers catch up. PoS collateral at
+        // registration keeps fresh-keypair spam infeasible, and the
+        // auth-key binding below ensures `sender` actually controls the
+        // BLS private key registered for this slot.
+        if let Some(err) = self.check_sender_owns_auth_key(
+            sender,
+            auth_pk,
+            DiscardedVMStatus::PIVOT_DECISION_SENDER_NOT_REGISTERED,
+        ) {
+            return Some(err);
         }
         if pivot_decision_tx.height <= self.pivot_decision.height {
             return Some(DiscardedVMStatus::PIVOT_DECISION_HEIGHT_TOO_OLD);
@@ -699,15 +731,14 @@ impl PosState {
     }
 
     pub fn validate_dispute_simple(
-        &self, sender: &AccountAddress,
+        &self, sender: &AccountAddress, auth_pk: &ConsensusPublicKey,
     ) -> Option<DiscardedVMStatus> {
-        // Registered-node gating, same rationale as
-        // `validate_pivot_decision_simple`; `verify_dispute` runs at
-        // execute time.
-        if !self.node_map.contains_key(sender) {
-            return Some(DiscardedVMStatus::DISPUTE_SENDER_NOT_REGISTERED);
-        }
-        None
+        // Registered-node gating; `verify_dispute` runs at execute time.
+        self.check_sender_owns_auth_key(
+            sender,
+            auth_pk,
+            DiscardedVMStatus::DISPUTE_SENDER_NOT_REGISTERED,
+        )
     }
 }
 
@@ -1389,5 +1420,202 @@ impl DisputeEvent {
 
     pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Admission tests for `validate_*_simple`. These cover the
+    //! authenticator-pubkey ↔ `node_map` binding that makes
+    //! `tx.sender()` a non-forgeable identity at mempool admission.
+
+    use super::*;
+    use crate::block_info::PivotBlockDecision;
+    use diem_crypto::{
+        bls::BLSPrivateKey, ec_vrf::EcVrfPrivateKey, PrivateKey, Uniform,
+    };
+    use rand::{rngs::StdRng, SeedableRng};
+
+    struct Keys {
+        bls_sk: BLSPrivateKey,
+        bls_pk: ConsensusPublicKey,
+        vrf_pk: ConsensusVRFPublicKey,
+        addr: AccountAddress,
+    }
+
+    fn keys_from_seed(seed: u64) -> Keys {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let bls_sk = BLSPrivateKey::generate(&mut rng);
+        let bls_pk = bls_sk.public_key();
+        let vrf_sk = EcVrfPrivateKey::generate(&mut rng);
+        let vrf_pk = vrf_sk.public_key();
+        let node_id = NodeID::new(bls_pk.clone(), vrf_pk.clone());
+        Keys {
+            bls_sk,
+            bls_pk,
+            vrf_pk,
+            addr: node_id.addr,
+        }
+    }
+
+    fn state_with_node(k: &Keys) -> PosState {
+        let mut state = PosState::new_empty();
+        state
+            .register_node(NodeID::new(k.bls_pk.clone(), k.vrf_pk.clone()))
+            .expect("register_node");
+        state
+    }
+
+    #[test]
+    fn pivot_decision_rejects_unregistered_sender() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        let tx = PivotBlockDecision {
+            block_hash: Default::default(),
+            height: 1,
+        };
+        assert_eq!(
+            state.validate_pivot_decision_simple(
+                &mallory.addr,
+                &mallory.bls_pk,
+                &tx
+            ),
+            Some(DiscardedVMStatus::PIVOT_DECISION_SENDER_NOT_REGISTERED),
+        );
+    }
+
+    #[test]
+    fn pivot_decision_rejects_auth_key_mismatch() {
+        // Attacker claims sender = alice but signs with mallory's key.
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        let tx = PivotBlockDecision {
+            block_hash: Default::default(),
+            height: 1,
+        };
+        assert_eq!(
+            state.validate_pivot_decision_simple(
+                &alice.addr,
+                &mallory.bls_pk,
+                &tx
+            ),
+            Some(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH),
+        );
+    }
+
+    #[test]
+    fn pivot_decision_accepts_legitimate_self_signed() {
+        let alice = keys_from_seed(1);
+        let state = state_with_node(&alice);
+
+        let tx = PivotBlockDecision {
+            block_hash: Default::default(),
+            height: 1,
+        };
+        assert_eq!(
+            state.validate_pivot_decision_simple(
+                &alice.addr,
+                &alice.bls_pk,
+                &tx
+            ),
+            None,
+        );
+        // sanity: keep the keypair owner alive — silences unused warning.
+        let _ = alice.bls_sk;
+    }
+
+    #[test]
+    fn dispute_rejects_unregistered_sender() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        assert_eq!(
+            state.validate_dispute_simple(&mallory.addr, &mallory.bls_pk),
+            Some(DiscardedVMStatus::DISPUTE_SENDER_NOT_REGISTERED),
+        );
+    }
+
+    #[test]
+    fn dispute_rejects_auth_key_mismatch() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        assert_eq!(
+            state.validate_dispute_simple(&alice.addr, &mallory.bls_pk),
+            Some(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH),
+        );
+    }
+
+    #[test]
+    fn dispute_accepts_legitimate_self_signed() {
+        let alice = keys_from_seed(1);
+        let state = state_with_node(&alice);
+
+        assert_eq!(
+            state.validate_dispute_simple(&alice.addr, &alice.bls_pk),
+            None,
+        );
+        let _ = alice.bls_sk;
+    }
+
+    #[test]
+    fn election_rejects_auth_key_mismatch() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        // Attacker constructs a payload claiming alice's keys, sets
+        // sender = alice.addr (so the payload-pk-derived addr check
+        // passes), but signs with mallory's BLS key.
+        // We can't easily construct an ElectionPayload without a real
+        // VRF proof; instead, test the auth-key binding via the helper
+        // that `validate_election_simple` uses.
+        assert_eq!(
+            state.check_sender_owns_auth_key(
+                &alice.addr,
+                &mallory.bls_pk,
+                DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
+            ),
+            Some(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH),
+        );
+    }
+
+    #[test]
+    fn check_sender_owns_auth_key_unregistered() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        // Custom not_registered code (use ELECTION_NON_EXISTENT_NODE
+        // here to exercise the parameterized return).
+        assert_eq!(
+            state.check_sender_owns_auth_key(
+                &mallory.addr,
+                &mallory.bls_pk,
+                DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
+            ),
+            Some(DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE),
+        );
+    }
+
+    #[test]
+    fn check_sender_owns_auth_key_accepts_matching() {
+        let alice = keys_from_seed(1);
+        let state = state_with_node(&alice);
+
+        assert_eq!(
+            state.check_sender_owns_auth_key(
+                &alice.addr,
+                &alice.bls_pk,
+                DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
+            ),
+            None,
+        );
     }
 }
