@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CompatBool04","CompatBool06","StrictBool"]};
