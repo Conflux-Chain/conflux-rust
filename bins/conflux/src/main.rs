@@ -25,7 +25,7 @@ use clap::{crate_version, ArgMatches, CommandFactory};
 use cli::Cli;
 use client::{
     archive::ArchiveClient,
-    common::{shutdown_handler, ClientTrait},
+    common::{panic_handler, shutdown_handler, ClientTrait},
     configuration::Configuration,
     full::FullClient,
     light::LightClient,
@@ -86,6 +86,7 @@ fn main() -> Result<(), String> {
     let conf = Configuration::parse(&matches)?;
 
     setup_logger(&conf)?;
+    panic_handler::setup();
 
     THROTTLING_SERVICE.write().initialize(
         conf.raw_conf.egress_queue_capacity,

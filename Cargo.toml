@@ -69,16 +69,7 @@ members = [
     "crates/rpc/rpc-cfx-impl",
     "crates/rpc/rpc-cfx-api",
     "crates/pos/common/bounded-executor",
-    "crates/pos/common/crash-handler",
-    "crates/pos/common/infallible",
     "crates/pos/common/logger",
-    "crates/pos/common/metrics",
-    "crates/pos/common/metrics-core",
-    "crates/pos/common/proptest-helpers",
-    "crates/pos/common/short-hex-str",
-    "crates/pos/common/subscription-service",
-    "crates/pos/common/temppath",
-    "crates/pos/common/time-service",
     "crates/pos/config/global-constants",
     "crates/pos/consensus/consensus-types",
     "crates/pos/config/config",
@@ -200,16 +191,7 @@ cfx-rpc-middlewares = { path = "./crates/rpc/rpc-middlewares" }
 bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 #diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
 channel = { path = "./crates/pos/common/channel" }
-crash-handler = { path = "./crates/pos/common/crash-handler" }
-diem-infallible = { path = "./crates/pos/common/infallible" }
 diem-logger = { path = "./crates/pos/common/logger" }
-diem-metrics = { path = "./crates/pos/common/metrics" }
-diem-metrics-core = { path = "./crates/pos/common/metrics-core" }
-diem-proptest-helpers = { path = "./crates/pos/common/proptest-helpers" }
-short-hex-str = { path = "./crates/pos/common/short-hex-str" }
-subscription-service = { path = "./crates/pos/common/subscription-service" }
-diem-temppath = { path = "./crates/pos/common/temppath" }
-diem-time-service = { path = "./crates/pos/common/time-service" }
 diem-global-constants = { path = "./crates/pos/config/global-constants" }
 diem-config = { path = "./crates/pos/config/config" }
 consensus-types = { path = "./crates/pos/consensus/consensus-types" }
@@ -374,7 +356,7 @@ strum_macros = "0.26"
 toml = "0.8"
 app_dirs = "1.2.1"
 slab = "0.4"
-rpassword = "5.0.1"
+rpassword = "7.5"
 static_assertions = "1.1.0"
 transient-hashmap = "0.4"
 num_cpus = "1.17"

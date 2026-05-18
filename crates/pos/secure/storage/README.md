@@ -16,19 +16,13 @@ key-value pairs).
 - `CryptoStorage`: Offers a cryptographic-key based storage abstraction for
 Ed25519 keys (e.g., key creation, rotation and signing).
 
-This crate provides two storage implementations, each of which implements
-both `KVStorage` and `CryptoStorage`:
-- `InMemory`: A simple in-memory storage engine, primarily used for testing.
-- `OnDisk`: An on-disk storage engine backed by a single file on local disk.
-
-In addition, this crate also offers a `NamespacedStorage` wrapper around secure
-storage implementations. Using the NamespacedStorage wrapper, different entities
-can share the same secure storage instance under different namespaces.
+This crate provides a single storage implementation, `OnDiskStorage`, that
+implements both `KVStorage` and `CryptoStorage`. It is backed by a JSON file
+on local disk and rewrites the file atomically on every write.
 
 ## How is this module organized?
 ```
     secure/storage/
-    ├── src                # Contains the definitions for secure storage (e.g., API and error types),
-                                as well as the InMemory and OnDisk implementations.
-    └── src/tests          # Contains the testsuite for all secure storage implementations.
+    ├── src                # Storage API, error types, and the OnDiskStorage implementation.
+    └── src/tests          # Testsuite for OnDiskStorage.
 ```

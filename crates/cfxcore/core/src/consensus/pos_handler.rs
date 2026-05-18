@@ -1,5 +1,6 @@
 use std::sync::{mpsc, Arc, Weak};
 
+use futures::channel::mpsc as futures_mpsc;
 use once_cell::sync::OnceCell;
 
 use cfx_types::{H256, U256, U64};
@@ -30,7 +31,9 @@ use crate::{
             NetworkReceivers as MemPoolNetworkReceivers,
             NetworkTask as MempoolNetworkTask,
         },
-        pos::{start_pos_consensus, PosDropHandle},
+        pos::{
+            start_pos_consensus, PosChainParams, PosDropHandle, PosNodeKeys,
+        },
         protocol::sync_protocol::HotStuffSynchronizationProtocol,
     },
     sync::ProtocolConfiguration,
@@ -39,7 +42,6 @@ use crate::{
 
 use cached_pos_ledger_db::CachedPosLedgerDB;
 use consensus_types::block::Block;
-use diem_config::config::SafetyRulesTestConfig;
 use diem_types::{
     account_address::from_consensus_public_key,
     block_info::{PivotBlockDecision, Round},
@@ -114,7 +116,7 @@ pub struct PosHandler {
     drop_handle: Mutex<Option<PosDropHandle>>,
     consensus_network_receiver: Mutex<Option<ConsensusNetworkReceivers>>,
     mempool_network_receiver: Mutex<Option<MemPoolNetworkReceivers>>,
-    test_command_sender: Mutex<Option<channel::Sender<TestCommand>>>,
+    test_command_sender: Mutex<Option<futures_mpsc::Sender<TestCommand>>>,
     enable_height: u64,
     hsb_protocol_handler: Option<Arc<HotStuffSynchronizationProtocol>>,
     pub conf: PosConfiguration,
@@ -193,31 +195,27 @@ impl PosHandler {
         )?;
         let network = self.network.lock().take().expect("pos not initialized");
         let (test_command_sender, test_command_receiver) =
-            channel::new_test(1024);
+            futures_mpsc::channel(1024);
 
-        pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
+        let node_keys = PosNodeKeys {
             author: from_consensus_public_key(
                 &self.conf.bls_key.public_key(),
                 &self.conf.vrf_key.public_key(),
             ),
-            consensus_key: Some(self.conf.bls_key.clone()),
-            execution_key: Some(self.conf.bls_key.clone()),
-        });
-        pos_config.consensus.safety_rules.vrf_private_key =
-            Some(self.conf.vrf_key.clone());
-        pos_config.consensus.safety_rules.export_consensus_key = true;
-        pos_config.consensus.safety_rules.vrf_proposal_threshold =
-            self.conf.vrf_proposal_threshold;
-        pos_config.consensus.chain_id = ChainId::new(network.network_id());
+            consensus_private_key: self.conf.bls_key.private_key(),
+            vrf_private_key: self.conf.vrf_key.private_key(),
+        };
+        let chain_params = PosChainParams {
+            chain_id: ChainId::new(network.network_id()),
+            vrf_proposal_threshold: self.conf.vrf_proposal_threshold,
+        };
 
         let pos_drop_handle = start_pos_consensus(
             &pos_config,
             network,
             self.conf.protocol_conf.clone(),
-            Some((
-                self.conf.bls_key.public_key(),
-                self.conf.vrf_key.public_key(),
-            )),
+            node_keys,
+            chain_params,
             pos_genesis,
             self.consensus_network_receiver
                 .lock()

@@ -9,6 +9,7 @@ use std::{ops::Deref, sync::Arc, thread, time::Duration};
 
 use crate::BlockGenerator;
 
+#[derive(Clone)]
 pub struct BlockGeneratorTestApi(Arc<BlockGenerator>);
 
 // Generate Block APIs for test only
