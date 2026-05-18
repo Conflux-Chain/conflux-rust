@@ -242,7 +242,7 @@ git submodule update --init --recursive
 ln -s /conflux-rust/build /home/ubuntu/worktrees/my-test/build
 
 # 4. Launch (run_in_background: true)
-bash dev-support/test.sh > /tmp/test_run.log 2>&1
+bash -c 'set -o pipefail; bash dev-support/test.sh 2>&1 | tee /tmp/test_run.log'
 ```
 
 ---
