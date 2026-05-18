@@ -294,7 +294,7 @@ impl fmt::Display for BLSPublicKey {
 
 impl Uniform for BLSPrivateKey {
     fn generate<R>(rng: &mut R) -> Self
-    where R: ::rand_08::RngCore + ::rand_08::CryptoRng {
+    where R: ::rand::RngCore + ::rand::CryptoRng {
         BLSPrivateKey(RawPrivateKey::generate(rng))
     }
 }
@@ -431,7 +431,7 @@ mod test {
     pub struct TestDiemCrypto(pub String);
     #[test]
     fn test_bls_sig_decode() {
-        let sk = BLSPrivateKey::generate(&mut rand_08::thread_rng());
+        let sk = BLSPrivateKey::generate(&mut rand::thread_rng());
         let sig = sk.sign(&TestDiemCrypto("".to_string()));
         let sig_bytes = sig.to_bytes();
         let start = Instant::now();

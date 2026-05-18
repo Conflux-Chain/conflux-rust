@@ -21,7 +21,7 @@ use diem_crypto::{
 use diem_crypto_derive::{CryptoHasher, DeserializeKey, SerializeKey};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
-use rand_08::{rngs::OsRng, Rng};
+use rand::{rngs::OsRng, Rng};
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt, str::FromStr};
 

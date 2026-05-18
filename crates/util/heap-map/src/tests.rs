@@ -44,16 +44,16 @@ fn test_simple() {
 #[test]
 fn test_random() {
     const SIZE: usize = 10000usize;
-    let key = || rand_08::random::<usize>() % (SIZE * 2);
+    let key = || rand::random::<usize>() % (SIZE * 2);
     let mut map = HeapMap::<usize, usize>::new();
 
     for _round in 0..10 {
         for _ in 0..SIZE {
-            map.insert(&key(), rand_08::random());
+            map.insert(&key(), rand::random());
         }
         for _iter in 0..1000 {
             map.remove(&key());
-            map.insert(&key(), rand_08::random());
+            map.insert(&key(), rand::random());
             if _iter % 10 == 9 {
                 assert!(map.check_mono());
             }

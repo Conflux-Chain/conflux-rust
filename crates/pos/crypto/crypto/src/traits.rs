@@ -14,7 +14,7 @@
 use crate::{hash::CryptoHash, HashValue};
 use anyhow::Result;
 use core::convert::{From, TryFrom};
-use rand_08::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
+use rand::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{fmt::Debug, hash::Hash};
 use thiserror::Error;
@@ -326,7 +326,7 @@ pub trait VRFProof:
 }
 
 /// A type family for schemes which know how to generate key material from
-/// a cryptographically-secure [`CryptoRng`][::rand_08::CryptoRng].
+/// a cryptographically-secure [`CryptoRng`][::rand::CryptoRng].
 pub trait Uniform {
     /// Generate key material from an RNG. This should generally not be used for
     /// production purposes even with a good source of randomness. When

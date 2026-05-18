@@ -42,7 +42,7 @@ where
     for<'a> P: From<&'a S>,
 {
     fn generate<R>(rng: &mut R) -> Self
-    where R: ::rand_08::RngCore + ::rand_08::CryptoRng {
+    where R: ::rand::RngCore + ::rand::CryptoRng {
         let private_key = S::generate(rng);
         private_key.into()
     }
@@ -55,7 +55,7 @@ where
     for<'a> P: From<&'a S>,
 {
     fn generate<R>(rng: &mut R) -> Self
-    where R: ::rand_08::RngCore + ::rand_08::CryptoRng {
+    where R: ::rand::RngCore + ::rand::CryptoRng {
         let private_key = S::generate(rng);
         let public_key = (&private_key).into();
         (private_key, public_key)
@@ -77,7 +77,7 @@ where
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest::prelude::*;
 #[cfg(any(test, feature = "fuzzing"))]
-use rand_08::{rngs::StdRng, SeedableRng};
+use rand::{rngs::StdRng, SeedableRng};
 
 /// Produces a uniformly random keypair from a seed
 #[cfg(any(test, feature = "fuzzing"))]

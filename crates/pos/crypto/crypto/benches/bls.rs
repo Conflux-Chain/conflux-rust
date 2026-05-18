@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate criterion;
+extern crate rand_08 as rand;
 use criterion::Criterion;
 use diem_crypto::{
     bls::*,
@@ -7,7 +8,7 @@ use diem_crypto::{
     PrivateKey, Signature, ValidCryptoMaterial,
 };
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
-use rand_08::{rngs::ThreadRng, thread_rng};
+use rand::{rngs::ThreadRng, thread_rng};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 

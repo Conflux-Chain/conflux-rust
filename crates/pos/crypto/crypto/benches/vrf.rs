@@ -1,11 +1,12 @@
 #[macro_use]
 extern crate criterion;
+extern crate rand_08 as rand;
 use criterion::{BatchSize, Criterion};
 use diem_crypto::{
     ec_vrf::EcVrfPrivateKey, traits::Uniform, vrf_number_with_nonce, HashValue,
     VRFPrivateKey, VRFProof,
 };
-use rand_08::{random, rngs::ThreadRng, thread_rng};
+use rand::{random, rngs::ThreadRng, thread_rng};
 
 fn compute(c: &mut Criterion) {
     let mut csprng: ThreadRng = thread_rng();

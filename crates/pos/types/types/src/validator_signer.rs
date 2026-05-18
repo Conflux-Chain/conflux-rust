@@ -15,7 +15,7 @@ use crate::{
 use diem_crypto::{
     hash::CryptoHash, test_utils::TEST_SEED, PrivateKey, SigningKey, Uniform,
 };
-use rand_08::{rngs::StdRng, SeedableRng};
+use rand::{rngs::StdRng, SeedableRng};
 use serde::ser::Serialize;
 use std::convert::TryFrom;
 
