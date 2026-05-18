@@ -22,12 +22,12 @@ use crate::pos::{
 use anyhow::Result;
 use cached_pos_ledger_db::CachedPosLedgerDB;
 use diem_config::config::NodeConfig;
-use diem_infallible::{Mutex, RwLock};
 use diem_types::transaction::SignedTransaction;
 use futures::channel::{
     mpsc::{self, Receiver, UnboundedSender},
     oneshot,
 };
+use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 use tokio::runtime::{Builder, Handle, Runtime};
 
@@ -52,8 +52,7 @@ pub(crate) fn start_shared_mempool(
     validator: Arc<RwLock<TransactionValidator>>,
     subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
 ) {
-    let peer_manager =
-        Arc::new(PeerManager::new(config.base.role, config.mempool.clone()));
+    let peer_manager = Arc::new(PeerManager::new());
 
     let smp = SharedMempool {
         mempool: mempool.clone(),

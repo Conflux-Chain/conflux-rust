@@ -343,7 +343,6 @@ def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000, har
     validator_config = {}
     validator_config['base'] = {
         'data_dir': os.path.join(datadir, 'pos_db'),
-        'role': 'validator',
     }
     validator_config['storage'] = {
         'dir': os.path.join(datadir, 'pos_db', 'db'),

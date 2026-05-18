@@ -26,12 +26,6 @@ pub trait TxnManager: Send + Sync {
         &self, max_size: u64, exclude: Vec<&Payload>, hash: HashValue,
         validators: ValidatorVerifier,
     ) -> Result<Payload, MempoolError>;
-
-    /// Notifies TxnManager about the executed result of the block,
-    /// which includes the specifics of what transactions succeeded and failed.
-    async fn notify(
-        &self, block: &Block, compute_result: &StateComputeResult,
-    ) -> Result<(), MempoolError>;
 }
 
 /// While Consensus is managing proposed blocks, `StateComputer` is managing the

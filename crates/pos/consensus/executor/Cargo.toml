@@ -21,7 +21,6 @@ executor-types = { workspace = true }
 bcs = "0.1.2"
 diem-crypto = { workspace = true }
 diem-logger = { workspace = true }
-diem-metrics = { workspace = true }
 diem-state-view = { workspace = true }
 cached-pos-ledger-db = { workspace = true }
 diem-types = { workspace = true }

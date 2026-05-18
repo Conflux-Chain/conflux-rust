@@ -19,6 +19,7 @@ use cfx_rpc_utils::error::{
         invalid_params_rpc_err, invalid_request_msg, rpc_error_with_code,
     },
 };
+use cfx_tasks::TaskExecutor;
 use cfx_types::{Space, H128, H256};
 use cfxcore::{
     channel::Channel, errors::Error as CoreError, BlockDataManager,
@@ -78,9 +79,72 @@ impl CfxFilterHandler {
         handler
     }
 
+    pub fn new_with_task_executor(
+        consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
+        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: TaskExecutor,
+        poll_lifetime: u32, logs_filter_max_limit: Option<usize>,
+        network: Network,
+    ) -> Self {
+        let handler = CfxFilterHandler {
+            consensus,
+            tx_pool,
+            polls: Mutex::new(PollManager::new(poll_lifetime)),
+            unfinalized_epochs: Default::default(),
+            logs_filter_max_limit,
+            network,
+        };
+        handler.start_epochs_loop_with_task_executor(epochs_ordered, executor);
+        handler
+    }
+
     fn start_epochs_loop(
         &self, epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
         executor: Arc<Runtime>,
+    ) {
+        let mut receiver = epochs_ordered.subscribe();
+        let consensus = self.consensus.clone();
+        let epochs = self.unfinalized_epochs.clone();
+
+        let fut = async move {
+            while let Some(epoch) = receiver.recv().await {
+                let mut epochs = epochs.write();
+                epochs.epochs_queue.push_back(epoch.clone());
+                epochs
+                    .epochs_map
+                    .entry(epoch.0)
+                    .or_insert(vec![])
+                    .push(epoch.1.clone());
+
+                let latest_finalized_epoch_number =
+                    consensus.latest_finalized_epoch_number();
+                debug!(
+                    "latest finalized epoch number: {}, received epochs: {:?}",
+                    latest_finalized_epoch_number, epoch
+                );
+
+                while let Some(e) = epochs.epochs_queue.front() {
+                    if e.0 < latest_finalized_epoch_number {
+                        let (k, _) = epochs.epochs_queue.pop_front().unwrap();
+                        if let Some(target) = epochs.epochs_map.get_mut(&k) {
+                            if target.len() == 1 {
+                                epochs.epochs_map.remove(&k);
+                            } else {
+                                target.remove(0);
+                            }
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        };
+
+        executor.spawn(fut);
+    }
+
+    fn start_epochs_loop_with_task_executor(
+        &self, epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
+        executor: TaskExecutor,
     ) {
         let mut receiver = epochs_ordered.subscribe();
         let consensus = self.consensus.clone();

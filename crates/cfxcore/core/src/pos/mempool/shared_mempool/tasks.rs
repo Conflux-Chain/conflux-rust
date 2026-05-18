@@ -10,7 +10,6 @@
 
 use crate::pos::mempool::{
     core_mempool::{CoreMempool, TimelineState, TxnPointer},
-    counters,
     logging::{LogEntry, LogEvent, LogSchema},
     network::MempoolSyncMsg,
     shared_mempool::types::{
@@ -22,15 +21,14 @@ use crate::pos::mempool::{
 };
 use anyhow::Result;
 use cached_pos_ledger_db::CachedPosLedgerDB;
-use diem_infallible::Mutex;
 use diem_logger::prelude::*;
-use diem_metrics::HistogramTimer;
 use diem_types::{
     mempool_status::{MempoolStatus, MempoolStatusCode},
     transaction::SignedTransaction,
 };
 use futures::{channel::oneshot, stream::FuturesUnordered};
 use network::node_table::NodeId;
+use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::{
     cmp,
@@ -85,13 +83,8 @@ pub(crate) fn execute_broadcast(
 /// Processes transactions directly submitted by client.
 pub(crate) async fn process_client_transaction_submission(
     smp: SharedMempool, transaction: SignedTransaction,
-    callback: oneshot::Sender<Result<SubmissionStatus>>, timer: HistogramTimer,
+    callback: oneshot::Sender<Result<SubmissionStatus>>,
 ) {
-    timer.stop_and_record();
-    let _timer = counters::process_txn_submit_latency_timer(
-        counters::CLIENT_LABEL,
-        counters::CLIENT_LABEL,
-    );
     let statuses = process_incoming_transactions(
         &smp,
         vec![transaction],
@@ -106,7 +99,6 @@ pub(crate) async fn process_client_transaction_submission(
                 LogEntry::JsonRpc,
                 LogEvent::CallbackFail
             ));
-            counters::CLIENT_CALLBACK_FAIL.inc();
         }
     }
 }
@@ -115,14 +107,8 @@ pub(crate) async fn process_client_transaction_submission(
 pub(crate) async fn process_transaction_broadcast(
     smp: SharedMempool, transactions: Vec<SignedTransaction>,
     request_id: Vec<u8>, timeline_state: TimelineState, peer: NodeId,
-    timer: HistogramTimer,
 ) {
     diem_trace!("process_transaction_broadcast starts: peer={}", peer);
-    timer.stop_and_record();
-    /*let _timer = counters::process_txn_submit_latency_timer(
-        peer.raw_network_id().as_str(),
-        peer.peer_id().short_str().as_str(),
-    );*/
     let results = process_incoming_transactions(
         &smp,
         transactions.clone(),
@@ -136,12 +122,10 @@ pub(crate) async fn process_transaction_broadcast(
         .network_sender
         .send_message_with_peer_id(&peer, &ack_response)
     {
-        counters::network_send_fail_inc(counters::ACK_TXNS);
         diem_error!(LogSchema::event_log(
             LogEntry::BroadcastACK,
             LogEvent::NetworkSendFail
         )
-        //.peer(&peer)
         .error(&e.into()));
         return;
     }
@@ -175,32 +159,11 @@ fn gen_ack_response(
         retry
     );
 
-    update_ack_counter(&peer, counters::SENT_LABEL, retry, backoff);
     MempoolSyncMsg::BroadcastTransactionsResponse {
         request_id,
         retry,
         backoff,
     }
-}
-
-pub(crate) fn update_ack_counter(
-    _peer: &NodeId, _direction_label: &str, _retry: bool, _backoff: bool,
-) {
-    /*
-    if retry {
-        counters::shared_mempool_ack_inc(
-            peer,
-            direction_label,
-            counters::RETRY_BROADCAST_LABEL,
-        );
-    }
-    if backoff {
-        counters::shared_mempool_ack_inc(
-            peer,
-            direction_label,
-            counters::BACKPRESSURE_BROADCAST_LABEL,
-        );
-    }*/
 }
 
 fn is_txn_retryable(result: SubmissionStatus) -> bool {
@@ -215,19 +178,6 @@ pub(crate) async fn process_incoming_transactions(
 ) -> Vec<SubmissionStatusBundle> {
     let mut statuses = vec![];
 
-    let start_storage_read = Instant::now();
-    // Track latency for storage read fetching sequence number
-    let storage_read_latency = start_storage_read.elapsed();
-    counters::PROCESS_TXN_BREAKDOWN_LATENCY
-        .with_label_values(&[counters::FETCH_SEQ_NUM_LABEL])
-        .observe(
-            storage_read_latency.as_secs_f64() / transactions.len() as f64,
-        );
-
-    // Track latency: VM validation
-    let vm_validation_timer = counters::PROCESS_TXN_BREAKDOWN_LATENCY
-        .with_label_values(&[counters::VM_VALIDATION_LABEL])
-        .start_timer();
     // Filter out already received transactions, so we do not need to process
     // them.
     let transactions: Vec<SignedTransaction> = {
@@ -245,34 +195,24 @@ pub(crate) async fn process_incoming_transactions(
                 .validate_transaction(&t, smp.commited_pos_state.clone())
         })
         .collect::<Vec<_>>();
-    vm_validation_timer.stop_and_record();
 
     {
         let mut mempool = smp.mempool.lock();
         for (idx, transaction) in transactions.into_iter().enumerate() {
-            if let Some(validation_result) = &validation_results[idx] {
-                match validation_result.status() {
-                    None => {
-                        let ranking_score = validation_result.score();
-                        let governance_role =
-                            validation_result.governance_role();
-                        let mempool_status = mempool.add_txn(
-                            transaction.clone(),
-                            ranking_score,
-                            timeline_state,
-                            governance_role,
-                        );
-                        statuses.push((transaction, (mempool_status, None)));
-                    }
-                    Some(validation_status) => {
-                        statuses.push((
-                            transaction.clone(),
-                            (
-                                MempoolStatus::new(MempoolStatusCode::VmError),
-                                Some(validation_status),
-                            ),
-                        ));
-                    }
+            match validation_results[idx] {
+                None => {
+                    let mempool_status =
+                        mempool.add_txn(transaction.clone(), timeline_state);
+                    statuses.push((transaction, (mempool_status, None)));
+                }
+                Some(validation_status) => {
+                    statuses.push((
+                        transaction,
+                        (
+                            MempoolStatus::new(MempoolStatusCode::VmError),
+                            Some(validation_status),
+                        ),
+                    ));
                 }
             }
         }
@@ -301,28 +241,7 @@ fn log_txn_process_results(
                 vm_status = vm_status,
                 sender = sender,
             );
-            /*counters::shared_mempool_transactions_processed_inc(
-                counters::VM_VALIDATION_LABEL,
-                &network,
-                &sender,
-            );*/
-            continue;
         }
-        /*
-        match mempool_status.code {
-            MempoolStatusCode::Accepted => {
-                counters::shared_mempool_transactions_processed_inc(
-                    counters::SUCCESS_LABEL,
-                    &network,
-                    &sender,
-                )
-            }
-            _ => counters::shared_mempool_transactions_processed_inc(
-                &mempool_status.code.to_string(),
-                &network,
-                &sender,
-            ),
-        }*/
     }
 }
 
@@ -333,131 +252,80 @@ fn log_txn_process_results(
 pub(crate) async fn process_committed_transactions(
     mempool: Arc<Mutex<CoreMempool>>, req: CommitNotification,
 ) {
-    let start_time = Instant::now();
     diem_debug!(LogSchema::event_log(
         LogEntry::StateSyncCommit,
         LogEvent::Received
     )
     .state_sync_msg(&req));
-    counters::mempool_service_transactions(
-        counters::COMMIT_STATE_SYNC_LABEL,
-        req.transactions.len(),
-    );
-    commit_txns(&mempool, req.transactions, req.block_timestamp_usecs, false)
-        .await;
-    let result = if req.callback.send(Ok(CommitResponse::success())).is_err() {
+    commit_txns(&mempool, req.transactions, req.block_timestamp_usecs).await;
+    if req.callback.send(Ok(CommitResponse::success())).is_err() {
         diem_error!(LogSchema::event_log(
             LogEntry::StateSyncCommit,
             LogEvent::CallbackFail
         ));
-        counters::REQUEST_FAIL_LABEL
-    } else {
-        counters::REQUEST_SUCCESS_LABEL
-    };
-    let latency = start_time.elapsed();
-    counters::mempool_service_latency(
-        counters::COMMIT_STATE_SYNC_LABEL,
-        result,
-        latency,
-    );
+    }
 }
 
 pub(crate) async fn process_consensus_request(
     db: Arc<CachedPosLedgerDB>, mempool: &Mutex<CoreMempool>,
     req: ConsensusRequest,
 ) {
-    // Start latency timer
-    let start_time = Instant::now();
     diem_debug!(
         LogSchema::event_log(LogEntry::Consensus, LogEvent::Received)
             .consensus_msg(&req)
     );
 
-    let (resp, callback, counter_label) = match req {
-        ConsensusRequest::GetBlockRequest(
-            max_block_size,
-            transactions,
-            parent_block_id,
+    let ConsensusRequest {
+        max_block_size,
+        exclude_txns,
+        parent_block_id,
+        validators,
+        callback,
+    } = req;
+    let exclude_transactions: HashSet<TxnPointer> = exclude_txns
+        .iter()
+        .map(|txn| (txn.sender, txn.hash))
+        .collect();
+    let mut txns;
+    {
+        let mut mempool = mempool.lock();
+        // gc before pulling block as extra protection against txns that
+        // may expire in consensus Note: this gc
+        // operation relies on the fact that consensus uses the system
+        // time to determine block timestamp
+        let curr_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH");
+        mempool.gc_by_expiration_time(curr_time);
+        let block_size = cmp::max(max_block_size, 1);
+        let pos_state = db
+            .get_pos_state(&parent_block_id)
+            .expect("pos_state should exist");
+        txns = mempool.get_block(
+            block_size,
+            exclude_transactions,
+            &pos_state,
             validators,
-            callback,
-        ) => {
-            let exclude_transactions: HashSet<TxnPointer> = transactions
-                .iter()
-                .map(|txn| (txn.sender, txn.hash))
-                .collect();
-            let mut txns;
-            {
-                let mut mempool = mempool.lock();
-                // gc before pulling block as extra protection against txns that
-                // may expire in consensus Note: this gc
-                // operation relies on the fact that consensus uses the system
-                // time to determine block timestamp
-                let curr_time = diem_infallible::duration_since_epoch();
-                mempool.gc_by_expiration_time(curr_time);
-                let block_size = cmp::max(max_block_size, 1);
-                let pos_state = db
-                    .get_pos_state(&parent_block_id)
-                    .expect("pos_state should exist");
-                txns = mempool.get_block(
-                    block_size,
-                    exclude_transactions,
-                    &pos_state,
-                    validators,
-                );
-            }
-            counters::mempool_service_transactions(
-                counters::GET_BLOCK_LABEL,
-                txns.len(),
-            );
-            txns.len();
-            let pulled_block =
-                txns.drain(..).map(SignedTransaction::into).collect();
-
-            (
-                ConsensusResponse::GetBlockResponse(pulled_block),
-                callback,
-                counters::GET_BLOCK_LABEL,
-            )
-        }
-        ConsensusRequest::RejectNotification(transactions, callback) => {
-            counters::mempool_service_transactions(
-                counters::COMMIT_CONSENSUS_LABEL,
-                transactions.len(),
-            );
-            commit_txns(mempool, transactions, 0, true).await;
-            (
-                ConsensusResponse::CommitResponse(),
-                callback,
-                counters::COMMIT_CONSENSUS_LABEL,
-            )
-        }
-    };
-    // Send back to callback
-    let result = if callback.send(Ok(resp)).is_err() {
+        );
+    }
+    let pulled_block = txns.drain(..).map(SignedTransaction::into).collect();
+    let resp = ConsensusResponse { txns: pulled_block };
+    if callback.send(Ok(resp)).is_err() {
         diem_error!(LogSchema::event_log(
             LogEntry::Consensus,
             LogEvent::CallbackFail
         ));
-        counters::REQUEST_FAIL_LABEL
-    } else {
-        counters::REQUEST_SUCCESS_LABEL
-    };
-    let latency = start_time.elapsed();
-    counters::mempool_service_latency(counter_label, result, latency);
+    }
 }
 
 async fn commit_txns(
     mempool: &Mutex<CoreMempool>, transactions: Vec<CommittedTransaction>,
-    block_timestamp_usecs: u64, is_rejected: bool,
+    block_timestamp_usecs: u64,
 ) {
     let mut pool = mempool.lock();
 
     for transaction in transactions {
-        pool.remove_transaction(
-            &transaction.sender,
-            transaction.hash,
-            is_rejected,
-        );
+        pool.remove_transaction(transaction.hash);
     }
 
     if block_timestamp_usecs > 0 {
