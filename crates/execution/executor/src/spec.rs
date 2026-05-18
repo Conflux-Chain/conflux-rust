@@ -160,7 +160,7 @@ pub struct TransitionsEpochHeight {
     pub cip145_fix: BlockHeight,
     /// EIP-7939: Count Leading Zeros Instruction
     pub cip166: BlockHeight,
-    // precompile secp256r1 activation height
+    /// EIP-7212 / RIP-7212: precompile secp256r1 activation height
     pub cip167: BlockHeight,
 }
 

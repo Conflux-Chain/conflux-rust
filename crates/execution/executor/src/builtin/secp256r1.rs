@@ -6,7 +6,6 @@ pub use revm_precompile::secp256r1::{
 };
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct Secp256R1;
 
 impl Precompile for Secp256R1 {

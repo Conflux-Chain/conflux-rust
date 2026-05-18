@@ -157,7 +157,11 @@ impl UnitTester {
                 match geth_traces {
                     GethTrace::Default(v) => {
                         for log in &v.struct_logs {
-                            trace!("{}", serde_json::to_string(log).unwrap());
+                            trace!(
+                                "{}",
+                                serde_json::to_string(log)
+                                    .expect("struct log must be serializable")
+                            );
                         }
                     }
                     _ => {}
