@@ -23,10 +23,7 @@ use diem_types::{
     mempool_status::{MempoolStatus, MempoolStatusCode},
     transaction::{SignedTransaction, TransactionPayload},
 };
-use std::{
-    collections::{hash_map::Values, HashMap, HashSet},
-    time::Duration,
-};
+use std::collections::{hash_map::Values, HashMap, HashSet};
 
 /// TransactionStore is in-memory storage for all transactions in mempool.
 pub struct TransactionStore {
@@ -35,24 +32,19 @@ pub struct TransactionStore {
     // pivot decision helper structure
     pivot_decisions: HashMap<HashValue, HashSet<(AccountAddress, HashValue)>>,
 
-    // TTLIndex based on client-specified expiration time
-    expiration_time_index: TTLIndex,
-    // TTLIndex based on system expiration time
-    // we keep it separate from `expiration_time_index` so Mempool can't be
-    // clogged  by old transactions even if it hasn't received commit
-    // callbacks for a while
+    // TTL keyed on `MempoolTransaction.expiration_time = add_time +
+    // system_transaction_timeout`. Every txn is evicted after the timeout,
+    // regardless of its payload — keeps old txns from clogging the mempool
+    // when commit callbacks are delayed.
     system_ttl_index: TTLIndex,
     timeline_index: TimelineIndex,
-
-    // configuration
-    _capacity: usize,
 }
 
 pub type PivotDecisionIter<'a> =
     Values<'a, HashValue, HashSet<(AccountAddress, HashValue)>>;
 
 impl TransactionStore {
-    pub(crate) fn new(config: &MempoolConfig) -> Self {
+    pub(crate) fn new(_config: &MempoolConfig) -> Self {
         Self {
             // main DS
             transactions: AccountTransactions::new(),
@@ -62,15 +54,7 @@ impl TransactionStore {
             system_ttl_index: TTLIndex::new(Box::new(
                 |t: &MempoolTransaction| t.expiration_time,
             )),
-            expiration_time_index: TTLIndex::new(Box::new(
-                |t: &MempoolTransaction| {
-                    Duration::from_secs(t.txn.expiration_timestamp_secs())
-                },
-            )),
             timeline_index: TimelineIndex::new(),
-
-            // configuration
-            _capacity: config.capacity,
         }
     }
 
@@ -110,12 +94,7 @@ impl TransactionStore {
         }
 
         self.timeline_index.insert(&mut txn);
-
-        // TODO(linxi): evict transaction when mempool is full
-
-        // insert into storage and other indexes
         self.system_ttl_index.insert(&txn);
-        self.expiration_time_index.insert(&txn);
 
         let payload = txn.txn.clone().into_raw_transaction().into_payload();
         if let TransactionPayload::PivotDecision(pivot_decision) = payload {
@@ -172,7 +151,6 @@ impl TransactionStore {
     /// Removes transaction from all indexes.
     fn index_remove(&mut self, txn: &MempoolTransaction) {
         self.system_ttl_index.remove(&txn);
-        self.expiration_time_index.remove(&txn);
         self.timeline_index.remove(&txn);
     }
 
@@ -206,34 +184,17 @@ impl TransactionStore {
             .collect()
     }
 
-    /// Garbage collect old transactions.
+    /// Garbage collect old transactions by system TTL.
     pub(crate) fn gc_by_system_ttl(&mut self) {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("System time is before UNIX_EPOCH");
-        self.gc(now, true);
-    }
 
-    /// Garbage collect old transactions based on client-specified expiration
-    /// time.
-    pub(crate) fn gc_by_expiration_time(&mut self, block_time: Duration) {
-        self.gc(block_time, false);
-    }
-
-    fn gc(&mut self, now: Duration, by_system_ttl: bool) {
-        let (index, log_event) = if by_system_ttl {
-            (&mut self.system_ttl_index, LogEvent::SystemTTLExpiration)
-        } else {
-            (&mut self.expiration_time_index, LogEvent::ClientExpiration)
-        };
-
-        let mut gc_txns = index.gc(now);
-        // sort the expired txns by order of sequence number per account
+        let mut gc_txns = self.system_ttl_index.gc(now);
         gc_txns.sort_by_key(|key| (key.address, key.hash));
-        let mut gc_iter = gc_txns.iter().peekable();
 
         let mut gc_txns_log = TxnsLog::new();
-        while let Some(key) = gc_iter.next() {
+        for key in gc_txns.iter() {
             if let Some(txn) = self.transactions.remove(&key.hash) {
                 gc_txns_log.add(txn.get_sender(), txn.get_hash());
                 self.index_remove(&txn);
@@ -245,8 +206,11 @@ impl TransactionStore {
             }
         }
 
-        diem_debug!(LogSchema::event_log(LogEntry::GCRemoveTxns, log_event)
-            .txns(gc_txns_log));
+        diem_debug!(LogSchema::event_log(
+            LogEntry::GCRemoveTxns,
+            LogEvent::SystemTTLExpiration
+        )
+        .txns(gc_txns_log));
     }
 
     pub(crate) fn iter(&self) -> AccountTransactionIter<'_> {

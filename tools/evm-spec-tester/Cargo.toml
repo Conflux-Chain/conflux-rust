@@ -24,7 +24,7 @@ geth-tracer = { path = "../../crates/execution/geth-tracer" }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 walkdir = "2.5"
 thiserror = "2.0.11"
-rlp = "0.4.0"
+rlp = "0.6"
 hex = "0.4.3"
 hex-literal = "0.4.1"
 
@@ -39,6 +39,8 @@ clap-verbosity-flag = "3"
 
 [features]
 default = ["cfx-executor/align_evm", "cfx-statedb/testonly_code"]
+
+[workspace]
 
 [patch.crates-io]
 # use a forked version to fix a vulnerability(introduced by failure) in vrf-rs, can be removed after the upstream is fixed

@@ -309,7 +309,7 @@ pub fn check_tx_bytes(
 
     let raw_tx = rlp::encode(&tx.transaction.transaction);
 
-    if raw_tx != txbytes {
+    if &raw_tx[..] != txbytes {
         // trace!(
         //     "\tCheck txbytes failed expected vs actually: {} \n{} \n{}",
         //     self.name.clone(),
