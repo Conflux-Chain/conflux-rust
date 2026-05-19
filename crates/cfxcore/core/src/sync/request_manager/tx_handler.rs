@@ -49,10 +49,7 @@ struct TimeWindow<T> {
 
 impl<T> TimeWindow<T> {
     pub fn new(timeout: u64, window_size: usize) -> Self {
-        assert!(
-            window_size > 0,
-            "TimeWindow window_size must be > 0",
-        );
+        assert!(window_size > 0, "TimeWindow window_size must be > 0",);
         assert!(
             timeout >= window_size as u64,
             "TimeWindow timeout ({}s) must be >= window_size ({}); \
