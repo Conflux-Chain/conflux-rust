@@ -185,7 +185,7 @@
 <a href=#185 id=185 data-nosnippet>185</a>            <span class="kw">fn </span>msg_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str { <span class="macro-nonterminal">$name_str </span>}
 <a href=#186 id=186 data-nosnippet>186</a>
 <a href=#187 id=187 data-nosnippet>187</a>            <span class="kw">fn </span>encode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
-<a href=#188 id=188 data-nosnippet>188</a>                <span class="kw">let </span><span class="kw-2">mut </span>encoded = <span class="self">self</span>.rlp_bytes();
+<a href=#188 id=188 data-nosnippet>188</a>                <span class="kw">let </span><span class="kw-2">mut </span>encoded = <span class="self">self</span>.rlp_bytes().to_vec();
 <a href=#189 id=189 data-nosnippet>189</a>                <span class="self">self</span>.push_msg_id_leb128_encoding(<span class="kw-2">&amp;mut </span>encoded);
 <a href=#190 id=190 data-nosnippet>190</a>                encoded
 <a href=#191 id=191 data-nosnippet>191</a>            }

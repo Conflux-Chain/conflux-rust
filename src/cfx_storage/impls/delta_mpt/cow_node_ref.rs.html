@@ -718,7 +718,7 @@
 <a href=#718 id=718 data-nosnippet>718</a>                        .value
 <a href=#719 id=719 data-nosnippet>719</a>                        .try_into()
 <a href=#720 id=720 data-nosnippet>720</a>                        .expect(<span class="string">"not exceed i64::MAX"</span>),
-<a href=#721 id=721 data-nosnippet>721</a>                    trie_node.rlp_bytes().as_slice(),
+<a href=#721 id=721 data-nosnippet>721</a>                    <span class="kw-2">&amp;</span>trie_node.rlp_bytes(),
 <a href=#722 id=722 data-nosnippet>722</a>                )<span class="question-mark">?</span>;
 <a href=#723 id=723 data-nosnippet>723</a>            commit_transaction.info.row_number =
 <a href=#724 id=724 data-nosnippet>724</a>                commit_transaction.info.row_number.get_next()<span class="question-mark">?</span>;

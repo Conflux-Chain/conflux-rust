@@ -102,7 +102,7 @@
 <a href=#102 id=102 data-nosnippet>102</a>
 <a href=#103 id=103 data-nosnippet>103</a><span class="doccomment">/// Only used by storage benchmark due to incompatibility of rlp crate version.
 <a href=#104 id=104 data-nosnippet>104</a></span><span class="kw">impl </span>StateRootWithAuxInfoToFromRlpBytes <span class="kw">for </span>StateRootWithAuxInfo {
-<a href=#105 id=105 data-nosnippet>105</a>    <span class="kw">fn </span>to_rlp_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; { <span class="self">self</span>.rlp_bytes() }
+<a href=#105 id=105 data-nosnippet>105</a>    <span class="kw">fn </span>to_rlp_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; { <span class="self">self</span>.rlp_bytes().to_vec() }
 <a href=#106 id=106 data-nosnippet>106</a>
 <a href=#107 id=107 data-nosnippet>107</a>    <span class="kw">fn </span>from_rlp_bytes(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
 <a href=#108 id=108 data-nosnippet>108</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::decode(<span class="kw-2">&amp;</span>Rlp::new(bytes))<span class="question-mark">?</span>)

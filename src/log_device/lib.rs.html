@@ -243,7 +243,7 @@
 <a href=#243 id=243 data-nosnippet>243</a>    <span class="kw">fn </span>set_stripe_info_to_db(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], stripe_info: <span class="kw-2">&amp;</span>StripeInfo) {
 <a href=#244 id=244 data-nosnippet>244</a>        <span class="kw">let </span>value = rlp::encode(stripe_info);
 <a href=#245 id=245 data-nosnippet>245</a>        <span class="kw">let </span><span class="kw-2">mut </span>tx = DBTransaction::new();
-<a href=#246 id=246 data-nosnippet>246</a>        tx.put(COL_DB, key, value.as_slice());
+<a href=#246 id=246 data-nosnippet>246</a>        tx.put(COL_DB, key, <span class="kw-2">&amp;</span>value);
 <a href=#247 id=247 data-nosnippet>247</a>        <span class="self">self</span>.db.key_value().write(tx).expect(<span class="string">"DB write failed."</span>);
 <a href=#248 id=248 data-nosnippet>248</a>    }
 <a href=#249 id=249 data-nosnippet>249</a>

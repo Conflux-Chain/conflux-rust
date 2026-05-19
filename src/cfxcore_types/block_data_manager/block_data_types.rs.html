@@ -199,7 +199,7 @@
 <a href=#199 id=199 data-nosnippet>199</a><span class="kw">impl</span>&lt;Version: Encodable, T: Encodable&gt; DatabaseEncodable
 <a href=#200 id=200 data-nosnippet>200</a>    <span class="kw">for </span>DataVersionTuple&lt;Version, T&gt;
 <a href=#201 id=201 data-nosnippet>201</a>{
-<a href=#202 id=202 data-nosnippet>202</a>    <span class="kw">fn </span>db_encode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; { rlp::encode(<span class="self">self</span>) }
+<a href=#202 id=202 data-nosnippet>202</a>    <span class="kw">fn </span>db_encode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; { rlp::encode(<span class="self">self</span>).to_vec() }
 <a href=#203 id=203 data-nosnippet>203</a>}
 <a href=#204 id=204 data-nosnippet>204</a>
 <a href=#205 id=205 data-nosnippet>205</a><span class="kw">impl</span>&lt;Version: Decodable, T: Decodable&gt; DatabaseDecodable
@@ -370,7 +370,7 @@
 <a href=#370 id=370 data-nosnippet>370</a>    <span class="kw">for </span>e <span class="kw">in </span>list {
 <a href=#371 id=371 data-nosnippet>371</a>        rlp_stream.append_raw(<span class="kw-2">&amp;</span>e.db_encode(), <span class="number">1</span>);
 <a href=#372 id=372 data-nosnippet>372</a>    }
-<a href=#373 id=373 data-nosnippet>373</a>    rlp_stream.drain()
+<a href=#373 id=373 data-nosnippet>373</a>    rlp_stream.out().to_vec()
 <a href=#374 id=374 data-nosnippet>374</a>}
 <a href=#375 id=375 data-nosnippet>375</a>
 <a href=#376 id=376 data-nosnippet>376</a><span class="kw">pub fn </span>db_decode_list&lt;T&gt;(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;T&gt;, DecoderError&gt;

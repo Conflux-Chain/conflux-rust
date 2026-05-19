@@ -68,7 +68,7 @@
 <a href=#68 id=68 data-nosnippet>68</a>
 <a href=#69 id=69 data-nosnippet>69</a>    <span class="kw">fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, offset: U256) -&gt; U256 {
 <a href=#70 id=70 data-nosnippet>70</a>        <span class="kw">let </span>off = offset.low_u64() <span class="kw">as </span>usize;
-<a href=#71 id=71 data-nosnippet>71</a>        U256::from(<span class="kw-2">&amp;</span><span class="self">self</span>[off..off + <span class="number">32</span>])
+<a href=#71 id=71 data-nosnippet>71</a>        U256::from_big_endian(<span class="kw-2">&amp;</span><span class="self">self</span>[off..off + <span class="number">32</span>])
 <a href=#72 id=72 data-nosnippet>72</a>    }
 <a href=#73 id=73 data-nosnippet>73</a>
 <a href=#74 id=74 data-nosnippet>74</a>    <span class="kw">fn </span>writeable_slice(<span class="kw-2">&amp;mut </span><span class="self">self</span>, offset: U256, size: U256) -&gt; <span class="kw-2">&amp;mut </span>[u8] {
@@ -90,7 +90,7 @@
 <a href=#90 id=90 data-nosnippet>90</a>
 <a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">fn </span>write(<span class="kw-2">&amp;mut </span><span class="self">self</span>, offset: U256, value: U256) {
 <a href=#92 id=92 data-nosnippet>92</a>        <span class="kw">let </span>off = offset.low_u64() <span class="kw">as </span>usize;
-<a href=#93 id=93 data-nosnippet>93</a>        value.to_big_endian(<span class="kw-2">&amp;mut </span><span class="self">self</span>[off..off + <span class="number">32</span>]);
+<a href=#93 id=93 data-nosnippet>93</a>        <span class="self">self</span>[off..off + <span class="number">32</span>].copy_from_slice(<span class="kw-2">&amp;</span>value.to_big_endian());
 <a href=#94 id=94 data-nosnippet>94</a>    }
 <a href=#95 id=95 data-nosnippet>95</a>
 <a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">fn </span>write_byte(<span class="kw-2">&amp;mut </span><span class="self">self</span>, offset: U256, value: U256) {

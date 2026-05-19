@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a>// Conflux is free software and distributed under GNU General Public License.
 <a href=#6 id=6 data-nosnippet>6</a>// See http://www.gnu.org/licenses/
 <a href=#7 id=7 data-nosnippet>7</a>
-<a href=#8 id=8 data-nosnippet>8</a></span><span class="kw">use super</span>::{error::StateSyncError, state_replication::StateComputer};
+<a href=#8 id=8 data-nosnippet>8</a></span><span class="kw">use </span><span class="kw">super</span>::state_replication::StateComputer;
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span><span class="kw">crate</span>::pos::mempool::{CommitNotification, CommittedTransaction};
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>anyhow::Result;
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>consensus_types::block::Block;
@@ -154,30 +154,19 @@
 <a href=#154 id=154 data-nosnippet>154</a>        <span class="self">self</span>.notify_mempool(committed_txns, timestamp).<span class="kw">await</span>;
 <a href=#155 id=155 data-nosnippet>155</a>        <span class="prelude-val">Ok</span>(())
 <a href=#156 id=156 data-nosnippet>156</a>    }
-<a href=#157 id=157 data-nosnippet>157</a>
-<a href=#158 id=158 data-nosnippet>158</a>    <span class="doccomment">/// No-op: state sync via chunk execution is not supported in
-<a href=#159 id=159 data-nosnippet>159</a>    /// Conflux PoS.
-<a href=#160 id=160 data-nosnippet>160</a>    </span><span class="kw">async fn </span>sync_to(
-<a href=#161 id=161 data-nosnippet>161</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, _target: LedgerInfoWithSignatures,
-<a href=#162 id=162 data-nosnippet>162</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), StateSyncError&gt; {
-<a href=#163 id=163 data-nosnippet>163</a>        <span class="macro">fail_point!</span>(<span class="string">"consensus::sync_to"</span>, |<span class="kw">_</span>| {
-<a href=#164 id=164 data-nosnippet>164</a>            <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Injected error in sync_to"</span>).into())
-<a href=#165 id=165 data-nosnippet>165</a>        });
-<a href=#166 id=166 data-nosnippet>166</a>        <span class="prelude-val">Ok</span>(())
-<a href=#167 id=167 data-nosnippet>167</a>    }
-<a href=#168 id=168 data-nosnippet>168</a>}
-<a href=#169 id=169 data-nosnippet>169</a>
-<a href=#170 id=170 data-nosnippet>170</a><span class="kw">fn </span>id_and_transactions_from_block(
-<a href=#171 id=171 data-nosnippet>171</a>    block: <span class="kw-2">&amp;</span>Block,
-<a href=#172 id=172 data-nosnippet>172</a>) -&gt; (HashValue, Vec&lt;Transaction&gt;) {
-<a href=#173 id=173 data-nosnippet>173</a>    <span class="kw">let </span>id = block.id();
-<a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">let </span><span class="kw-2">mut </span>transactions = <span class="macro">vec!</span>[Transaction::BlockMetadata(block.into())];
-<a href=#175 id=175 data-nosnippet>175</a>    transactions.extend(
-<a href=#176 id=176 data-nosnippet>176</a>        block
-<a href=#177 id=177 data-nosnippet>177</a>            .payload()
-<a href=#178 id=178 data-nosnippet>178</a>            .unwrap_or(<span class="kw-2">&amp;</span><span class="macro">vec!</span>[])
-<a href=#179 id=179 data-nosnippet>179</a>            .iter()
-<a href=#180 id=180 data-nosnippet>180</a>            .map(|txn| Transaction::UserTransaction(txn.clone())),
-<a href=#181 id=181 data-nosnippet>181</a>    );
-<a href=#182 id=182 data-nosnippet>182</a>    (id, transactions)
-<a href=#183 id=183 data-nosnippet>183</a>}</code></pre></div></section></main></body></html>
+<a href=#157 id=157 data-nosnippet>157</a>}
+<a href=#158 id=158 data-nosnippet>158</a>
+<a href=#159 id=159 data-nosnippet>159</a><span class="kw">fn </span>id_and_transactions_from_block(
+<a href=#160 id=160 data-nosnippet>160</a>    block: <span class="kw-2">&amp;</span>Block,
+<a href=#161 id=161 data-nosnippet>161</a>) -&gt; (HashValue, Vec&lt;Transaction&gt;) {
+<a href=#162 id=162 data-nosnippet>162</a>    <span class="kw">let </span>id = block.id();
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">let </span><span class="kw-2">mut </span>transactions = <span class="macro">vec!</span>[Transaction::BlockMetadata(block.into())];
+<a href=#164 id=164 data-nosnippet>164</a>    transactions.extend(
+<a href=#165 id=165 data-nosnippet>165</a>        block
+<a href=#166 id=166 data-nosnippet>166</a>            .payload()
+<a href=#167 id=167 data-nosnippet>167</a>            .unwrap_or(<span class="kw-2">&amp;</span><span class="macro">vec!</span>[])
+<a href=#168 id=168 data-nosnippet>168</a>            .iter()
+<a href=#169 id=169 data-nosnippet>169</a>            .map(|txn| Transaction::UserTransaction(txn.clone())),
+<a href=#170 id=170 data-nosnippet>170</a>    );
+<a href=#171 id=171 data-nosnippet>171</a>    (id, transactions)
+<a href=#172 id=172 data-nosnippet>172</a>}</code></pre></div></section></main></body></html>

@@ -136,5 +136,5 @@
 <a href=#136 id=136 data-nosnippet>136</a>}
 <a href=#137 id=137 data-nosnippet>137</a>
 <a href=#138 id=138 data-nosnippet>138</a><span class="kw">impl </span>DatabaseEncodable <span class="kw">for </span>BlockExecTraces {
-<a href=#139 id=139 data-nosnippet>139</a>    <span class="kw">fn </span>db_encode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Bytes { rlp::encode(<span class="self">self</span>) }
+<a href=#139 id=139 data-nosnippet>139</a>    <span class="kw">fn </span>db_encode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Bytes { rlp::encode(<span class="self">self</span>).to_vec() }
 <a href=#140 id=140 data-nosnippet>140</a>}</code></pre></div></section></main></body></html>

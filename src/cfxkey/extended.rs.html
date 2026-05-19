@@ -298,7 +298,7 @@
 <a href=#298 id=298 data-nosnippet>298</a>
 <a href=#299 id=299 data-nosnippet>299</a>        <span class="comment">// 0x00 (padding) -- private_key --  index
 <a href=#300 id=300 data-nosnippet>300</a>        //  0             --    1..33    -- 33..end
-<a href=#301 id=301 data-nosnippet>301</a>        </span>private.to_big_endian(<span class="kw-2">&amp;mut </span>data[<span class="number">1</span>..<span class="number">33</span>]);
+<a href=#301 id=301 data-nosnippet>301</a>        </span>data[<span class="number">1</span>..<span class="number">33</span>].copy_from_slice(<span class="kw-2">&amp;</span>private.to_big_endian());
 <a href=#302 id=302 data-nosnippet>302</a>        index.store(<span class="kw-2">&amp;mut </span>data[<span class="number">33</span>..(<span class="number">33 </span>+ T::len())]);
 <a href=#303 id=303 data-nosnippet>303</a>
 <a href=#304 id=304 data-nosnippet>304</a>        hmac_pair(<span class="kw-2">&amp;</span>data, private_key, chain_code)

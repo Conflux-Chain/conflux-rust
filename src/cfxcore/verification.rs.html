@@ -84,7 +84,7 @@
 <a href=#84 id=84 data-nosnippet>84</a>    make_simple_mpt(
 <a href=#85 id=85 data-nosnippet>85</a>        block_receipts
 <a href=#86 id=86 data-nosnippet>86</a>            .iter()
-<a href=#87 id=87 data-nosnippet>87</a>            .map(|receipt| receipt.rlp_bytes().into_boxed_slice())
+<a href=#87 id=87 data-nosnippet>87</a>            .map(|receipt| receipt.rlp_bytes().to_vec().into_boxed_slice())
 <a href=#88 id=88 data-nosnippet>88</a>            .collect(),
 <a href=#89 id=89 data-nosnippet>89</a>    )
 <a href=#90 id=90 data-nosnippet>90</a>}

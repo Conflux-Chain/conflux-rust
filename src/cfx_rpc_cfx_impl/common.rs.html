@@ -236,7 +236,7 @@
 <a href=#236 id=236 data-nosnippet>236</a>                .expect(<span class="string">"failed to convert scaled risk to bigInt"</span>);
 <a href=#237 id=237 data-nosnippet>237</a>            <span class="kw">let </span>(sign, big_endian_bytes) = scaled_risk.to_bytes_be();
 <a href=#238 id=238 data-nosnippet>238</a>            <span class="macro">assert_ne!</span>(sign, num_bigint::Sign::Minus);
-<a href=#239 id=239 data-nosnippet>239</a>            <span class="kw">let </span>rpc_result = U256::from(big_endian_bytes.as_slice());
+<a href=#239 id=239 data-nosnippet>239</a>            <span class="kw">let </span>rpc_result = U256::from_big_endian(big_endian_bytes.as_slice());
 <a href=#240 id=240 data-nosnippet>240</a>            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(rpc_result.into()))
 <a href=#241 id=241 data-nosnippet>241</a>        }
 <a href=#242 id=242 data-nosnippet>242</a>    }

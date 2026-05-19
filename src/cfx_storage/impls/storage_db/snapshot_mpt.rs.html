@@ -180,7 +180,7 @@
 <a href=#180 id=180 data-nosnippet>180</a>        <span class="kw">let </span>key = mpt_node_path_to_db_key(path);
 <a href=#181 id=181 data-nosnippet>181</a>        <span class="self">self</span>.db
 <a href=#182 id=182 data-nosnippet>182</a>            .borrow_mut()
-<a href=#183 id=183 data-nosnippet>183</a>            .put(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>trie_node.rlp_bytes().into_boxed_slice())<span class="question-mark">?</span>;
+<a href=#183 id=183 data-nosnippet>183</a>            .put(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>trie_node.rlp_bytes().to_vec().into_boxed_slice())<span class="question-mark">?</span>;
 <a href=#184 id=184 data-nosnippet>184</a>        <span class="prelude-val">Ok</span>(())
 <a href=#185 id=185 data-nosnippet>185</a>    }
 <a href=#186 id=186 data-nosnippet>186</a>}

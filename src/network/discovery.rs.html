@@ -173,7 +173,7 @@
 <a href=#173 id=173 data-nosnippet>173</a>            uio,
 <a href=#174 id=174 data-nosnippet>174</a>            PACKET_PING,
 <a href=#175 id=175 data-nosnippet>175</a>            <span class="kw-2">&amp;</span>node.endpoint.udp_address(),
-<a href=#176 id=176 data-nosnippet>176</a>            <span class="kw-2">&amp;</span>rlp.drain(),
+<a href=#176 id=176 data-nosnippet>176</a>            <span class="kw-2">&amp;</span>rlp.out(),
 <a href=#177 id=177 data-nosnippet>177</a>        )<span class="question-mark">?</span>;
 <a href=#178 id=178 data-nosnippet>178</a>
 <a href=#179 id=179 data-nosnippet>179</a>        <span class="self">self</span>.in_flight_pings.insert(
@@ -286,7 +286,7 @@
 <a href=#286 id=286 data-nosnippet>286</a>
 <a href=#287 id=287 data-nosnippet>287</a>        </span>response.append(<span class="kw-2">&amp;</span>echo_hash);
 <a href=#288 id=288 data-nosnippet>288</a>        response.append(<span class="kw-2">&amp;</span><span class="self">self</span>.config.expire_timestamp());
-<a href=#289 id=289 data-nosnippet>289</a>        <span class="self">self</span>.send_packet(uio, PACKET_PONG, from, <span class="kw-2">&amp;</span>response.drain())<span class="question-mark">?</span>;
+<a href=#289 id=289 data-nosnippet>289</a>        <span class="self">self</span>.send_packet(uio, PACKET_PONG, from, <span class="kw-2">&amp;</span>response.out())<span class="question-mark">?</span>;
 <a href=#290 id=290 data-nosnippet>290</a>
 <a href=#291 id=291 data-nosnippet>291</a>        <span class="kw">let </span>entry = NodeEntry {
 <a href=#292 id=292 data-nosnippet>292</a>            id: node_id.clone(),

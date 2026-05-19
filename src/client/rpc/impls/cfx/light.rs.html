@@ -566,7 +566,7 @@
 <a href=#566 id=566 data-nosnippet>566</a>                accounts,
 <a href=#567 id=567 data-nosnippet>567</a>            )<span class="question-mark">?</span>;
 <a href=#568 id=568 data-nosnippet>568</a>
-<a href=#569 id=569 data-nosnippet>569</a>            <span class="self">Self</span>::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
+<a href=#569 id=569 data-nosnippet>569</a>            <span class="self">Self</span>::send_tx_helper(light, Bytes::new(tx.rlp_bytes().to_vec()))
 <a href=#570 id=570 data-nosnippet>570</a>        };
 <a href=#571 id=571 data-nosnippet>571</a>
 <a href=#572 id=572 data-nosnippet>572</a>        fut.boxed()

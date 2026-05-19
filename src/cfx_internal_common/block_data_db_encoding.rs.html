@@ -14,7 +14,7 @@
 <a href=#14 id=14 data-nosnippet>14</a></span><span class="macro">macro_rules!</span> impl_db_encoding_as_rlp {
 <a href=#15 id=15 data-nosnippet>15</a>    (<span class="macro-nonterminal">$</span><span class="kw">type</span>:<span class="macro-nonterminal">ty</span>) =&gt; {
 <a href=#16 id=16 data-nosnippet>16</a>        <span class="kw">impl </span><span class="macro-nonterminal">$crate::DatabaseEncodable </span><span class="kw">for </span><span class="macro-nonterminal">$</span><span class="kw">type </span>{
-<a href=#17 id=17 data-nosnippet>17</a>            <span class="kw">fn </span><span class="macro-nonterminal">db_encode</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; { rlp::encode(<span class="self">self</span>) }
+<a href=#17 id=17 data-nosnippet>17</a>            <span class="kw">fn </span><span class="macro-nonterminal">db_encode</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; { rlp::encode(<span class="self">self</span>).to_vec() }
 <a href=#18 id=18 data-nosnippet>18</a>        }
 <a href=#19 id=19 data-nosnippet>19</a>
 <a href=#20 id=20 data-nosnippet>20</a>        <span class="kw">impl </span><span class="macro-nonterminal">$crate::DatabaseDecodable </span><span class="kw">for </span><span class="macro-nonterminal">$</span><span class="kw">type </span>{
@@ -39,7 +39,7 @@
 <a href=#39 id=39 data-nosnippet>39</a>    <span class="kw">fn </span>db_encode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Bytes {
 <a href=#40 id=40 data-nosnippet>40</a>        <span class="kw">let </span><span class="kw-2">mut </span>rlp_stream = RlpStream::new();
 <a href=#41 id=41 data-nosnippet>41</a>        <span class="self">self</span>.stream_rlp_with_pow_hash(<span class="kw-2">&amp;mut </span>rlp_stream);
-<a href=#42 id=42 data-nosnippet>42</a>        rlp_stream.drain()
+<a href=#42 id=42 data-nosnippet>42</a>        rlp_stream.out().to_vec()
 <a href=#43 id=43 data-nosnippet>43</a>    }
 <a href=#44 id=44 data-nosnippet>44</a>}
 <a href=#45 id=45 data-nosnippet>45</a>

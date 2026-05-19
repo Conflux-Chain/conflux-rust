@@ -121,8 +121,8 @@
 <a href=#121 id=121 data-nosnippet>121</a>        <span class="comment">// for phantom tx, it's r and s are set to 'tx.from', which lead some
 <a href=#122 id=122 data-nosnippet>122</a>        // txs r and s to 0 which is not valid in some ethereum tools,
 <a href=#123 id=123 data-nosnippet>123</a>        // so we set them to chain_id
-<a href=#124 id=124 data-nosnippet>124</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>r: U256 = signature.r().into();
-<a href=#125 id=125 data-nosnippet>125</a>        <span class="kw">let </span><span class="kw-2">mut </span>s: U256 = signature.s().into();
+<a href=#124 id=124 data-nosnippet>124</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>r: U256 = U256::from_big_endian(signature.r());
+<a href=#125 id=125 data-nosnippet>125</a>        <span class="kw">let </span><span class="kw-2">mut </span>s: U256 = U256::from_big_endian(signature.s());
 <a href=#126 id=126 data-nosnippet>126</a>        <span class="kw">if </span>r == U256::zero() || s == U256::zero() {
 <a href=#127 id=127 data-nosnippet>127</a>            <span class="kw">let </span>chain_id = t
 <a href=#128 id=128 data-nosnippet>128</a>                .chain_id()
@@ -148,37 +148,39 @@
 <a href=#148 id=148 data-nosnippet>148</a>            gas: <span class="kw-2">*</span>t.gas(),
 <a href=#149 id=149 data-nosnippet>149</a>            input: Bytes::new(t.data().clone()),
 <a href=#150 id=150 data-nosnippet>150</a>            creates: exec_info.<span class="number">1</span>,
-<a href=#151 id=151 data-nosnippet>151</a>            raw: <span class="prelude-val">Some</span>(Bytes::new(t.transaction.transaction.rlp_bytes())),
-<a href=#152 id=152 data-nosnippet>152</a>            public_key: t.public().map(Into::into),
-<a href=#153 id=153 data-nosnippet>153</a>            chain_id: t.chain_id().map(|x| U64::from(x <span class="kw">as </span>u64)),
-<a href=#154 id=154 data-nosnippet>154</a>            standard_v: <span class="prelude-val">Some</span>(signature.v().into()),
-<a href=#155 id=155 data-nosnippet>155</a>            v,
-<a href=#156 id=156 data-nosnippet>156</a>            r,
-<a href=#157 id=157 data-nosnippet>157</a>            s,
-<a href=#158 id=158 data-nosnippet>158</a>            status: exec_info.<span class="number">0</span>,
-<a href=#159 id=159 data-nosnippet>159</a>            access_list: t.access_list().cloned(),
-<a href=#160 id=160 data-nosnippet>160</a>            max_fee_per_gas: t.after_1559().then_some(<span class="kw-2">*</span>t.gas_price()),
-<a href=#161 id=161 data-nosnippet>161</a>            max_priority_fee_per_gas: t
-<a href=#162 id=162 data-nosnippet>162</a>                .after_1559()
-<a href=#163 id=163 data-nosnippet>163</a>                .then_some(<span class="kw-2">*</span>t.max_priority_gas_price()),
-<a href=#164 id=164 data-nosnippet>164</a>            y_parity,
-<a href=#165 id=165 data-nosnippet>165</a>            transaction_type: <span class="prelude-val">Some</span>(U64::from(t.type_id())),
-<a href=#166 id=166 data-nosnippet>166</a>            authorization_list: t.authorization_list().map(|list| {
-<a href=#167 id=167 data-nosnippet>167</a>                list.iter()
-<a href=#168 id=168 data-nosnippet>168</a>                    .map(|item| SignedAuthorization::from(item.clone()))
-<a href=#169 id=169 data-nosnippet>169</a>                    .collect()
-<a href=#170 id=170 data-nosnippet>170</a>            }),
-<a href=#171 id=171 data-nosnippet>171</a>        }
-<a href=#172 id=172 data-nosnippet>172</a>    }
-<a href=#173 id=173 data-nosnippet>173</a>
-<a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">pub fn </span>deployed_contract_address(t: <span class="kw-2">&amp;</span>SignedTransaction) -&gt; <span class="prelude-ty">Option</span>&lt;H160&gt; {
-<a href=#175 id=175 data-nosnippet>175</a>        t.cal_created_address().map(|t| t.address)
-<a href=#176 id=176 data-nosnippet>176</a>    }
-<a href=#177 id=177 data-nosnippet>177</a>}
-<a href=#178 id=178 data-nosnippet>178</a>
-<a href=#179 id=179 data-nosnippet>179</a><span class="attr">#[derive(Debug, Clone, PartialEq, Serialize)]
-<a href=#180 id=180 data-nosnippet>180</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
-<a href=#181 id=181 data-nosnippet>181</a></span><span class="kw">pub enum </span>WrapTransaction {
-<a href=#182 id=182 data-nosnippet>182</a>    NativeTransaction(CfxTransaction),
-<a href=#183 id=183 data-nosnippet>183</a>    EthTransaction(Transaction),
-<a href=#184 id=184 data-nosnippet>184</a>}</code></pre></div></section></main></body></html>
+<a href=#151 id=151 data-nosnippet>151</a>            raw: <span class="prelude-val">Some</span>(Bytes::new(
+<a href=#152 id=152 data-nosnippet>152</a>                t.transaction.transaction.rlp_bytes().to_vec(),
+<a href=#153 id=153 data-nosnippet>153</a>            )),
+<a href=#154 id=154 data-nosnippet>154</a>            public_key: t.public().map(Into::into),
+<a href=#155 id=155 data-nosnippet>155</a>            chain_id: t.chain_id().map(|x| U64::from(x <span class="kw">as </span>u64)),
+<a href=#156 id=156 data-nosnippet>156</a>            standard_v: <span class="prelude-val">Some</span>(signature.v().into()),
+<a href=#157 id=157 data-nosnippet>157</a>            v,
+<a href=#158 id=158 data-nosnippet>158</a>            r,
+<a href=#159 id=159 data-nosnippet>159</a>            s,
+<a href=#160 id=160 data-nosnippet>160</a>            status: exec_info.<span class="number">0</span>,
+<a href=#161 id=161 data-nosnippet>161</a>            access_list: t.access_list().cloned(),
+<a href=#162 id=162 data-nosnippet>162</a>            max_fee_per_gas: t.after_1559().then_some(<span class="kw-2">*</span>t.gas_price()),
+<a href=#163 id=163 data-nosnippet>163</a>            max_priority_fee_per_gas: t
+<a href=#164 id=164 data-nosnippet>164</a>                .after_1559()
+<a href=#165 id=165 data-nosnippet>165</a>                .then_some(<span class="kw-2">*</span>t.max_priority_gas_price()),
+<a href=#166 id=166 data-nosnippet>166</a>            y_parity,
+<a href=#167 id=167 data-nosnippet>167</a>            transaction_type: <span class="prelude-val">Some</span>(U64::from(t.type_id())),
+<a href=#168 id=168 data-nosnippet>168</a>            authorization_list: t.authorization_list().map(|list| {
+<a href=#169 id=169 data-nosnippet>169</a>                list.iter()
+<a href=#170 id=170 data-nosnippet>170</a>                    .map(|item| SignedAuthorization::from(item.clone()))
+<a href=#171 id=171 data-nosnippet>171</a>                    .collect()
+<a href=#172 id=172 data-nosnippet>172</a>            }),
+<a href=#173 id=173 data-nosnippet>173</a>        }
+<a href=#174 id=174 data-nosnippet>174</a>    }
+<a href=#175 id=175 data-nosnippet>175</a>
+<a href=#176 id=176 data-nosnippet>176</a>    <span class="kw">pub fn </span>deployed_contract_address(t: <span class="kw-2">&amp;</span>SignedTransaction) -&gt; <span class="prelude-ty">Option</span>&lt;H160&gt; {
+<a href=#177 id=177 data-nosnippet>177</a>        t.cal_created_address().map(|t| t.address)
+<a href=#178 id=178 data-nosnippet>178</a>    }
+<a href=#179 id=179 data-nosnippet>179</a>}
+<a href=#180 id=180 data-nosnippet>180</a>
+<a href=#181 id=181 data-nosnippet>181</a><span class="attr">#[derive(Debug, Clone, PartialEq, Serialize)]
+<a href=#182 id=182 data-nosnippet>182</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#183 id=183 data-nosnippet>183</a></span><span class="kw">pub enum </span>WrapTransaction {
+<a href=#184 id=184 data-nosnippet>184</a>    NativeTransaction(CfxTransaction),
+<a href=#185 id=185 data-nosnippet>185</a>    EthTransaction(Transaction),
+<a href=#186 id=186 data-nosnippet>186</a>}</code></pre></div></section></main></body></html>

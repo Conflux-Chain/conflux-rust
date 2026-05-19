@@ -579,7 +579,7 @@
 <a href=#579 id=579 data-nosnippet>579</a>
 <a href=#580 id=580 data-nosnippet>580</a>    <span class="doccomment">/// Send a Disconnect packet immediately to the remote peer.
 <a href=#581 id=581 data-nosnippet>581</a>    </span><span class="kw">pub fn </span>send_disconnect(<span class="kw-2">&amp;mut </span><span class="self">self</span>, reason: DisconnectReason) -&gt; Error {
-<a href=#582 id=582 data-nosnippet>582</a>        <span class="kw">let </span>packet = rlp::encode(<span class="kw-2">&amp;</span>reason);
+<a href=#582 id=582 data-nosnippet>582</a>        <span class="kw">let </span>packet = rlp::encode(<span class="kw-2">&amp;</span>reason).to_vec();
 <a href=#583 id=583 data-nosnippet>583</a>        <span class="kw">let _ </span>= <span class="self">self</span>.send_packet_immediately(
 <a href=#584 id=584 data-nosnippet>584</a>            <span class="prelude-val">None</span>,
 <a href=#585 id=585 data-nosnippet>585</a>            ProtocolVersion::default(),
@@ -609,7 +609,7 @@
 <a href=#609 id=609 data-nosnippet>609</a>            <span class="prelude-val">None</span>,
 <a href=#610 id=610 data-nosnippet>610</a>            ProtocolVersion::default(),
 <a href=#611 id=611 data-nosnippet>611</a>            PACKET_HELLO,
-<a href=#612 id=612 data-nosnippet>612</a>            rlp.drain(),
+<a href=#612 id=612 data-nosnippet>612</a>            rlp.out().to_vec(),
 <a href=#613 id=613 data-nosnippet>613</a>            SendQueuePriority::High,
 <a href=#614 id=614 data-nosnippet>614</a>        )
 <a href=#615 id=615 data-nosnippet>615</a>        .map(|<span class="kw">_</span>| ())

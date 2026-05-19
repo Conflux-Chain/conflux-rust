@@ -66,37 +66,38 @@
 <a href=#66 id=66 data-nosnippet>66</a>            // future.
 <a href=#67 id=67 data-nosnippet>67</a>            </span>buffer[<span class="number">0</span>] = <span class="number">0x0</span>;
 <a href=#68 id=68 data-nosnippet>68</a>            buffer[<span class="number">1</span>..(<span class="number">1 </span>+ <span class="number">20</span>)].copy_from_slice(<span class="kw-2">&amp;</span>sender[..]);
-<a href=#69 id=69 data-nosnippet>69</a>            nonce.to_little_endian(<span class="kw-2">&amp;mut </span>buffer[(<span class="number">1 </span>+ <span class="number">20</span>)..(<span class="number">1 </span>+ <span class="number">20 </span>+ <span class="number">32</span>)]);
-<a href=#70 id=70 data-nosnippet>70</a>            buffer[(<span class="number">1 </span>+ <span class="number">20 </span>+ <span class="number">32</span>)..].copy_from_slice(<span class="kw-2">&amp;</span>code_hash[..]);
-<a href=#71 id=71 data-nosnippet>71</a>            <span class="comment">// In Conflux, we use the first four bits to indicate the type of
-<a href=#72 id=72 data-nosnippet>72</a>            // the address. For contract address, the bits will be
-<a href=#73 id=73 data-nosnippet>73</a>            // set to 0x8.
-<a href=#74 id=74 data-nosnippet>74</a>            </span><span class="kw">let </span>h = Address::from(keccak(<span class="kw-2">&amp;</span>buffer[..]));
-<a href=#75 id=75 data-nosnippet>75</a>            (h, code_hash)
-<a href=#76 id=76 data-nosnippet>76</a>        }
-<a href=#77 id=77 data-nosnippet>77</a>        CreateContractAddressType::FromSenderSaltAndCodeHash(salt) =&gt; {
-<a href=#78 id=78 data-nosnippet>78</a>            <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0u8</span>; <span class="number">1 </span>+ <span class="number">20 </span>+ <span class="number">32 </span>+ <span class="number">32</span>];
-<a href=#79 id=79 data-nosnippet>79</a>            buffer[<span class="number">0</span>] = <span class="number">0xff</span>;
-<a href=#80 id=80 data-nosnippet>80</a>            buffer[<span class="number">1</span>..(<span class="number">1 </span>+ <span class="number">20</span>)].copy_from_slice(<span class="kw-2">&amp;</span>sender[..]);
-<a href=#81 id=81 data-nosnippet>81</a>            buffer[(<span class="number">1 </span>+ <span class="number">20</span>)..(<span class="number">1 </span>+ <span class="number">20 </span>+ <span class="number">32</span>)].copy_from_slice(<span class="kw-2">&amp;</span>salt[..]);
-<a href=#82 id=82 data-nosnippet>82</a>            buffer[(<span class="number">1 </span>+ <span class="number">20 </span>+ <span class="number">32</span>)..].copy_from_slice(<span class="kw-2">&amp;</span>code_hash[..]);
-<a href=#83 id=83 data-nosnippet>83</a>            <span class="comment">// In Conflux, we use the first bit to indicate the type of the
-<a href=#84 id=84 data-nosnippet>84</a>            // address. For contract address, the bits will be set to 0x8.
-<a href=#85 id=85 data-nosnippet>85</a>            </span><span class="kw">let </span>h = Address::from(keccak(<span class="kw-2">&amp;</span>buffer[..]));
-<a href=#86 id=86 data-nosnippet>86</a>            (h, code_hash)
-<a href=#87 id=87 data-nosnippet>87</a>        }
-<a href=#88 id=88 data-nosnippet>88</a>    };
-<a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">return </span>(address, code_hash);
-<a href=#90 id=90 data-nosnippet>90</a>}
-<a href=#91 id=91 data-nosnippet>91</a>
-<a href=#92 id=92 data-nosnippet>92</a><span class="kw">pub fn </span>cal_contract_address_with_space(
-<a href=#93 id=93 data-nosnippet>93</a>    address_scheme: CreateContractAddressType, sender: <span class="kw-2">&amp;</span>AddressWithSpace,
-<a href=#94 id=94 data-nosnippet>94</a>    nonce: <span class="kw-2">&amp;</span>U256, code: <span class="kw-2">&amp;</span>[u8],
-<a href=#95 id=95 data-nosnippet>95</a>) -&gt; (AddressWithSpace, H256) {
-<a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">let </span>(<span class="kw-2">mut </span>address, code_hash) =
-<a href=#97 id=97 data-nosnippet>97</a>        cal_contract_address(address_scheme, <span class="kw-2">&amp;</span>sender.address, nonce, code);
-<a href=#98 id=98 data-nosnippet>98</a>    <span class="kw">if </span>sender.space == Space::Native {
-<a href=#99 id=99 data-nosnippet>99</a>        address.set_contract_type_bits();
-<a href=#100 id=100 data-nosnippet>100</a>    }
-<a href=#101 id=101 data-nosnippet>101</a>    (address.with_space(sender.space), code_hash)
-<a href=#102 id=102 data-nosnippet>102</a>}</code></pre></div></section></main></body></html>
+<a href=#69 id=69 data-nosnippet>69</a>            buffer[(<span class="number">1 </span>+ <span class="number">20</span>)..(<span class="number">1 </span>+ <span class="number">20 </span>+ <span class="number">32</span>)]
+<a href=#70 id=70 data-nosnippet>70</a>                .copy_from_slice(<span class="kw-2">&amp;</span>nonce.to_little_endian());
+<a href=#71 id=71 data-nosnippet>71</a>            buffer[(<span class="number">1 </span>+ <span class="number">20 </span>+ <span class="number">32</span>)..].copy_from_slice(<span class="kw-2">&amp;</span>code_hash[..]);
+<a href=#72 id=72 data-nosnippet>72</a>            <span class="comment">// In Conflux, we use the first four bits to indicate the type of
+<a href=#73 id=73 data-nosnippet>73</a>            // the address. For contract address, the bits will be
+<a href=#74 id=74 data-nosnippet>74</a>            // set to 0x8.
+<a href=#75 id=75 data-nosnippet>75</a>            </span><span class="kw">let </span>h = Address::from(keccak(<span class="kw-2">&amp;</span>buffer[..]));
+<a href=#76 id=76 data-nosnippet>76</a>            (h, code_hash)
+<a href=#77 id=77 data-nosnippet>77</a>        }
+<a href=#78 id=78 data-nosnippet>78</a>        CreateContractAddressType::FromSenderSaltAndCodeHash(salt) =&gt; {
+<a href=#79 id=79 data-nosnippet>79</a>            <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0u8</span>; <span class="number">1 </span>+ <span class="number">20 </span>+ <span class="number">32 </span>+ <span class="number">32</span>];
+<a href=#80 id=80 data-nosnippet>80</a>            buffer[<span class="number">0</span>] = <span class="number">0xff</span>;
+<a href=#81 id=81 data-nosnippet>81</a>            buffer[<span class="number">1</span>..(<span class="number">1 </span>+ <span class="number">20</span>)].copy_from_slice(<span class="kw-2">&amp;</span>sender[..]);
+<a href=#82 id=82 data-nosnippet>82</a>            buffer[(<span class="number">1 </span>+ <span class="number">20</span>)..(<span class="number">1 </span>+ <span class="number">20 </span>+ <span class="number">32</span>)].copy_from_slice(<span class="kw-2">&amp;</span>salt[..]);
+<a href=#83 id=83 data-nosnippet>83</a>            buffer[(<span class="number">1 </span>+ <span class="number">20 </span>+ <span class="number">32</span>)..].copy_from_slice(<span class="kw-2">&amp;</span>code_hash[..]);
+<a href=#84 id=84 data-nosnippet>84</a>            <span class="comment">// In Conflux, we use the first bit to indicate the type of the
+<a href=#85 id=85 data-nosnippet>85</a>            // address. For contract address, the bits will be set to 0x8.
+<a href=#86 id=86 data-nosnippet>86</a>            </span><span class="kw">let </span>h = Address::from(keccak(<span class="kw-2">&amp;</span>buffer[..]));
+<a href=#87 id=87 data-nosnippet>87</a>            (h, code_hash)
+<a href=#88 id=88 data-nosnippet>88</a>        }
+<a href=#89 id=89 data-nosnippet>89</a>    };
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">return </span>(address, code_hash);
+<a href=#91 id=91 data-nosnippet>91</a>}
+<a href=#92 id=92 data-nosnippet>92</a>
+<a href=#93 id=93 data-nosnippet>93</a><span class="kw">pub fn </span>cal_contract_address_with_space(
+<a href=#94 id=94 data-nosnippet>94</a>    address_scheme: CreateContractAddressType, sender: <span class="kw-2">&amp;</span>AddressWithSpace,
+<a href=#95 id=95 data-nosnippet>95</a>    nonce: <span class="kw-2">&amp;</span>U256, code: <span class="kw-2">&amp;</span>[u8],
+<a href=#96 id=96 data-nosnippet>96</a>) -&gt; (AddressWithSpace, H256) {
+<a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">let </span>(<span class="kw-2">mut </span>address, code_hash) =
+<a href=#98 id=98 data-nosnippet>98</a>        cal_contract_address(address_scheme, <span class="kw-2">&amp;</span>sender.address, nonce, code);
+<a href=#99 id=99 data-nosnippet>99</a>    <span class="kw">if </span>sender.space == Space::Native {
+<a href=#100 id=100 data-nosnippet>100</a>        address.set_contract_type_bits();
+<a href=#101 id=101 data-nosnippet>101</a>    }
+<a href=#102 id=102 data-nosnippet>102</a>    (address.with_space(sender.space), code_hash)
+<a href=#103 id=103 data-nosnippet>103</a>}</code></pre></div></section></main></body></html>

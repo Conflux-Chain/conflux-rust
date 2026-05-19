@@ -506,8 +506,8 @@
 <a href=#506 id=506 data-nosnippet>506</a>        TransactionWithSignature {
 <a href=#507 id=507 data-nosnippet>507</a>            transaction: TransactionWithSignatureSerializePart {
 <a href=#508 id=508 data-nosnippet>508</a>                unsigned: <span class="self">self</span>,
-<a href=#509 id=509 data-nosnippet>509</a>                r: sig.r().into(),
-<a href=#510 id=510 data-nosnippet>510</a>                s: sig.s().into(),
+<a href=#509 id=509 data-nosnippet>509</a>                r: U256::from_big_endian(sig.r()),
+<a href=#510 id=510 data-nosnippet>510</a>                s: U256::from_big_endian(sig.s()),
 <a href=#511 id=511 data-nosnippet>511</a>                v: sig.v(),
 <a href=#512 id=512 data-nosnippet>512</a>            },
 <a href=#513 id=513 data-nosnippet>513</a>            hash: H256::zero(),

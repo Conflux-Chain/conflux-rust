@@ -160,39 +160,37 @@
 <a href=#160 id=160 data-nosnippet>160</a>
 <a href=#161 id=161 data-nosnippet>161</a><span class="comment">// convert from cfx U256 to alloy U256
 <a href=#162 id=162 data-nosnippet>162</a></span><span class="kw">pub fn </span>to_alloy_u256(u: U256) -&gt; RU256 {
-<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">let </span><span class="kw-2">mut </span>be_bytes: [u8; <span class="number">32</span>] = [<span class="number">0</span>; <span class="number">32</span>];
-<a href=#164 id=164 data-nosnippet>164</a>    u.to_big_endian(<span class="kw-2">&amp;mut </span>be_bytes);
-<a href=#165 id=165 data-nosnippet>165</a>    RU256::from_be_bytes(be_bytes)
-<a href=#166 id=166 data-nosnippet>166</a>}
-<a href=#167 id=167 data-nosnippet>167</a>
-<a href=#168 id=168 data-nosnippet>168</a><span class="kw">pub fn </span>to_alloy_address(h: H160) -&gt; RAddress {
-<a href=#169 id=169 data-nosnippet>169</a>    RAddress::from_slice(h.as_bytes())
-<a href=#170 id=170 data-nosnippet>170</a>}
+<a href=#163 id=163 data-nosnippet>163</a>    RU256::from_be_bytes(u.to_big_endian())
+<a href=#164 id=164 data-nosnippet>164</a>}
+<a href=#165 id=165 data-nosnippet>165</a>
+<a href=#166 id=166 data-nosnippet>166</a><span class="kw">pub fn </span>to_alloy_address(h: H160) -&gt; RAddress {
+<a href=#167 id=167 data-nosnippet>167</a>    RAddress::from_slice(h.as_bytes())
+<a href=#168 id=168 data-nosnippet>168</a>}
+<a href=#169 id=169 data-nosnippet>169</a>
+<a href=#170 id=170 data-nosnippet>170</a><span class="kw">pub fn </span>to_alloy_h256(h: H256) -&gt; B256 { B256::from(h.<span class="number">0</span>) }
 <a href=#171 id=171 data-nosnippet>171</a>
-<a href=#172 id=172 data-nosnippet>172</a><span class="kw">pub fn </span>to_alloy_h256(h: H256) -&gt; B256 { B256::from(h.<span class="number">0</span>) }
-<a href=#173 id=173 data-nosnippet>173</a>
-<a href=#174 id=174 data-nosnippet>174</a><span class="kw">pub fn </span>from_alloy_address(address: RAddress) -&gt; Address {
-<a href=#175 id=175 data-nosnippet>175</a>    Address::from_slice(address.as_slice())
-<a href=#176 id=176 data-nosnippet>176</a>}
-<a href=#177 id=177 data-nosnippet>177</a>
-<a href=#178 id=178 data-nosnippet>178</a><span class="attr">#[cfg(test)]
-<a href=#179 id=179 data-nosnippet>179</a></span><span class="kw">mod </span>tests {
-<a href=#180 id=180 data-nosnippet>180</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#181 id=181 data-nosnippet>181</a>    <span class="kw">use </span>alloy_sol_types::{GenericContractError, SolInterface};
-<a href=#182 id=182 data-nosnippet>182</a>
-<a href=#183 id=183 data-nosnippet>183</a>    <span class="attr">#[test]
-<a href=#184 id=184 data-nosnippet>184</a>    </span><span class="kw">fn </span>decode_revert_reason() {
-<a href=#185 id=185 data-nosnippet>185</a>        <span class="kw">let </span>err = GenericContractError::Revert(<span class="string">"my revert"</span>.into());
-<a href=#186 id=186 data-nosnippet>186</a>        <span class="kw">let </span>encoded = err.abi_encode();
-<a href=#187 id=187 data-nosnippet>187</a>        <span class="kw">let </span>reason = maybe_revert_reason(<span class="kw-2">&amp;</span>encoded).unwrap();
-<a href=#188 id=188 data-nosnippet>188</a>        <span class="macro">assert_eq!</span>(reason, <span class="string">"my revert"</span>);
-<a href=#189 id=189 data-nosnippet>189</a>    }
-<a href=#190 id=190 data-nosnippet>190</a>
-<a href=#191 id=191 data-nosnippet>191</a>    <span class="comment">// &lt;https://etherscan.io/tx/0x105707c8e3b3675a8424a7b0820b271cbe394eaf4d5065b03c273298e3a81314&gt;
-<a href=#192 id=192 data-nosnippet>192</a>    </span><span class="attr">#[test]
-<a href=#193 id=193 data-nosnippet>193</a>    </span><span class="kw">fn </span>decode_revert_reason_with_error() {
-<a href=#194 id=194 data-nosnippet>194</a>        <span class="kw">let </span>err = <span class="macro">hex!</span>(<span class="string">"08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000024556e697377617056323a20494e53554646494349454e545f494e5055545f414d4f554e5400000000000000000000000000000000000000000000000000000080"</span>);
-<a href=#195 id=195 data-nosnippet>195</a>        <span class="kw">let </span>reason = maybe_revert_reason(<span class="kw-2">&amp;</span>err[..]).unwrap();
-<a href=#196 id=196 data-nosnippet>196</a>        <span class="macro">assert_eq!</span>(reason, <span class="string">"UniswapV2: INSUFFICIENT_INPUT_AMOUNT"</span>);
-<a href=#197 id=197 data-nosnippet>197</a>    }
-<a href=#198 id=198 data-nosnippet>198</a>}</code></pre></div></section></main></body></html>
+<a href=#172 id=172 data-nosnippet>172</a><span class="kw">pub fn </span>from_alloy_address(address: RAddress) -&gt; Address {
+<a href=#173 id=173 data-nosnippet>173</a>    Address::from_slice(address.as_slice())
+<a href=#174 id=174 data-nosnippet>174</a>}
+<a href=#175 id=175 data-nosnippet>175</a>
+<a href=#176 id=176 data-nosnippet>176</a><span class="attr">#[cfg(test)]
+<a href=#177 id=177 data-nosnippet>177</a></span><span class="kw">mod </span>tests {
+<a href=#178 id=178 data-nosnippet>178</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#179 id=179 data-nosnippet>179</a>    <span class="kw">use </span>alloy_sol_types::{GenericContractError, SolInterface};
+<a href=#180 id=180 data-nosnippet>180</a>
+<a href=#181 id=181 data-nosnippet>181</a>    <span class="attr">#[test]
+<a href=#182 id=182 data-nosnippet>182</a>    </span><span class="kw">fn </span>decode_revert_reason() {
+<a href=#183 id=183 data-nosnippet>183</a>        <span class="kw">let </span>err = GenericContractError::Revert(<span class="string">"my revert"</span>.into());
+<a href=#184 id=184 data-nosnippet>184</a>        <span class="kw">let </span>encoded = err.abi_encode();
+<a href=#185 id=185 data-nosnippet>185</a>        <span class="kw">let </span>reason = maybe_revert_reason(<span class="kw-2">&amp;</span>encoded).unwrap();
+<a href=#186 id=186 data-nosnippet>186</a>        <span class="macro">assert_eq!</span>(reason, <span class="string">"my revert"</span>);
+<a href=#187 id=187 data-nosnippet>187</a>    }
+<a href=#188 id=188 data-nosnippet>188</a>
+<a href=#189 id=189 data-nosnippet>189</a>    <span class="comment">// &lt;https://etherscan.io/tx/0x105707c8e3b3675a8424a7b0820b271cbe394eaf4d5065b03c273298e3a81314&gt;
+<a href=#190 id=190 data-nosnippet>190</a>    </span><span class="attr">#[test]
+<a href=#191 id=191 data-nosnippet>191</a>    </span><span class="kw">fn </span>decode_revert_reason_with_error() {
+<a href=#192 id=192 data-nosnippet>192</a>        <span class="kw">let </span>err = <span class="macro">hex!</span>(<span class="string">"08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000024556e697377617056323a20494e53554646494349454e545f494e5055545f414d4f554e5400000000000000000000000000000000000000000000000000000080"</span>);
+<a href=#193 id=193 data-nosnippet>193</a>        <span class="kw">let </span>reason = maybe_revert_reason(<span class="kw-2">&amp;</span>err[..]).unwrap();
+<a href=#194 id=194 data-nosnippet>194</a>        <span class="macro">assert_eq!</span>(reason, <span class="string">"UniswapV2: INSUFFICIENT_INPUT_AMOUNT"</span>);
+<a href=#195 id=195 data-nosnippet>195</a>    }
+<a href=#196 id=196 data-nosnippet>196</a>}</code></pre></div></section></main></body></html>

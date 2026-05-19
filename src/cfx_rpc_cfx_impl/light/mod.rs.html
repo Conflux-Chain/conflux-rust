@@ -509,7 +509,7 @@
 <a href=#509 id=509 data-nosnippet>509</a>            )
 <a href=#510 id=510 data-nosnippet>510</a>            .map_err(into_rpc_err)<span class="question-mark">?</span>;
 <a href=#511 id=511 data-nosnippet>511</a>
-<a href=#512 id=512 data-nosnippet>512</a>        <span class="self">Self</span>::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
+<a href=#512 id=512 data-nosnippet>512</a>        <span class="self">Self</span>::send_tx_helper(light, Bytes::new(tx.rlp_bytes().to_vec()))
 <a href=#513 id=513 data-nosnippet>513</a>    }
 <a href=#514 id=514 data-nosnippet>514</a>
 <a href=#515 id=515 data-nosnippet>515</a>    <span class="kw">async fn </span>storage_root(
