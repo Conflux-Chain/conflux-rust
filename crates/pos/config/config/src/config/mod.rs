@@ -92,11 +92,11 @@ impl NodeConfig {
 pub trait PersistableConfig: Serialize + DeserializeOwned {
     fn load_config<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let mut file = File::open(&path).map_err(|e| {
-            Error::IO(path.as_ref().to_str().unwrap().to_string(), e)
+            Error::IO(path.as_ref().to_string_lossy().to_string(), e)
         })?;
         let mut contents = String::new();
         file.read_to_string(&mut contents).map_err(|e| {
-            Error::IO(path.as_ref().to_str().unwrap().to_string(), e)
+            Error::IO(path.as_ref().to_string_lossy().to_string(), e)
         })?;
         Self::parse(&contents)
     }
@@ -105,16 +105,16 @@ pub trait PersistableConfig: Serialize + DeserializeOwned {
         let contents = yaml_serde::to_string(&self)
             .map_err(|e| {
                 Error::Yaml(
-                    output_file.as_ref().to_str().unwrap().to_string(),
+                    output_file.as_ref().to_string_lossy().to_string(),
                     e,
                 )
             })?
             .into_bytes();
         let mut file = File::create(output_file.as_ref()).map_err(|e| {
-            Error::IO(output_file.as_ref().to_str().unwrap().to_string(), e)
+            Error::IO(output_file.as_ref().to_string_lossy().to_string(), e)
         })?;
         file.write_all(&contents).map_err(|e| {
-            Error::IO(output_file.as_ref().to_str().unwrap().to_string(), e)
+            Error::IO(output_file.as_ref().to_string_lossy().to_string(), e)
         })?;
         Ok(())
     }

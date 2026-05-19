@@ -484,13 +484,16 @@ mod test {
     }
     impl ElementToPrint for Vec<u8> {
         fn to_string(&self) -> String {
-            unsafe { std::str::from_utf8_unchecked(self.as_slice()) }
+            std::str::from_utf8(self.as_slice())
+                .expect("Vec<u8> should be valid utf8")
                 .to_string()
         }
     }
     impl ElementToPrint for Box<[u8]> {
         fn to_string(&self) -> String {
-            unsafe { std::str::from_utf8_unchecked(self.as_ref()) }.to_string()
+            std::str::from_utf8(self.as_ref())
+                .expect("Box<[u8]> should be valid utf8")
+                .to_string()
         }
     }
 

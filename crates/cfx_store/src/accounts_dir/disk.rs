@@ -227,18 +227,22 @@ where T: KeyFileManager
 
     /// all accounts found in keys directory
     fn files_content(&self) -> Result<HashMap<PathBuf, SafeAccount>, Error> {
-        // it's not done using one iterator cause
-        // there is an issue with rustc and it takes tooo much time to compile
+        // it's not done using one iterator because
+        // there is an issue with rustc and it takes too much time to compile
         let paths = self.files()?;
         Ok(paths
             .into_iter()
-            .filter_map(|path| {
-                let filename = Some(
-                    path.file_name()
-                        .and_then(|n| n.to_str())
-                        .expect("Keys have valid UTF8 names only.")
-                        .to_owned(),
-                );
+            .map(|path| {
+                let filename = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .ok_or_else(|| {
+                        Error::InvalidKeyFile(
+                            "Filename contains invalid UTF-8".into(),
+                        )
+                    })?
+                    .to_owned();
+                let filename = Some(filename);
                 fs::File::open(path.clone())
                     .map_err(Into::into)
                     .and_then(|file| self.key_manager.read(filename, file))
@@ -247,8 +251,8 @@ where T: KeyFileManager
                         err
                     })
                     .map(|account| (path, account))
-                    .ok()
             })
+            .filter_map(Result::ok)
             .collect())
     }
 

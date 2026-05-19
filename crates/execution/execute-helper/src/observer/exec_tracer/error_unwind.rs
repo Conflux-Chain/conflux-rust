@@ -100,10 +100,9 @@ impl ErrorUnwind {
                 "Vm reverted. {}",
                 string_revert_reason_decode(return_data)
             )),
-            Outcome::Fail => Some(
-                String::from_utf8(return_data.clone())
-                    .expect("Return data is encoded from valid utf-8 string"),
-            ),
+            Outcome::Fail => {
+                Some(String::from_utf8_lossy(return_data).into_owned())
+            }
         }
     }
 }

@@ -57,7 +57,8 @@ impl DeltaDbManagerTrait for DeltaDbManagerRocksdb {
             Ok(KvdbRocksdb {
                 kvdb: Arc::new(Database::open(
                     &Self::ROCKSDB_CONFIG,
-                    path.to_str().unwrap(),
+                    path.to_str()
+                        .ok_or(Error::Msg("Invalid database path".into()))?,
                 )?),
                 col: 0,
             })
