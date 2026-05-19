@@ -180,7 +180,7 @@ impl<
         let key = mpt_node_path_to_db_key(path);
         self.db
             .borrow_mut()
-            .put(&key, &trie_node.rlp_bytes().into_boxed_slice())?;
+            .put(&key, &trie_node.rlp_bytes().to_vec().into_boxed_slice())?;
         Ok(())
     }
 }
