@@ -66,7 +66,8 @@ pub fn cal_contract_address(
             // future.
             buffer[0] = 0x0;
             buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
-            nonce.to_little_endian(&mut buffer[(1 + 20)..(1 + 20 + 32)]);
+            buffer[(1 + 20)..(1 + 20 + 32)]
+                .copy_from_slice(&nonce.to_little_endian());
             buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first four bits to indicate the type of
             // the address. For contract address, the bits will be

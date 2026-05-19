@@ -136,5 +136,5 @@ impl DatabaseDecodable for BlockExecTraces {
 }
 
 impl DatabaseEncodable for BlockExecTraces {
-    fn db_encode(&self) -> Bytes { rlp::encode(self) }
+    fn db_encode(&self) -> Bytes { rlp::encode(self).to_vec() }
 }

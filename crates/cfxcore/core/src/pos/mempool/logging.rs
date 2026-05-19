@@ -167,7 +167,6 @@ pub enum LogEvent {
 
     // garbage-collect txns events
     SystemTTLExpiration,
-    ClientExpiration,
 
     Success,
 }

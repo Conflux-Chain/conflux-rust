@@ -89,9 +89,8 @@ impl Decodable for CompatBool06 {
 
 #[cfg(test)]
 mod tests {
-    //! `rlp::` is the main dep (0.4 today); `rlp_06` is a dev-dep alias
-    //! to rlp 0.6. After the main `rlp` upgrade to 0.6, flip the dev-dep
-    //! to `rlp_04` and rewrite `rlp::` → `rlp_04::` on the 0.4 side.
+    //! `rlp::` is the main dep (0.6 now); `rlp_04` is a dev-dep alias
+    //! to rlp 0.4 for side-by-side coverage.
 
     use super::*;
 
@@ -117,23 +116,23 @@ mod tests {
 
     #[test]
     fn compat_bool_04_encode_matches_rlp_04() {
-        assert_eq!(encode(&CompatBool04(false)), rlp::encode(&false).to_vec());
-        assert_eq!(encode(&CompatBool04(true)), rlp::encode(&true).to_vec());
+        assert_eq!(
+            encode(&CompatBool04(false)),
+            rlp_04::encode(&false).to_vec()
+        );
+        assert_eq!(encode(&CompatBool04(true)), rlp_04::encode(&true).to_vec());
     }
 
     #[test]
     fn compat_bool_06_encode_matches_rlp_06() {
-        assert_eq!(
-            encode(&CompatBool06(false)),
-            rlp_06::encode(&false).to_vec()
-        );
-        assert_eq!(encode(&CompatBool06(true)), rlp_06::encode(&true).to_vec());
+        assert_eq!(encode(&CompatBool06(false)), rlp::encode(&false).to_vec());
+        assert_eq!(encode(&CompatBool06(true)), rlp::encode(&true).to_vec());
     }
 
     #[test]
     fn strict_bool_encode_matches_rlp_04() {
-        assert_eq!(encode(&StrictBool(false)), rlp::encode(&false).to_vec());
-        assert_eq!(encode(&StrictBool(true)), rlp::encode(&true).to_vec());
+        assert_eq!(encode(&StrictBool(false)), rlp_04::encode(&false).to_vec());
+        assert_eq!(encode(&StrictBool(true)), rlp_04::encode(&true).to_vec());
     }
 
     // Decode behavior for each payload `[b]`:
@@ -147,8 +146,8 @@ mod tests {
 
     #[test]
     fn decode_empty_payload() {
+        assert_eq!(rlp_04::decode::<bool>(&[0x80]).unwrap(), false);
         assert_eq!(rlp::decode::<bool>(&[0x80]).unwrap(), false);
-        assert_eq!(rlp_06::decode::<bool>(&[0x80]).unwrap(), false);
 
         assert!(decode::<StrictBool>(&[0x80]).is_err());
         assert_eq!(
@@ -163,8 +162,8 @@ mod tests {
 
     #[test]
     fn decode_zero_byte() {
-        assert_eq!(rlp::decode::<bool>(&[0x00]).unwrap(), false);
-        assert!(rlp_06::decode::<bool>(&[0x00]).is_err());
+        assert_eq!(rlp_04::decode::<bool>(&[0x00]).unwrap(), false);
+        assert!(rlp::decode::<bool>(&[0x00]).is_err());
 
         assert_eq!(decode::<StrictBool>(&[0x00]).unwrap(), StrictBool(false));
         assert_eq!(
@@ -179,8 +178,8 @@ mod tests {
 
     #[test]
     fn decode_one_byte() {
+        assert_eq!(rlp_04::decode::<bool>(&[0x01]).unwrap(), true);
         assert_eq!(rlp::decode::<bool>(&[0x01]).unwrap(), true);
-        assert_eq!(rlp_06::decode::<bool>(&[0x01]).unwrap(), true);
 
         assert_eq!(decode::<StrictBool>(&[0x01]).unwrap(), StrictBool(true));
         assert_eq!(
@@ -205,13 +204,13 @@ mod tests {
             };
 
             assert_eq!(
-                rlp::decode::<bool>(&rlp_bytes).unwrap(),
+                rlp_04::decode::<bool>(&rlp_bytes).unwrap(),
                 true,
                 "rlp_04 byte {:#04x}",
                 byte
             );
             assert!(
-                rlp_06::decode::<bool>(&rlp_bytes).is_err(),
+                rlp::decode::<bool>(&rlp_bytes).is_err(),
                 "rlp_06 byte {:#04x}",
                 byte
             );
@@ -227,8 +226,8 @@ mod tests {
         for rlp_bytes in
             [&[0x82, 0xab, 0xcd][..], &[0x83, 0x01, 0x02, 0x03][..]]
         {
+            assert!(rlp_04::decode::<bool>(rlp_bytes).is_err());
             assert!(rlp::decode::<bool>(rlp_bytes).is_err());
-            assert!(rlp_06::decode::<bool>(rlp_bytes).is_err());
             assert!(decode::<StrictBool>(rlp_bytes).is_err());
             assert!(decode::<CompatBool04>(rlp_bytes).is_err());
             assert!(decode::<CompatBool06>(rlp_bytes).is_err());
