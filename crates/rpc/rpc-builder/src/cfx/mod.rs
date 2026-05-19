@@ -3,6 +3,7 @@ mod module;
 pub use crate::{
     error::*, id_provider::SubscriptionIdProvider, RpcServerHandle,
 };
+use cfx_rpc_middlewares::{Logger, Metrics, Throttle};
 pub use module::{CfxRpcModule, RpcModuleSelection};
 
 use blockgen::BlockGeneratorTestApi;
@@ -24,7 +25,10 @@ use cfxcore::{
 use cfxcore_accounts::AccountProvider;
 use jsonrpsee::{
     core::RegisterMethodError,
-    server::{IdProvider, ServerBuilder, ServerConfigBuilder},
+    server::{
+        middleware::rpc::RpcServiceBuilder, IdProvider, ServerBuilder,
+        ServerConfigBuilder,
+    },
     Methods, RpcModule,
 };
 use network::NetworkService;
@@ -416,7 +420,21 @@ impl RpcServerConfig {
 
     pub async fn start(
         self, modules: &TransportRpcModules,
+        throttling_conf_file: Option<String>, throttling_section: &str,
+        enable_metrics: bool,
     ) -> Result<RpcServerHandle, RpcError<CfxRpcModule>> {
+        let throttling_section = throttling_section.to_string();
+        let rpc_middleware = RpcServiceBuilder::new()
+            .layer_fn(move |s| {
+                Throttle::new(
+                    throttling_conf_file.as_ref().map(|s| s.as_str()),
+                    throttling_section.as_str(),
+                    s,
+                )
+            })
+            .layer_fn(move |s| Metrics::new(s, enable_metrics))
+            .layer_fn(|s| Logger::new(s));
+
         let http_socket_addr = self.http_addr.unwrap_or(SocketAddr::V4(
             SocketAddrV4::new(Ipv4Addr::LOCALHOST, DEFAULT_HTTP_PORT),
         ));
@@ -433,6 +451,7 @@ impl RpcServerConfig {
 
             if let Some(config) = self.http_server_config {
                 let server = ServerBuilder::new()
+                    .set_rpc_middleware(rpc_middleware)
                     .set_config(config.build())
                     .build(http_socket_addr)
                     .await
@@ -476,6 +495,7 @@ impl RpcServerConfig {
         if let Some(config) = self.ws_server_config {
             let server = ServerBuilder::new()
                 .set_config(config.ws_only().build())
+                .set_rpc_middleware(rpc_middleware.clone())
                 .build(ws_socket_addr)
                 .await
                 .map_err(|err| {
@@ -498,6 +518,7 @@ impl RpcServerConfig {
         if let Some(config) = self.http_server_config {
             let server = ServerBuilder::new()
                 .set_config(config.http_only().build())
+                .set_rpc_middleware(rpc_middleware)
                 .build(http_socket_addr)
                 .await
                 .map_err(|err| {
