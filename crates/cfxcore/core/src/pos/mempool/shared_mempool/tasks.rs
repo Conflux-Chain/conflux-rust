@@ -257,7 +257,7 @@ pub(crate) async fn process_committed_transactions(
         LogEvent::Received
     )
     .state_sync_msg(&req));
-    commit_txns(&mempool, req.transactions, req.block_timestamp_usecs).await;
+    commit_txns(&mempool, req.transactions).await;
     if req.callback.send(Ok(CommitResponse::success())).is_err() {
         diem_error!(LogSchema::event_log(
             LogEntry::StateSyncCommit,
@@ -289,14 +289,6 @@ pub(crate) async fn process_consensus_request(
     let mut txns;
     {
         let mut mempool = mempool.lock();
-        // gc before pulling block as extra protection against txns that
-        // may expire in consensus Note: this gc
-        // operation relies on the fact that consensus uses the system
-        // time to determine block timestamp
-        let curr_time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX_EPOCH");
-        mempool.gc_by_expiration_time(curr_time);
         let block_size = cmp::max(max_block_size, 1);
         let pos_state = db
             .get_pos_state(&parent_block_id)
@@ -320,17 +312,10 @@ pub(crate) async fn process_consensus_request(
 
 async fn commit_txns(
     mempool: &Mutex<CoreMempool>, transactions: Vec<CommittedTransaction>,
-    block_timestamp_usecs: u64,
 ) {
     let mut pool = mempool.lock();
 
     for transaction in transactions {
         pool.remove_transaction(transaction.hash);
-    }
-
-    if block_timestamp_usecs > 0 {
-        pool.gc_by_expiration_time(Duration::from_micros(
-            block_timestamp_usecs,
-        ));
     }
 }

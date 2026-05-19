@@ -44,9 +44,7 @@ impl ExecutionProxy {
     }
 
     /// Notify mempool of committed transactions so it can prune them.
-    async fn notify_mempool(
-        &self, committed_txns: Vec<Transaction>, block_timestamp_usecs: u64,
-    ) {
+    async fn notify_mempool(&self, committed_txns: Vec<Transaction>) {
         let user_txns: Vec<CommittedTransaction> = committed_txns
             .iter()
             .filter_map(|txn| match txn {
@@ -67,7 +65,6 @@ impl ExecutionProxy {
         let (callback, cb_receiver) = oneshot::channel();
         let notification = CommitNotification {
             transactions: user_txns,
-            block_timestamp_usecs,
             callback,
         };
 
@@ -146,12 +143,11 @@ impl StateComputer for ExecutionProxy {
         &self, block_ids: Vec<HashValue>,
         finality_proof: LedgerInfoWithSignatures,
     ) -> Result<(), ExecutionError> {
-        let timestamp = finality_proof.ledger_info().timestamp_usecs();
         let committed_txns = self
             .executor
             .lock()
             .commit_blocks(block_ids, finality_proof)?;
-        self.notify_mempool(committed_txns, timestamp).await;
+        self.notify_mempool(committed_txns).await;
         Ok(())
     }
 }
