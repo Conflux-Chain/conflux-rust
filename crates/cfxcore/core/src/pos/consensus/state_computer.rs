@@ -5,7 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{error::StateSyncError, state_replication::StateComputer};
+use super::state_replication::StateComputer;
 use crate::pos::mempool::{CommitNotification, CommittedTransaction};
 use anyhow::Result;
 use consensus_types::block::Block;
@@ -152,17 +152,6 @@ impl StateComputer for ExecutionProxy {
             .lock()
             .commit_blocks(block_ids, finality_proof)?;
         self.notify_mempool(committed_txns, timestamp).await;
-        Ok(())
-    }
-
-    /// No-op: state sync via chunk execution is not supported in
-    /// Conflux PoS.
-    async fn sync_to(
-        &self, _target: LedgerInfoWithSignatures,
-    ) -> Result<(), StateSyncError> {
-        fail_point!("consensus::sync_to", |_| {
-            Err(anyhow::anyhow!("Injected error in sync_to").into())
-        });
         Ok(())
     }
 }
