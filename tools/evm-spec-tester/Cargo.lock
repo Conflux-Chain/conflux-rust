@@ -255,8 +255,8 @@ dependencies = [
 
 [[package]]
 name = "alloy-primitives-wrapper"
-version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/alloy-primitives-wrapper.git?rev=df227569c85fd1be773134e49f4994fa5b2b8643#df227569c85fd1be773134e49f4994fa5b2b8643"
+version = "0.2.0"
+source = "git+https://github.com/Conflux-Chain/alloy-primitives-wrapper.git?rev=2683b5d133ebd1035afb98285fb8a50209a5dc19#2683b5d133ebd1035afb98285fb8a50209a5dc19"
 dependencies = [
  "alloy-primitives",
  "ethereum-types",
