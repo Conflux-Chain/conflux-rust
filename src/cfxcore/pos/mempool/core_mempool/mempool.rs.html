@@ -196,28 +196,23 @@
 <a href=#196 id=196 data-nosnippet>196</a>        block
 <a href=#197 id=197 data-nosnippet>197</a>    }
 <a href=#198 id=198 data-nosnippet>198</a>
-<a href=#199 id=199 data-nosnippet>199</a>    <span class="doccomment">/// Periodic core mempool garbage collection.
-<a href=#200 id=200 data-nosnippet>200</a>    /// Removes all expired transactions.
+<a href=#199 id=199 data-nosnippet>199</a>    <span class="doccomment">/// Periodic core mempool garbage collection. Removes all expired
+<a href=#200 id=200 data-nosnippet>200</a>    /// transactions by system TTL.
 <a href=#201 id=201 data-nosnippet>201</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>gc(<span class="kw-2">&amp;mut </span><span class="self">self</span>) { <span class="self">self</span>.transactions.gc_by_system_ttl(); }
 <a href=#202 id=202 data-nosnippet>202</a>
-<a href=#203 id=203 data-nosnippet>203</a>    <span class="doccomment">/// Garbage collection based on client-specified expiration time.
-<a href=#204 id=204 data-nosnippet>204</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>gc_by_expiration_time(<span class="kw-2">&amp;mut </span><span class="self">self</span>, block_time: Duration) {
-<a href=#205 id=205 data-nosnippet>205</a>        <span class="self">self</span>.transactions.gc_by_expiration_time(block_time);
-<a href=#206 id=206 data-nosnippet>206</a>    }
-<a href=#207 id=207 data-nosnippet>207</a>
-<a href=#208 id=208 data-nosnippet>208</a>    <span class="doccomment">/// Read `count` transactions from timeline since `timeline_id`.
-<a href=#209 id=209 data-nosnippet>209</a>    /// Returns block of transactions and new last_timeline_id.
-<a href=#210 id=210 data-nosnippet>210</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>read_timeline(
-<a href=#211 id=211 data-nosnippet>211</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>, timeline_id: u64, count: usize,
-<a href=#212 id=212 data-nosnippet>212</a>    ) -&gt; (Vec&lt;SignedTransaction&gt;, u64) {
-<a href=#213 id=213 data-nosnippet>213</a>        <span class="self">self</span>.transactions.read_timeline(timeline_id, count)
-<a href=#214 id=214 data-nosnippet>214</a>    }
-<a href=#215 id=215 data-nosnippet>215</a>
-<a href=#216 id=216 data-nosnippet>216</a>    <span class="doccomment">/// Read transactions from timeline from `start_id` (exclusive) to `end_id`
-<a href=#217 id=217 data-nosnippet>217</a>    /// (inclusive).
-<a href=#218 id=218 data-nosnippet>218</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>timeline_range(
-<a href=#219 id=219 data-nosnippet>219</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>, start_id: u64, end_id: u64,
-<a href=#220 id=220 data-nosnippet>220</a>    ) -&gt; Vec&lt;SignedTransaction&gt; {
-<a href=#221 id=221 data-nosnippet>221</a>        <span class="self">self</span>.transactions.timeline_range(start_id, end_id)
-<a href=#222 id=222 data-nosnippet>222</a>    }
-<a href=#223 id=223 data-nosnippet>223</a>}</code></pre></div></section></main></body></html>
+<a href=#203 id=203 data-nosnippet>203</a>    <span class="doccomment">/// Read `count` transactions from timeline since `timeline_id`.
+<a href=#204 id=204 data-nosnippet>204</a>    /// Returns block of transactions and new last_timeline_id.
+<a href=#205 id=205 data-nosnippet>205</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>read_timeline(
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>, timeline_id: u64, count: usize,
+<a href=#207 id=207 data-nosnippet>207</a>    ) -&gt; (Vec&lt;SignedTransaction&gt;, u64) {
+<a href=#208 id=208 data-nosnippet>208</a>        <span class="self">self</span>.transactions.read_timeline(timeline_id, count)
+<a href=#209 id=209 data-nosnippet>209</a>    }
+<a href=#210 id=210 data-nosnippet>210</a>
+<a href=#211 id=211 data-nosnippet>211</a>    <span class="doccomment">/// Read transactions from timeline from `start_id` (exclusive) to `end_id`
+<a href=#212 id=212 data-nosnippet>212</a>    /// (inclusive).
+<a href=#213 id=213 data-nosnippet>213</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>timeline_range(
+<a href=#214 id=214 data-nosnippet>214</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>, start_id: u64, end_id: u64,
+<a href=#215 id=215 data-nosnippet>215</a>    ) -&gt; Vec&lt;SignedTransaction&gt; {
+<a href=#216 id=216 data-nosnippet>216</a>        <span class="self">self</span>.transactions.timeline_range(start_id, end_id)
+<a href=#217 id=217 data-nosnippet>217</a>    }
+<a href=#218 id=218 data-nosnippet>218</a>}</code></pre></div></section></main></body></html>
