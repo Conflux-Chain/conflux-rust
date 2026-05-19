@@ -7,6 +7,7 @@ use cfx_bytes::Bytes;
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
 use cfx_types::{Bloom, Space, H256, U256, U64};
 use malloc_size_of_derive::MallocSizeOf;
+use primitives::CompatBool;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
@@ -30,7 +31,7 @@ impl Encodable for ExecTrace {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(2);
         s.append(&self.action);
-        s.append(&self.valid);
+        s.append(&CompatBool(self.valid));
     }
 }
 
@@ -43,7 +44,7 @@ impl Decodable for ExecTrace {
             }),
             2 => Ok(ExecTrace {
                 action: d.val_at(0)?,
-                valid: d.val_at(1)?,
+                valid: d.val_at::<CompatBool>(1)?.0,
             }),
             _ => Err(DecoderError::RlpInvalidLength),
         }
@@ -135,5 +136,5 @@ impl DatabaseDecodable for BlockExecTraces {
 }
 
 impl DatabaseEncodable for BlockExecTraces {
-    fn db_encode(&self) -> Bytes { rlp::encode(self) }
+    fn db_encode(&self) -> Bytes { rlp::encode(self).to_vec() }
 }

@@ -48,6 +48,7 @@ members = [
     "crates/util/metrics",
     "crates/util/priority-send-queue",
     "crates/util/random_crash",
+    "crates/util/rlp_compat",
     "crates/util/sha3-macro",
     "crates/execution/solidity-abi",
     "crates/execution/solidity-abi-derive",
@@ -262,7 +263,7 @@ revm-primitives = "21.0"
 revm-interpreter = "31.1"
 revm-context-interface = "13.1"
 revm-bytecode = "7.1"
-alloy-primitives-wrapper = { git = "https://github.com/Conflux-Chain/alloy-primitives-wrapper.git", rev = "df227569c85fd1be773134e49f4994fa5b2b8643" }
+alloy-primitives-wrapper = { git = "https://github.com/Conflux-Chain/alloy-primitives-wrapper.git", rev = "2683b5d133ebd1035afb98285fb8a50209a5dc19" }
 
 # jsonrpc framework(old)
 jsonrpc-core = "18.0.0"
@@ -306,7 +307,7 @@ snmalloc-rs = { version = "0.3.7", features = ["build_cc"] }
 
 # crypto & hash
 #fixed-hash = "0.5"
-keccak-hash = "0.5"
+keccak-hash = "0.12"
 tiny-keccak = "2.0"
 bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = [
     "multicore",
@@ -420,12 +421,13 @@ chrono = "0.4"
 duration-str = "0.17"
 
 # parity crates
-rlp = "0.4.0"
+rlp = "0.6"
 rlp_derive = { package = "rlp-derive", version = "0.2.0" }
+rlp-compat = { path = "./crates/util/rlp_compat" }
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
-ethereum-types = "0.9"
+ethereum-types = "0.16.0"
 parity-wordlist = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 parity-path = "0.1"
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev = "b523017108bb2d571a7a69bd97bc406e63bc7a9d" }

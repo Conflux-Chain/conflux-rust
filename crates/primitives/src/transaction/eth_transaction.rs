@@ -28,8 +28,8 @@ impl Eip155Transaction {
                     // phantom transactions with matching
                     // fields from different senders
                     // will have different hashes
-                    r: U256::from(from.address.as_ref()),
-                    s: U256::from(from.address.as_ref()),
+                    r: U256::from_big_endian(from.address.as_ref()),
+                    s: U256::from_big_endian(from.address.as_ref()),
                     v: 0,
                 },
                 hash: H256::zero(),

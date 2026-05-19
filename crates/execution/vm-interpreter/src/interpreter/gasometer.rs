@@ -18,7 +18,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Space, H256, U256};
+use cfx_types::{u256_to_h256_be, Space, U256};
 use cfx_vm_types::{self as vm, Spec};
 use primitives::extract_7702_payload;
 use std::cmp;
@@ -150,8 +150,7 @@ impl<Gas: CostType> Gasometer<Gas> {
             }
             instructions::SLOAD => {
                 let gas = if spec.cip645.eip_cold_warm_access {
-                    let mut key = H256::zero();
-                    stack.peek(0).to_big_endian(&mut key.0);
+                    let key = u256_to_h256_be(*stack.peek(0));
                     if context.is_warm_storage_entry(&key)? {
                         spec.warm_access_gas
                     } else {
@@ -532,8 +531,7 @@ fn calc_sstore_gas<Gas: CostType>(
         return Ok((spec.call_stipend + 1, 0));
     }
 
-    let mut key = H256::zero();
-    stack.peek(0).to_big_endian(&mut key.0);
+    let key = u256_to_h256_be(*stack.peek(0));
 
     let new_val = *stack.peek(1);
     let warm_val = context.is_warm_storage_entry(&key)?;
