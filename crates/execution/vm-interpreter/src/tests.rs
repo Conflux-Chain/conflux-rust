@@ -1328,8 +1328,7 @@ fn assert_set_contains<T: Debug + Eq + PartialEq + Hash>(
 }
 
 fn assert_store(ctx: &MockContext, pos: u64, val: &str) {
-    let mut key = vec![0; 32];
-    U256::from(pos).to_big_endian(key.as_mut());
+    let key = U256::from(pos).to_big_endian().to_vec();
     assert_eq!(
         ctx.store.get(&key).unwrap(),
         &H256::from_str(val).unwrap().into_uint()

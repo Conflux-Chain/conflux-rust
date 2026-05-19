@@ -201,7 +201,7 @@ impl<'a> ContextTrait for Context<'a> {
         }
     }
 
-    fn transient_storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
+    fn transient_storage_at(&self, key: &[u8]) -> vm::Result<U256> {
         let receiver = AddressWithSpace {
             address: self.origin.address,
             space: self.space,

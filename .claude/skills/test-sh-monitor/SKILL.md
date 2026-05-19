@@ -31,7 +31,7 @@ Remember the chosen interval — it will be used in the monitoring loop in Step 
 
 ## Step 1: Pre-flight Checks
 
-Confirm these four items before launching to avoid discovering environment problems after a long wait:
+Confirm these five items before launching to avoid discovering environment problems after a long wait:
 
 ```bash
 # 1. uv is present
@@ -45,7 +45,12 @@ ls -la target 2>/dev/null || echo "target not present (OK, test.sh will handle)"
 
 # 4. venv (test.sh creates it automatically; this is just a sanity check)
 ls .venv 2>/dev/null && echo "venv exists" || echo "venv absent (test.sh will create it)"
+
+# 5. fmt check (fast — catches formatting issues before starting the long build)
+bash cargo_fmt.sh -- --check
 ```
+
+If fmt check fails, fix formatting before launching test.sh — there is no point waiting for a build that will eventually fail the same check.
 
 If submodules are missing:
 ```bash
@@ -59,16 +64,18 @@ git submodule update --init --recursive
 **Prefer `run_in_background: true`** so the framework owns the process and notifies you on exit, structurally eliminating zombie process issues:
 
 ```bash
-bash dev-support/test.sh > /tmp/test_run.log 2>&1
+bash -c 'set -o pipefail; bash dev-support/test.sh 2>&1 | tee /tmp/test_run.log'
 # (with run_in_background: true)
 ```
+
+> **Why pipe instead of `> file 2>&1`?** test.sh's check functions use `tee /dev/stderr` internally. When stderr is redirected to a regular file, `tee` opens `/dev/stderr` via `/proc/self/fd/2`, which creates a new file description starting at position 0 — overwriting earlier content (including phase anchors). With a pipe, there is no file position, so `tee /dev/stderr` appends correctly. `pipefail` ensures the exit code reflects test.sh, not tee.
 
 > **Why prefer run_in_background?** The framework-owned process is not a child of the current shell, so the framework reaps it — no need to handle zombies in the monitoring loop.
 
 If you must background it manually, **do not use `kill -0` as the loop condition** — it cannot distinguish a running process from a zombie (`kill -0` returns 0 for both). Use `ps -o stat=` instead:
 
 ```bash
-bash dev-support/test.sh > /tmp/test_run.log 2>&1 &
+bash -c 'set -o pipefail; bash dev-support/test.sh 2>&1 | tee /tmp/test_run.log' &
 PID=$!
 while [[ "$(ps -p $PID -o stat= 2>/dev/null)" =~ ^[^Z] ]]; do
     sleep 10
@@ -91,7 +98,7 @@ The core check logic is the same regardless of tool availability:
 PASSED=$(grep -c "✓" /tmp/test_run.log 2>/dev/null || echo 0)
 FAILED=$(grep -cE "[✖✗]" /tmp/test_run.log 2>/dev/null || echo 0)
 RUNNING=$(pgrep -f "bash dev-support/test.sh" > /dev/null 2>&1 && echo "RUNNING" || echo "STOPPED")
-PHASE=$(grep -oE "Phase [0-9]/[0-9]: [^=]+" /tmp/test_run.log 2>/dev/null | tail -1 || echo "unknown")
+PHASE=$(grep -oE "(Phase [0-9]/[0-9]: [^=]+|Fmt check( passed)?)" /tmp/test_run.log 2>/dev/null | tail -1 || echo "unknown")
 echo "[$(date '+%H:%M:%S')] $RUNNING phase=[$PHASE] passed=$PASSED failed=$FAILED"
 tail -3 /tmp/test_run.log
 ```
@@ -117,7 +124,7 @@ while true; do
   RUNNING=$(pgrep -f "bash dev-support/test.sh" > /dev/null 2>&1 && echo "yes" || echo "no")
   PASSED=$(grep -c "✓" /tmp/test_run.log 2>/dev/null || echo 0)
   FAILED=$(grep -cE "[✖✗]" /tmp/test_run.log 2>/dev/null || echo 0)
-  PHASE=$(grep -oE "Phase [0-9]/[0-9]: [^=]+" /tmp/test_run.log 2>/dev/null | tail -1)
+  PHASE=$(grep -oE "(Phase [0-9]/[0-9]: [^=]+|Fmt check( passed)?)" /tmp/test_run.log 2>/dev/null | tail -1)
 
   if [ "$PHASE" != "$PREV_PHASE" ]; then
     echo "[$(date '+%H:%M:%S')] $PHASE | passed=$PASSED failed=$FAILED"
@@ -149,7 +156,7 @@ Use the foreground Bash + background sleep alternating pattern:
 PASSED=$(grep -c "✓" /tmp/test_run.log 2>/dev/null || echo 0)
 FAILED=$(grep -cE "[✖✗]" /tmp/test_run.log 2>/dev/null || echo 0)
 RUNNING=$(pgrep -f "bash dev-support/test.sh" > /dev/null 2>&1 && echo "RUNNING" || echo "STOPPED")
-PHASE=$(grep -oE "Phase [0-9]/[0-9]: [^=]+" /tmp/test_run.log 2>/dev/null | tail -1 || echo "unknown")
+PHASE=$(grep -oE "(Phase [0-9]/[0-9]: [^=]+|Fmt check( passed)?)" /tmp/test_run.log 2>/dev/null | tail -1 || echo "unknown")
 echo "[$(date '+%H:%M:%S')] $RUNNING phase=[$PHASE] passed=$PASSED failed=$FAILED"
 tail -3 /tmp/test_run.log
 ```
@@ -165,7 +172,13 @@ On timer notification → run Step A → run Step B → repeat.
 
 ---
 
-## The Four Phases
+## Phases
+
+### Pre-check: Fmt
+- **Anchor:** `=== Fmt check ===`
+- **Success anchor:** `=== Fmt check passed ===`
+- **Behavior:** runs `cargo_fmt.sh -- --check` (nightly rustfmt across all workspaces). Fast (seconds). On failure, process exits immediately — no success anchor, no build phases.
+- **Note:** Step 1 pre-flight already runs this check independently. If you see fmt failure here, it means the pre-flight was skipped or code changed between pre-flight and launch.
 
 ### Phase 1: cargo build (main project)
 - **Anchor:** `=== Phase 1/4: Building main project ===`
@@ -176,8 +189,6 @@ On timer notification → run Step A → run Step B → repeat.
 ### Phase 2: cargo build consensus_bench
 - **Anchor:** `=== Phase 2/4: Building consensus_bench ===`
 - **Success anchor:** `=== Phase 2/4: Build succeeded ===`
-- **Special risk:** when the worktree is nested inside the parent repo, Cargo may walk up and resolve the wrong workspace
-- **Failure signal:** `error: current package believes it's in a workspace`
 
 ### Phase 3: test_all.py (integration tests) — requires active monitoring
 - **Anchor:** `=== Phase 3/4: Integration tests ===`
@@ -231,7 +242,7 @@ git submodule update --init --recursive
 ln -s /conflux-rust/build /home/ubuntu/worktrees/my-test/build
 
 # 4. Launch (run_in_background: true)
-bash dev-support/test.sh > /tmp/test_run.log 2>&1
+bash -c 'set -o pipefail; bash dev-support/test.sh 2>&1 | tee /tmp/test_run.log'
 ```
 
 ---

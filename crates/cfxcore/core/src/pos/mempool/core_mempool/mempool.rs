@@ -196,14 +196,9 @@ impl Mempool {
         block
     }
 
-    /// Periodic core mempool garbage collection.
-    /// Removes all expired transactions.
+    /// Periodic core mempool garbage collection. Removes all expired
+    /// transactions by system TTL.
     pub(crate) fn gc(&mut self) { self.transactions.gc_by_system_ttl(); }
-
-    /// Garbage collection based on client-specified expiration time.
-    pub(crate) fn gc_by_expiration_time(&mut self, block_time: Duration) {
-        self.transactions.gc_by_expiration_time(block_time);
-    }
 
     /// Read `count` transactions from timeline since `timeline_id`.
     /// Returns block of transactions and new last_timeline_id.

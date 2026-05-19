@@ -509,7 +509,7 @@ impl RpcImpl {
             )
             .map_err(into_rpc_err)?;
 
-        Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
+        Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes().to_vec()))
     }
 
     async fn storage_root(
