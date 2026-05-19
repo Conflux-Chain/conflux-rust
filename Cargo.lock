@@ -2165,7 +2165,6 @@ dependencies = [
  "diem-config",
  "diem-crypto",
  "diem-logger",
- "diem-temppath",
  "diem-types",
  "either",
  "executor",
@@ -2227,6 +2226,7 @@ dependencies = [
  "storage-interface",
  "strum 0.26.3",
  "strum_macros 0.26.4",
+ "tempfile",
  "thiserror 2.0.18",
  "threadpool",
  "throttling",
@@ -2592,7 +2592,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -3235,7 +3235,6 @@ dependencies = [
  "diem-global-constants",
  "diem-logger",
  "diem-secure-storage",
- "diem-temppath",
  "diem-types",
  "serde",
  "thiserror 1.0.63",
@@ -3322,11 +3321,11 @@ dependencies = [
  "chrono",
  "diem-crypto",
  "diem-logger",
- "diem-temppath",
  "diem-types",
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 1.0.63",
 ]
 
@@ -3336,14 +3335,6 @@ version = "0.1.0"
 dependencies = [
  "diem-crypto",
  "diem-types",
-]
-
-[[package]]
-name = "diem-temppath"
-version = "0.1.0"
-dependencies = [
- "hex",
- "rand 0.8.5",
 ]
 
 [[package]]
@@ -4964,7 +4955,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6203,15 +6194,14 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
-version = "0.10.72"
+version = "0.10.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fedfea7d58a1f73118430a55da6a286e7b044961736ce96a16a17068ea25e5da"
+checksum = "bf0b434746ee2832f4f0baf10137e1cabb18cbe6912c69e2e33263c45250f542"
 dependencies = [
  "bitflags 2.10.0",
  "cfg-if 1.0.0",
  "foreign-types",
  "libc",
- "once_cell",
  "openssl-macros",
  "openssl-sys",
 ]
@@ -6235,9 +6225,9 @@ checksum = "d05e27ee213611ffe7d6348b942e8f942b37114c00cc03cec254295a4a17852e"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.108"
+version = "0.9.115"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e145e1651e858e820e4860f7b9c5e169bc1d8ce1c86043be79fa7b7634821847"
+checksum = "158fe5b292746440aa6e7a7e690e55aeb72d41505e2804c23c6973ad0e9c9781"
 dependencies = [
  "cc",
  "libc",
@@ -6694,7 +6684,6 @@ dependencies = [
  "diem-config",
  "diem-crypto",
  "diem-logger",
- "diem-temppath",
  "diem-types",
  "itertools 0.14.0",
  "move-core-types",
@@ -6707,6 +6696,7 @@ dependencies = [
  "schemadb",
  "serde",
  "storage-interface",
+ "tempfile",
  "thiserror 2.0.18",
 ]
 
@@ -6870,6 +6860,7 @@ dependencies = [
  "once_cell",
  "rand 0.9.3",
  "rlp 0.4.6",
+ "rlp-compat",
  "rlp-derive",
  "serde",
  "serde_derive",
@@ -7672,6 +7663,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "rlp"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa24e92bb2a83198bb76d661a71df9f7076b8c420b8696e4d3d97d50d94479e3"
+dependencies = [
+ "bytes",
+ "rustc-hex",
+]
+
+[[package]]
+name = "rlp-compat"
+version = "0.1.0"
+dependencies = [
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "rlp 0.4.6",
+ "rlp 0.6.1",
+]
+
+[[package]]
 name = "rlp-derive"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7699,12 +7710,23 @@ checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 
 [[package]]
 name = "rpassword"
-version = "5.0.1"
+version = "7.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffc936cf8a7ea60c58f030fd36a612a48f440610214dc54bc36431f9ea0c3efb"
+checksum = "5ac5b223d9738ef56e0b98305410be40fa0941bf6036c56f1506751e43552d64"
 dependencies = [
  "libc",
- "winapi 0.3.9",
+ "rtoolbox",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "rtoolbox"
+version = "0.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50a0e551c1e27e1731aba276dbeaeac73f53c7cd34d1bda485d02bd1e0f36844"
+dependencies = [
+ "libc",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7815,7 +7837,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7885,7 +7907,7 @@ dependencies = [
  "security-framework 3.5.1",
  "security-framework-sys",
  "webpki-root-certs 0.26.11",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7941,13 +7963,13 @@ dependencies = [
  "diem-global-constants",
  "diem-logger",
  "diem-secure-storage",
- "diem-temppath",
  "diem-types",
  "log",
  "once_cell",
  "proptest",
  "rand 0.8.5",
  "serde",
+ "tempfile",
  "thiserror 2.0.18",
 ]
 
@@ -7994,9 +8016,9 @@ dependencies = [
  "anyhow",
  "byteorder",
  "diem-logger",
- "diem-temppath",
  "proptest",
  "rocksdb",
+ "tempfile",
 ]
 
 [[package]]

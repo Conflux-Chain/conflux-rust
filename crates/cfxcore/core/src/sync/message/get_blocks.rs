@@ -17,7 +17,7 @@ use crate::{
 use cfx_parameters::sync::MAX_PACKET_SIZE;
 use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use primitives::Block;
+use primitives::{Block, CompatBool};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{any::Any, time::Duration};
 
@@ -35,7 +35,7 @@ impl Encodable for GetBlocks {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(3)
             .append(&self.request_id)
-            .append(&self.with_public)
+            .append(&CompatBool(self.with_public))
             .append_list(&self.hashes);
     }
 }
@@ -44,7 +44,7 @@ impl Decodable for GetBlocks {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         Ok(GetBlocks {
             request_id: rlp.val_at(0)?,
-            with_public: rlp.val_at(1)?,
+            with_public: rlp.val_at::<CompatBool>(1)?.0,
             hashes: rlp.list_at(2)?,
             preferred_node_type: None,
         })

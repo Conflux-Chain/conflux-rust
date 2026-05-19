@@ -48,6 +48,7 @@ members = [
     "crates/util/metrics",
     "crates/util/priority-send-queue",
     "crates/util/random_crash",
+    "crates/util/rlp_compat",
     "crates/util/sha3-macro",
     "crates/execution/solidity-abi",
     "crates/execution/solidity-abi-derive",
@@ -70,7 +71,6 @@ members = [
     "crates/rpc/rpc-cfx-api",
     "crates/pos/common/bounded-executor",
     "crates/pos/common/logger",
-    "crates/pos/common/temppath",
     "crates/pos/config/global-constants",
     "crates/pos/consensus/consensus-types",
     "crates/pos/config/config",
@@ -193,7 +193,6 @@ bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 #diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
 channel = { path = "./crates/pos/common/channel" }
 diem-logger = { path = "./crates/pos/common/logger" }
-diem-temppath = { path = "./crates/pos/common/temppath" }
 diem-global-constants = { path = "./crates/pos/config/global-constants" }
 diem-config = { path = "./crates/pos/config/config" }
 consensus-types = { path = "./crates/pos/consensus/consensus-types" }
@@ -357,7 +356,7 @@ strum_macros = "0.26"
 toml = "0.8"
 app_dirs = "1.2.1"
 slab = "0.4"
-rpassword = "5.0.1"
+rpassword = "7.5"
 static_assertions = "1.1.0"
 transient-hashmap = "0.4"
 num_cpus = "1.17"
@@ -423,6 +422,7 @@ duration-str = "0.17"
 # parity crates
 rlp = "0.4.0"
 rlp_derive = { package = "rlp-derive", version = "0.2.0" }
+rlp-compat = { path = "./crates/util/rlp_compat" }
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
