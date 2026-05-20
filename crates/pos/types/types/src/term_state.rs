@@ -1425,14 +1425,18 @@ mod tests {
     //! `tx.sender()` a non-forgeable identity at mempool admission.
 
     use super::*;
-    use crate::block_info::PivotBlockDecision;
+    use crate::{
+        block_info::PivotBlockDecision, transaction::ElectionPayload,
+        validator_config::ConsensusVRFProof,
+    };
     use diem_crypto::{
-        bls::BLSPrivateKey, ec_vrf::EcVrfPrivateKey, PrivateKey, Uniform,
+        bls::BLSPrivateKey,
+        ec_vrf::{EcVrfPrivateKey, EcVrfProof},
+        PrivateKey, Uniform,
     };
     use rand::{rngs::StdRng, SeedableRng};
 
     struct Keys {
-        bls_sk: BLSPrivateKey,
         bls_pk: ConsensusPublicKey,
         vrf_pk: ConsensusVRFPublicKey,
         addr: AccountAddress,
@@ -1446,11 +1450,15 @@ mod tests {
         let vrf_pk = vrf_sk.public_key();
         let node_id = NodeID::new(bls_pk.clone(), vrf_pk.clone());
         Keys {
-            bls_sk,
             bls_pk,
             vrf_pk,
             addr: node_id.addr,
         }
+    }
+
+    // simple-validation doesn't verify the VRF proof, so any bytes work.
+    fn dummy_vrf_proof() -> ConsensusVRFProof {
+        EcVrfProof::try_from(&[][..]).unwrap()
     }
 
     fn state_with_node(k: &Keys) -> PosState {
@@ -1519,8 +1527,6 @@ mod tests {
             ),
             None,
         );
-        // sanity: keep the keypair owner alive — silences unused warning.
-        let _ = alice.bls_sk;
     }
 
     #[test]
@@ -1556,7 +1562,36 @@ mod tests {
             state.validate_dispute_simple(&alice.addr, &alice.bls_pk),
             None,
         );
-        let _ = alice.bls_sk;
+    }
+
+    fn election_payload_for(k: &Keys) -> ElectionPayload {
+        ElectionPayload {
+            public_key: k.bls_pk.clone(),
+            vrf_public_key: k.vrf_pk.clone(),
+            target_term: 1,
+            vrf_proof: dummy_vrf_proof(),
+        }
+    }
+
+    #[test]
+    fn election_rejects_signer_mismatch() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        // Payload claims alice's keys but `tx.sender` is mallory's
+        // address. The payload-identity check fires before the
+        // node_map lookup, so this rejects regardless of whether
+        // mallory is registered.
+        let payload = election_payload_for(&alice);
+        assert_eq!(
+            state.validate_election_simple(
+                &mallory.addr,
+                &mallory.bls_pk,
+                &payload
+            ),
+            Some(DiscardedVMStatus::ELECTION_SIGNER_MISMATCH),
+        );
     }
 
     #[test]
@@ -1565,20 +1600,15 @@ mod tests {
         let mallory = keys_from_seed(2);
         let state = state_with_node(&alice);
 
-        // Attacker constructs a payload claiming alice's keys, sets
-        // sender = alice.addr (so the payload-pk-derived addr check
-        // passes), but signs with mallory's BLS key.
-        // We can't easily construct an ElectionPayload without a real
-        // VRF proof; instead, test the auth-key binding via the helper
-        // that `validate_election_simple` uses.
+        // Sender = alice.addr (so the payload-pk-derived addr check
+        // passes), but the authenticator pubkey is mallory's.
+        let payload = election_payload_for(&alice);
         assert_eq!(
-            state
-                .check_sender_owns_auth_key(
-                    &alice.addr,
-                    &mallory.bls_pk,
-                    DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
-                )
-                .err(),
+            state.validate_election_simple(
+                &alice.addr,
+                &mallory.bls_pk,
+                &payload
+            ),
             Some(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH),
         );
     }

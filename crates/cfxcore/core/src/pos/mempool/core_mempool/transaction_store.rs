@@ -23,7 +23,10 @@ use diem_types::{
     mempool_status::{MempoolStatus, MempoolStatusCode},
     transaction::{SignedTransaction, TransactionPayload},
 };
-use std::collections::{hash_map::Values, HashMap, HashSet};
+use std::{
+    collections::{hash_map::Values, HashMap, HashSet},
+    time::Duration,
+};
 
 /// TransactionStore is in-memory storage for all transactions in mempool.
 pub struct TransactionStore {
@@ -38,6 +41,9 @@ pub struct TransactionStore {
     timeline_index: TimelineIndex,
 
     // Caps live txns per sender to bound Byzantine-validator spam.
+    // Invariant: incremented in `insert` and decremented in
+    // `index_remove`; every removal of `self.transactions` must route
+    // through `index_remove` to keep the count honest.
     per_sender_count: HashMap<AccountAddress, usize>,
     capacity_per_sender: usize,
 }
@@ -101,11 +107,17 @@ impl TransactionStore {
         let sender_entry = self.per_sender_count.entry(address).or_insert(0);
         if *sender_entry >= self.capacity_per_sender {
             let sender_count = *sender_entry;
-            diem_debug!(
-                sender = %address,
-                sender_count = sender_count,
-                cap = self.capacity_per_sender,
-                "mempool: per-sender capacity reached, rejecting txn",
+            // Surface at warn so operators see spam in default logs;
+            // rate-limited because a sustained attack can fire this on
+            // every gossip txn.
+            diem_sample!(
+                SampleRate::Duration(Duration::from_secs(60)),
+                diem_warn!(
+                    sender = %address,
+                    sender_count = sender_count,
+                    cap = self.capacity_per_sender,
+                    "mempool: per-sender capacity reached, rejecting txn",
+                )
             );
             return MempoolStatus::new(MempoolStatusCode::TooManyTransactions)
                 .with_message(format!(
@@ -271,6 +283,9 @@ mod tests {
         TransactionStore::new(&cfg)
     }
 
+    // Address is arbitrary; per_sender_count keys on the address only,
+    // so it doesn't need to match the BLS-derived NodeID for these
+    // bookkeeping tests.
     fn new_sender() -> (BLSPrivateKey, BLSPublicKey, AccountAddress) {
         let sk = BLSPrivateKey::generate_for_testing();
         let pk = sk.public_key();
