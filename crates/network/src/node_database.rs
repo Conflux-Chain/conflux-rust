@@ -376,7 +376,7 @@ impl NodeDatabase {
         // node table
         self.trusted_node_tag_index
             .sample(count, key, value)
-            .unwrap_or_else(HashSet::new)
+            .unwrap_or_default()
     }
 
     pub fn get_nodes(

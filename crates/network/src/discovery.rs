@@ -360,7 +360,7 @@ impl Discovery {
         let msg: FindNodeMessage = rlp.as_val()?;
         self.check_timestamp(msg.expire_timestamp)?;
         let neighbors = msg.sample(
-            &*uio.node_db.read(),
+            &uio.node_db.read(),
             &self.ip_filter,
             self.config.discover_node_count,
         )?;

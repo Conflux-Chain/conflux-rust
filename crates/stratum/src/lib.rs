@@ -201,7 +201,7 @@ async fn handle_connection(
                 let method = req.method.clone();
 
                 // Call the method
-                match methods.raw_json_request(&trimmed, 1).await {
+                match methods.raw_json_request(trimmed, 1).await {
                     Ok((response_raw, _rx)) => {
                         let response_str = response_raw.get();
                         debug!("Response for {}: {}", method, response_str);
@@ -319,7 +319,7 @@ impl StratumImpl {
 
         let next_request_id = {
             let mut counter = self.notify_counter.write();
-            if *counter == ::std::u32::MAX {
+            if *counter == u32::MAX {
                 *counter = NOTIFY_COUNTER_INITIAL;
             } else {
                 *counter += 1

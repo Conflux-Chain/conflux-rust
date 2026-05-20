@@ -131,9 +131,8 @@ impl TransactionGenerator {
         let mut tx_n = 0;
         // Wait for initial tx
         loop {
-            match *txgen.state.read() {
-                TransGenState::Stop => return,
-                _ => {}
+            if let TransGenState::Stop = *txgen.state.read() {
+                return;
             }
 
             // Do not generate tx in catch_up_mode
@@ -151,12 +150,11 @@ impl TransactionGenerator {
             let address = key_pair.address();
             let secret = key_pair.secret().clone();
             addresses.push(address);
-            nonce_map.insert(address.clone(), 0.into());
+            nonce_map.insert(address, 0.into());
 
             let balance = genesis_accounts.get(&address).cloned();
 
-            balance_map
-                .insert(address.clone(), balance.unwrap_or(U256::zero()));
+            balance_map.insert(address, balance.unwrap_or(U256::zero()));
             address_secret_pair.insert(address, secret);
         }
 
@@ -166,9 +164,8 @@ impl TransactionGenerator {
 
         let account_count = address_secret_pair.len();
         loop {
-            match *txgen.state.read() {
-                TransGenState::Stop => return,
-                _ => {}
+            if let TransGenState::Stop = *txgen.state.read() {
+                return;
             }
 
             // Randomly select sender and receiver.
@@ -194,8 +191,8 @@ impl TransactionGenerator {
                 .get_state_account_info(&sender_address.with_native_space())
                 .unwrap();
             if nonce.cmp(sender_nonce) != Ordering::Equal {
-                *sender_nonce = nonce.clone();
-                balance_map.insert(sender_address.clone(), balance.clone());
+                *sender_nonce = nonce;
+                balance_map.insert(sender_address, balance);
             }
             trace!(
                 "receiver={:?} value={:?} nonce={:?}",
@@ -219,8 +216,7 @@ impl TransactionGenerator {
             .into();
 
             let signed_tx = tx.sign(&address_secret_pair[&sender_address]);
-            let mut tx_to_insert = Vec::new();
-            tx_to_insert.push(signed_tx.transaction);
+            let tx_to_insert = vec![signed_tx.transaction];
             let (txs, fail) =
                 txgen.txpool.insert_new_transactions(tx_to_insert);
             if fail.is_empty() {
@@ -297,14 +293,14 @@ impl DirectTransactionGenerator {
             start_erc20_balance,
         );
         let mut accounts = HashMap::<Address, (KeyPair, Account, U256)>::new();
-        accounts.insert(start_address.clone(), info);
-        let address_by_index = vec![start_address.clone()];
+        accounts.insert(start_address, info);
+        let address_by_index = vec![start_address];
 
         let mut erc20_address = cal_contract_address(
             CreateContractAddressType::FromSenderNonceAndCodeHash,
             // A fake block_number. There field is unnecessary in Ethereum
             // replay test.
-            &contract_creator,
+            contract_creator,
             &0.into(),
             // A fake code. There field is unnecessary in Ethereum replay test.
             &[],
@@ -335,7 +331,7 @@ impl DirectTransactionGenerator {
 
             let sender_index: usize = random_range(0..number_of_accounts);
             let sender_address =
-                self.address_by_index.get(sender_index).unwrap().clone();
+                *self.address_by_index.get(sender_index).unwrap();
             let sender_kp;
             let sender_balance;
             let sender_nonce;
@@ -369,26 +365,25 @@ impl DirectTransactionGenerator {
             let receiver_address = match is_send_to_new_address {
                 false => {
                     let index: usize = random_range(0..number_of_accounts);
-                    self.address_by_index.get(index).unwrap().clone()
+                    *self.address_by_index.get(index).unwrap()
                 }
                 true => loop {
                     let kp =
                         Random.generate().expect("Fail to generate KeyPair.");
                     let address = public_to_address(kp.public(), true);
-                    if self.accounts.get(&address).is_none() {
-                        self.accounts.insert(
-                            address,
-                            (
-                                kp,
-                                Account::new_empty_with_balance(
-                                    &address.with_native_space(),
-                                    &0.into(), /* balance */
-                                    &0.into(), /* nonce */
-                                ),
-                                0.into(),
+                    if let std::collections::hash_map::Entry::Vacant(e) =
+                        self.accounts.entry(address)
+                    {
+                        e.insert((
+                            kp,
+                            Account::new_empty_with_balance(
+                                &address.with_native_space(),
+                                &0.into(), /* balance */
+                                &0.into(), /* nonce */
                             ),
-                        );
-                        self.address_by_index.push(address.clone());
+                            0.into(),
+                        ));
+                        self.address_by_index.push(address);
 
                         break address;
                     }
@@ -433,7 +428,7 @@ impl DirectTransactionGenerator {
 
             let sender_index: usize = random_range(0..number_of_accounts);
             let sender_address =
-                self.address_by_index.get(sender_index).unwrap().clone();
+                *self.address_by_index.get(sender_index).unwrap();
             let sender_kp;
             let sender_balance;
             let sender_erc20_balance;
@@ -442,7 +437,7 @@ impl DirectTransactionGenerator {
                 let sender_info = self.accounts.get(&sender_address).unwrap();
                 sender_kp = sender_info.0.clone();
                 sender_balance = sender_info.1.balance;
-                sender_erc20_balance = sender_info.2.clone();
+                sender_erc20_balance = sender_info.2;
                 sender_nonce = sender_info.1.nonce;
             }
 
@@ -468,7 +463,7 @@ impl DirectTransactionGenerator {
 
             let receiver_index = random_range(0..number_of_accounts);
             let receiver_address =
-                self.address_by_index.get(receiver_index).unwrap().clone();
+                *self.address_by_index.get(receiver_index).unwrap();
 
             if receiver_index == sender_index {
                 continue;
@@ -491,7 +486,7 @@ impl DirectTransactionGenerator {
                 gas_price,
                 gas,
                 value: 0.into(),
-                action: Action::Call(self.erc20_address.clone()),
+                action: Action::Call(self.erc20_address),
                 storage_limit: 0,
                 // FIXME: We will have to setup TRANSACTION_EPOCH_BOUND to a
                 // large value to avoid FIXME: this sloppy zero

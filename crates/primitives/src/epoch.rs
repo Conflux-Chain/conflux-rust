@@ -29,8 +29,8 @@ pub enum EpochNumber {
     LatestMined,
 }
 
-impl Into<EpochNumber> for u64 {
-    fn into(self) -> EpochNumber { EpochNumber::Number(self) }
+impl From<u64> for EpochNumber {
+    fn from(val: u64) -> Self { EpochNumber::Number(val) }
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
