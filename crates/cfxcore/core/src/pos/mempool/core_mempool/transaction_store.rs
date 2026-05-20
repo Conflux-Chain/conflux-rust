@@ -51,6 +51,10 @@ pub type PivotDecisionIter<'a> =
 
 impl TransactionStore {
     pub(crate) fn new(config: &MempoolConfig) -> Self {
+        assert!(
+            config.capacity_per_sender > 0,
+            "mempool.capacity_per_sender must be > 0",
+        );
         Self {
             // main DS
             transactions: AccountTransactions::new(),
@@ -184,6 +188,11 @@ impl TransactionStore {
         self.system_ttl_index.remove(&txn);
         self.timeline_index.remove(&txn);
         let sender = txn.get_sender();
+        debug_assert!(
+            self.per_sender_count.contains_key(&sender),
+            "per_sender_count missing entry for {} at index_remove",
+            sender,
+        );
         if let Some(count) = self.per_sender_count.get_mut(&sender) {
             *count -= 1;
             if *count == 0 {
@@ -367,5 +376,11 @@ mod tests {
 
         assert_eq!(store.insert(dup).code, MempoolStatusCode::Accepted);
         assert_eq!(store.per_sender_count[&sender], 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "mempool.capacity_per_sender must be > 0")]
+    fn capacity_per_sender_zero_panics_on_construction() {
+        let _ = store_with_cap(0);
     }
 }
