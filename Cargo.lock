@@ -2300,6 +2300,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfxkey-cli"
+version = "1.0.0"
+dependencies = [
+ "cfxkey",
+ "clap",
+ "env_logger",
+ "panic_hook",
+ "rustc-hex",
+ "threadpool",
+]
+
+[[package]]
 name = "cfxstore"
 version = "0.2.1"
 dependencies = [
@@ -2926,18 +2938,6 @@ dependencies = [
  "kernel32-sys",
  "libc",
  "winapi 0.2.8",
-]
-
-[[package]]
-name = "ctxkey-cli"
-version = "1.0.0"
-dependencies = [
- "cfxkey",
- "clap",
- "env_logger",
- "panic_hook",
- "rustc-hex",
- "threadpool",
 ]
 
 [[package]]

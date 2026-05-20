@@ -88,11 +88,9 @@ impl MineState {
     /// This is a heartbeat mechanism to ensure that new or temporarily
     /// disconnected miners receive the current job.
     pub fn check_for_renotification(&self) -> Option<ProofOfWorkProblem> {
-        let Some(MineJob { problem, .. }) = self.mining_job.as_ref() else {
-            return None;
-        };
+        let MineJob { problem, .. } = self.mining_job.as_ref()?;
         if self.last_notify_at.elapsed() > Duration::from_secs(60) {
-            Some(problem.clone())
+            Some(*problem)
         } else {
             None
         }

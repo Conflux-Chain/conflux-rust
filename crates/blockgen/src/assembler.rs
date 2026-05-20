@@ -57,7 +57,7 @@ impl BlockAssembler {
 
     fn consensus_graph(&self) -> &ConsensusGraph { &self.graph.consensus }
 
-    // TODO: should not hold and pass write lock to consensus.
+    #[allow(clippy::too_many_arguments)]
     fn assemble_new_block_impl(
         &self, mut parent_hash: H256, mut referees: Vec<H256>,
         mut blame_info: StateBlameInfo, block_gas_limit: U256,
@@ -88,7 +88,7 @@ impl BlockAssembler {
             x
         } else {
             consensus_graph.check_mining_adaptive_block(
-                &mut *consensus_inner,
+                &mut consensus_inner,
                 &parent_hash,
                 &referees,
                 &expected_difficulty,
@@ -147,8 +147,7 @@ impl BlockAssembler {
         Block::new(block_header, transactions)
     }
 
-    /// Assemble a new block with specified parent and referee, this is for test
-    /// only
+    #[allow(clippy::too_many_arguments)]
     pub fn assemble_new_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
         difficulty: u64, adaptive: bool, block_gas_target: u64,
@@ -253,7 +252,7 @@ impl BlockAssembler {
             )
             .unwrap();
 
-        let best_block_hash = best_info.best_block_hash.clone();
+        let best_block_hash = best_info.best_block_hash;
         let mut referee = best_info.bounded_terminal_block_hashes.clone();
         let maybe_pos_reference = if self
             .pos_verifier
@@ -289,9 +288,7 @@ impl BlockAssembler {
         )
     }
 
-    /// Assemble a new block without nonce and with options to override the
-    /// states/blame. This function is used for testing only to generate
-    /// incorrect blocks
+    #[allow(clippy::too_many_arguments)]
     pub fn assemble_new_block_with_blame_info(
         &self, num_txs: usize, block_size_limit: usize,
         additional_transactions: Vec<Arc<SignedTransaction>>,
@@ -327,7 +324,7 @@ impl BlockAssembler {
             state_blame_info.logs_bloom_vec_root = x;
         }
 
-        let best_block_hash = best_info.best_block_hash.clone();
+        let best_block_hash = best_info.best_block_hash;
         let mut referee = best_info.bounded_terminal_block_hashes.clone();
         referee.retain(|r| *r != best_block_hash);
 
@@ -376,11 +373,11 @@ impl BlockAssembler {
             )
             .unwrap();
 
-        let best_block_hash = best_info.best_block_hash.clone();
+        let best_block_hash = best_info.best_block_hash;
         let mut referee = best_info.bounded_terminal_block_hashes.clone();
         referee.retain(|r| *r != best_block_hash);
 
-        let block = self.assemble_new_block_impl(
+        self.assemble_new_block_impl(
             best_block_hash,
             referee,
             state_blame_info,
@@ -390,8 +387,7 @@ impl BlockAssembler {
             adaptive,
             self.get_pos_reference(&best_block_hash),
             maybe_base_price,
-        );
-        block
+        )
     }
 
     pub fn assemble_custom_block_with_parent(

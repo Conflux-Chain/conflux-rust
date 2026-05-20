@@ -274,12 +274,8 @@ pub enum Commands {
     /// RPC based subcommands to query blockchain information and send
     /// transactions
     #[command(subcommand_required = true, arg_required_else_help = true)]
-    Rpc(RpcCommand),
+    Rpc(Box<RpcCommand>),
 }
-
-/**
- * --------------- Account Subcommands ---------------
- */
 
 /// Account Subcommands
 #[derive(Args, Debug)]
@@ -855,7 +851,7 @@ pub struct RpcLocalSubcommands {
 #[derive(Subcommand, Debug)]
 pub enum RpcLocalCommand {
     /// Send a transaction and return its hash
-    Send(RpcLocalSendArgs),
+    Send(Box<RpcLocalSendArgs>),
     /// Account related subcommands
     #[command(subcommand_required = true, arg_required_else_help = true)]
     Account(RpcLocalAccountSubcommands),

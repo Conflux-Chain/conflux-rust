@@ -66,7 +66,7 @@ pub mod ecdh {
             if pub_bytes.len() < 64 {
                 return Err(Error::Secp(secp256k1::Error::InvalidPublicKey));
             }
-            (&mut temp[1..65]).copy_from_slice(&pub_bytes[0..64]);
+            temp[1..65].copy_from_slice(&pub_bytes[0..64]);
             temp
         };
 
@@ -207,7 +207,7 @@ pub mod ecies {
                 (ctr >> 8) as u8,
                 ctr as u8,
             ];
-            hasher.update(&ctrs);
+            hasher.update(ctrs);
             hasher.update(secret.as_ref());
             hasher.update(s1);
             let d = hasher.finalize();
@@ -265,7 +265,7 @@ pub mod aes {
             return Err("Data cannot be empty".to_string());
         }
 
-        if data.len() % 16 != 0 {
+        if !data.len().is_multiple_of(16) {
             return Err(
                 "Data length must be a multiple of 16 bytes".to_string()
             );
