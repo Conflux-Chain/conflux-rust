@@ -43,6 +43,6 @@ impl fmt::Display for Error {
     }
 }
 
-impl Into<String> for Error {
-    fn into(self) -> String { format!("{}", self) }
+impl From<Error> for String {
+    fn from(val: Error) -> Self { format!("{}", val) }
 }

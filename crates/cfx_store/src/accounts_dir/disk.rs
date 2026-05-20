@@ -54,8 +54,7 @@ pub fn find_unique_filename_using_random_suffix(
 
         while path.exists() {
             if retries >= MAX_RETRIES {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
+                return Err(io::Error::other(
                     "Exceeded maximum retries when deduplicating filename.",
                 ));
             }
@@ -193,7 +192,7 @@ where T: KeyFileManager
                 let file_name = entry.file_name();
                 let name = file_name.to_string_lossy();
                 // filter directories
-                metadata.map_or(false, |m| !m.is_dir()) &&
+                metadata.is_some_and(|m| !m.is_dir()) &&
 					// hidden files
 					!name.starts_with('.') &&
 					// other ignored files
@@ -300,11 +299,7 @@ impl<T> KeyDirectory for DiskDirectory<T>
 where T: KeyFileManager
 {
     fn load(&self) -> Result<Vec<SafeAccount>, Error> {
-        let accounts = self
-            .files_content()?
-            .into_iter()
-            .map(|(_, account)| account)
-            .collect();
+        let accounts = self.files_content()?.into_values().collect();
         Ok(accounts)
     }
 
@@ -322,10 +317,9 @@ where T: KeyFileManager
     fn remove(&self, account: &SafeAccount) -> Result<(), Error> {
         // enumerate all entries in keystore
         // and find entry with given address
-        let to_remove =
-            self.files_content()?.into_iter().find(|&(_, ref acc)| {
-                acc.id == account.id && acc.address == account.address
-            });
+        let to_remove = self.files_content()?.into_iter().find(|(_, acc)| {
+            acc.id == account.id && acc.address == account.address
+        });
 
         // remove it
         match to_remove {
