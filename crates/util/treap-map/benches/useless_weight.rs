@@ -28,7 +28,7 @@ impl SharedKeyTreapMapConfig for NoWeight {
     type Weight = treap_map::NoWeight;
 }
 
-const SIZE: usize = 1 << 12 - 1;
+const SIZE: usize = 1 << (12 - 1);
 
 fn make_small_weight_map(mut rng: impl Rng) -> TreapMap<SmallWeight> {
     let mut treap_map = TreapMap::<SmallWeight>::new();
@@ -64,19 +64,17 @@ fn bench_small_weight_search(c: &mut Criterion) {
             let treap_map = make_small_weight_map(StdRng::from_seed([123; 32]));
             let mut rand = XorShiftRng::from_os_rng();
             b.iter(|| {
-                black_box({
-                    let key = rand.next_u64() as usize % (SIZE * 2);
-                    black_box(treap_map.search(|left_weight, node| {
-                        if node.value <= key {
-                            SearchDirection::Right(u64::consolidate(
-                                left_weight,
-                                &node.weight,
-                            ))
-                        } else {
-                            SearchDirection::LeftOrStop
-                        }
-                    }));
-                })
+                let key = rand.next_u64() as usize % (SIZE * 2);
+                black_box(treap_map.search(|left_weight, node| {
+                    if node.value <= key {
+                        SearchDirection::Right(u64::consolidate(
+                            left_weight,
+                            &node.weight,
+                        ))
+                    } else {
+                        SearchDirection::LeftOrStop
+                    }
+                }));
             });
         },
     );
@@ -89,19 +87,17 @@ fn bench_large_weight_search(c: &mut Criterion) {
             let treap_map = make_large_weight_map(StdRng::from_seed([123; 32]));
             let mut rand = XorShiftRng::from_os_rng();
             b.iter(|| {
-                black_box({
-                    let key = rand.next_u64() as usize % (SIZE * 2);
-                    black_box(treap_map.search(|left_weight, node| {
-                        if node.value <= key {
-                            SearchDirection::Right(U512::consolidate(
-                                left_weight,
-                                &node.weight,
-                            ))
-                        } else {
-                            SearchDirection::LeftOrStop
-                        }
-                    }));
-                })
+                let key = rand.next_u64() as usize % (SIZE * 2);
+                black_box(treap_map.search(|left_weight, node| {
+                    if node.value <= key {
+                        SearchDirection::Right(U512::consolidate(
+                            left_weight,
+                            &node.weight,
+                        ))
+                    } else {
+                        SearchDirection::LeftOrStop
+                    }
+                }));
             });
         },
     );
@@ -111,16 +107,14 @@ fn bench_large_weight_search(c: &mut Criterion) {
         let treap_map = make_large_weight_map(StdRng::from_seed([123; 32]));
 
         b.iter(|| {
-            black_box({
-                let key = rand.next_u64() as usize % (SIZE * 2);
-                black_box(treap_map.search_no_weight(|node| {
-                    if node.value <= key {
-                        SearchDirection::Right(())
-                    } else {
-                        SearchDirection::LeftOrStop
-                    }
-                }));
-            })
+            let key = rand.next_u64() as usize % (SIZE * 2);
+            black_box(treap_map.search_no_weight(|node| {
+                if node.value <= key {
+                    SearchDirection::Right(())
+                } else {
+                    SearchDirection::LeftOrStop
+                }
+            }));
         });
     });
 }
@@ -130,16 +124,14 @@ fn bench_no_weight_search(c: &mut Criterion) {
         let treap_map = make_no_weight_map(StdRng::from_seed([123; 32]));
         let mut rand = XorShiftRng::from_os_rng();
         b.iter(|| {
-            black_box({
-                let key = rand.next_u64() as usize % (SIZE * 2);
-                black_box(treap_map.search(|_, node| {
-                    if node.value <= key {
-                        SearchDirection::Right(treap_map::NoWeight)
-                    } else {
-                        SearchDirection::LeftOrStop
-                    }
-                }));
-            })
+            let key = rand.next_u64() as usize % (SIZE * 2);
+            black_box(treap_map.search(|_, node| {
+                if node.value <= key {
+                    SearchDirection::Right(treap_map::NoWeight)
+                } else {
+                    SearchDirection::LeftOrStop
+                }
+            }));
         });
     });
 }

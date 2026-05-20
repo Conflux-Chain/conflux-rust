@@ -55,7 +55,6 @@ macro_rules! conflux_client_version {
 }
 
 #[cfg(test)]
-
 mod tests {
     use crate::{platform, version};
 
@@ -80,7 +79,7 @@ mod tests {
         println!("version_string: {}", version_string);
         assert!(version_string
             .starts_with(&format!("conflux-rust/v{}", test_version)));
-        assert!(version_string.contains(&format!("{}", platform())));
+        assert!(version_string.contains(&platform().to_string()));
 
         let sha = env!("VERGEN_GIT_SHA");
 

@@ -124,7 +124,7 @@ fn field(name: &str, prefix: Option<&String>) -> String {
         None => name.into(),
         Some(prefix) => {
             let mut field = prefix.clone();
-            field.push_str(".");
+            field.push('.');
             field.push_str(name);
             field
         }
