@@ -65,9 +65,7 @@ impl TransactionValidator {
             return result;
         }
 
-        // Cheaper checks ran first; only verify the signature once the
-        // payload + sender + auth pubkey have all passed.
-        if tx.clone().check_signature().is_err() {
+        if tx.verify_signature().is_err() {
             return Some(DiscardedVMStatus::INVALID_SIGNATURE);
         }
 
