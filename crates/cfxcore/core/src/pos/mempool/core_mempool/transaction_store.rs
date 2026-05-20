@@ -40,10 +40,8 @@ pub struct TransactionStore {
     system_ttl_index: TTLIndex,
     timeline_index: TimelineIndex,
 
-    // Caps live txns per sender to bound Byzantine-validator spam.
-    // Invariant: incremented in `insert` and decremented in
-    // `index_remove`; every removal of `self.transactions` must route
-    // through `index_remove` to keep the count honest.
+    // Per-sender cap against Byzantine spam. Invariant: every removal
+    // of `self.transactions` must route through `index_remove`.
     per_sender_count: HashMap<AccountAddress, usize>,
     capacity_per_sender: usize,
 }
@@ -107,9 +105,7 @@ impl TransactionStore {
         let sender_entry = self.per_sender_count.entry(address).or_insert(0);
         if *sender_entry >= self.capacity_per_sender {
             let sender_count = *sender_entry;
-            // Surface at warn so operators see spam in default logs;
-            // rate-limited because a sustained attack can fire this on
-            // every gossip txn.
+            // Rate-limited so a sustained attack doesn't flood logs.
             diem_sample!(
                 SampleRate::Duration(Duration::from_secs(60)),
                 diem_warn!(
@@ -283,9 +279,7 @@ mod tests {
         TransactionStore::new(&cfg)
     }
 
-    // Address is arbitrary; per_sender_count keys on the address only,
-    // so it doesn't need to match the BLS-derived NodeID for these
-    // bookkeeping tests.
+    // Address is arbitrary — `per_sender_count` keys on address only.
     fn new_sender() -> (BLSPrivateKey, BLSPublicKey, AccountAddress) {
         let sk = BLSPrivateKey::generate_for_testing();
         let pk = sk.public_key();

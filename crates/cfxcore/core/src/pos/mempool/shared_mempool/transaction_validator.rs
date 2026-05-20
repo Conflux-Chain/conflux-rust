@@ -18,27 +18,12 @@ impl TransactionValidator {
     pub fn validate_transaction(
         &self, tx: &SignedTransaction, pos_state: Arc<PosState>,
     ) -> Option<DiscardedVMStatus> {
-        // Authenticator must be BLS — the per-type checks below assume a
-        // BLS public key is available to bind against `node_map`. Doing
-        // this first also avoids paying for payload lookups on
-        // malformed inputs. `tx.authenticator()` returns by value (it
-        // clones internally), so hold onto the binding for the lifetime
-        // of `auth_pk`.
         let authenticator = tx.authenticator();
         let auth_pk = match &authenticator {
             TransactionAuthenticator::BLS { public_key, .. } => public_key,
             _ => return Some(DiscardedVMStatus::INVALID_SIGNATURE),
         };
 
-        // Reject payload types that never legitimately enter via mempool
-        // gossip. Register/Retire/UpdateVotingPower are proposer-built
-        // from PoW staking events (see
-        // `proposal_generator::generate_proposal` →
-        // `RawTransaction::from_staking_event`) and pushed straight into
-        // the block payload, so any copy seen on the gossip path is
-        // adversarial. Admitting them would let a peer seed the
-        // mempool with non-matching staking events that a proposer
-        // could then pull into a doomed block.
         let sender = tx.sender();
         let result = match tx.payload() {
             TransactionPayload::Election(election_payload) => pos_state

@@ -136,9 +136,8 @@ pub(crate) async fn process_transaction_broadcast(
 fn gen_ack_response(
     request_id: Vec<u8>, results: Vec<SubmissionStatusBundle>, peer: &NodeId,
 ) -> MempoolSyncMsg {
-    // No global-capacity cap, so `MempoolIsFull` is unreachable and
-    // `backoff` stays off. Retry fires on the per-sender cap; GC or
-    // commit frees a slot.
+    // No global cap (`MempoolIsFull` is unreachable), so `backoff`
+    // stays off. Retry on the per-sender cap; GC or commit frees a slot.
     let retry = results.iter().any(|(_, (status, _))| {
         matches!(status.code, MempoolStatusCode::TooManyTransactions)
     });

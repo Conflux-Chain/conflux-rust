@@ -629,12 +629,9 @@ impl PosState {
 
 /// Read-only functions use in `TransactionValidator`
 impl PosState {
-    /// Look up the registered BLS public key for `sender` and verify it
-    /// matches `auth_pk`. This is what makes `tx.sender()` a non-forgeable
-    /// identity at admission: `raw_txn.sender` is otherwise a free-form
-    /// field, but pairing it with the authenticator pubkey + node_map
-    /// constrains it to a slot the submitter actually controls. Returns
-    /// the `NodeData` so callers can reuse the borrow.
+    /// Binds `sender` to a slot the submitter actually controls by
+    /// requiring `node_map[sender].public_key == auth_pk`. Returns the
+    /// `NodeData` so callers can reuse the borrow.
     fn check_sender_owns_auth_key(
         &self, sender: &AccountAddress, auth_pk: &ConsensusPublicKey,
         not_registered: DiscardedVMStatus,
@@ -659,11 +656,9 @@ impl PosState {
             node_id.addr,
             election_tx.target_term
         );
-        // sender must be the addr derived from the payload's declared
-        // keys, AND the submitter must hold the BLS private key
-        // registered at that addr. Together these mean a forged sender
-        // gets rejected, and a registered submitter cannot impersonate
-        // another node's slot by stuffing someone else's payload keys.
+        // Sender must match the addr derived from the payload's
+        // declared keys, so a registered submitter can't stuff another
+        // node's payload keys.
         if *sender != node_id.addr {
             return Some(DiscardedVMStatus::ELECTION_SIGNER_MISMATCH);
         }
@@ -703,14 +698,9 @@ impl PosState {
         &self, sender: &AccountAddress, auth_pk: &ConsensusPublicKey,
         pivot_decision_tx: &PivotBlockDecision,
     ) -> Option<DiscardedVMStatus> {
-        // Registered-node check (not active-committee): mempool gossip
-        // is the sole propagation path for individual PivotDecision
-        // signatures (one per validator per round). A committee check
-        // would drop newly-joined members' signatures at every term
-        // boundary until lagged receivers catch up. PoS collateral at
-        // registration keeps fresh-keypair spam infeasible, and the
-        // auth-key binding below ensures `sender` actually controls the
-        // BLS private key registered for this slot.
+        // node_map (not active-committee): PivotDecision is gossiped
+        // per round and committee gating would drop newly-joined
+        // members at every term boundary.
         if let Err(err) = self.check_sender_owns_auth_key(
             sender,
             auth_pk,
@@ -1420,10 +1410,6 @@ impl DisputeEvent {
 
 #[cfg(test)]
 mod tests {
-    //! Admission tests for `validate_*_simple`. These cover the
-    //! authenticator-pubkey ↔ `node_map` binding that makes
-    //! `tx.sender()` a non-forgeable identity at mempool admission.
-
     use super::*;
     use crate::{
         block_info::PivotBlockDecision, transaction::ElectionPayload,
@@ -1491,7 +1477,6 @@ mod tests {
 
     #[test]
     fn pivot_decision_rejects_auth_key_mismatch() {
-        // Attacker claims sender = alice but signs with mallory's key.
         let alice = keys_from_seed(1);
         let mallory = keys_from_seed(2);
         let state = state_with_node(&alice);
@@ -1579,10 +1564,6 @@ mod tests {
         let mallory = keys_from_seed(2);
         let state = state_with_node(&alice);
 
-        // Payload claims alice's keys but `tx.sender` is mallory's
-        // address. The payload-identity check fires before the
-        // node_map lookup, so this rejects regardless of whether
-        // mallory is registered.
         let payload = election_payload_for(&alice);
         assert_eq!(
             state.validate_election_simple(
@@ -1600,8 +1581,6 @@ mod tests {
         let mallory = keys_from_seed(2);
         let state = state_with_node(&alice);
 
-        // Sender = alice.addr (so the payload-pk-derived addr check
-        // passes), but the authenticator pubkey is mallory's.
         let payload = election_payload_for(&alice);
         assert_eq!(
             state.validate_election_simple(
@@ -1619,8 +1598,6 @@ mod tests {
         let mallory = keys_from_seed(2);
         let state = state_with_node(&alice);
 
-        // Custom not_registered code (use ELECTION_NON_EXISTENT_NODE
-        // here to exercise the parameterized return).
         assert_eq!(
             state
                 .check_sender_owns_auth_key(
