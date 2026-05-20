@@ -15,12 +15,12 @@ chrono = { workspace = true }
 rand = "0.8.3"
 serde = { version = "1.0.124", features = ["rc"], default-features = false }
 serde_json = "1.0.64"
+tempfile = { workspace = true }
 thiserror = "1.0.24"
 
 bcs = "0.1.2"
 diem-crypto = { workspace = true }
 diem-logger = { workspace = true }
-diem-temppath = { workspace = true }
 diem-types = { workspace = true }
 
 [dev-dependencies]

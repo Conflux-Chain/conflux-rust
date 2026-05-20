@@ -20,10 +20,11 @@ lazy_static! {
 #[derive(Clone)]
 pub struct Metrics<S> {
     service: S,
+    enabled: bool,
 }
 
 impl<S> Metrics<S> {
-    pub fn new(service: S) -> Self { Self { service } }
+    pub fn new(service: S, enabled: bool) -> Self { Self { service, enabled } }
 }
 
 impl<S> Metrics<S> {
@@ -53,6 +54,11 @@ where S: RpcServiceT<MethodResponse = MethodResponse>
     fn call<'a>(
         &self, req: Request<'a>,
     ) -> impl Future<Output = Self::MethodResponse> + Send + 'a {
+        if !self.enabled {
+            let service = self.service.clone();
+            return Box::pin(async move { service.call(req).await }).boxed();
+        }
+
         let before_result = self.before(&req.method_name().to_string());
 
         debug!("run metrics interceptor before_result: {:?}", before_result);

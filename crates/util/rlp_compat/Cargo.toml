@@ -1,0 +1,15 @@
+[package]
+name = "rlp-compat"
+version = "0.1.0"
+edition = "2021"
+license-file.workspace = true
+
+[dependencies]
+rlp = { workspace = true }
+malloc_size_of = { workspace = true }
+malloc_size_of_derive = { workspace = true }
+
+[dev-dependencies]
+# Compared against in tests. The main `rlp` dep is 0.6 now; this dev-dep
+# pins 0.4 for side-by-side coverage of both wire formats.
+rlp_04 = { package = "rlp", version = "0.4" }

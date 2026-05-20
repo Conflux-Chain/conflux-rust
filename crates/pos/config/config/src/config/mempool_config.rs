@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct MempoolConfig {
-    pub capacity: usize,
     pub max_broadcasts_per_peer: usize,
     pub shared_mempool_ack_timeout_ms: u64,
     pub shared_mempool_backoff_interval_ms: u64,
@@ -31,7 +30,6 @@ impl Default for MempoolConfig {
             shared_mempool_max_concurrent_inbound_syncs: 2,
             // Allow for 1s latency with the default 500ms tick.
             max_broadcasts_per_peer: 2,
-            capacity: 100_000,
             system_transaction_timeout_secs: 600,
             system_transaction_gc_interval_ms: 60_000,
         }

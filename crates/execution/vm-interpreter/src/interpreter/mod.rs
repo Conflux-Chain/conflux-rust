@@ -88,7 +88,7 @@ impl CodeReader {
         let pos = self.position;
         self.position += no_of_bytes;
         let max = cmp::min(pos + no_of_bytes, self.code.len());
-        U256::from(&self.code[pos..max])
+        U256::from_big_endian(&self.code[pos..max])
     }
 
     fn len(&self) -> usize { self.code.len() }
@@ -657,8 +657,7 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                     return Err(vm::Error::InvalidSubEntry);
                 } else {
                     // TLOAD
-                    let mut key = vec![0; 32];
-                    self.stack.pop_back().to_big_endian(key.as_mut());
+                    let key = self.stack.pop_back().to_big_endian();
                     let word = if context.spec().cip154 {
                         context.transient_storage_at(&key)?
                     } else {
@@ -700,8 +699,7 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                     }
                 } else {
                     // TSTORE
-                    let mut key = vec![0; 32];
-                    self.stack.pop_back().to_big_endian(key.as_mut());
+                    let key = self.stack.pop_back().to_big_endian().to_vec();
                     let val = self.stack.pop_back();
 
                     context.transient_set_storage(key, val)?;
@@ -1059,14 +1057,12 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                 self.stack.push(k.into_uint());
             }
             instructions::SLOAD => {
-                let mut key = vec![0; 32];
-                self.stack.pop_back().to_big_endian(key.as_mut());
-                let word = context.storage_at(&key)?;
+                let key = self.stack.pop_back().to_big_endian();
+                let word = context.storage_at(&key[..])?;
                 self.stack.push(word);
             }
             instructions::SSTORE => {
-                let mut key = vec![0; 32];
-                self.stack.pop_back().to_big_endian(key.as_mut());
+                let key = self.stack.pop_back().to_big_endian().to_vec();
                 let val = self.stack.pop_back();
 
                 context.set_storage(key, val)?;
@@ -1109,7 +1105,7 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                     if id < bound && big_id < U256::from(data.len()) {
                         let mut v = [0u8; 32];
                         v[0..bound - id].clone_from_slice(&data[id..bound]);
-                        self.stack.push(U256::from(&v[..]))
+                        self.stack.push(U256::from_big_endian(&v[..]))
                     } else {
                         self.stack.push(U256::zero())
                     }

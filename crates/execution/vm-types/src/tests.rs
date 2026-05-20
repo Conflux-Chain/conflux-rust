@@ -123,7 +123,7 @@ impl Context for MockContext {
         Ok(())
     }
 
-    fn transient_storage_at(&self, _key: &Vec<u8>) -> Result<U256> {
+    fn transient_storage_at(&self, _key: &[u8]) -> Result<U256> {
         Ok(U256::zero())
     }
 
