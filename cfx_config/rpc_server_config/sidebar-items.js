@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["HttpConfiguration","TcpConfiguration","WsConfiguration"]};
+window.SIDEBAR_ITEMS = {"struct":["HttpConfiguration","WsConfiguration"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["initialize_common_modules","initialize_not_light_node_modules","initialize_txgens"],"mod":["delegate_convert","panic_handler","shutdown_handler"],"struct":["ClientComponents","PosDropHandle"],"trait":["ClientTrait"]};
+window.SIDEBAR_ITEMS = {"fn":["initialize_common_modules","initialize_not_light_node_modules","initialize_txgens"],"mod":["panic_handler","shutdown_handler"],"struct":["ClientComponents","PosDropHandle"],"trait":["ClientTrait"]};

@@ -141,7 +141,7 @@
 <a href=#141 id=141 data-nosnippet>141</a></span><span class="kw">impl </span>CommonRpcImpl {
 <a href=#142 id=142 data-nosnippet>142</a>    <span class="kw">pub fn </span>best_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RpcResult&lt;H256&gt; {
 <a href=#143 id=143 data-nosnippet>143</a>        <span class="macro">info!</span>(<span class="string">"RPC Request: cfx_getBestBlockHash()"</span>);
-<a href=#144 id=144 data-nosnippet>144</a>        <span class="prelude-val">Ok</span>(<span class="self">self</span>.consensus.best_block_hash().into())
+<a href=#144 id=144 data-nosnippet>144</a>        <span class="prelude-val">Ok</span>(<span class="self">self</span>.consensus.best_block_hash())
 <a href=#145 id=145 data-nosnippet>145</a>    }
 <a href=#146 id=146 data-nosnippet>146</a>
 <a href=#147 id=147 data-nosnippet>147</a>    <span class="kw">pub fn </span>gas_price(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CoreResult&lt;U256&gt; {

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":["AccountPendingInfo","AccountPendingTransactions","TxPoolPendingNonceRange","TxPoolStatus","TxWithPoolInfo"]};
