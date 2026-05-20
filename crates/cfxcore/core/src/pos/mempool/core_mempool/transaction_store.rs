@@ -118,8 +118,9 @@ impl TransactionStore {
         self.timeline_index.insert(&mut txn);
         self.system_ttl_index.insert(&txn);
 
-        let payload = txn.txn.clone().into_raw_transaction().into_payload();
-        if let TransactionPayload::PivotDecision(pivot_decision) = payload {
+        if let TransactionPayload::PivotDecision(pivot_decision) =
+            txn.txn.payload()
+        {
             let pivot_decision_hash = pivot_decision.hash();
             self.pivot_decisions
                 .entry(pivot_decision_hash)
