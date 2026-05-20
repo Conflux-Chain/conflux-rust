@@ -144,5 +144,5 @@ pub fn rpc_err<S: Serialize>(
 }
 
 pub fn unknown_block() -> ErrorObjectOwned {
-    invalid_params_msg("Unknown block number")
+    invalid_params_rpc_err("Unknown block number", None::<()>)
 }
