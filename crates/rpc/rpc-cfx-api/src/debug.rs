@@ -22,7 +22,7 @@ pub trait DebugRpc {
     fn txpool_inspect(
         &self, address: Option<RpcAddress>,
     ) -> JsonRpcResult<
-        BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
+        BTreeMap<String, BTreeMap<String, BTreeMap<u64, Vec<String>>>>,
     >;
 
     // return all txpool transactions grouped by hex address
@@ -30,10 +30,7 @@ pub trait DebugRpc {
     fn txpool_content(
         &self, address: Option<RpcAddress>,
     ) -> JsonRpcResult<
-        BTreeMap<
-            String,
-            BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
-        >,
+        BTreeMap<String, BTreeMap<String, BTreeMap<u64, Vec<RpcTransaction>>>>,
     >;
 
     // return account ready + deferred transactions

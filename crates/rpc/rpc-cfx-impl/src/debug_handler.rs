@@ -244,19 +244,15 @@ impl DebugHandler {
 impl DebugRpcServer for DebugHandler {
     fn txpool_inspect(
         &self, address: Option<RpcAddress>,
-    ) -> RpcResult<
-        BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
-    > {
+    ) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<u64, Vec<String>>>>>
+    {
         self.common.txpool_inspect(address)
     }
 
     fn txpool_content(
         &self, address: Option<RpcAddress>,
     ) -> RpcResult<
-        BTreeMap<
-            String,
-            BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
-        >,
+        BTreeMap<String, BTreeMap<String, BTreeMap<u64, Vec<RpcTransaction>>>>,
     > {
         self.common.txpool_content(address)
     }

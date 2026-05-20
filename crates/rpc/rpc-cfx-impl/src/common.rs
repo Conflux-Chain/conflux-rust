@@ -74,17 +74,17 @@ where CoreError: From<E> {
 
 pub fn grouped_txs<T, F>(
     txs: Vec<Arc<SignedTransaction>>, converter: F,
-) -> BTreeMap<String, BTreeMap<usize, Vec<T>>>
+) -> BTreeMap<String, BTreeMap<u64, Vec<T>>>
 where F: Fn(Arc<SignedTransaction>) -> T {
-    let mut addr_grouped_txs: BTreeMap<String, BTreeMap<usize, Vec<T>>> =
+    let mut addr_grouped_txs: BTreeMap<String, BTreeMap<u64, Vec<T>>> =
         BTreeMap::new();
 
     for tx in txs {
         let addr = format!("{:?}", tx.sender());
-        let addr_entry: &mut BTreeMap<usize, Vec<T>> =
+        let addr_entry: &mut BTreeMap<u64, Vec<T>> =
             addr_grouped_txs.entry(addr).or_insert(BTreeMap::new());
 
-        let nonce = tx.nonce().as_usize();
+        let nonce = tx.nonce().as_u64();
         let nonce_entry: &mut Vec<T> =
             addr_entry.entry(nonce).or_insert(Vec::new());
 
@@ -634,10 +634,7 @@ impl CommonRpcImpl {
     pub fn txpool_content(
         &self, address: Option<RpcAddress>,
     ) -> RpcResult<
-        BTreeMap<
-            String,
-            BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
-        >,
+        BTreeMap<String, BTreeMap<String, BTreeMap<u64, Vec<RpcTransaction>>>>,
     > {
         let address: Option<H160> = match address {
             None => None,
@@ -664,7 +661,7 @@ impl CommonRpcImpl {
 
         let mut ret: BTreeMap<
             String,
-            BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
+            BTreeMap<String, BTreeMap<u64, Vec<RpcTransaction>>>,
         > = BTreeMap::new();
         ret.insert("ready".into(), grouped_txs(ready_txs, converter));
         ret.insert("deferred".into(), grouped_txs(deferred_txs, converter));
@@ -674,9 +671,8 @@ impl CommonRpcImpl {
 
     pub fn txpool_inspect(
         &self, address: Option<RpcAddress>,
-    ) -> RpcResult<
-        BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
-    > {
+    ) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<u64, Vec<String>>>>>
+    {
         let address: Option<H160> = match address {
             None => None,
             Some(addr) => {
@@ -706,7 +702,7 @@ impl CommonRpcImpl {
 
         let mut ret: BTreeMap<
             String,
-            BTreeMap<String, BTreeMap<usize, Vec<String>>>,
+            BTreeMap<String, BTreeMap<u64, Vec<String>>>,
         > = BTreeMap::new();
         ret.insert("ready".into(), grouped_txs(ready_txs, converter));
         ret.insert("deferred".into(), grouped_txs(deferred_txs, converter));

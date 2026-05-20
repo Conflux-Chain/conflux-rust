@@ -1644,9 +1644,8 @@ impl LightDebugHandler {
 impl DebugRpcServer for LightDebugHandler {
     fn txpool_inspect(
         &self, address: Option<RpcAddress>,
-    ) -> RpcResult<
-        BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
-    > {
+    ) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<u64, Vec<String>>>>>
+    {
         self.debug_impl.txpool_inspect(address)
     }
 
@@ -1654,10 +1653,7 @@ impl DebugRpcServer for LightDebugHandler {
     fn txpool_content(
         &self, address: Option<RpcAddress>,
     ) -> RpcResult<
-        BTreeMap<
-            String,
-            BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
-        >,
+        BTreeMap<String, BTreeMap<String, BTreeMap<u64, Vec<RpcTransaction>>>>,
     > {
         self.debug_impl.txpool_content(address)
     }
