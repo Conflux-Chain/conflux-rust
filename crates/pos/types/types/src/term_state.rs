@@ -109,8 +109,6 @@ pub struct NodeData {
 
 impl NodeData {
     pub fn lock_status(&self) -> &NodeLockStatus { &self.lock_status }
-
-    pub fn public_key(&self) -> &ConsensusPublicKey { &self.public_key }
 }
 
 /// A node becomes its voting power number of ElectionNodes for election.
@@ -631,23 +629,21 @@ impl PosState {
 
 /// Read-only functions use in `TransactionValidator`
 impl PosState {
-    /// Look up the registered BLS public key for `addr` and verify it
+    /// Look up the registered BLS public key for `sender` and verify it
     /// matches `auth_pk`. This is what makes `tx.sender()` a non-forgeable
     /// identity at admission: `raw_txn.sender` is otherwise a free-form
     /// field, but pairing it with the authenticator pubkey + node_map
-    /// constrains it to a slot the submitter actually controls.
+    /// constrains it to a slot the submitter actually controls. Returns
+    /// the `NodeData` so callers can reuse the borrow.
     fn check_sender_owns_auth_key(
         &self, sender: &AccountAddress, auth_pk: &ConsensusPublicKey,
         not_registered: DiscardedVMStatus,
-    ) -> Option<DiscardedVMStatus> {
-        let node = match self.node_map.get(sender) {
-            Some(node) => node,
-            None => return Some(not_registered),
-        };
-        if node.public_key() != auth_pk {
-            return Some(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH);
+    ) -> Result<&NodeData, DiscardedVMStatus> {
+        let node = self.account_node_data(*sender).ok_or(not_registered)?;
+        if &node.public_key != auth_pk {
+            return Err(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH);
         }
-        None
+        Ok(node)
     }
 
     pub fn validate_election_simple(
@@ -671,16 +667,14 @@ impl PosState {
         if *sender != node_id.addr {
             return Some(DiscardedVMStatus::ELECTION_SIGNER_MISMATCH);
         }
-        if let Some(err) = self.check_sender_owns_auth_key(
+        let node = match self.check_sender_owns_auth_key(
             sender,
             auth_pk,
             DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
         ) {
-            return Some(err);
-        }
-        // Safe to unwrap: check_sender_owns_auth_key returned None, so
-        // the entry exists.
-        let node = self.node_map.get(&node_id.addr).unwrap();
+            Ok(node) => node,
+            Err(err) => return Some(err),
+        };
 
         let target_view = match POS_STATE_CONFIG
             .get_starting_view_for_term(election_tx.target_term)
@@ -717,7 +711,7 @@ impl PosState {
         // registration keeps fresh-keypair spam infeasible, and the
         // auth-key binding below ensures `sender` actually controls the
         // BLS private key registered for this slot.
-        if let Some(err) = self.check_sender_owns_auth_key(
+        if let Err(err) = self.check_sender_owns_auth_key(
             sender,
             auth_pk,
             DiscardedVMStatus::PIVOT_DECISION_SENDER_NOT_REGISTERED,
@@ -739,6 +733,7 @@ impl PosState {
             auth_pk,
             DiscardedVMStatus::DISPUTE_SENDER_NOT_REGISTERED,
         )
+        .err()
     }
 }
 
@@ -1577,11 +1572,13 @@ mod tests {
         // VRF proof; instead, test the auth-key binding via the helper
         // that `validate_election_simple` uses.
         assert_eq!(
-            state.check_sender_owns_auth_key(
-                &alice.addr,
-                &mallory.bls_pk,
-                DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
-            ),
+            state
+                .check_sender_owns_auth_key(
+                    &alice.addr,
+                    &mallory.bls_pk,
+                    DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
+                )
+                .err(),
             Some(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH),
         );
     }
@@ -1595,11 +1592,13 @@ mod tests {
         // Custom not_registered code (use ELECTION_NON_EXISTENT_NODE
         // here to exercise the parameterized return).
         assert_eq!(
-            state.check_sender_owns_auth_key(
-                &mallory.addr,
-                &mallory.bls_pk,
-                DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
-            ),
+            state
+                .check_sender_owns_auth_key(
+                    &mallory.addr,
+                    &mallory.bls_pk,
+                    DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
+                )
+                .err(),
             Some(DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE),
         );
     }
@@ -1609,13 +1608,12 @@ mod tests {
         let alice = keys_from_seed(1);
         let state = state_with_node(&alice);
 
-        assert_eq!(
-            state.check_sender_owns_auth_key(
+        assert!(state
+            .check_sender_owns_auth_key(
                 &alice.addr,
                 &alice.bls_pk,
                 DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
-            ),
-            None,
-        );
+            )
+            .is_ok());
     }
 }
