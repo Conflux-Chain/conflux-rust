@@ -2051,11 +2051,11 @@ version = "1.12.0"
 dependencies = [
  "cfx-types",
  "env_logger",
- "jsonrpsee",
+ "jsonrpc-core",
+ "jsonrpc-tcp-server",
  "keccak-hash",
  "log",
  "parking_lot 0.12.1",
- "serde_json",
  "tokio",
 ]
 
@@ -5103,6 +5103,19 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.6.10",
  "unicase",
+]
+
+[[package]]
+name = "jsonrpc-tcp-server"
+version = "18.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60a0a0d35558123e93743d467285196905da1368500378cb5352b71856377874"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpc-server-utils",
+ "log",
+ "parking_lot 0.11.2",
+ "tower-service",
 ]
 
 [[package]]
