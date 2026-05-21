@@ -1949,7 +1949,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
             bail!(Error::SendUnsupportedMessage {
                 protocol: self.protocol,
                 msg_id: parse_msg_id_leb128_2_bytes_at_most(&mut &*msg)
-                    .unwrap_or(0),
+                    .expect("locally encoded message must contain a valid leb128 msg id"),
                 peer_protocol_version: None,
                 min_supported_version: Some(self.min_supported_version),
             });
