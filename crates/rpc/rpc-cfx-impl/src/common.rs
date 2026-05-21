@@ -141,7 +141,7 @@ impl CommonRpcImpl {
 impl CommonRpcImpl {
     pub fn best_block_hash(&self) -> RpcResult<H256> {
         info!("RPC Request: cfx_getBestBlockHash()");
-        Ok(self.consensus.best_block_hash().into())
+        Ok(self.consensus.best_block_hash())
     }
 
     pub fn gas_price(&self) -> CoreResult<U256> {

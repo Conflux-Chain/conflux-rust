@@ -58,7 +58,7 @@ use network::DiscoveryConfiguration;
 use primitives::block_header::CIP112_TRANSITION_HEIGHT;
 use txgen::TransactionGeneratorConfig;
 
-use crate::{HttpConfiguration, TcpConfiguration, WsConfiguration};
+use crate::{HttpConfiguration, WsConfiguration};
 
 lazy_static! {
     pub static ref CHAIN_ID: RwLock<Option<ChainIdParams>> = Default::default();
@@ -219,12 +219,9 @@ build_config! {
         (pow_problem_window_size, (usize), 1)
 
         // Network section.
-        (core_space_rpc_use_old_impl, (bool), false) // This is a temporary flag for testing. It will be removed after the new rpc implementation is verified to be stable.
-        (jsonrpc_local_tcp_port, (Option<u16>), None)
         (jsonrpc_local_http_port, (Option<u16>), None)
         (jsonrpc_local_ws_port, (Option<u16>), None)
         (jsonrpc_ws_port, (Option<u16>), None)
-        (jsonrpc_tcp_port, (Option<u16>), None)
         (jsonrpc_http_port, (Option<u16>), None)
         (jsonrpc_http_threads, (Option<usize>), None)
         (jsonrpc_cors, (Option<String>), None)
@@ -1159,13 +1156,6 @@ impl Configuration {
         )
     }
 
-    pub fn local_tcp_config(&self) -> TcpConfiguration {
-        TcpConfiguration::new(
-            Some((127, 0, 0, 1)),
-            self.raw_conf.jsonrpc_local_tcp_port,
-        )
-    }
-
     pub fn local_ws_config(&self) -> WsConfiguration {
         WsConfiguration::new(
             Some((127, 0, 0, 1)),
@@ -1190,10 +1180,6 @@ impl Configuration {
             self.raw_conf.jsonrpc_ws_port,
             self.raw_conf.jsonrpc_ws_max_payload_bytes,
         )
-    }
-
-    pub fn tcp_config(&self) -> TcpConfiguration {
-        TcpConfiguration::new(None, self.raw_conf.jsonrpc_tcp_port)
     }
 
     pub fn eth_http_config(&self) -> HttpConfiguration {

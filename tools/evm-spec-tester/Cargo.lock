@@ -254,6 +254,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-primitives-wrapper"
+version = "0.2.0"
+source = "git+https://github.com/Conflux-Chain/alloy-primitives-wrapper.git?rev=2683b5d133ebd1035afb98285fb8a50209a5dc19#2683b5d133ebd1035afb98285fb8a50209a5dc19"
+dependencies = [
+ "alloy-primitives",
+ "ethereum-types",
+]
+
+[[package]]
 name = "alloy-rlp"
 version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1722,6 +1731,7 @@ dependencies = [
 name = "cfx-rpc-eth-api"
 version = "3.0.0"
 dependencies = [
+ "alloy-primitives",
  "alloy-rpc-types-trace",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
@@ -1733,6 +1743,7 @@ dependencies = [
 name = "cfx-rpc-eth-impl"
 version = "3.0.0"
 dependencies = [
+ "alloy-primitives",
  "alloy-rpc-types-trace",
  "async-trait",
  "cfx-addr",
@@ -1776,6 +1787,7 @@ name = "cfx-rpc-eth-types"
 version = "3.0.0"
 dependencies = [
  "alloy-rpc-types",
+ "alloy-rpc-types-trace",
  "cfx-bytes",
  "cfx-parameters",
  "cfx-parity-trace-types",
@@ -3583,6 +3595,7 @@ name = "geth-tracer"
 version = "3.0.0"
 dependencies = [
  "alloy-primitives",
+ "alloy-primitives-wrapper",
  "alloy-rpc-types-trace",
  "alloy-sol-types",
  "cfx-executor",
@@ -5434,15 +5447,14 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
-version = "0.10.72"
+version = "0.10.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fedfea7d58a1f73118430a55da6a286e7b044961736ce96a16a17068ea25e5da"
+checksum = "a45fa2aa886c42762255da344f0a0d313e254066c46aad76f300c3d3da62d967"
 dependencies = [
  "bitflags 2.10.0",
  "cfg-if 1.0.0",
  "foreign-types",
  "libc",
- "once_cell",
  "openssl-macros",
  "openssl-sys",
 ]
@@ -5466,9 +5478,9 @@ checksum = "d05e27ee213611ffe7d6348b942e8f942b37114c00cc03cec254295a4a17852e"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.108"
+version = "0.9.116"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e145e1651e858e820e4860f7b9c5e169bc1d8ce1c86043be79fa7b7634821847"
+checksum = "f28a22dc7140cda5f096e5e7724a6962ca81a7f8bfd2979f9b18c11af56318c4"
 dependencies = [
  "cc",
  "libc",

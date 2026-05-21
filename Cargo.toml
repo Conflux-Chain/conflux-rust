@@ -262,8 +262,9 @@ revm = { version = "33.1.0", default-features = false }
 revm-primitives = "21.0.1"
 revm-interpreter = "31.1.0"
 revm-context-interface = "13.1.0"
-revm-bytecode = "7.0.2"
+revm-bytecode = "7.1"
 revm-precompile = "31.0.0"
+alloy-primitives-wrapper = { git = "https://github.com/Conflux-Chain/alloy-primitives-wrapper.git", rev = "2683b5d133ebd1035afb98285fb8a50209a5dc19" }
 
 # jsonrpc framework(old)
 jsonrpc-core = "18.0.0"
