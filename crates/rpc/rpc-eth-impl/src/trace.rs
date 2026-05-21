@@ -1,6 +1,10 @@
 use std::vec;
 
+use crate::helpers::TxExecutor;
+use alloy_primitives::map::HashSet;
 use cfx_addr::Network;
+use cfx_execute_helper::tx_outcome::parity_traces;
+use cfx_executor::executive::ExecutionOutcome;
 use cfx_parity_trace_types::Action;
 use cfx_rpc_cfx_impl::TraceHandler;
 use cfx_rpc_cfx_types::PhantomBlock;
@@ -10,25 +14,38 @@ use cfx_rpc_common_impl::trace::{
 use cfx_rpc_eth_api::TraceApiServer;
 use cfx_rpc_eth_types::{
     trace::{LocalizedSetAuthTrace, LocalizedTrace as EthLocalizedTrace},
-    BlockId, Index, LocalizedTrace, TraceFilter,
+    BlockId, BlockOverrides, Index, LocalizedTrace, RpcStateOverride,
+    TraceFilter, TraceResults, TraceType, TransactionRequest,
 };
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::{
-    internal_error, invalid_params_rpc_err,
+    call_execution_error, internal_error, invalid_params_rpc_err,
 };
-use cfx_types::H256;
+use cfx_types::{H256, U256};
 use cfx_util_macros::unwrap_option_or_return_result_none as unwrap_or_return;
 use cfxcore::{errors::Result as CoreResult, SharedConsensusGraph};
 use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
 use log::warn;
 use primitives::EpochNumber;
+
 pub struct TraceApi {
     trace_handler: TraceHandler,
+    tx_executor: TxExecutor,
 }
 
 impl TraceApi {
-    pub fn new(consensus: SharedConsensusGraph, network: Network) -> TraceApi {
+    pub fn new(
+        consensus: SharedConsensusGraph, network: Network,
+        max_estimation_gas_limit: Option<U256>,
+    ) -> TraceApi {
+        let cloned_consensus = consensus.clone();
         let trace_handler = TraceHandler::new(network, consensus);
-        TraceApi { trace_handler }
+        TraceApi {
+            trace_handler,
+            tx_executor: TxExecutor::new(
+                cloned_consensus,
+                max_estimation_gas_limit,
+            ),
+        }
     }
 
     pub fn get_block(
@@ -199,6 +216,63 @@ impl TraceApi {
 
         Ok(Some(eth_traces))
     }
+
+    pub fn trace_call(
+        &self, call: TransactionRequest, trace_types: HashSet<TraceType>,
+        block_id: Option<BlockId>, state_overrides: Option<RpcStateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
+    ) -> CoreResult<TraceResults> {
+        // currently we only support default trace type: TraceType::Trace
+        if trace_types.contains(&TraceType::VmTrace)
+            || trace_types.contains(&TraceType::StateDiff)
+        {
+            return Err(invalid_params_rpc_err(
+                "Unsupported trace type",
+                Some(trace_types),
+            )
+            .into());
+        }
+
+        let (executed, _) = self.tx_executor.do_exec_transaction(
+            call,
+            block_id,
+            state_overrides,
+            block_overrides,
+            false,
+        )?;
+        let output = match &executed {
+            ExecutionOutcome::ExecutionErrorBumpNonce(_, e) => e.output.clone(),
+            ExecutionOutcome::Finished(e) => e.output.clone(),
+            ExecutionOutcome::NotExecutedDrop(err) => {
+                return Err(call_execution_error(
+                    "NotExecutedDrop".into(),
+                    format!("{:?}", err),
+                )
+                .into());
+            }
+            ExecutionOutcome::NotExecutedToReconsiderPacking(err) => {
+                return Err(call_execution_error(
+                    "NotExecutedToReconsiderPacking".into(),
+                    format!("{:?}", err),
+                )
+                .into());
+            }
+        };
+        let traces = parity_traces(&executed);
+        let localized_traces = into_eth_localized_traces(
+            &traces,
+            0,
+            H256::zero(),
+            H256::zero(),
+            0,
+        )?;
+        Ok(TraceResults {
+            output: output.into(),
+            trace: localized_traces.into_iter().map(|v| v.into()).collect(),
+            state_diff: None, // TODO impl state_diff
+            vm_trace: None,   // TODO impl vm_trace
+        })
+    }
 }
 
 #[async_trait::async_trait]
@@ -242,5 +316,20 @@ impl TraceApiServer for TraceApi {
         };
         let index = indices[0].value();
         Ok(traces.get(index).cloned())
+    }
+
+    async fn trace_call(
+        &self, call: TransactionRequest, trace_types: HashSet<TraceType>,
+        block_id: Option<BlockId>, state_overrides: Option<RpcStateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
+    ) -> RpcResult<TraceResults> {
+        self.trace_call(
+            call,
+            trace_types,
+            block_id,
+            state_overrides,
+            block_overrides,
+        )
+        .map_err(|err| err.into())
     }
 }
