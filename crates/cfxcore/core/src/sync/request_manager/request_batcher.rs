@@ -135,11 +135,6 @@ struct DelayBucket<T> {
 
 impl<T> DelayBucket<T> {
     fn new(bucket_number: usize, bucket_size: Duration) -> Self {
-        assert!(bucket_number > 0, "DelayBucket bucket_number must be > 0");
-        assert!(
-            !bucket_size.is_zero(),
-            "DelayBucket bucket_size must be > 0",
-        );
         let mut buckets = Vec::with_capacity(bucket_number);
         for _ in 0..bucket_number {
             buckets.push((Duration::default(), Vec::new()));
