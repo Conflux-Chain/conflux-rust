@@ -536,7 +536,8 @@ impl Session {
                             protocol,
                             msg_id: parse_msg_id_leb128_2_bytes_at_most(
                                 &mut msg
-                            ),
+                            )
+                            .unwrap_or(0),
                             peer_protocol_version: Some(peer_protocol.version),
                             min_supported_version: None,
                         });
