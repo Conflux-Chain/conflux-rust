@@ -43,7 +43,13 @@ use cfxcore::{
     consensus_internal_parameters::*,
     consensus_parameters::*,
     light_protocol::LightNodeConfiguration,
-    sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
+    sync::{
+        request_manager::tx_handler::{
+            InflightPendingTransactionContainer, ReceivedTransactionContainer,
+            TransactionCacheContainer,
+        },
+        ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig,
+    },
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
     NodeType,
@@ -871,6 +877,36 @@ impl Configuration {
     }
 
     pub fn protocol_config(&self) -> ProtocolConfiguration {
+        // Window sizes are defined in tx_handler.rs.
+        // timeout (in seconds) must be >= window_size,
+        // so timeout_ms >= window_size * 1000.
+        let received_tx_window_size_ms = ReceivedTransactionContainer::RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE as u64 * 1000;
+        let inflight_window_size_ms = InflightPendingTransactionContainer::INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE as u64 * 1000;
+        assert!(
+            self.raw_conf.received_tx_index_maintain_timeout_ms
+                >= received_tx_window_size_ms,
+            "received_tx_index_maintain_timeout_ms ({}) must be >= {}ms",
+            self.raw_conf.received_tx_index_maintain_timeout_ms,
+            received_tx_window_size_ms
+        );
+        assert!(
+            self.raw_conf.inflight_pending_tx_index_maintain_timeout_ms
+                >= inflight_window_size_ms,
+            "inflight_pending_tx_index_maintain_timeout_ms ({}) must be >= {}ms",
+            self.raw_conf.inflight_pending_tx_index_maintain_timeout_ms,
+            inflight_window_size_ms
+        );
+
+        assert!(
+            self.raw_conf.send_tx_period_ms > 0,
+            "send_tx_period must be > 0"
+        );
+        assert!(
+            self.raw_conf.tx_maintained_for_peer_timeout_ms
+                >= self.raw_conf.send_tx_period_ms,
+            "tx_maintained_for_peer_timeout_ms must be >= send_tx_period_ms"
+        );
+
         ProtocolConfiguration {
             is_consortium: self.raw_conf.is_consortium,
             send_tx_period: Duration::from_millis(
@@ -991,13 +1027,28 @@ impl Configuration {
     }
 
     pub fn data_mananger_config(&self) -> DataManagerConfiguration {
+        // Window size is defined in tx_handler.rs.
+        // timeout (in seconds) must be >= window_size,
+        // so timeout_ms >= window_size * 1000.
+        let tx_cache_window_size =
+            TransactionCacheContainer::TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE
+                as u64
+                * 1000;
+        let tx_cache_timeout_ms =
+            self.raw_conf.tx_cache_index_maintain_timeout_ms;
+        assert!(
+            tx_cache_timeout_ms >= tx_cache_window_size,
+            "tx_cache_index_maintain_timeout_ms ({}) must be >= {}ms",
+            tx_cache_timeout_ms,
+            tx_cache_window_size
+        );
         let mut conf = DataManagerConfiguration {
             persist_tx_index: self.raw_conf.persist_tx_index,
             persist_block_number_index: self
                 .raw_conf
                 .persist_block_number_index,
             tx_cache_index_maintain_timeout: Duration::from_millis(
-                self.raw_conf.tx_cache_index_maintain_timeout_ms,
+                tx_cache_timeout_ms,
             ),
             db_type: match self.raw_conf.block_db_type.as_str() {
                 "rocksdb" => DbType::Rocksdb,

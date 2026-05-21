@@ -156,17 +156,9 @@ impl RequestManager {
             protocol_config.inflight_pending_tx_index_maintain_timeout;
 
         // FIXME: make sent_transaction_window_size to be 2^pow.
-        let send_tx_period_ms = protocol_config.send_tx_period.as_millis();
-        assert!(send_tx_period_ms > 0, "send_tx_period must be > 0",);
         let sent_transaction_window_size =
             protocol_config.tx_maintained_for_peer_timeout.as_millis()
-                / send_tx_period_ms;
-        assert!(
-            sent_transaction_window_size > 0,
-            "tx_maintained_for_peer_timeout ({}ms) must be >= send_tx_period ({}ms)",
-            protocol_config.tx_maintained_for_peer_timeout.as_millis(),
-            send_tx_period_ms,
-        );
+                / protocol_config.send_tx_period.as_millis();
         Self {
             received_transactions: Arc::new(RwLock::new(
                 ReceivedTransactionContainer::new(

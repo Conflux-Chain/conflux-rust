@@ -49,7 +49,6 @@ struct TimeWindow<T> {
 
 impl<T> TimeWindow<T> {
     pub fn new(timeout: u64, window_size: usize) -> Self {
-        assert!(window_size > 0, "TimeWindow window_size must be > 0",);
         assert!(
             timeout >= window_size as u64,
             "TimeWindow timeout ({}s) must be >= window_size ({}); \
@@ -120,7 +119,7 @@ pub struct ReceivedTransactionContainer {
 
 impl ReceivedTransactionContainer {
     const BUCKET_LIMIT: usize = 10;
-    const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;
+    pub const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;
 
     pub fn new(timeout: u64) -> Self {
         ReceivedTransactionContainer {
@@ -239,10 +238,6 @@ struct SentTransactionContainerInner {
 
 impl SentTransactionContainerInner {
     pub fn new(window_size: usize) -> Self {
-        assert!(
-            window_size > 0,
-            "SentTransactionContainer window_size must be > 0",
-        );
         let mut time_windowed_indices = Vec::new();
         for _ in 0..window_size {
             time_windowed_indices.push(None);
@@ -371,7 +366,7 @@ pub struct InflightPendingTransactionContainer {
 }
 
 impl InflightPendingTransactionContainer {
-    const INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 5;
+    pub const INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 5;
 
     pub fn new(timeout: u64) -> Self {
         InflightPendingTransactionContainer {
@@ -492,7 +487,7 @@ pub struct TransactionCacheContainer {
 }
 
 impl TransactionCacheContainer {
-    const TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE: usize = 64;
+    pub const TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE: usize = 64;
 
     pub fn new(timeout: u64) -> Self {
         TransactionCacheContainer {
