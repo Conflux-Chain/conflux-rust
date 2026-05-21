@@ -42,9 +42,14 @@ pub fn h256_to_u256_be(value: H256) -> U256 {
 }
 
 // ethereum precompiled contracts: https://www.evm.codes/precompiled
-pub fn is_precompiled_address(address: &Address) -> bool {
-    let maybe_builtin = &address[..18] == &[0u8; 18];
-    maybe_builtin
+// this function checks if a address is maybe a precompiled contract by
+// checking if it is in the range of 0x1 to 0xFFFF (65535)
+// note: this is not a definitive check, as there could be user-defined
+// contracts in this range, but it is a quick way to filter out most addresses
+// that are not precompiled contracts.
+pub fn maybe_precompiled_address(address: &Address) -> bool {
+    let maybe_precompile = &address[..18] == &[0u8; 18];
+    maybe_precompile
 }
 
 pub fn is_internal_address(address: &Address) -> bool {

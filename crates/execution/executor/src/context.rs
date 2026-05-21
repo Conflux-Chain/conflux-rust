@@ -21,7 +21,7 @@ use cfx_parameters::staking::{
 };
 use cfx_types::{
     cal_contract_address_with_space, is_internal_address,
-    is_precompiled_address, Address, AddressSpaceUtil, AddressWithSpace,
+    maybe_precompiled_address, Address, AddressSpaceUtil, AddressWithSpace,
     BigEndianHash, CreateContractAddressType, Space, H256, U256,
 };
 use cfx_vm_types::{
@@ -565,8 +565,8 @@ impl<'a> ContextTrait for Context<'a> {
 
     fn is_warm_account(&self, account: Address) -> bool {
         let address_with_space = account.with_space(self.space);
-        let maybe_builtin = is_precompiled_address(&account);
-        if maybe_builtin
+        let maybe_precompile = maybe_precompiled_address(&account);
+        if maybe_precompile
             && self
                 .machine
                 .builtin(
