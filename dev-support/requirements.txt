@@ -139,7 +139,7 @@ hive-py @ git+https://github.com/marioevz/hive.py@582703e2f94b4d5e61ae495d90d684
     # via
     #   --override (workspace)
     #   ethereum-execution-spec-tests
-idna==3.10
+idna==3.15
     # via
     #   requests
     #   yarl

@@ -2,10 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use jsonrpc_http_server::Server as HttpServer;
-use jsonrpc_tcp_server::Server as TcpServer;
-use jsonrpc_ws_server::Server as WsServer;
-
 use crate::{
     common::{initialize_not_light_node_modules, ClientComponents},
     configuration::Configuration,
@@ -24,12 +20,6 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 pub struct ArchiveClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
-    pub debug_rpc_http_server: Option<HttpServer>,
-    pub rpc_http_server: Option<HttpServer>,
-    pub debug_rpc_tpc_server: Option<TcpServer>,
-    pub rpc_tcp_server: Option<TcpServer>,
-    pub debug_rpc_ws_server: Option<WsServer>,
-    pub rpc_ws_server: Option<WsServer>,
     pub sync: Arc<SynchronizationService>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
@@ -75,12 +65,6 @@ impl ArchiveClient {
             consensus,
             sync,
             blockgen,
-            debug_rpc_http_server,
-            rpc_http_server,
-            debug_rpc_tpc_server,
-            rpc_tcp_server,
-            debug_rpc_ws_server,
-            rpc_ws_server,
             pos_handler,
             tokio_runtime,
             eth_rpc_server_handle,
@@ -98,12 +82,6 @@ impl ArchiveClient {
             pos_handler: Some(pos_handler),
             other_components: ArchiveClientExtraComponents {
                 consensus,
-                debug_rpc_http_server,
-                rpc_http_server,
-                debug_rpc_tpc_server,
-                rpc_tcp_server,
-                debug_rpc_ws_server,
-                rpc_ws_server,
                 sync,
                 txpool,
                 pow,
