@@ -1,13 +1,13 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/execution/geth-tracer/src/utils.rs`."><title>utils.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="geth_tracer" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0-nightly (fa3155a64 2025-09-30)" data-channel="nightly" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-828709d0.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">geth_tracer/</div>utils.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Util functions for revm related ops
 <a href=#2 id=2 data-nosnippet>2</a></span><span class="kw">use </span><span class="kw">crate</span>::config::TraceStyle;
-<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>alloy_primitives::{hex, B256};
-<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>alloy_sol_types::{ContractError, GenericRevertReason};
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>cfx_types::{Address, H160, H256, U256};
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>cfx_vm_interpreter::instructions::{
-<a href=#7 id=7 data-nosnippet>7</a>    INSTRUCTIONS, INSTRUCTIONS_CANCUN, INSTRUCTIONS_CIP645,
-<a href=#8 id=8 data-nosnippet>8</a>};
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>revm::interpreter::InstructionResult;
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>revm_primitives::{Address <span class="kw">as </span>RAddress, U256 <span class="kw">as </span>RU256};
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>alloy_primitives::{hex, Address <span class="kw">as </span>RAddress, B256, U256 <span class="kw">as </span>RU256};
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>alloy_primitives_wrapper::{WAddress, WB256, WU256};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>alloy_sol_types::{ContractError, GenericRevertReason};
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>cfx_types::{Address, H160, H256, U256};
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>cfx_vm_interpreter::instructions::{
+<a href=#8 id=8 data-nosnippet>8</a>    INSTRUCTIONS, INSTRUCTIONS_CANCUN, INSTRUCTIONS_CIP645,
+<a href=#9 id=9 data-nosnippet>9</a>};
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>revm::interpreter::InstructionResult;
 <a href=#11 id=11 data-nosnippet>11</a>
 <a href=#12 id=12 data-nosnippet>12</a><span class="doccomment">/// Converts a non successful [`InstructionResult`] to an error message.
 <a href=#13 id=13 data-nosnippet>13</a>///
@@ -159,38 +159,37 @@
 <a href=#159 id=159 data-nosnippet>159</a>}
 <a href=#160 id=160 data-nosnippet>160</a>
 <a href=#161 id=161 data-nosnippet>161</a><span class="comment">// convert from cfx U256 to alloy U256
-<a href=#162 id=162 data-nosnippet>162</a></span><span class="kw">pub fn </span>to_alloy_u256(u: U256) -&gt; RU256 {
-<a href=#163 id=163 data-nosnippet>163</a>    RU256::from_be_bytes(u.to_big_endian())
-<a href=#164 id=164 data-nosnippet>164</a>}
+<a href=#162 id=162 data-nosnippet>162</a></span><span class="kw">pub fn </span>to_alloy_u256(u: U256) -&gt; RU256 { WU256::from(u).into() }
+<a href=#163 id=163 data-nosnippet>163</a>
+<a href=#164 id=164 data-nosnippet>164</a><span class="kw">pub fn </span>to_alloy_address(h: H160) -&gt; RAddress { WAddress::from(h).into() }
 <a href=#165 id=165 data-nosnippet>165</a>
-<a href=#166 id=166 data-nosnippet>166</a><span class="kw">pub fn </span>to_alloy_address(h: H160) -&gt; RAddress {
-<a href=#167 id=167 data-nosnippet>167</a>    RAddress::from_slice(h.as_bytes())
-<a href=#168 id=168 data-nosnippet>168</a>}
-<a href=#169 id=169 data-nosnippet>169</a>
-<a href=#170 id=170 data-nosnippet>170</a><span class="kw">pub fn </span>to_alloy_h256(h: H256) -&gt; B256 { B256::from(h.<span class="number">0</span>) }
-<a href=#171 id=171 data-nosnippet>171</a>
-<a href=#172 id=172 data-nosnippet>172</a><span class="kw">pub fn </span>from_alloy_address(address: RAddress) -&gt; Address {
-<a href=#173 id=173 data-nosnippet>173</a>    Address::from_slice(address.as_slice())
-<a href=#174 id=174 data-nosnippet>174</a>}
-<a href=#175 id=175 data-nosnippet>175</a>
-<a href=#176 id=176 data-nosnippet>176</a><span class="attr">#[cfg(test)]
-<a href=#177 id=177 data-nosnippet>177</a></span><span class="kw">mod </span>tests {
-<a href=#178 id=178 data-nosnippet>178</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#179 id=179 data-nosnippet>179</a>    <span class="kw">use </span>alloy_sol_types::{GenericContractError, SolInterface};
-<a href=#180 id=180 data-nosnippet>180</a>
-<a href=#181 id=181 data-nosnippet>181</a>    <span class="attr">#[test]
-<a href=#182 id=182 data-nosnippet>182</a>    </span><span class="kw">fn </span>decode_revert_reason() {
-<a href=#183 id=183 data-nosnippet>183</a>        <span class="kw">let </span>err = GenericContractError::Revert(<span class="string">"my revert"</span>.into());
-<a href=#184 id=184 data-nosnippet>184</a>        <span class="kw">let </span>encoded = err.abi_encode();
-<a href=#185 id=185 data-nosnippet>185</a>        <span class="kw">let </span>reason = maybe_revert_reason(<span class="kw-2">&amp;</span>encoded).unwrap();
-<a href=#186 id=186 data-nosnippet>186</a>        <span class="macro">assert_eq!</span>(reason, <span class="string">"my revert"</span>);
-<a href=#187 id=187 data-nosnippet>187</a>    }
-<a href=#188 id=188 data-nosnippet>188</a>
-<a href=#189 id=189 data-nosnippet>189</a>    <span class="comment">// &lt;https://etherscan.io/tx/0x105707c8e3b3675a8424a7b0820b271cbe394eaf4d5065b03c273298e3a81314&gt;
-<a href=#190 id=190 data-nosnippet>190</a>    </span><span class="attr">#[test]
-<a href=#191 id=191 data-nosnippet>191</a>    </span><span class="kw">fn </span>decode_revert_reason_with_error() {
-<a href=#192 id=192 data-nosnippet>192</a>        <span class="kw">let </span>err = <span class="macro">hex!</span>(<span class="string">"08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000024556e697377617056323a20494e53554646494349454e545f494e5055545f414d4f554e5400000000000000000000000000000000000000000000000000000080"</span>);
-<a href=#193 id=193 data-nosnippet>193</a>        <span class="kw">let </span>reason = maybe_revert_reason(<span class="kw-2">&amp;</span>err[..]).unwrap();
-<a href=#194 id=194 data-nosnippet>194</a>        <span class="macro">assert_eq!</span>(reason, <span class="string">"UniswapV2: INSUFFICIENT_INPUT_AMOUNT"</span>);
-<a href=#195 id=195 data-nosnippet>195</a>    }
-<a href=#196 id=196 data-nosnippet>196</a>}</code></pre></div></section></main></body></html>
+<a href=#166 id=166 data-nosnippet>166</a><span class="kw">pub fn </span>to_alloy_h256(h: H256) -&gt; B256 {
+<a href=#167 id=167 data-nosnippet>167</a>    <span class="comment">// B256::from(h.0)
+<a href=#168 id=168 data-nosnippet>168</a>    </span>WB256::from(h).into()
+<a href=#169 id=169 data-nosnippet>169</a>}
+<a href=#170 id=170 data-nosnippet>170</a>
+<a href=#171 id=171 data-nosnippet>171</a><span class="kw">pub fn </span>from_alloy_address(address: RAddress) -&gt; Address {
+<a href=#172 id=172 data-nosnippet>172</a>    WAddress::from(address).into()
+<a href=#173 id=173 data-nosnippet>173</a>}
+<a href=#174 id=174 data-nosnippet>174</a>
+<a href=#175 id=175 data-nosnippet>175</a><span class="attr">#[cfg(test)]
+<a href=#176 id=176 data-nosnippet>176</a></span><span class="kw">mod </span>tests {
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#178 id=178 data-nosnippet>178</a>    <span class="kw">use </span>alloy_sol_types::{GenericContractError, SolInterface};
+<a href=#179 id=179 data-nosnippet>179</a>
+<a href=#180 id=180 data-nosnippet>180</a>    <span class="attr">#[test]
+<a href=#181 id=181 data-nosnippet>181</a>    </span><span class="kw">fn </span>decode_revert_reason() {
+<a href=#182 id=182 data-nosnippet>182</a>        <span class="kw">let </span>err = GenericContractError::Revert(<span class="string">"my revert"</span>.into());
+<a href=#183 id=183 data-nosnippet>183</a>        <span class="kw">let </span>encoded = err.abi_encode();
+<a href=#184 id=184 data-nosnippet>184</a>        <span class="kw">let </span>reason = maybe_revert_reason(<span class="kw-2">&amp;</span>encoded).unwrap();
+<a href=#185 id=185 data-nosnippet>185</a>        <span class="macro">assert_eq!</span>(reason, <span class="string">"my revert"</span>);
+<a href=#186 id=186 data-nosnippet>186</a>    }
+<a href=#187 id=187 data-nosnippet>187</a>
+<a href=#188 id=188 data-nosnippet>188</a>    <span class="comment">// &lt;https://etherscan.io/tx/0x105707c8e3b3675a8424a7b0820b271cbe394eaf4d5065b03c273298e3a81314&gt;
+<a href=#189 id=189 data-nosnippet>189</a>    </span><span class="attr">#[test]
+<a href=#190 id=190 data-nosnippet>190</a>    </span><span class="kw">fn </span>decode_revert_reason_with_error() {
+<a href=#191 id=191 data-nosnippet>191</a>        <span class="kw">let </span>err = <span class="macro">hex!</span>(<span class="string">"08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000024556e697377617056323a20494e53554646494349454e545f494e5055545f414d4f554e5400000000000000000000000000000000000000000000000000000080"</span>);
+<a href=#192 id=192 data-nosnippet>192</a>        <span class="kw">let </span>reason = maybe_revert_reason(<span class="kw-2">&amp;</span>err[..]).unwrap();
+<a href=#193 id=193 data-nosnippet>193</a>        <span class="macro">assert_eq!</span>(reason, <span class="string">"UniswapV2: INSUFFICIENT_INPUT_AMOUNT"</span>);
+<a href=#194 id=194 data-nosnippet>194</a>    }
+<a href=#195 id=195 data-nosnippet>195</a>}</code></pre></div></section></main></body></html>

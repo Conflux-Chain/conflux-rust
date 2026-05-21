@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["make_process_tx_outcome"],"struct":["ProcessTxOutcome"]};
+window.SIDEBAR_ITEMS = {"fn":["make_process_tx_outcome","parity_traces"],"struct":["ProcessTxOutcome"]};
