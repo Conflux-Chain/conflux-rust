@@ -86,6 +86,23 @@ pub fn simultaneous_dial_outcome(
     }
 }
 
+fn ingress_duplicate_outcome(
+    own_node_id: &NodeId, remote_node_id: &NodeId, existing: &IndexEntry,
+) -> SimDialOutcome {
+    // An expired existing entry is a session being torn down (its entry
+    // lingers until `deregister_stream`). Tie-breaking against it could
+    // `DropNew` and leave us with no connection, so it loses by default.
+    if existing.is_expired() {
+        SimDialOutcome::KeepNew
+    } else {
+        simultaneous_dial_outcome(
+            own_node_id,
+            remote_node_id,
+            existing.originated,
+        )
+    }
+}
+
 /// Session manager maintains all ingress and egress TCP connections in thread
 /// safe manner.
 ///
@@ -395,20 +412,11 @@ impl SessionManager {
             if existing.token == idx {
                 panic!("The same token already exists for the same node!!!");
             }
-            // The existing entry may point at an already-expired session — its
-            // entry lingers until `deregister_stream`. Tie-breaking against a
-            // dying session could return `DropNew` and leave us with no
-            // connection, so treat an expired existing entry as a tie-break
-            // loss: the new ingress wins.
-            let outcome = if existing.is_expired() {
-                SimDialOutcome::KeepNew
-            } else {
-                simultaneous_dial_outcome(
-                    &self.own_node_id,
-                    node_id,
-                    existing.originated,
-                )
-            };
+            let outcome = ingress_duplicate_outcome(
+                &self.own_node_id,
+                node_id,
+                &existing,
+            );
             match outcome {
                 SimDialOutcome::KeepNew => {
                     node_id_index.insert(node_id.clone(), new_entry);
@@ -510,8 +518,13 @@ mod tests {
     use crate::{
         node_table::NodeId,
         session_manager::{
-            simultaneous_dial_outcome, SessionTagIndex, SimDialOutcome,
+            ingress_duplicate_outcome, simultaneous_dial_outcome, IndexEntry,
+            SessionTagIndex, SimDialOutcome,
         },
+    };
+    use std::{
+        sync::{Arc, OnceLock},
+        time::Instant,
     };
 
     #[test]
@@ -537,6 +550,53 @@ mod tests {
             "exactly one side must keep its egress; got a={:?} b={:?}",
             a_outcome,
             b_outcome
+        );
+    }
+
+    #[test]
+    fn simdial_outcome_cases() {
+        let lo = NodeId::from_low_u64_be(1);
+        let hi = NodeId::from_low_u64_be(2);
+
+        // Ingress existing (originated = false): the fresher ingress wins.
+        assert_eq!(
+            simultaneous_dial_outcome(&lo, &hi, false),
+            SimDialOutcome::KeepNew
+        );
+        assert_eq!(
+            simultaneous_dial_outcome(&hi, &lo, false),
+            SimDialOutcome::KeepNew
+        );
+
+        // Egress existing: the connection from the higher-NodeId peer wins.
+        assert_eq!(
+            simultaneous_dial_outcome(&lo, &hi, true),
+            SimDialOutcome::KeepNew
+        );
+        assert_eq!(
+            simultaneous_dial_outcome(&hi, &lo, true),
+            SimDialOutcome::KeepExisting
+        );
+    }
+
+    #[test]
+    fn simdial_expired_existing_entry_keeps_new_ingress() {
+        let lo = NodeId::from_low_u64_be(1);
+        let hi = NodeId::from_low_u64_be(2);
+        let expired = Arc::new(OnceLock::new());
+        assert!(expired.set(Instant::now()).is_ok());
+        let existing = IndexEntry {
+            token: 1,
+            originated: true,
+            expired,
+        };
+
+        // Without the expired-entry guard, this ordering would keep the
+        // existing egress. Because that session is already expired, the new
+        // ingress must replace it instead.
+        assert_eq!(
+            ingress_duplicate_outcome(&hi, &lo, &existing),
+            SimDialOutcome::KeepNew
         );
     }
 

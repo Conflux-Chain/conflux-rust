@@ -316,6 +316,17 @@ impl Session {
                 // For ingress session, update the node id in `SessionManager`
                 let token_to_disconnect = self.update_ingress_node_id(host)?;
 
+                // Dropped by the tie-break: stop before `Ready` so the loser
+                // never reaches `on_peer_connected`; the caller kills it.
+                if token_to_disconnect.as_ref().map(|(t, _)| *t)
+                    == Some(self.token())
+                {
+                    return Ok(SessionDataWithDisconnectInfo {
+                        session_data: SessionData::None,
+                        token_to_disconnect,
+                    });
+                }
+
                 // Handle Hello packet to exchange protocols
                 let rlp = Rlp::new(&packet.data);
                 let pos_public_key = self.read_hello(&rlp, host)?;
@@ -352,13 +363,9 @@ impl Session {
         }
     }
 
-    /// Update node Id in `SessionManager` for ingress session and apply
-    /// the network-layer simultaneous-dial tie-breaker. Returns the
-    /// optional `(token, reason)` pair the caller should pass to
-    /// `kill_connection_by_token`, or `None` if no kill is needed. If
-    /// the tie-breaker decides this new ingress should lose, this
-    /// function sends a DISCONNECT to the remote and returns `Err` —
-    /// the caller's existing error path then kills our own session.
+    /// Apply the simultaneous-dial tie-breaker for this ingress. Returns the
+    /// `(token, reason)` to kill — the old session if this ingress wins, our
+    /// own token if it loses — or `None` if no kill is needed.
     fn update_ingress_node_id(
         &mut self, host: &NetworkServiceInner,
     ) -> Result<Option<(usize, String)>, Error> {
@@ -393,16 +400,18 @@ impl Session {
                 )))
             }
             crate::session_manager::UpdateIngressResult::DropNew => {
-                // Lost the simultaneous-dial tie-breaker. Send a
-                // DISCONNECT to the remote and propagate as Err so the
-                // caller (`session_readable`) kills our own session via
-                // its standard error path.
+                // Lost the tie-break: tell the remote, then return our own
+                // token so the caller kills us via the non-failure path.
                 debug!(
                     "lost simultaneous-dial tie-break, dropping new ingress session = {:?}",
                     self
                 );
-                Err(self.send_disconnect(DisconnectReason::Custom(
+                let _ = self.send_disconnect(DisconnectReason::Custom(
                     "simultaneous dial: drop new connection".into(),
+                ));
+                Ok(Some((
+                    token,
+                    String::from("simultaneous dial: drop new connection"),
                 )))
             }
         }

@@ -1114,11 +1114,13 @@ impl NetworkServiceInner {
         }
 
         if let Some(token_to_disconnect) = token_to_disconnect {
+            // Sim-dial dedup, not a peer failure — `op = None`, no
+            // note_failure.
             self.kill_connection_by_token(
                 token_to_disconnect.0,
                 io,
                 true,
-                Some(UpdateNodeOperation::Failure),
+                None,
                 token_to_disconnect.1.as_str(), // reason
             );
         }
