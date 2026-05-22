@@ -180,10 +180,11 @@ impl RangedManifest {
             ));
         }
         if let Some(next) = &self.next {
-            if next != self.chunk_boundaries.last().unwrap() {
-                bail!(Error::InvalidSnapshotManifest(
+            match self.chunk_boundaries.last() {
+                Some(last) if next == last => (),
+                _ => bail!(Error::InvalidSnapshotManifest(
                     "next does not match last boundary".into(),
-                ));
+                )),
             }
         }
 
