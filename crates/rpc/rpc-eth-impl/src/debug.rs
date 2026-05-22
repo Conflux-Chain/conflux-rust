@@ -146,6 +146,19 @@ impl DebugApi {
                     )
                     .into());
                 }
+            } else if let Some(max_priority_fee_per_gas) =
+                request.max_priority_fee_per_gas
+            {
+                // if max_fee_per_gas is not set, we will set it to
+                // max_fee_per_gas, so we also need to check
+                // max_priority_fee_per_gas
+                if max_priority_fee_per_gas < base_price {
+                    return Err(invalid_params(
+                        "maxPriorityFeePerGas",
+                        Some("max priority fee per gas cannot be lower than base price"),
+                    )
+                    .into());
+                }
             }
         }
 
