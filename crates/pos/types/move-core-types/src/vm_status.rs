@@ -205,6 +205,8 @@ pub enum StatusCode {
     ELECTION_TARGET_TERM_NOT_OPEN = 31,
     ELECTION_WITHOUT_VOTES = 32,
     PIVOT_DECISION_HEIGHT_TOO_OLD = 33,
+    // `expiration_timestamp_secs` must be u64::MAX; any other value is invalid.
+    INVALID_EXPIRATION_TIME = 34,
 
     // Runtime Errors: 4000-4999
     EXECUTED = 4001,

@@ -33,6 +33,13 @@ impl TransactionValidator {
             return result;
         }
 
+        // PoS transactions never expire; `expiration_timestamp_secs` must be
+        // u64::MAX. Reject any other value before paying for signature
+        // verification.
+        if tx.expiration_timestamp_secs() != u64::MAX {
+            return Some(DiscardedVMStatus::INVALID_EXPIRATION_TIME);
+        }
+
         match tx.authenticator() {
             TransactionAuthenticator::BLS { .. } => {}
             _ => return Some(DiscardedVMStatus::INVALID_SIGNATURE),
