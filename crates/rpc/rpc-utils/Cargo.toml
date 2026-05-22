@@ -14,7 +14,6 @@ license-file.workspace = true
 
 [dependencies]
 jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
-jsonrpc-core = { workspace = true }
 cfx-types = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-rpc-types = { workspace = true }

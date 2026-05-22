@@ -17,11 +17,8 @@ use cfx_rpc_eth_types::{
     BlockId, BlockOverrides, Index, LocalizedTrace, RpcStateOverride,
     TraceFilter, TraceResults, TraceType, TransactionRequest,
 };
-use cfx_rpc_utils::error::{
-    jsonrpc_error_helpers::{
-        call_execution_error, error_object_owned_to_jsonrpc_error,
-    },
-    jsonrpsee_error_helpers::{internal_error, invalid_params_rpc_err},
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::{
+    call_execution_error, internal_error, invalid_params_rpc_err,
 };
 use cfx_types::{H256, U256};
 use cfx_util_macros::unwrap_option_or_return_result_none as unwrap_or_return;
@@ -147,9 +144,7 @@ impl TraceApi {
     pub fn filter_traces(
         &self, filter: TraceFilter,
     ) -> CoreResult<Vec<LocalizedTrace>> {
-        let primitive_filter = filter
-            .into_primitive()
-            .map_err(error_object_owned_to_jsonrpc_error)?;
+        let primitive_filter = filter.into_primitive()?;
 
         let Some(primitive_traces) = self
             .trace_handler

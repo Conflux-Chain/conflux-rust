@@ -76,15 +76,6 @@ dependencies = [
 
 [[package]]
 name = "aho-corasick"
-version = "0.7.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc936419f96fa211c1b9166887b38e5e40b19958e5b895be7c1f93adec7071ac"
-dependencies = [
- "memchr",
-]
-
-[[package]]
-name = "aho-corasick"
 version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e60d3430d3a69478ad0993f19238d2df97c507009a52b3c10addcd7f6bcb916"
@@ -1393,7 +1384,6 @@ dependencies = [
  "clap",
  "db",
  "diem-types",
- "jsonrpc-http-server",
  "jsonrpsee",
  "kvdb-rocksdb",
  "lazy_static",
@@ -1846,7 +1836,6 @@ dependencies = [
  "cfx-tasks",
  "cfx-types",
  "futures 0.3.30",
- "jsonrpc-core",
  "jsonrpsee",
  "jsonrpsee-core",
  "revm-context-interface",
@@ -2046,7 +2035,6 @@ dependencies = [
  "hex",
  "hibitset",
  "itertools 0.14.0",
- "jsonrpc-core",
  "jsonrpsee",
  "keccak-hash",
  "kvdb",
@@ -3657,11 +3645,11 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "globset"
-version = "0.4.10"
+version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "029d74589adefde59de1a0c4f4732695c32805624aec7b68d91503d4dba79afc"
+checksum = "759c97c1e17c55525b57192c06a267cda0ac5210b222d6b82189a2338fa1c13d"
 dependencies = [
- "aho-corasick 0.7.20",
+ "aho-corasick",
  "bstr",
  "fnv",
  "log",
@@ -4486,22 +4474,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonrpc-http-server"
-version = "18.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1dea6e07251d9ce6a552abfb5d7ad6bc290a4596c8dcc3d795fae2bbdc1f3ff"
-dependencies = [
- "futures 0.3.30",
- "hyper 0.14.32",
- "jsonrpc-core",
- "jsonrpc-server-utils",
- "log",
- "net2",
- "parking_lot 0.11.2",
- "unicase",
-]
-
-[[package]]
 name = "jsonrpc-server-utils"
 version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5188,17 +5160,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d85b74917d95eab8b26ab6fe28e21d3fede3a614411ca4d3b01265c05bf86a12"
 dependencies = [
  "cc",
-]
-
-[[package]]
-name = "net2"
-version = "0.2.38"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74d0df99cfcd2530b2e694f6e17e7f37b8e26bb23983ac530c0c97408837c631"
-dependencies = [
- "cfg-if 0.1.10",
- "libc",
- "winapi 0.3.9",
 ]
 
 [[package]]
@@ -6084,7 +6045,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rand_xorshift 0.3.0",
- "regex-syntax 0.8.2",
+ "regex-syntax",
  "rusty-fork",
  "tempfile",
  "unarray",
@@ -6250,13 +6211,14 @@ checksum = "c6fd6195683d528242d8b017810909f8aaf91f111fdc4dbe8b10e4dd50e0c7f4"
 
 [[package]]
 name = "regex"
-version = "1.7.2"
+version = "1.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cce168fea28d3e05f158bda4576cf0c844d5045bc2cc3620fa0292ed5bb5814c"
+checksum = "4219d74c6b67a3654a9fbebc4b419e22126d13d2f3c4a07ee0cb61ff79a79619"
 dependencies = [
- "aho-corasick 0.7.20",
+ "aho-corasick",
  "memchr",
- "regex-syntax 0.6.29",
+ "regex-automata 0.4.7",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -6271,16 +6233,10 @@ version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38caf58cc5ef2fed281f89292ef23f6365465ed9a41b7a7754eb4e26496c92df"
 dependencies = [
- "aho-corasick 1.1.3",
+ "aho-corasick",
  "memchr",
- "regex-syntax 0.8.2",
+ "regex-syntax",
 ]
-
-[[package]]
-name = "regex-syntax"
-version = "0.6.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
 
 [[package]]
 name = "regex-syntax"
@@ -8218,12 +8174,9 @@ source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=08d6a
 
 [[package]]
 name = "unicase"
-version = "2.6.0"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50f37be617794602aabbeee0be4f259dc1778fabe05e2d67ee8f79326d5cb4f6"
-dependencies = [
- "version_check",
-]
+checksum = "dbc4bc3a9f746d862c45cb89d705aa10f187bb96c76001afab07a0d35ce60142"
 
 [[package]]
 name = "unicode-ident"

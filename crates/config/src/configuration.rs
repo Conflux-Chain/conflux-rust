@@ -104,7 +104,7 @@ build_config! {
         //
         // `dev` mode is for users to run a single node that automatically
         //     generates blocks with fixed intervals
-        //     * You are expected to also set `jsonrpc_ws_port`, `jsonrpc_tcp_port`,
+        //     * You are expected to also set `jsonrpc_ws_port`,
         //       and `jsonrpc_http_port` if you want RPC functionalities.
         //     * generate blocks automatically without PoW.
         //     * Skip catch-up mode even there is no peer
@@ -1148,7 +1148,6 @@ impl Configuration {
         HttpConfiguration::new(
             Some((127, 0, 0, 1)),
             self.raw_conf.jsonrpc_local_http_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
         )
@@ -1166,7 +1165,6 @@ impl Configuration {
         HttpConfiguration::new(
             None,
             self.raw_conf.jsonrpc_http_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
         )
@@ -1184,7 +1182,6 @@ impl Configuration {
         HttpConfiguration::new(
             None,
             self.raw_conf.jsonrpc_http_eth_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
         )
