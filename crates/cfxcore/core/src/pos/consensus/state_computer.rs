@@ -5,14 +5,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{error::StateSyncError, state_replication::StateComputer};
+use super::state_replication::StateComputer;
 use crate::pos::mempool::{CommitNotification, CommittedTransaction};
 use anyhow::Result;
 use consensus_types::block::Block;
 use diem_crypto::HashValue;
-use diem_infallible::Mutex;
 use diem_logger::prelude::*;
-use diem_metrics::monitor;
 use diem_types::{
     ledger_info::LedgerInfoWithSignatures, transaction::Transaction,
 };
@@ -21,6 +19,7 @@ use executor_types::{
 };
 use fail::fail_point;
 use futures::channel::{mpsc, oneshot};
+use parking_lot::Mutex;
 use std::boxed::Box;
 
 /// Basic communication with the Execution module;
@@ -45,9 +44,7 @@ impl ExecutionProxy {
     }
 
     /// Notify mempool of committed transactions so it can prune them.
-    async fn notify_mempool(
-        &self, committed_txns: Vec<Transaction>, block_timestamp_usecs: u64,
-    ) {
+    async fn notify_mempool(&self, committed_txns: Vec<Transaction>) {
         let user_txns: Vec<CommittedTransaction> = committed_txns
             .iter()
             .filter_map(|txn| match txn {
@@ -68,7 +65,6 @@ impl ExecutionProxy {
         let (callback, cb_receiver) = oneshot::channel();
         let notification = CommitNotification {
             transactions: user_txns,
-            block_timestamp_usecs,
             callback,
         };
 
@@ -136,13 +132,10 @@ impl StateComputer for ExecutionProxy {
             "Executing block",
         );
 
-        monitor!(
-            "execute_block",
-            self.executor.lock().execute_block(
-                id_and_transactions_from_block(block),
-                parent_block_id,
-                catch_up_mode
-            )
+        self.executor.lock().execute_block(
+            id_and_transactions_from_block(block),
+            parent_block_id,
+            catch_up_mode,
         )
     }
 
@@ -150,28 +143,11 @@ impl StateComputer for ExecutionProxy {
         &self, block_ids: Vec<HashValue>,
         finality_proof: LedgerInfoWithSignatures,
     ) -> Result<(), ExecutionError> {
-        let timestamp = finality_proof.ledger_info().timestamp_usecs();
-        let committed_txns = monitor!(
-            "commit_block",
-            self.executor
-                .lock()
-                .commit_blocks(block_ids, finality_proof)?
-        );
-        monitor!(
-            "notify_mempool",
-            self.notify_mempool(committed_txns, timestamp).await
-        );
-        Ok(())
-    }
-
-    /// No-op: state sync via chunk execution is not supported in
-    /// Conflux PoS.
-    async fn sync_to(
-        &self, _target: LedgerInfoWithSignatures,
-    ) -> Result<(), StateSyncError> {
-        fail_point!("consensus::sync_to", |_| {
-            Err(anyhow::anyhow!("Injected error in sync_to").into())
-        });
+        let committed_txns = self
+            .executor
+            .lock()
+            .commit_blocks(block_ids, finality_proof)?;
+        self.notify_mempool(committed_txns).await;
         Ok(())
     }
 }

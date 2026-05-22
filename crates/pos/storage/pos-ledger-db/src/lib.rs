@@ -14,18 +14,10 @@
 //! the underlying Key-Value storage system, and implements diem data structures
 //! on top of it.
 
-use std::{
-    collections::HashMap,
-    iter::Iterator,
-    path::Path,
-    sync::{mpsc, Arc, Mutex},
-    thread::{self, JoinHandle},
-    time::{Duration, Instant},
-};
+use std::{iter::Iterator, path::Path, sync::Arc, time::Instant};
 
 use anyhow::{ensure, Result};
 use itertools::{izip, zip_eq};
-use once_cell::sync::Lazy;
 
 use diem_config::config::RocksdbConfig;
 use diem_crypto::hash::{
@@ -54,12 +46,6 @@ use crate::{
     change_set::{ChangeSet, SealedChangeSet},
     event_store::EventStore,
     ledger_store::LedgerStore,
-    metrics::{
-        DIEM_STORAGE_API_LATENCY_SECONDS, DIEM_STORAGE_COMMITTED_TXNS,
-        DIEM_STORAGE_LATEST_TXN_VERSION, DIEM_STORAGE_LEDGER_VERSION,
-        DIEM_STORAGE_NEXT_BLOCK_EPOCH, DIEM_STORAGE_OTHER_TIMERS_SECONDS,
-        DIEM_STORAGE_ROCKSDB_PROPERTIES,
-    },
     schema::*,
     transaction_store::TransactionStore,
 };
@@ -70,7 +56,6 @@ use diem_types::block_metadata::BlockMetadata;
 pub mod test_helper;
 
 pub mod errors;
-pub mod metrics;
 pub mod schema;
 
 mod change_set;
@@ -87,104 +72,11 @@ mod diemdb_test;
 // waypoint and client knows to boot from there.
 const MAX_NUM_EPOCH_ENDING_LEDGER_INFO: usize = 100;
 
-static ROCKSDB_PROPERTY_MAP: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
-    [
-        (
-            "diem_rocksdb_live_sst_files_size_bytes",
-            "rocksdb.live-sst-files-size",
-        ),
-        (
-            "diem_rocksdb_all_memtables_size_bytes",
-            "rocksdb.size-all-mem-tables",
-        ),
-        (
-            "diem_rocksdb_num_running_compactions",
-            "rocksdb.num-running-compactions",
-        ),
-        (
-            "diem_rocksdb_num_running_flushes",
-            "rocksdb.num-running-flushes",
-        ),
-        (
-            "diem_rocksdb_block_cache_usage_bytes",
-            "rocksdb.block-cache-usage",
-        ),
-        (
-            "diem_rocksdb_cf_size_bytes",
-            "rocksdb.estimate-live-data-size",
-        ),
-    ]
-    .iter()
-    .cloned()
-    .collect()
-});
-
 fn gen_rocksdb_options(config: &RocksdbConfig) -> Options {
     let mut db_opts = Options::default();
     db_opts.set_max_open_files(config.max_open_files);
     db_opts.set_max_total_wal_size(config.max_total_wal_size);
     db_opts
-}
-
-fn update_rocksdb_properties(db: &DB) -> Result<()> {
-    let _timer = DIEM_STORAGE_OTHER_TIMERS_SECONDS
-        .with_label_values(&["update_rocksdb_properties"])
-        .start_timer();
-    for cf_name in PosLedgerDB::column_families() {
-        for (property_name, rocksdb_property_argument) in &*ROCKSDB_PROPERTY_MAP
-        {
-            DIEM_STORAGE_ROCKSDB_PROPERTIES
-                .with_label_values(&[cf_name, property_name])
-                .set(
-                    db.get_property(cf_name, rocksdb_property_argument)? as i64
-                );
-        }
-    }
-    Ok(())
-}
-
-#[derive(Debug)]
-struct RocksdbPropertyReporter {
-    sender: Mutex<mpsc::Sender<()>>,
-    join_handle: Option<JoinHandle<()>>,
-}
-
-impl RocksdbPropertyReporter {
-    fn new(db: Arc<DB>) -> Self {
-        let (send, recv) = mpsc::channel();
-        let join_handle = Some(thread::spawn(move || loop {
-            if let Err(e) = update_rocksdb_properties(&db) {
-                diem_warn!(
-                    error = ?e,
-                    "Updating rocksdb property failed."
-                );
-            }
-            // report rocksdb properties each 10 seconds
-            match recv.recv_timeout(Duration::from_secs(10)) {
-                Ok(_) => break,
-                Err(mpsc::RecvTimeoutError::Timeout) => (),
-                Err(mpsc::RecvTimeoutError::Disconnected) => break,
-            }
-        }));
-        Self {
-            sender: Mutex::new(send),
-            join_handle,
-        }
-    }
-}
-
-impl Drop for RocksdbPropertyReporter {
-    fn drop(&mut self) {
-        // Notify the property reporting thread to exit
-        self.sender.lock().unwrap().send(()).unwrap();
-        self.join_handle
-            .take()
-            .expect("Rocksdb property reporting thread must exist.")
-            .join()
-            .expect(
-                "Rocksdb property reporting thread should join peacefully.",
-            );
-    }
 }
 
 /// This holds a handle to the underlying DB responsible for physical storage
@@ -195,8 +87,6 @@ pub struct PosLedgerDB {
     ledger_store: Arc<LedgerStore>,
     transaction_store: Arc<TransactionStore>,
     event_store: Arc<EventStore>,
-    #[allow(dead_code)]
-    rocksdb_property_reporter: RocksdbPropertyReporter,
 }
 
 impl PosLedgerDB {
@@ -225,7 +115,7 @@ impl PosLedgerDB {
         ]
     }
 
-    fn new_with_db(db: DB, _prune_window: Option<u64>) -> Self {
+    fn new_with_db(db: DB) -> Self {
         let db = Arc::new(db);
 
         PosLedgerDB {
@@ -233,21 +123,12 @@ impl PosLedgerDB {
             event_store: Arc::new(EventStore::new(Arc::clone(&db))),
             ledger_store: Arc::new(LedgerStore::new(Arc::clone(&db))),
             transaction_store: Arc::new(TransactionStore::new(Arc::clone(&db))),
-            rocksdb_property_reporter: RocksdbPropertyReporter::new(
-                Arc::clone(&db),
-            ),
         }
     }
 
     pub fn open<P: AsRef<Path> + Clone>(
-        db_root_path: P, readonly: bool, prune_window: Option<u64>,
-        rocksdb_config: RocksdbConfig,
+        db_root_path: P, readonly: bool, rocksdb_config: RocksdbConfig,
     ) -> Result<Self> {
-        ensure!(
-            prune_window.is_none() || !readonly,
-            "Do not set prune_window when opening readonly.",
-        );
-
         let old_path = db_root_path.as_ref().join("diemdb");
         let path = if old_path.exists() {
             old_path
@@ -276,7 +157,7 @@ impl PosLedgerDB {
             )?
         };
 
-        let ret = Self::new_with_db(db, prune_window);
+        let ret = Self::new_with_db(db);
         diem_info!(
             path = path,
             time_ms = %instant.elapsed().as_millis(),
@@ -285,21 +166,15 @@ impl PosLedgerDB {
         Ok(ret)
     }
 
-    /// This opens db in non-readonly mode, without the pruner.
+    /// This opens db in non-readonly mode.
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn new_for_test<P: AsRef<Path> + Clone>(db_root_path: P) -> Self {
         Self::open(
             db_root_path,
             false, /* readonly */
-            None,  /* pruner */
             RocksdbConfig::default(),
         )
         .expect("Unable to open DiemDB")
-    }
-
-    /// This force the db to update rocksdb properties immediately.
-    pub fn update_rocksdb_properties(&self) -> Result<()> {
-        update_rocksdb_properties(&self.db)
     }
 
     /// Returns ledger infos reflecting epoch bumps starting with the given
@@ -535,12 +410,6 @@ impl DbReader for PosLedgerDB {
         })
     }
 
-    fn get_accumulator_root_hash(&self, version: Version) -> Result<HashValue> {
-        gauged_api("get_accumulator_root_hash", || {
-            self.ledger_store.get_root_hash(version)
-        })
-    }
-
     fn get_pos_state(&self, block_id: &HashValue) -> Result<PosState> {
         diem_debug!("get_pos_state:{}", block_id);
         self.ledger_store.get_pos_state(block_id)
@@ -635,31 +504,12 @@ impl DbWriter for PosLedgerDB {
 
             // Persist.
             let sealed_cs = self.seal_change_set(cs)?;
-            {
-                let _timer = DIEM_STORAGE_OTHER_TIMERS_SECONDS
-                    .with_label_values(&["save_transactions_commit"])
-                    .start_timer();
-                self.commit(sealed_cs)?;
-            }
+            self.commit(sealed_cs)?;
 
             // Once everything is successfully persisted, update the latest
             // in-memory ledger info.
             if let Some(x) = ledger_info_with_sigs {
                 self.ledger_store.set_latest_ledger_info(x.clone());
-
-                DIEM_STORAGE_LEDGER_VERSION
-                    .set(x.ledger_info().version() as i64);
-                DIEM_STORAGE_NEXT_BLOCK_EPOCH
-                    .set(x.ledger_info().next_block_epoch() as i64);
-            }
-
-            // Only increment counter if commit succeeds and there are at least
-            // one transaction written to the storage. That's also
-            // when we'd inform the pruner thread to work.
-            if num_txns > 0 {
-                let last_version = first_version + num_txns - 1;
-                DIEM_STORAGE_COMMITTED_TXNS.inc_by(num_txns);
-                DIEM_STORAGE_LATEST_TXN_VERSION.set(last_version as i64);
             }
 
             Ok(())
@@ -762,24 +612,15 @@ fn get_first_seq_num_and_limit(
 
 fn gauged_api<T, F>(api_name: &'static str, api_impl: F) -> Result<T>
 where F: FnOnce() -> Result<T> {
-    let timer = Instant::now();
-
     let res = api_impl();
 
-    let res_type = match &res {
-        Ok(_) => "Ok",
-        Err(e) => {
-            diem_warn!(
-                api_name = api_name,
-                error = ?e,
-                "DiemDB API returned error."
-            );
-            "Err"
-        }
-    };
-    DIEM_STORAGE_API_LATENCY_SECONDS
-        .with_label_values(&[api_name, res_type])
-        .observe(timer.elapsed().as_secs_f64());
+    if let Err(e) = &res {
+        diem_warn!(
+            api_name = api_name,
+            error = ?e,
+            "DiemDB API returned error."
+        );
+    }
 
     res
 }

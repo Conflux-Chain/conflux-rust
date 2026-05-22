@@ -509,7 +509,7 @@ impl RpcImpl {
             )
             .map_err(into_rpc_err)?;
 
-        Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
+        Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes().to_vec()))
     }
 
     async fn storage_root(
@@ -1050,12 +1050,17 @@ async fn fetch_block_for_fee_history(
 
 pub struct LightCfxHandler {
     rpc_impl: Arc<RpcImpl>,
-    cfx_impl: Arc<CommonRpcImpl>,
+    common_impl: Arc<CommonRpcImpl>,
 }
 
 impl LightCfxHandler {
-    pub fn new(rpc_impl: Arc<RpcImpl>, cfx_impl: Arc<CommonRpcImpl>) -> Self {
-        LightCfxHandler { rpc_impl, cfx_impl }
+    pub fn new(
+        rpc_impl: Arc<RpcImpl>, common_impl: Arc<CommonRpcImpl>,
+    ) -> Self {
+        LightCfxHandler {
+            rpc_impl,
+            common_impl,
+        }
     }
 }
 
@@ -1185,16 +1190,9 @@ impl CfxRpcServer for LightCfxHandler {
             .await
     }
 
-    /// Returns block with given block number.
-    async fn block_by_block_number(
-        &self, _block_number: U64, _include_txs: bool,
-    ) -> RpcResult<Option<Block>> {
-        return Err(not_supported());
-    }
-
     /// Returns best block hash.
     async fn best_block_hash(&self) -> RpcResult<H256> {
-        self.cfx_impl.best_block_hash()
+        self.common_impl.best_block_hash()
     }
 
     /// Returns the nonce should be filled in next sending transaction from
@@ -1275,7 +1273,7 @@ impl CfxRpcServer for LightCfxHandler {
     async fn skipped_blocks_by_epoch(
         &self, epoch_number: EpochNumber,
     ) -> RpcResult<Vec<H256>> {
-        self.cfx_impl.skipped_blocks_by_epoch(epoch_number)
+        self.common_impl.skipped_blocks_by_epoch(epoch_number)
     }
 
     async fn transaction_receipt(
@@ -1315,29 +1313,29 @@ impl CfxRpcServer for LightCfxHandler {
     async fn confirmation_risk_by_hash(
         &self, block_hash: H256,
     ) -> RpcResult<Option<U256>> {
-        self.cfx_impl.confirmation_risk_by_hash(block_hash)
+        self.common_impl.confirmation_risk_by_hash(block_hash)
     }
 
     async fn get_status(&self) -> RpcResult<RpcStatus> {
-        self.cfx_impl.get_status()
-    }
-
-    /// Returns block reward information in an epoch
-    async fn get_block_reward_info(
-        &self, _num: EpochNumber,
-    ) -> RpcResult<Vec<RpcRewardInfo>> {
-        return Err(not_supported());
+        self.common_impl.get_status()
     }
 
     /// Return the client version as a string
     async fn get_client_version(&self) -> RpcResult<String> {
-        self.cfx_impl.get_client_version()
+        self.common_impl.get_client_version()
     }
 
     /// Return information about total token supply.
     async fn get_supply_info(
         &self, _epoch_number: Option<EpochNumber>,
     ) -> RpcResult<TokenSupplyInfo> {
+        return Err(not_supported());
+    }
+
+    /// Returns block reward information in an epoch
+    async fn get_block_reward_info(
+        &self, _num: EpochNumber,
+    ) -> RpcResult<Vec<RpcRewardInfo>> {
         return Err(not_supported());
     }
 
@@ -1365,6 +1363,13 @@ impl CfxRpcServer for LightCfxHandler {
     ) -> RpcResult<VoteParamsInfo> {
         return Err(not_supported());
     }
+
+    /// Returns block with given block number.
+    async fn block_by_block_number(
+        &self, _block_number: U64, _include_txs: bool,
+    ) -> RpcResult<Option<Block>> {
+        return Err(not_supported());
+    }
 }
 
 #[async_trait::async_trait]
@@ -1377,30 +1382,37 @@ impl CfxDebugRpcServer for LightCfxHandler {
 
     /// Returns accounts list.
     async fn accounts(&self) -> RpcResult<Vec<RpcAddress>> {
-        self.cfx_impl.accounts()
+        self.common_impl.accounts()
     }
 
     /// Create a new account
     async fn new_account(&self, password: String) -> RpcResult<RpcAddress> {
-        self.cfx_impl.new_account(password)
+        self.common_impl.new_account(password)
     }
 
     /// Unlock an account
     async fn unlock_account(
         &self, address: RpcAddress, password: String, duration: Option<U128>,
     ) -> RpcResult<bool> {
-        self.cfx_impl.unlock_account(address, password, duration)
+        self.common_impl.unlock_account(address, password, duration)
     }
 
     /// Lock an account
     async fn lock_account(&self, address: RpcAddress) -> RpcResult<bool> {
-        self.cfx_impl.lock_account(address)
+        self.common_impl.lock_account(address)
     }
 
     fn sign(
         &self, data: RpcBytes, address: RpcAddress, password: Option<String>,
     ) -> RpcResult<H520> {
-        self.cfx_impl.sign(data, address, password)
+        self.common_impl.sign(data, address, password)
+    }
+
+    /// Get transaction pending info by account address
+    async fn account_pending_info(
+        &self, address: RpcAddress,
+    ) -> RpcResult<Option<AccountPendingInfo>> {
+        self.common_impl.account_pending_info(address)
     }
 
     fn sign_transaction(
@@ -1414,13 +1426,6 @@ impl CfxDebugRpcServer for LightCfxHandler {
         _include_eth_receipts: Option<bool>,
     ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
         return Err(not_supported());
-    }
-
-    /// Get transaction pending info by account address
-    async fn account_pending_info(
-        &self, address: RpcAddress,
-    ) -> RpcResult<Option<AccountPendingInfo>> {
-        self.rpc_impl.account_pending_info(address).await
     }
 
     /// Get transaction pending info by account address

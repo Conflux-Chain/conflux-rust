@@ -4,22 +4,20 @@
 
 use std::sync::Arc;
 
+use cfx_rpc_cfx_types::apis::ApiSet;
 use parking_lot::{Condvar, Mutex};
 use secret_store::SecretStore;
+use tokio::runtime::Runtime as TokioRuntime;
 
-use jsonrpc_http_server::Server as HttpServer;
-use jsonrpc_tcp_server::Server as TcpServer;
-use jsonrpc_ws_server::Server as WsServer;
+use cfx_rpc_builder::RpcServerHandle;
 
 use crate::{
     common::{initialize_common_modules, ClientComponents},
     configuration::Configuration,
-    rpc::{
-        extractor::RpcExtractor, impls::light::RpcImpl,
-        setup_debug_rpc_apis_light, setup_public_rpc_apis_light,
-    },
+    rpc_starter::launch_cfx_light_async_rpc_servers,
 };
 use blockgen::BlockGenerator;
+use cfx_tasks::TaskManager;
 use cfxcore::{
     pow::PowComputer, ConsensusGraph, LightQueryService, NodeType,
     TransactionPool,
@@ -28,16 +26,21 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 
 pub struct LightClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
-    pub debug_rpc_http_server: Option<HttpServer>,
-    pub debug_rpc_tcp_server: Option<TcpServer>,
-    pub debug_rpc_ws_server: Option<WsServer>,
+    pub cfx_rpc_server_handle: Option<RpcServerHandle>,
+    pub debug_cfx_rpc_server_handle: Option<RpcServerHandle>,
     pub light: Arc<LightQueryService>,
-    pub rpc_http_server: Option<HttpServer>,
-    pub rpc_tcp_server: Option<TcpServer>,
-    pub rpc_ws_server: Option<WsServer>,
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
+    /// Keep the tokio runtime alive for the lifetime of the node so that the
+    /// jsonrpsee server (and any other tasks spawned on this runtime) keeps
+    /// processing requests. Without this, the runtime would be dropped at the
+    /// end of `LightClient::start`, silently cancelling the RPC accept loop
+    /// and causing every RPC call (e.g. `cfx_getBestBlockHash`) to hang.
+    pub tokio_runtime: Arc<TokioRuntime>,
+    /// Keep the task manager alive so that tasks spawned via its executor
+    /// (e.g. async RPC handlers, pubsub) are not shut down prematurely.
+    pub task_manager: TaskManager,
 }
 
 impl MallocSizeOf for LightClientExtraComponents {
@@ -47,7 +50,8 @@ impl MallocSizeOf for LightClientExtraComponents {
 pub struct LightClient {}
 
 impl LightClient {
-    // Start all key components of Conflux and pass out their handles
+    // Start all key components of Conflux and pass out
+    // their handles
     pub fn start(
         mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Result<
@@ -65,11 +69,9 @@ impl LightClient {
             consensus,
             sync_graph,
             network,
-            common_impl,
             accounts,
             notifications,
-            pubsub,
-            _tokio_runtime,
+            tokio_runtime,
         ) = initialize_common_modules(
             &mut conf,
             exit.clone(),
@@ -81,83 +83,52 @@ impl LightClient {
             sync_graph.clone(),
             network.clone(),
             conf.raw_conf.throttling_conf.clone(),
-            notifications,
+            notifications.clone(),
             conf.light_node_config(),
         ));
         light.register().unwrap();
 
         sync_graph.recover_graph_from_db();
 
-        let rpc_impl = Arc::new(RpcImpl::new(
-            light.clone(),
-            accounts,
-            consensus.clone(),
-            data_man.clone(),
-        ));
+        // Create task executor for async RPC
+        let task_manager = TaskManager::new(tokio_runtime.handle().clone());
+        let task_executor = task_manager.executor();
 
-        let debug_rpc_http_server = crate::rpc::start_http(
-            conf.local_http_config(),
-            setup_debug_rpc_apis_light(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
+        // Start the new jsonrpsee-based core space RPC
+        // servers for the light node.
+        let cfx_rpc_server_handle =
+            tokio_runtime.block_on(launch_cfx_light_async_rpc_servers(
+                consensus.clone(),
+                txpool.clone(),
+                data_man.clone(),
+                network.clone(),
+                pos_verifier.clone(),
+                accounts.clone(),
+                light.clone(),
+                exit.clone(),
+                task_executor.clone(),
+                notifications.clone(),
                 &conf,
-            ),
-        )?;
+                conf.raw_conf.public_rpc_apis.clone(),
+                false,
+            ))?;
 
-        let debug_rpc_tcp_server = crate::rpc::start_tcp(
-            conf.local_tcp_config(),
-            setup_debug_rpc_apis_light(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
+        let debug_cfx_rpc_server_handle =
+            tokio_runtime.block_on(launch_cfx_light_async_rpc_servers(
+                consensus.clone(),
+                txpool.clone(),
+                data_man.clone(),
+                network.clone(),
+                pos_verifier.clone(),
+                accounts,
+                light.clone(),
+                exit,
+                task_executor,
+                notifications,
                 &conf,
-            ),
-            RpcExtractor,
-        )?;
-
-        let rpc_tcp_server = crate::rpc::start_tcp(
-            conf.tcp_config(),
-            setup_public_rpc_apis_light(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
-                &conf,
-            ),
-            RpcExtractor,
-        )?;
-
-        let debug_rpc_ws_server = crate::rpc::start_ws(
-            conf.local_ws_config(),
-            setup_public_rpc_apis_light(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
-                &conf,
-            ),
-            RpcExtractor,
-        )?;
-
-        let rpc_ws_server = crate::rpc::start_ws(
-            conf.ws_config(),
-            setup_public_rpc_apis_light(
-                common_impl.clone(),
-                rpc_impl.clone(),
-                pubsub.clone(),
-                &conf,
-            ),
-            RpcExtractor,
-        )?;
-
-        let rpc_http_server = crate::rpc::start_http(
-            conf.http_config(),
-            setup_public_rpc_apis_light(
-                common_impl,
-                rpc_impl,
-                pubsub.clone(),
-                &conf,
-            ),
-        )?;
+                ApiSet::All,
+                true,
+            ))?;
 
         network.start();
 
@@ -167,16 +138,14 @@ impl LightClient {
             pos_handler: Some(pos_verifier),
             other_components: LightClientExtraComponents {
                 consensus,
-                debug_rpc_http_server,
-                debug_rpc_tcp_server,
-                debug_rpc_ws_server,
+                cfx_rpc_server_handle,
+                debug_cfx_rpc_server_handle,
                 light,
-                rpc_http_server,
-                rpc_tcp_server,
-                rpc_ws_server,
                 secret_store,
                 txpool,
                 pow,
+                tokio_runtime,
+                task_manager,
             },
         }))
     }

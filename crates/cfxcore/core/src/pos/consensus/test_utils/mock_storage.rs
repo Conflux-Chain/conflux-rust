@@ -5,12 +5,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::pos::consensus::{
-    epoch_manager::LivenessStorageData,
-    persistent_liveness_storage::{
-        LedgerRecoveryData, PersistentLivenessStorage, RecoveryData,
-        RootMetadata,
-    },
+use crate::pos::consensus::persistent_liveness_storage::{
+    PersistentLivenessStorage, RecoveryData, RootMetadata,
 };
 use anyhow::Result;
 use consensus_types::{
@@ -18,11 +14,11 @@ use consensus_types::{
     timeout_certificate::TimeoutCertificate, vote::Vote,
 };
 use diem_crypto::HashValue;
-use diem_infallible::Mutex;
 use diem_types::{
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
     on_chain_config::ValidatorSet,
 };
+use parking_lot::Mutex;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
@@ -99,12 +95,8 @@ impl MockStorage {
         &self.shared_storage.validator_set
     }
 
-    pub fn get_ledger_recovery_data(&self) -> LedgerRecoveryData {
-        LedgerRecoveryData::new(self.storage_ledger.lock().clone())
-    }
-
     pub fn try_start(&self) -> Result<RecoveryData> {
-        let ledger_recovery_data = self.get_ledger_recovery_data();
+        let storage_ledger = self.storage_ledger.lock().clone();
         let mut blocks: Vec<_> = self
             .shared_storage
             .block
@@ -124,7 +116,7 @@ impl MockStorage {
         blocks.sort_by_key(Block::round);
         RecoveryData::new(
             self.shared_storage.last_vote.lock().clone(),
-            ledger_recovery_data,
+            &storage_ledger,
             blocks,
             RootMetadata::new_empty(),
             quorum_certs,
@@ -146,10 +138,7 @@ impl MockStorage {
             Arc::new(MockSharedStorage::new(validator_set.clone()));
         let genesis_li = LedgerInfo::mock_genesis(Some(validator_set));
         let storage = Self::new_with_ledger_info(shared_storage, genesis_li);
-        let recovery_data = storage.start().expect_recovery_data(
-            "Mock storage should never fail constructing recovery data",
-        );
-
+        let recovery_data = storage.start();
         (recovery_data, Arc::new(storage))
     }
 }
@@ -202,19 +191,11 @@ impl PersistentLivenessStorage for MockStorage {
         Ok(())
     }
 
-    fn recover_from_ledger(&self) -> LedgerRecoveryData {
-        self.get_ledger_recovery_data()
-    }
-
-    fn start(&self) -> LivenessStorageData {
-        match self.try_start() {
-            Ok(recovery_data) => {
-                LivenessStorageData::RecoveryData(recovery_data)
-            }
-            Err(_) => LivenessStorageData::LedgerRecoveryData(
-                self.recover_from_ledger(),
-            ),
-        }
+    fn start(&self) -> RecoveryData {
+        self.try_start().expect(
+            "MockStorage failed to construct recovery data — this indicates \
+             an inconsistent test setup",
+        )
     }
 
     fn save_highest_timeout_cert(
@@ -239,9 +220,7 @@ impl EmptyStorage {
 
     pub fn start_for_testing() -> (RecoveryData, Arc<Self>) {
         let storage = Arc::new(EmptyStorage::new());
-        let recovery_data = storage.start().expect_recovery_data(
-            "Empty storage should never fail constructing recovery data",
-        );
+        let recovery_data = storage.start();
         (recovery_data, storage)
     }
 }
@@ -255,29 +234,16 @@ impl PersistentLivenessStorage for EmptyStorage {
 
     fn save_vote(&self, _: &Vote) -> Result<()> { Ok(()) }
 
-    fn recover_from_ledger(&self) -> LedgerRecoveryData {
-        LedgerRecoveryData::new(LedgerInfo::mock_genesis(None))
-    }
-
-    fn start(&self) -> LivenessStorageData {
-        match RecoveryData::new(
+    fn start(&self) -> RecoveryData {
+        RecoveryData::new(
             None,
-            self.recover_from_ledger(),
+            &LedgerInfo::mock_genesis(None),
             vec![],
             RootMetadata::new_empty(),
             vec![],
             None,
-        ) {
-            Ok(recovery_data) => {
-                LivenessStorageData::RecoveryData(recovery_data)
-            }
-            Err(e) => {
-                eprintln!("{}", e);
-                panic!(
-                    "Construct recovery data during genesis should never fail"
-                );
-            }
-        }
+        )
+        .expect("Construct recovery data during genesis should never fail")
     }
 
     fn save_highest_timeout_cert(&self, _: TimeoutCertificate) -> Result<()> {

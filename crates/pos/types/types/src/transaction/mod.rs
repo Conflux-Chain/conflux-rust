@@ -43,9 +43,7 @@ use crate::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
         ConsensusVRFProof, ConsensusVRFPublicKey, MultiConsensusSignature,
     },
-    vm_status::{
-        DiscardedVMStatus, KeptVMStatus, StatusCode, StatusType, VMStatus,
-    },
+    vm_status::{DiscardedVMStatus, KeptVMStatus, StatusCode, VMStatus},
 };
 
 pub mod authenticator;
@@ -629,95 +627,6 @@ impl From<VMStatus> for TransactionStatus {
             Err(code) => TransactionStatus::Discard(code),
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum GovernanceRole {
-    DiemRoot,
-    TreasuryCompliance,
-    Validator,
-    ValidatorOperator,
-    DesignatedDealer,
-    NonGovernanceRole,
-}
-
-impl GovernanceRole {
-    pub fn from_role_id(role_id: u64) -> Self {
-        use GovernanceRole::*;
-        match role_id {
-            0 => DiemRoot,
-            1 => TreasuryCompliance,
-            2 => DesignatedDealer,
-            3 => Validator,
-            4 => ValidatorOperator,
-            _ => NonGovernanceRole,
-        }
-    }
-
-    /// The higher the number that is returned, the greater priority assigned to
-    /// a transaction sent from an account with that role in mempool. All
-    /// transactions sent from an account with role priority N are ranked
-    /// higher than all transactions sent from accounts with role priorities <
-    /// N. Transactions from accounts with equal priority are ranked base on
-    /// other characteristics (e.g., gas price).
-    pub fn priority(&self) -> u64 {
-        use GovernanceRole::*;
-        match self {
-            DiemRoot => 3,
-            TreasuryCompliance => 2,
-            Validator | ValidatorOperator | DesignatedDealer => 1,
-            NonGovernanceRole => 0,
-        }
-    }
-}
-
-/// The result of running the transaction through the VM validator.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VMValidatorResult {
-    /// Result of the validation: `None` if the transaction was successfully
-    /// validated or `Some(DiscardedVMStatus)` if the transaction should be
-    /// discarded.
-    status: Option<DiscardedVMStatus>,
-
-    /// Score for ranking the transaction priority (e.g., based on the gas
-    /// price). Only used when the status is `None`. Higher values indicate
-    /// a higher priority.
-    score: u64,
-
-    /// The account role for the transaction sender, so that certain
-    /// governance transactions can be prioritized above normal transactions.
-    /// Only used when the status is `None`.
-    governance_role: GovernanceRole,
-}
-
-impl VMValidatorResult {
-    pub fn new(
-        vm_status: Option<DiscardedVMStatus>, score: u64,
-        governance_role: GovernanceRole,
-    ) -> Self {
-        debug_assert!(
-            match vm_status {
-                None => true,
-                Some(status) => {
-                    status.status_type() == StatusType::Unknown
-                        || status.status_type() == StatusType::Validation
-                }
-            },
-            "Unexpected discarded status: {:?}",
-            vm_status
-        );
-        Self {
-            status: vm_status,
-            score,
-            governance_role,
-        }
-    }
-
-    pub fn status(&self) -> Option<DiscardedVMStatus> { self.status }
-
-    pub fn score(&self) -> u64 { self.score }
-
-    pub fn governance_role(&self) -> GovernanceRole { self.governance_role }
 }
 
 /// The output of executing a transaction.

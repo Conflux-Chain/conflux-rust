@@ -10,8 +10,6 @@ publish = false
 edition = "2018"
 
 [dependencies]
-if-addrs = "0.14.0"
-rand = "0.8.3"
 serde = { version = "1.0.124", features = ["rc"], default-features = false }
 yaml_serde = "0.10.3"
 thiserror = "1.0.24"
@@ -21,9 +19,7 @@ diem-crypto = { workspace = true }
 diem-global-constants = { workspace = true }
 diem-logger = { workspace = true }
 diem-secure-storage = { workspace = true }
-diem-temppath = { workspace = true }
 diem-types = { workspace = true }
-short-hex-str = { workspace = true }
 cfx-types = { workspace = true }
 
 [dev-dependencies]

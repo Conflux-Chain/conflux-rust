@@ -5,25 +5,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{CryptoStorage, Error, KVStorage, Storage};
+use crate::{CryptoStorage, Error, KVStorage, OnDiskStorage};
 
 use diem_crypto::{
     bls::BLSPrivateKey, test_utils::TestDiemCrypto, HashValue, PrivateKey,
     Signature, Uniform,
 };
 
-/// This suite contains tests for secure storage backends. We test the correct
-/// functionality of both key/value and cryptographic operations for storage
-/// implementations. All storage backend implementations should be tested using
-/// the tests in this suite.
-
-/// This holds the canonical list of secure storage tests. It allows different
-/// callers of the test suite to ensure they're executing all tests.
-/// Note: this is required because: (i) vault tests cannot be run in the usual
-/// fashion (i.e., vault tests rely on first running the vault docker script in
-/// `docker/vault/run.sh`); and (ii) vault tests cannot currently be run in
-/// parallel, as each test uses the same vault instance.
-const STORAGE_TESTS: &[fn(&mut Storage)] = &[
+/// Canonical list of secure storage tests, exercised against `OnDiskStorage`.
+const STORAGE_TESTS: &[fn(&mut OnDiskStorage)] = &[
     test_set_reset_get,
     test_create_and_get_non_existent_version,
     test_create_get_key_pair,
@@ -46,7 +36,7 @@ const U64_KEY: &str = "U64_Key";
 const CRYPTO_NAME: &str = "Test_Key_Name";
 
 /// Executes all storage tests on a given storage backend.
-pub fn execute_all_storage_tests(storage: &mut Storage) {
+pub fn execute_all_storage_tests(storage: &mut OnDiskStorage) {
     storage.reset_and_clear().unwrap();
     for test in STORAGE_TESTS.iter() {
         test(storage);
@@ -57,7 +47,7 @@ pub fn execute_all_storage_tests(storage: &mut Storage) {
 /// This test tries to set a key, reset the storage and then retrieve its
 // value, checking that the reset is indeed performed in testing mode. It
 /// should be performed first, as other tests will depend on it.
-fn test_set_reset_get(storage: &mut Storage) {
+fn test_set_reset_get(storage: &mut OnDiskStorage) {
     let u64_1 = 10;
     storage.set(U64_KEY, u64_1).unwrap();
     storage.reset_and_clear().unwrap();
@@ -69,7 +59,7 @@ fn test_set_reset_get(storage: &mut Storage) {
 
 /// This test tries to get and set non-existent keys in storage and asserts that
 /// the correct errors are returned on these operations.
-fn test_get_non_existent(storage: &mut Storage) {
+fn test_get_non_existent(storage: &mut OnDiskStorage) {
     assert_eq!(
         storage.get::<BLSPrivateKey>(CRYPTO_KEY).unwrap_err(),
         Error::KeyNotSet(CRYPTO_KEY.to_string())
@@ -83,7 +73,7 @@ fn test_get_non_existent(storage: &mut Storage) {
 /// This test tries to get previous versions of the public key after multiple
 /// rotations have occurred. It also checks that the previous versions returned
 /// can be used to fetch the correct private keys.
-fn test_get_public_key_previous_version(storage: &mut Storage) {
+fn test_get_public_key_previous_version(storage: &mut OnDiskStorage) {
     let num_rotations = 10;
 
     let mut public_key = storage.create_key(CRYPTO_NAME).unwrap();
@@ -122,7 +112,7 @@ fn test_get_public_key_previous_version(storage: &mut Storage) {
 
 /// This test stores various key/value pairs in storage, updates them, retrieves
 /// the values to ensure the correct value types are returned.
-fn test_get_set(storage: &mut Storage) {
+fn test_get_set(storage: &mut OnDiskStorage) {
     let crypto_private_1 = BLSPrivateKey::generate_for_testing();
     let crypto_private_2 = BLSPrivateKey::generate_for_testing();
     let u64_1 = 10;
@@ -148,7 +138,7 @@ fn test_get_set(storage: &mut Storage) {
 }
 
 /// This test ensures that a key can reasonably be imported.
-fn test_import_key(storage: &mut Storage) {
+fn test_import_key(storage: &mut OnDiskStorage) {
     let key_name = "key";
     let imported_key_name = "imported_key";
 
@@ -204,7 +194,7 @@ fn test_import_key(storage: &mut Storage) {
 /// This test stores different types of values into storage, retrieves them, and
 /// asserts that the value unwrap functions return an unexpected type error on
 /// an incorrect unwrap.
-fn test_verify_incorrect_value_types(storage: &mut Storage) {
+fn test_verify_incorrect_value_types(storage: &mut OnDiskStorage) {
     storage.set(U64_KEY, 10).unwrap();
     storage
         .set(CRYPTO_KEY, BLSPrivateKey::generate_for_testing())
@@ -217,7 +207,7 @@ fn test_verify_incorrect_value_types(storage: &mut Storage) {
 /// This test: (i) creates a new named test key pair; (ii) retrieves the public
 /// key for the created key pair; (iii) compares the public keys returned by the
 /// create call and the retrieval call.
-fn test_create_get_key_pair(storage: &mut Storage) {
+fn test_create_get_key_pair(storage: &mut OnDiskStorage) {
     let public_key = storage.create_key(CRYPTO_NAME).unwrap();
     let retrieved_public_key_response =
         storage.get_public_key(CRYPTO_NAME).unwrap();
@@ -226,7 +216,7 @@ fn test_create_get_key_pair(storage: &mut Storage) {
 
 /// This test tries to get the public key of a key pair that has not yet been
 /// created. As such, it asserts that this attempt fails.
-fn test_get_uncreated_key_pair(storage: &mut Storage) {
+fn test_get_uncreated_key_pair(storage: &mut OnDiskStorage) {
     let key_pair_name = "Non-existent Key";
     assert!(
         storage.get_public_key(key_pair_name).is_err(),
@@ -235,7 +225,7 @@ fn test_get_uncreated_key_pair(storage: &mut Storage) {
 }
 
 /// Verify HashValues work correctly
-fn test_hash_value(storage: &mut Storage) {
+fn test_hash_value(storage: &mut OnDiskStorage) {
     let hash_value_key = "HashValue";
     let hash_value_value = HashValue::random();
 
@@ -245,13 +235,13 @@ fn test_hash_value(storage: &mut Storage) {
 }
 
 /// This test verifies the storage engine is up and running.
-fn test_ensure_storage_is_available(storage: &mut Storage) {
+fn test_ensure_storage_is_available(storage: &mut OnDiskStorage) {
     storage.available().unwrap();
 }
 
 /// This test creates a new named key pair and attempts to get a non-existent
 /// version of the public and private keys. As such, these calls should fail.
-fn test_create_and_get_non_existent_version(storage: &mut Storage) {
+fn test_create_and_get_non_existent_version(storage: &mut OnDiskStorage) {
     // Create new named key pair
     let _ = storage.create_key(CRYPTO_NAME).unwrap();
 
@@ -266,7 +256,7 @@ fn test_create_and_get_non_existent_version(storage: &mut Storage) {
 
 /// This test creates a new key pair and performs multiple key rotations,
 /// ensuring that storage updates key pair versions appropriately.
-fn test_create_key_pair_and_perform_rotations(storage: &mut Storage) {
+fn test_create_key_pair_and_perform_rotations(storage: &mut OnDiskStorage) {
     let num_rotations = 10;
 
     let mut public_key = storage.create_key(CRYPTO_NAME).unwrap();
@@ -290,7 +280,7 @@ fn test_create_key_pair_and_perform_rotations(storage: &mut Storage) {
 /// This test creates a new key pair, signs a message using the key pair,
 /// rotates the key pair, re-signs the message using the previous key pair
 /// version, and asserts the same signature is produced.
-fn test_create_sign_rotate_sign(storage: &mut Storage) {
+fn test_create_sign_rotate_sign(storage: &mut OnDiskStorage) {
     // Generate new key pair
     let public_key = storage.create_key(CRYPTO_NAME).unwrap();
 
@@ -311,7 +301,7 @@ fn test_create_sign_rotate_sign(storage: &mut Storage) {
 }
 
 /// This test verifies that timestamps increase with successive writes
-fn test_incremental_timestamp(storage: &mut Storage) {
+fn test_incremental_timestamp(storage: &mut OnDiskStorage) {
     let key = "timestamp_u64";
     let value0 = 442;
     let value1 = 450;

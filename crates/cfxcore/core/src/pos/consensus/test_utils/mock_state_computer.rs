@@ -6,17 +6,15 @@
 // See http://www.gnu.org/licenses/
 
 use crate::pos::consensus::{
-    error::StateSyncError, state_replication::StateComputer,
-    test_utils::mock_storage::MockStorage,
+    state_replication::StateComputer, test_utils::mock_storage::MockStorage,
 };
 use anyhow::{format_err, Result};
 use consensus_types::{block::Block, common::Payload};
 use diem_crypto::{hash::ACCUMULATOR_PLACEHOLDER_HASH, HashValue};
-use diem_infallible::Mutex;
-use diem_logger::prelude::*;
 use diem_types::ledger_info::LedgerInfoWithSignatures;
 use executor_types::{Error, StateComputeResult};
 use futures::channel::mpsc;
+use parking_lot::Mutex;
 use std::{collections::HashMap, sync::Arc};
 
 pub struct MockStateComputer {
@@ -86,21 +84,6 @@ impl StateComputer for MockStateComputer {
         let _ = self.commit_callback.unbounded_send(commit);
         Ok(())
     }
-
-    async fn sync_to(
-        &self, commit: LedgerInfoWithSignatures,
-    ) -> Result<(), StateSyncError> {
-        diem_debug!(
-            "Fake sync to block id {}",
-            commit.ledger_info().consensus_block_id()
-        );
-        self.consensus_db
-            .commit_to_storage(commit.ledger_info().clone());
-        self.commit_callback
-            .unbounded_send(commit)
-            .expect("Fail to notify about sync");
-        Ok(())
-    }
 }
 
 pub struct EmptyStateComputer;
@@ -127,12 +110,6 @@ impl StateComputer for EmptyStateComputer {
     async fn commit(
         &self, _block_ids: Vec<HashValue>, _commit: LedgerInfoWithSignatures,
     ) -> Result<(), Error> {
-        Ok(())
-    }
-
-    async fn sync_to(
-        &self, _commit: LedgerInfoWithSignatures,
-    ) -> Result<(), StateSyncError> {
         Ok(())
     }
 }

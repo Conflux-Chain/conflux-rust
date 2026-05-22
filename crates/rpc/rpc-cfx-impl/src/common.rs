@@ -141,7 +141,7 @@ impl CommonRpcImpl {
 impl CommonRpcImpl {
     pub fn best_block_hash(&self) -> RpcResult<H256> {
         info!("RPC Request: cfx_getBestBlockHash()");
-        Ok(self.consensus.best_block_hash().into())
+        Ok(self.consensus.best_block_hash())
     }
 
     pub fn gas_price(&self) -> CoreResult<U256> {
@@ -236,7 +236,7 @@ impl CommonRpcImpl {
                 .expect("failed to convert scaled risk to bigInt");
             let (sign, big_endian_bytes) = scaled_risk.to_bytes_be();
             assert_ne!(sign, num_bigint::Sign::Minus);
-            let rpc_result = U256::from(big_endian_bytes.as_slice());
+            let rpc_result = U256::from_big_endian(big_endian_bytes.as_slice());
             Ok(Some(rpc_result.into()))
         }
     }

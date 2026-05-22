@@ -5,7 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{consensusdb::ConsensusDB, epoch_manager::LivenessStorageData};
+use super::consensusdb::ConsensusDB;
 use anyhow::{format_err, Context, Result};
 use consensus_types::{
     block::Block, db::LedgerBlockRW, quorum_cert::QuorumCert,
@@ -15,8 +15,7 @@ use diem_config::config::NodeConfig;
 use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use diem_types::{
-    block_info::{PivotBlockDecision, Round},
-    ledger_info::LedgerInfo,
+    block_info::PivotBlockDecision, ledger_info::LedgerInfo,
     transaction::Version,
 };
 use executor_types::ExecutedTrees;
@@ -40,12 +39,10 @@ pub trait PersistentLivenessStorage: Send + Sync {
     /// Persist consensus' state
     fn save_vote(&self, vote: &Vote) -> Result<()>;
 
-    /// Construct data that can be recovered from ledger
-    #[allow(dead_code)]
-    fn recover_from_ledger(&self) -> LedgerRecoveryData;
-
-    /// Construct necessary data to start consensus.
-    fn start(&self) -> LivenessStorageData;
+    /// Construct necessary data to start consensus. Panics if the ConsensusDB
+    /// is missing the block referenced by the latest committed ledger info —
+    /// that combination is only reachable via on-disk corruption.
+    fn start(&self) -> RecoveryData;
 
     /// Persist the highest timeout certificate for improved liveness - proof
     /// for other replicas to jump to this round
@@ -68,78 +65,57 @@ pub trait PersistentLivenessStorage: Send + Sync {
 #[derive(Clone)]
 pub struct RootInfo(pub Block, pub QuorumCert, pub QuorumCert);
 
-/// LedgerRecoveryData is a subset of RecoveryData that we can get solely from
-/// ledger info.
-#[derive(Clone)]
-pub struct LedgerRecoveryData {
-    storage_ledger: LedgerInfo,
-}
+/// Finds the root (last committed block) from the ConsensusDB contents and the
+/// storage latest ledger info. For an end-of-epoch ledger info we synthesise a
+/// deterministic virtual genesis block so first-ever startups and epoch
+/// transitions can always resolve their root without waiting for peer data.
+fn find_root(
+    storage_ledger: &LedgerInfo, blocks: &mut Vec<Block>,
+    quorum_certs: &mut Vec<QuorumCert>,
+) -> Result<RootInfo> {
+    diem_info!(
+        "The last committed block id as recorded in storage: {}",
+        storage_ledger
+    );
 
-impl LedgerRecoveryData {
-    pub fn new(storage_ledger: LedgerInfo) -> Self {
-        LedgerRecoveryData { storage_ledger }
-    }
-
-    pub fn commit_round(&self) -> Round { self.storage_ledger.round() }
-
-    /// Finds the root (last committed block) and returns the root block, the QC
-    /// to the root block and the ledger info for the root block, return an
-    /// error if it can not be found.
-    ///
-    /// We guarantee that the block corresponding to the storage's latest ledger
-    /// info always exists.
-    fn find_root(
-        &self, blocks: &mut Vec<Block>, quorum_certs: &mut Vec<QuorumCert>,
-    ) -> Result<RootInfo> {
-        diem_info!(
-            "The last committed block id as recorded in storage: {}",
-            self.storage_ledger
+    let root_id = if storage_ledger.ends_epoch() {
+        let genesis =
+            Block::make_genesis_block_from_ledger_info(storage_ledger);
+        let genesis_qc = QuorumCert::certificate_for_genesis_from_ledger_info(
+            storage_ledger,
+            genesis.id(),
         );
+        let genesis_id = genesis.id();
+        blocks.push(genesis);
+        quorum_certs.push(genesis_qc);
+        genesis_id
+    } else {
+        storage_ledger.consensus_block_id()
+    };
 
-        // We start from the block that storage's latest ledger info, if storage
-        // has end-epoch LedgerInfo, we generate the virtual genesis
-        // block
-        let root_id = if self.storage_ledger.ends_epoch() {
-            let genesis = Block::make_genesis_block_from_ledger_info(
-                &self.storage_ledger,
-            );
-            let genesis_qc =
-                QuorumCert::certificate_for_genesis_from_ledger_info(
-                    &self.storage_ledger,
-                    genesis.id(),
-                );
-            let genesis_id = genesis.id();
-            blocks.push(genesis);
-            quorum_certs.push(genesis_qc);
-            genesis_id
-        } else {
-            self.storage_ledger.consensus_block_id()
-        };
+    // sort by (epoch, round) to guarantee the topological order of parent
+    // <- child
+    blocks.sort_by_key(|b| (b.epoch(), b.round()));
 
-        // sort by (epoch, round) to guarantee the topological order of parent
-        // <- child
-        blocks.sort_by_key(|b| (b.epoch(), b.round()));
+    let root_idx = blocks
+        .iter()
+        .position(|block| block.id() == root_id)
+        .ok_or_else(|| format_err!("unable to find root: {}", root_id))?;
+    let root_block = blocks.remove(root_idx);
+    let root_quorum_cert = quorum_certs
+        .iter()
+        .find(|qc| qc.certified_block().id() == root_block.id())
+        .ok_or_else(|| format_err!("No QC found for root: {}", root_id))?
+        .clone();
+    let root_ledger_info = quorum_certs
+        .iter()
+        .find(|qc| qc.commit_info().id() == root_block.id())
+        .ok_or_else(|| format_err!("No LI found for root: {}", root_id))?
+        .clone();
 
-        let root_idx = blocks
-            .iter()
-            .position(|block| block.id() == root_id)
-            .ok_or_else(|| format_err!("unable to find root: {}", root_id))?;
-        let root_block = blocks.remove(root_idx);
-        let root_quorum_cert = quorum_certs
-            .iter()
-            .find(|qc| qc.certified_block().id() == root_block.id())
-            .ok_or_else(|| format_err!("No QC found for root: {}", root_id))?
-            .clone();
-        let root_ledger_info = quorum_certs
-            .iter()
-            .find(|qc| qc.commit_info().id() == root_block.id())
-            .ok_or_else(|| format_err!("No LI found for root: {}", root_id))?
-            .clone();
+    diem_info!("Consensus root block is {}", root_block);
 
-        diem_info!("Consensus root block is {}", root_block);
-
-        Ok(RootInfo(root_block, root_quorum_cert, root_ledger_info))
-    }
+    Ok(RootInfo(root_block, root_quorum_cert, root_ledger_info))
 }
 
 pub struct RootMetadata {
@@ -196,19 +172,18 @@ pub struct RecoveryData {
 
 impl RecoveryData {
     pub fn new(
-        last_vote: Option<Vote>, ledger_recovery_data: LedgerRecoveryData,
+        last_vote: Option<Vote>, storage_ledger: &LedgerInfo,
         mut blocks: Vec<Block>, root_metadata: RootMetadata,
         mut quorum_certs: Vec<QuorumCert>,
         highest_timeout_certificate: Option<TimeoutCertificate>,
     ) -> Result<Self> {
-        let root = ledger_recovery_data
-            .find_root(&mut blocks, &mut quorum_certs)
+        let root = find_root(storage_ledger, &mut blocks, &mut quorum_certs)
             .with_context(|| {
                 // for better readability
                 quorum_certs.sort_by_key(|qc| qc.certified_block().round());
                 format!(
                     "\nRoot id: {}\nBlocks in db: {}\nQuorum Certs in db: {}\n",
-                    ledger_recovery_data.storage_ledger.consensus_block_id(),
+                    storage_ledger.consensus_block_id(),
                     blocks
                         .iter()
                         .map(|b| format!("\n\t{}", b))
@@ -327,19 +302,7 @@ impl PersistentLivenessStorage for StorageWriteProxy {
         Ok(self.db.save_vote(bcs::to_bytes(vote)?)?)
     }
 
-    fn recover_from_ledger(&self) -> LedgerRecoveryData {
-        let startup_info = self
-            .pos_ledger_db
-            .get_startup_info(true)
-            .expect("unable to read ledger info from storage")
-            .expect("startup info is None");
-
-        LedgerRecoveryData::new(
-            startup_info.latest_ledger_info.ledger_info().clone(),
-        )
-    }
-
-    fn start(&self) -> LivenessStorageData {
+    fn start(&self) -> RecoveryData {
         diem_info!("Start consensus recovery.");
         let raw_data = self
             .db
@@ -379,9 +342,8 @@ impl PersistentLivenessStorage for StorageWriteProxy {
             .expect("unable to read ledger info from storage")
             .expect("startup info is None");
         diem_debug!("startup_info={:?}", startup_info);
-        let ledger_recovery_data = LedgerRecoveryData::new(
-            startup_info.latest_ledger_info.ledger_info().clone(),
-        );
+        let storage_ledger =
+            startup_info.latest_ledger_info.ledger_info().clone();
         let frozen_root_hashes = startup_info
             .committed_tree_state
             .ledger_frozen_subtree_hashes
@@ -390,50 +352,44 @@ impl PersistentLivenessStorage for StorageWriteProxy {
             startup_info.committed_tree_state,
             startup_info.committed_pos_state,
         );
-        match RecoveryData::new(
+        let mut initial_data = RecoveryData::new(
             last_vote,
-            ledger_recovery_data.clone(),
+            &storage_ledger,
             blocks,
             RootMetadata::new(
                 root_executed_trees.txn_accumulator().num_leaves(),
                 root_executed_trees.state_id(),
                 frozen_root_hashes,
-                startup_info
-                    .latest_ledger_info
-                    .ledger_info()
-                    .pivot_decision()
-                    .cloned(),
+                storage_ledger.pivot_decision().cloned(),
             ),
             quorum_certs,
             highest_timeout_certificate,
-        ) {
-            Ok(mut initial_data) => {
-                (self as &dyn PersistentLivenessStorage)
-                    .prune_tree(initial_data.take_blocks_to_prune())
-                    .expect("unable to prune dangling blocks during restart");
-                if initial_data.last_vote.is_none() {
-                    self.db
-                        .delete_last_vote_msg()
-                        .expect("unable to cleanup last vote");
-                }
-                if initial_data.highest_timeout_certificate.is_none() {
-                    self.db
-                        .delete_highest_timeout_certificate()
-                        .expect("unable to cleanup highest timeout cert");
-                }
-                diem_info!(
-                    "Starting up the consensus state machine with recovery data - [last_vote {}], [highest timeout certificate: {}]",
-                    initial_data.last_vote.as_ref().map_or("None".to_string(), |v| v.to_string()),
-                    initial_data.highest_timeout_certificate.as_ref().map_or("None".to_string(), |v| v.to_string()),
-                );
+        )
+        .expect(
+            "ConsensusDB is missing the root block referenced by the latest \
+             committed ledger info — this indicates on-disk corruption",
+        );
 
-                LivenessStorageData::RecoveryData(initial_data)
-            }
-            Err(e) => {
-                diem_error!(error = ?e, "Failed to construct recovery data");
-                LivenessStorageData::LedgerRecoveryData(ledger_recovery_data)
-            }
+        (self as &dyn PersistentLivenessStorage)
+            .prune_tree(initial_data.take_blocks_to_prune())
+            .expect("unable to prune dangling blocks during restart");
+        if initial_data.last_vote.is_none() {
+            self.db
+                .delete_last_vote_msg()
+                .expect("unable to cleanup last vote");
         }
+        if initial_data.highest_timeout_certificate.is_none() {
+            self.db
+                .delete_highest_timeout_certificate()
+                .expect("unable to cleanup highest timeout cert");
+        }
+        diem_info!(
+            "Starting up the consensus state machine with recovery data - [last_vote {}], [highest timeout certificate: {}]",
+            initial_data.last_vote.as_ref().map_or("None".to_string(), |v| v.to_string()),
+            initial_data.highest_timeout_certificate.as_ref().map_or("None".to_string(), |v| v.to_string()),
+        );
+
+        initial_data
     }
 
     fn save_highest_timeout_cert(

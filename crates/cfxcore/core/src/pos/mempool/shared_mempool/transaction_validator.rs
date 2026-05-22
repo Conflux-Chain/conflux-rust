@@ -1,8 +1,8 @@
 use diem_types::{
     term_state::PosState,
     transaction::{
-        authenticator::TransactionAuthenticator, GovernanceRole,
-        SignedTransaction, TransactionPayload, VMValidatorResult,
+        authenticator::TransactionAuthenticator, SignedTransaction,
+        TransactionPayload,
     },
 };
 use move_core_types::vm_status::DiscardedVMStatus;
@@ -13,11 +13,11 @@ pub struct TransactionValidator {}
 impl TransactionValidator {
     pub fn new() -> Self { Self {} }
 
-    // TODO: `score` and `governance_role` in `VMValidatorResult` are not
-    // needed now.
+    /// Returns `None` if the transaction is accepted, or a
+    /// `DiscardedVMStatus` describing why it should be rejected.
     pub fn validate_transaction(
         &self, tx: &SignedTransaction, pos_state: Arc<PosState>,
-    ) -> Option<VMValidatorResult> {
+    ) -> Option<DiscardedVMStatus> {
         // This check is cheaper than signature verification, so we do not
         // need to verify signatures for old transactions.
         let result = match tx.payload() {
@@ -30,41 +30,22 @@ impl TransactionValidator {
             _ => None,
         };
         if result.is_some() {
-            return Some(VMValidatorResult::new(
-                result,
-                0,
-                GovernanceRole::Validator,
-            ));
+            return result;
         }
 
         match tx.authenticator() {
             TransactionAuthenticator::BLS { .. } => {}
-            _ => {
-                return Some(VMValidatorResult::new(
-                    Some(DiscardedVMStatus::INVALID_SIGNATURE),
-                    0,
-                    GovernanceRole::Validator,
-                ));
-            }
+            _ => return Some(DiscardedVMStatus::INVALID_SIGNATURE),
         }
 
-        // check signature
         if tx.clone().check_signature().is_err() {
-            return Some(VMValidatorResult::new(
-                Some(DiscardedVMStatus::INVALID_SIGNATURE),
-                0,
-                GovernanceRole::Validator,
-            ));
+            return Some(DiscardedVMStatus::INVALID_SIGNATURE);
         }
 
         if tx.expiration_timestamp_secs() != u64::MAX {
-            return Some(VMValidatorResult::new(
-                Some(DiscardedVMStatus::INVALID_EXPIRATION_TIME),
-                0,
-                GovernanceRole::Validator,
-            ));
+            return Some(DiscardedVMStatus::INVALID_EXPIRATION_TIME);
         }
 
-        Some(VMValidatorResult::new(result, 0, GovernanceRole::Validator))
+        None
     }
 }

@@ -17,9 +17,33 @@ export CARGO_TARGET_DIR=$ROOT_DIR/build
 export CONFLUX_BENCH=$CARGO_TARGET_DIR/release/consensus_bench
 export RUSTFLAGS="-g -D warnings"
 
+CHECK_FMT=0
 CHECK_BUILD=1
 CHECK_INT_TEST=2
 CHECK_PY_TEST=3
+
+function check_fmt {
+    local -n inner_result=$1
+
+    pushd $ROOT_DIR > /dev/null
+
+    local result
+
+    result=$(
+        $ROOT_DIR/cargo_fmt.sh -- --check | tee /dev/stderr
+    )
+
+    local exit_code=$?
+
+    popd > /dev/null
+
+    if [[ $exit_code -ne 0 ]]; then
+        result="Fmt check failed."$'\n'"$result"
+    else
+        result="Fmt check passed."
+    fi
+    inner_result=($exit_code "$result")
+}
 
 function check_build {
     local -n inner_result=$1
@@ -76,7 +100,7 @@ function check_integration_tests {
     local result
     result=$(
         # Make symbolic link for conflux binary to where integration test assumes its existence.
-        rm -f target; ln -s build target
+        rm -rf target; ln -s build target
         ./tests/test_all.py --max-workers $TEST_MAX_WORKERS --max-retries $TEST_MAX_RETRIES --max-nodes $TEST_MAX_NODES | tee /dev/stderr
     )
     local exit_code=$?
@@ -123,6 +147,11 @@ function save_test_result {
 
 echo -n "" > $ROOT_DIR/.phabricator-comment
 mkdir -p $ROOT_DIR/build
+
+# Fmt check
+echo "=== Fmt check ==="
+declare -a test_result; check_fmt test_result; save_test_result test_result $CHECK_FMT
+echo "=== Fmt check passed ==="
 
 # Phase 1: Build main project
 echo "=== Phase 1/4: Building main project ==="

@@ -28,15 +28,16 @@ use crate::{
 };
 
 use cached_pos_ledger_db::CachedPosLedgerDB;
+use cfx_types::U256;
 use diem_config::config::NodeConfig;
 use diem_logger::{prelude::*, Writer};
 use diem_types::{
-    account_address::{from_consensus_public_key, AccountAddress},
+    account_address::AccountAddress,
     block_info::PivotBlockDecision,
+    chain_id::ChainId,
     term_state::NodeID,
     transaction::SignedTransaction,
-    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
-    PeerId,
+    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use executor::db_bootstrapper::maybe_bootstrap;
 use futures::channel::{
@@ -60,6 +61,28 @@ use tokio::runtime::Runtime;
 const AC_SMP_CHANNEL_BUFFER_SIZE: usize = 1_024;
 const INTRA_NODE_CHANNEL_BUFFER_SIZE: usize = 1;
 
+/// This validator's identity and signing secrets.
+///
+/// These used to live inside `SafetyRulesConfig.test` / `.vrf_private_key`,
+/// but they are supplied by the Conflux-side TOML and have nothing to do
+/// with per-chain parameters.
+pub struct PosNodeKeys {
+    pub author: AccountAddress,
+    pub consensus_private_key: ConsensusPrivateKey,
+    pub vrf_private_key: ConsensusVRFPrivateKey,
+}
+
+/// Chain-wide PoS consensus parameters that every validator must agree on.
+///
+/// These used to live inside `ConsensusConfig.chain_id` /
+/// `SafetyRulesConfig.vrf_proposal_threshold`, but they are not per-operator
+/// choices — they're constants of the chain, derived from the network (for
+/// `chain_id`) or fixed by protocol (for `vrf_proposal_threshold`).
+pub struct PosChainParams {
+    pub chain_id: ChainId,
+    pub vrf_proposal_threshold: U256,
+}
+
 pub struct PosDropHandle {
     // pow handler
     pub pow_handler: Arc<PowHandler>,
@@ -77,16 +100,13 @@ pub struct PosDropHandle {
 
 pub fn start_pos_consensus(
     config: &NodeConfig, network: Arc<NetworkService>,
-    protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
-    pos_genesis_state: GenesisPosState,
+    protocol_config: ProtocolConfiguration, node_keys: PosNodeKeys,
+    chain_params: PosChainParams, pos_genesis_state: GenesisPosState,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
-    test_command_receiver: channel::Receiver<TestCommand>,
+    test_command_receiver: mpsc::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> PosDropHandle {
-    crash_handler::setup_panic_handler();
-
     let mut logger = diem_logger::Logger::new();
     logger
         .channel_size(config.logger.chan_size)
@@ -117,17 +137,6 @@ pub fn start_pos_consensus(
     // Let's now log some important information, since the logger is set up
     diem_info!(config = config, "Loaded Pos config");
 
-    /*if config.metrics.enabled {
-        for network in &config.full_node_networks {
-            let peer_id = network.peer_id();
-            setup_metrics(peer_id, &config);
-        }
-
-        if let Some(network) = config.validator_network.as_ref() {
-            let peer_id = network.peer_id();
-            setup_metrics(peer_id, &config);
-        }
-    }*/
     if fail::has_failpoints() {
         diem_warn!("Failpoints is enabled");
         if let Some(failpoints) = &config.failpoints {
@@ -144,7 +153,8 @@ pub fn start_pos_consensus(
         &config,
         network,
         protocol_config,
-        own_pos_public_key,
+        node_keys,
+        chain_params,
         pos_genesis_state,
         consensus_network_receiver,
         mempool_network_receiver,
@@ -153,48 +163,20 @@ pub fn start_pos_consensus(
     )
 }
 
-#[allow(unused)]
-fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
-    diem_metrics::dump_all_metrics_to_file_periodically(
-        &config.metrics.dir(),
-        &format!("{}.metrics", peer_id),
-        config.metrics.collection_interval_ms,
-    );
-}
-
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
-    protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
-    pos_genesis_state: GenesisPosState,
+    protocol_config: ProtocolConfiguration, node_keys: PosNodeKeys,
+    chain_params: PosChainParams, pos_genesis_state: GenesisPosState,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
-    test_command_receiver: channel::Receiver<TestCommand>,
+    test_command_receiver: mpsc::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> PosDropHandle {
-    // TODO(lpl): Handle port conflict.
-    // let metrics_port = node_config.debug_interface.metrics_server_port;
-    // let metric_host = node_config.debug_interface.address.clone();
-    // thread::spawn(move || {
-    //     metric_server::start_server(metric_host, metrics_port, false)
-    // });
-    // let public_metrics_port =
-    //     node_config.debug_interface.public_metrics_server_port;
-    // let public_metric_host = node_config.debug_interface.address.clone();
-    // thread::spawn(move || {
-    //     metric_server::start_server(
-    //         public_metric_host,
-    //         public_metrics_port,
-    //         true,
-    //     )
-    // });
-
     let mut instant = Instant::now();
     let (pos_ledger_db, db_rw) = DbReaderWriter::wrap(
         PosLedgerDB::open(
             &node_config.storage.dir(),
             false, /* readonly */
-            node_config.storage.prune_window,
             node_config.storage.rocksdb_config,
         )
         .expect("DB should open."),
@@ -255,7 +237,7 @@ pub fn setup_pos_environment(
 
     // Initialize and start consensus.
     instant = Instant::now();
-    debug!("own_pos_public_key: {:?}", own_pos_public_key);
+    debug!("pos author: {:?}", node_keys.author);
     let (consensus_runtime, pow_handler, stopped, consensus_db) =
         start_consensus(
             node_config,
@@ -266,12 +248,8 @@ pub fn setup_pos_environment(
             node_config.consensus.mempool_commit_timeout_ms,
             pos_ledger_db.clone(),
             db_with_cache.clone(),
-            own_pos_public_key.map_or_else(
-                || AccountAddress::random(),
-                |public_key| {
-                    from_consensus_public_key(&public_key.0, &public_key.1)
-                },
-            ),
+            node_keys,
+            chain_params,
             mp_client_sender.clone(),
             test_command_receiver,
             protocol_config.pos_started_as_voter,

@@ -14,9 +14,6 @@ use std::{
 
 use cfx_rpc_builder::RpcServerHandle;
 use cfx_util_macros::bail;
-use jsonrpc_http_server::Server as HttpServer;
-use jsonrpc_tcp_server::Server as TcpServer;
-use jsonrpc_ws_server::Server as WSServer;
 use parking_lot::{Condvar, Mutex};
 use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use threadpool::ThreadPool;
@@ -26,6 +23,7 @@ use cfx_executor::machine::{Machine, VmFactory};
 use cfx_parameters::genesis::{
     DEV_GENESIS_KEY_PAIR_2, GENESIS_ACCOUNT_ADDRESS,
 };
+use cfx_rpc_cfx_types::apis::ApiSet;
 use cfx_storage::StorageManager;
 use cfx_tasks::TaskManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
@@ -65,20 +63,13 @@ use cfx_config::{parse_config_address_string, Configuration};
 use crate::{
     accounts::{account_provider, keys_path},
     keylib::KeyPair,
-    rpc::{
-        extractor::RpcExtractor,
-        impls::{
-            cfx::RpcImpl, common::RpcImpl as CommonRpcImpl,
-            pubsub::PubSubClient,
-        },
-        launch_async_rpc_servers, setup_debug_rpc_apis, setup_public_rpc_apis,
-    },
+    rpc_starter::{launch_async_rpc_servers, launch_cfx_async_rpc_servers},
 };
 #[cfg(all(unix, feature = "jemalloc-prof"))]
 use cfx_mallocator_utils::start_pprf_server;
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 
-pub mod delegate_convert;
+pub mod panic_handler;
 pub mod shutdown_handler;
 
 /// Hold all top-level components for a type of client.
@@ -151,10 +142,8 @@ pub fn initialize_common_modules(
         Arc<ConsensusGraph>,
         Arc<SynchronizationGraph>,
         Arc<NetworkService>,
-        Arc<CommonRpcImpl>,
         Arc<AccountProvider>,
         Arc<Notifications>,
-        PubSubClient,
         Arc<TokioRuntime>,
     ),
     String,
@@ -166,7 +155,7 @@ pub fn initialize_common_modules(
         let key_path = Path::new(&conf.raw_conf.pos_private_key_path);
 
         let read_pos_password = |prompt: &str| -> Result<Vec<u8>, String> {
-            match rpassword::read_password_from_tty(Some(prompt)) {
+            match rpassword::prompt_password(prompt) {
                 Ok(password) => Ok(password.into_bytes()),
                 Err(e) => {
                     let mut msg = format!("{:?}", e);
@@ -466,23 +455,8 @@ pub fn initialize_common_modules(
         .expect("failed to initialize account provider"),
     );
 
-    let common_impl = Arc::new(CommonRpcImpl::new(
-        exit,
-        consensus.clone(),
-        network.clone(),
-        txpool.clone(),
-        accounts.clone(),
-        pos_verifier.clone(),
-    ));
     let tokio_runtime =
         Arc::new(TokioRuntime::new().map_err(|e| e.to_string())?);
-
-    let pubsub = PubSubClient::new(
-        tokio_runtime.clone(),
-        consensus.clone(),
-        notifications.clone(),
-        *network.get_network_type(),
-    );
 
     Ok((
         machine,
@@ -495,10 +469,8 @@ pub fn initialize_common_modules(
         consensus,
         sync_graph,
         network,
-        common_impl,
         accounts,
         notifications,
-        pubsub,
         tokio_runtime,
     ))
 }
@@ -514,14 +486,10 @@ pub fn initialize_not_light_node_modules(
         Arc<ConsensusGraph>,
         Arc<SynchronizationService>,
         Arc<BlockGenerator>,
-        Option<HttpServer>,
-        Option<HttpServer>,
-        Option<TcpServer>,
-        Option<TcpServer>,
-        Option<WSServer>,
-        Option<WSServer>,
         Arc<PosVerifier>,
         Arc<TokioRuntime>,
+        Option<RpcServerHandle>,
+        Option<RpcServerHandle>,
         Option<RpcServerHandle>,
         TaskManager,
     ),
@@ -538,10 +506,8 @@ pub fn initialize_not_light_node_modules(
         consensus,
         sync_graph,
         network,
-        common_impl,
         accounts,
         notifications,
-        pubsub,
         tokio_runtime,
     ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
@@ -655,81 +621,16 @@ pub fn initialize_not_light_node_modules(
         }
         if pow_config.enable_mining() {
             let bg = blockgen.clone();
-            tokio_runtime.spawn(async move {
-                bg.mine().await;
-            });
+            thread::Builder::new()
+                .name("mining".into())
+                .spawn(move || {
+                    bg.mine();
+                })
+                .expect("Mining thread spawn error");
         }
     }
 
-    let rpc_impl = Arc::new(RpcImpl::new(
-        consensus.clone(),
-        sync.clone(),
-        blockgen.test_api(),
-        txpool.clone(),
-        maybe_txgen.clone(),
-        maybe_direct_txgen,
-        conf.rpc_impl_config(),
-        accounts,
-    ));
-
-    let debug_rpc_http_server = super::rpc::start_http(
-        conf.local_http_config(),
-        setup_debug_rpc_apis(
-            common_impl.clone(),
-            rpc_impl.clone(),
-            pubsub.clone(),
-            &conf,
-        ),
-    )?;
-
-    let debug_rpc_tcp_server = super::rpc::start_tcp(
-        conf.local_tcp_config(),
-        setup_debug_rpc_apis(
-            common_impl.clone(),
-            rpc_impl.clone(),
-            pubsub.clone(),
-            &conf,
-        ),
-        RpcExtractor,
-    )?;
-
-    let rpc_tcp_server = super::rpc::start_tcp(
-        conf.tcp_config(),
-        setup_public_rpc_apis(
-            common_impl.clone(),
-            rpc_impl.clone(),
-            pubsub.clone(),
-            &conf,
-        ),
-        RpcExtractor,
-    )?;
-
-    let debug_rpc_ws_server = super::rpc::start_ws(
-        conf.local_ws_config(),
-        setup_public_rpc_apis(
-            common_impl.clone(),
-            rpc_impl.clone(),
-            pubsub.clone(),
-            &conf,
-        ),
-        RpcExtractor,
-    )?;
-
-    let rpc_ws_server = super::rpc::start_ws(
-        conf.ws_config(),
-        setup_public_rpc_apis(
-            common_impl.clone(),
-            rpc_impl.clone(),
-            pubsub.clone(),
-            &conf,
-        ),
-        RpcExtractor,
-    )?;
-
-    let rpc_http_server = super::rpc::start_http(
-        conf.http_config(),
-        setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
-    )?;
+    info!("Using new async core space RPC implementation");
 
     let task_manager = TaskManager::new(tokio_runtime.handle().clone());
     let task_executor = task_manager.executor();
@@ -742,6 +643,47 @@ pub fn initialize_not_light_node_modules(
             notifications.clone(),
             task_executor.clone(),
             conf,
+        ))?;
+
+    // Start V2 async core space RPC servers.
+    let cfx_rpc_server_handle =
+        tokio_runtime.block_on(launch_cfx_async_rpc_servers(
+            consensus.clone(),
+            sync.clone(),
+            txpool.clone(),
+            data_man.clone(),
+            network.clone(),
+            pos_verifier.clone(),
+            notifications.clone(),
+            task_executor.clone(),
+            accounts.clone(),
+            exit.clone(),
+            blockgen.test_api(),
+            maybe_txgen.clone(),
+            maybe_direct_txgen.clone(),
+            conf,
+            conf.raw_conf.public_rpc_apis.clone(),
+            false,
+        ))?;
+
+    let debug_cfx_rpc_server_handle =
+        tokio_runtime.block_on(launch_cfx_async_rpc_servers(
+            consensus.clone(),
+            sync.clone(),
+            txpool.clone(),
+            data_man.clone(),
+            network.clone(),
+            pos_verifier.clone(),
+            notifications.clone(),
+            task_executor.clone(),
+            accounts.clone(),
+            exit.clone(),
+            blockgen.test_api(),
+            maybe_txgen.clone(),
+            maybe_direct_txgen.clone(),
+            conf,
+            ApiSet::All,
+            true,
         ))?;
 
     // start pprf server, which is used to serve the pprof data for heap
@@ -767,15 +709,11 @@ pub fn initialize_not_light_node_modules(
         consensus,
         sync,
         blockgen,
-        debug_rpc_http_server,
-        rpc_http_server,
-        debug_rpc_tcp_server,
-        rpc_tcp_server,
-        debug_rpc_ws_server,
-        rpc_ws_server,
         pos_verifier,
         tokio_runtime,
         eth_rpc_server_handle,
+        cfx_rpc_server_handle,
+        debug_cfx_rpc_server_handle,
         task_manager,
     ))
 }
