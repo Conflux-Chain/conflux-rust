@@ -1,14 +1,5 @@
-
-base:
-  #data_dir: ./pos_db
-  role: validator
-  waypoint:
-    from_config: 0:81bf85cc19ca409846c142497552c998812aa96a72cdeab691892674db3e83cd
 consensus:
   round_initial_timeout_ms: 60000
-  safety_rules:
-    service:
-      type: local
   hardcoded_epoch_committee:
     7760:
       quorum_voting_power: 201
@@ -30,8 +21,6 @@ consensus:
           public_key: b413f616dc22b6c14626b3e0961ce358b9b658b0e581ede8a33a67864ffdacf335dd8a113aa037a7e57154f8b829c040
           vrf_public_key: 02d96026db65dfb2cab7efc88178890d5f69676af2876f2301901bb4c7de5c8446
           voting_power: 75
-execution:
-  genesis_file_location: ./genesis_file
 logger:
   file: ./log/pos.log
   level: INFO
