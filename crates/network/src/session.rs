@@ -27,7 +27,6 @@ use std::{
     fmt,
     net::SocketAddr,
     str,
-    sync::{Arc, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -52,10 +51,8 @@ pub struct Session {
     sent_hello: Instant,
     /// Session ready flag that set after successful Hello packet received.
     had_hello: Option<Instant>,
-    /// Set once when a kill path expires the session. `Arc<OnceLock>` so a
-    /// clone can live in `node_id_index` (see `IndexEntry`). The `Instant` is
-    /// diagnostic only — query liveness via `expired()`.
-    expired: Arc<OnceLock<Instant>>,
+    /// Set once when a kill path expires the session.
+    expired: Option<Instant>,
 
     // statistics for read/write
     last_read: Instant,
@@ -130,7 +127,7 @@ impl Session {
             state: State::Handshake(MovableWrapper::new(handshake)),
             sent_hello: Instant::now(),
             had_hello: None,
-            expired: Arc::new(OnceLock::new()),
+            expired: None,
             last_read: Instant::now(),
             last_write: (Instant::now(), WriteStatus::Complete),
             pos_public_key,
@@ -151,18 +148,9 @@ impl Session {
 
     pub fn is_ready(&self) -> bool { self.had_hello.is_some() }
 
-    pub fn expired(&self) -> bool { self.expired.get().is_some() }
+    pub fn expired(&self) -> bool { self.expired.is_some() }
 
-    /// Clone of the expired cell, for `SessionManager` to store in
-    /// `IndexEntry`.
-    pub fn expired_handle(&self) -> Arc<OnceLock<Instant>> {
-        self.expired.clone()
-    }
-
-    pub fn set_expired(&mut self) {
-        // Already-expired re-kills are benign: the first expiration wins.
-        let _ = self.expired.set(Instant::now());
-    }
+    pub fn set_expired(&mut self) { self.expired = Some(Instant::now()); }
 
     pub fn done(&self) -> bool {
         self.expired() && !self.connection().is_sending()
@@ -382,7 +370,7 @@ impl Session {
 
         let result = host
             .sessions
-            .update_ingress_node_id(token, &node_id, self.expired.clone())
+            .update_ingress_node_id(token, &node_id)
             .map_err(|reason| {
                 debug!(
                     "failed to update node id of ingress session, reason = {:?}, session = {:?}",
@@ -675,7 +663,7 @@ impl Session {
             node_id: self.metadata.id,
             address: self.address,
             connection: self.connection().details(),
-            status: if let Some(time) = self.expired.get() {
+            status: if let Some(time) = self.expired {
                 format!("expired ({:?})", time.elapsed())
             } else if let Some(time) = self.had_hello {
                 format!("communicating ({:?})", time.elapsed())
@@ -697,7 +685,7 @@ impl Session {
     /// heartbeat mechanism to exchange peer status. As a result, Inactive
     /// sessions (e.g. network issue) will be disconnected timely.
     pub fn check_timeout(&self) -> (bool, Option<UpdateNodeOperation>) {
-        if let Some(time) = self.expired.get() {
+        if let Some(time) = self.expired {
             // should disconnected timely once expired
             if time.elapsed() > Duration::from_secs(5) {
                 return (true, None);

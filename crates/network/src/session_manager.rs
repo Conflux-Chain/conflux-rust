@@ -20,32 +20,23 @@ use std::{
     net::{IpAddr, SocketAddr},
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc, OnceLock,
+        Arc,
     },
-    time::Instant,
 };
 
-/// An entry in `SessionManager::node_id_index`: the session's slab token, its
-/// direction (`originated`), and a lock-free view of its expired flag.
+/// An entry in `SessionManager::node_id_index`: the session's slab token and
+/// its direction (`originated`).
 ///
-/// `originated` and `expired` are cached here so the tie-breaker in
-/// `update_ingress_node_id` can read them without locking the `Session` —
-/// doing so while holding `node_id_index.write()` would deadlock the kill
-/// path. `expired` is the *same* `OnceLock` the `Session` holds, so it can't
-/// drift.
+/// `originated` is cached here so the simultaneous-dial tie-breaker in
+/// `update_ingress_node_id` can read it without locking the `Session`. Kill
+/// paths remove the entry (`remove_node_id_entry`) before marking the session
+/// expired, so a present entry is not left pointing at an already-expired
+/// session.
 #[derive(Clone, Debug)]
 pub struct IndexEntry {
     pub token: usize,
     /// `true` = our outbound (egress); `false` = remote's inbound (ingress).
     pub originated: bool,
-    /// Shares `Session::expired` — see the struct doc.
-    expired: Arc<OnceLock<Instant>>,
-}
-
-impl IndexEntry {
-    /// `true` once the pointed-at session is expired. The entry lingers in
-    /// `node_id_index` past expiry until `deregister_stream` removes it.
-    fn is_expired(&self) -> bool { self.expired.get().is_some() }
 }
 
 /// Outcome of `SessionManager::update_ingress_node_id`.
@@ -83,23 +74,6 @@ pub fn simultaneous_dial_outcome(
         SimDialOutcome::KeepNew
     } else {
         SimDialOutcome::KeepExisting
-    }
-}
-
-fn ingress_duplicate_outcome(
-    own_node_id: &NodeId, remote_node_id: &NodeId, existing: &IndexEntry,
-) -> SimDialOutcome {
-    // An expired existing entry is a session being torn down (its entry
-    // lingers until `deregister_stream`). Tie-breaking against it could
-    // `DropNew` and leave us with no connection, so it loses by default.
-    if existing.is_expired() {
-        SimDialOutcome::KeepNew
-    } else {
-        simultaneous_dial_outcome(
-            own_node_id,
-            remote_node_id,
-            existing.originated,
-        )
     }
 }
 
@@ -309,7 +283,6 @@ impl SessionManager {
             }
             Ok(session) => session,
         };
-        let expired = session.expired_handle();
         entry.insert(Arc::new(RwLock::new(session)));
 
         // update on creation succeeded
@@ -320,7 +293,6 @@ impl SessionManager {
                 IndexEntry {
                     token: index,
                     originated: true,
-                    expired,
                 },
             );
         }
@@ -345,14 +317,7 @@ impl SessionManager {
         // TODO This check can be removed?
         if sessions.contains(session.token()) {
             sessions.remove(session.token());
-            if let Some(node_id) = session.id() {
-                let mut node_id_index = self.node_id_index.write();
-                if let Some(entry) = node_id_index.get(node_id) {
-                    if entry.token == session.token() {
-                        node_id_index.remove(node_id);
-                    }
-                }
-            }
+            // node_id_index was already cleared by `remove_node_id_entry`.
 
             assert!(self.ip_limit.write().remove(&session.address().ip()));
 
@@ -368,11 +333,19 @@ impl SessionManager {
         debug!("SessionManager.remove: leave");
     }
 
+    /// Drop the reverse-index entry for `node_id` if it still points at
+    /// `token`. Called early in a kill, before the session is marked expired.
+    pub fn remove_node_id_entry(&self, node_id: &NodeId, token: usize) {
+        let mut node_id_index = self.node_id_index.write();
+        if let Some(entry) = node_id_index.get(node_id) {
+            if entry.token == token {
+                node_id_index.remove(node_id);
+            }
+        }
+    }
+
     /// Update the node id index for an ingress session whose HELLO has
     /// just been processed and the remote `node_id` is now known.
-    ///
-    /// `new_expired` is the new ingress's expired handle, passed in because the
-    /// caller already holds that `Session`'s write lock.
     ///
     /// Returns:
     /// - `Err(_)` if the session at `idx` is no longer in the slab (the session
@@ -386,7 +359,6 @@ impl SessionManager {
     ///   ingress (`idx`) it was about to register.
     pub fn update_ingress_node_id(
         &self, idx: usize, node_id: &NodeId,
-        new_expired: Arc<OnceLock<Instant>>,
     ) -> Result<UpdateIngressResult, String> {
         debug!("SessionManager.update_ingress_node_id: enter");
 
@@ -405,17 +377,16 @@ impl SessionManager {
         let new_entry = IndexEntry {
             token: idx,
             originated: false,
-            expired: new_expired,
         };
 
         if let Some(existing) = node_id_index.get(node_id).cloned() {
             if existing.token == idx {
                 panic!("The same token already exists for the same node!!!");
             }
-            let outcome = ingress_duplicate_outcome(
+            let outcome = simultaneous_dial_outcome(
                 &self.own_node_id,
                 node_id,
-                &existing,
+                existing.originated,
             );
             match outcome {
                 SimDialOutcome::KeepNew => {
@@ -518,13 +489,8 @@ mod tests {
     use crate::{
         node_table::NodeId,
         session_manager::{
-            ingress_duplicate_outcome, simultaneous_dial_outcome, IndexEntry,
-            SessionTagIndex, SimDialOutcome,
+            simultaneous_dial_outcome, SessionTagIndex, SimDialOutcome,
         },
-    };
-    use std::{
-        sync::{Arc, OnceLock},
-        time::Instant,
     };
 
     #[test]
@@ -576,27 +542,6 @@ mod tests {
         assert_eq!(
             simultaneous_dial_outcome(&hi, &lo, true),
             SimDialOutcome::KeepExisting
-        );
-    }
-
-    #[test]
-    fn simdial_expired_existing_entry_keeps_new_ingress() {
-        let lo = NodeId::from_low_u64_be(1);
-        let hi = NodeId::from_low_u64_be(2);
-        let expired = Arc::new(OnceLock::new());
-        assert!(expired.set(Instant::now()).is_ok());
-        let existing = IndexEntry {
-            token: 1,
-            originated: true,
-            expired,
-        };
-
-        // Without the expired-entry guard, this ordering would keep the
-        // existing egress. Because that session is already expired, the new
-        // ingress must replace it instead.
-        assert_eq!(
-            ingress_duplicate_outcome(&hi, &lo, &existing),
-            SimDialOutcome::KeepNew
         );
     }
 
