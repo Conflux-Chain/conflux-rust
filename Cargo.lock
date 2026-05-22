@@ -1762,7 +1762,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-impl"
-version = "3.0.0"
+version = "3.0.4-testnet-fix"
 dependencies = [
  "async-trait",
  "bigdecimal",
