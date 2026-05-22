@@ -39,6 +39,7 @@ impl Handleable for GetBlockTxnResponse {
         )?;
 
         let mut request_from_same_peer = false;
+        let mut invalid_response = false;
         // There can be at most one success block in this set.
         let mut received_blocks = HashSet::new();
         if resp_hash != req.block_hash {
@@ -60,61 +61,81 @@ impl Handleable for GetBlockTxnResponse {
                 .recover_unsigned_tx_with_order(&self.block_txn)?;
             match ctx.manager.graph.data_man.compact_block_by_hash(&resp_hash) {
                 Some(cmpct) => {
-                    let mut trans =
-                        Vec::with_capacity(cmpct.reconstructed_txns.len());
-                    let mut index = 0;
-                    for tx in cmpct.reconstructed_txns {
-                        match tx {
-                            Some(tx) => trans.push(tx),
-                            None => {
-                                trans.push(signed_txns[index].clone());
-                                index += 1;
+                    let missing_count = cmpct
+                        .reconstructed_txns
+                        .iter()
+                        .filter(|tx| tx.is_none())
+                        .count();
+                    if signed_txns.len() != missing_count {
+                        warn!(
+                            "Peer {} sent GetBlockTxnResponse with {} \
+                             transactions but compact block {} has {} \
+                             missing slots",
+                            ctx.node_id,
+                            signed_txns.len(),
+                            resp_hash,
+                            missing_count,
+                        );
+                        invalid_response = true;
+                    } else {
+                        let mut trans =
+                            Vec::with_capacity(cmpct.reconstructed_txns.len());
+                        let mut index = 0;
+                        for tx in cmpct.reconstructed_txns {
+                            match tx {
+                                Some(tx) => trans.push(tx),
+                                None => {
+                                    trans.push(signed_txns[index].clone());
+                                    index += 1;
+                                }
                             }
                         }
-                    }
-                    // FIXME Should check if hash matches
-                    let block = Block::new(header, trans);
-                    debug!(
-                        "transaction received by block: ratio={:?}",
-                        self.block_txn.len() as f64
-                            / block.transactions.len() as f64
-                    );
-                    debug!(
-                        "new block received: block_header={:?}, tx_count={}, block_size={}",
-                        block.block_header,
-                        block.transactions.len(),
-                        block.size(),
-                    );
-                    let insert_result = ctx.manager.graph.insert_block(
-                        block, true,  // need_to_verify
-                        true,  // persistent
-                        false, // recover_from_db
-                    );
+                        // FIXME Should check if hash matches
+                        let block = Block::new(header, trans);
+                        debug!(
+                            "transaction received by block: ratio={:?}",
+                            self.block_txn.len() as f64
+                                / block.transactions.len() as f64
+                        );
+                        debug!(
+                            "new block received: block_header={:?}, tx_count={}, block_size={}",
+                            block.block_header,
+                            block.transactions.len(),
+                            block.size(),
+                        );
+                        let insert_result = ctx.manager.graph.insert_block(
+                            block, true,  // need_to_verify
+                            true,  // persistent
+                            false, // recover_from_db
+                        );
 
-                    if !insert_result.request_again() {
-                        received_blocks.insert(resp_hash);
-                    }
-                    if insert_result.is_valid() {
-                        //insert signed transaction to tx pool
-                        let (signed_txns, _) = ctx
-                            .manager
-                            .graph
-                            .consensus
-                            .tx_pool()
-                            .insert_new_signed_transactions(signed_txns);
-                        // a transaction from compact block should be
-                        // added to received pool
-                        ctx.manager
-                            .request_manager
-                            .append_received_transactions(signed_txns);
-                    }
-                    if insert_result.should_relay()
-                        && !ctx.manager.catch_up_mode()
-                    {
-                        ctx.manager.relay_blocks(ctx.io, vec![resp_hash]).ok();
-                    }
-                    if insert_result.request_again() {
-                        request_from_same_peer = true;
+                        if !insert_result.request_again() {
+                            received_blocks.insert(resp_hash);
+                        }
+                        if insert_result.is_valid() {
+                            //insert signed transaction to tx pool
+                            let (signed_txns, _) = ctx
+                                .manager
+                                .graph
+                                .consensus
+                                .tx_pool()
+                                .insert_new_signed_transactions(signed_txns);
+                            // a transaction from compact block should be
+                            // added to received pool
+                            ctx.manager
+                                .request_manager
+                                .append_received_transactions(signed_txns);
+                        }
+                        if insert_result.should_relay()
+                            && !ctx.manager.catch_up_mode()
+                        {
+                            ctx.manager
+                                .relay_blocks(ctx.io, vec![resp_hash])
+                                .ok();
+                        }
+                        if insert_result.request_again() {
+                            request_from_same_peer = true;
+                        }
                     }
                 }
                 None => {
@@ -142,6 +163,12 @@ impl Handleable for GetBlockTxnResponse {
             delay,
             None, /* preferred_node_type_for_block_request */
         );
+        if invalid_response {
+            return Err(Error::InvalidGetBlockTxn(
+                "block_txn count does not match missing transactions".into(),
+            )
+            .into());
+        }
         Ok(())
     }
 }

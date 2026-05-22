@@ -465,6 +465,17 @@ impl RequestManager {
             return;
         }
 
+        if responded_tx_hashes.len() > tx_hashes_indices.len() {
+            warn!(
+                "Peer {} returned {} tx hashes, exceeding the {} requested \
+                 indices; dropping malformed GetTransactionsResponse",
+                peer_id,
+                responded_tx_hashes.len(),
+                tx_hashes_indices.len(),
+            );
+            return;
+        }
+
         let mut tx_from_hashes_inflight_keys = self
             .inflight_keys
             .write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
