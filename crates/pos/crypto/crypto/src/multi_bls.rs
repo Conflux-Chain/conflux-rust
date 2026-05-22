@@ -335,9 +335,7 @@ impl MultiBLSSignature {
 
     /// Get the actual signer set of the signature. `all_signers` is all
     /// possible signers aligned with the internal bitmap.
-    pub fn get_signers<T: Clone>(
-        &self, all_signers: &Vec<T>,
-    ) -> Result<Vec<T>> {
+    pub fn get_signers<T: Clone>(&self, all_signers: &[T]) -> Result<Vec<T>> {
         let mut signers = Vec::with_capacity(all_signers.len());
         if let Some(last_bit_index) = bitmap_last_set_bit(self.bitmap) {
             if last_bit_index as usize >= all_signers.len() {
