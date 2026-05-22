@@ -157,12 +157,10 @@ pub struct ConsensusResponse {
     pub txns: Vec<SignedTransaction>,
 }
 
-/// Notification from state sync to mempool of commit event.
+/// Notification from consensus to mempool of commit event.
 /// This notifies mempool to remove committed txns.
 pub struct CommitNotification {
     pub transactions: Vec<CommittedTransaction>,
-    /// Timestamp of committed block.
-    pub block_timestamp_usecs: u64,
     pub callback: oneshot::Sender<Result<CommitResponse>>,
 }
 
@@ -172,11 +170,7 @@ impl fmt::Display for CommitNotification {
         for txn in self.transactions.iter() {
             txns += &format!("{} ", txn);
         }
-        write!(
-            f,
-            "CommitNotification [block_timestamp_usecs: {}, txns: {}]",
-            self.block_timestamp_usecs, txns
-        )
+        write!(f, "CommitNotification [txns: {}]", txns)
     }
 }
 

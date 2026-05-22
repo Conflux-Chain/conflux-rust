@@ -70,8 +70,7 @@ use super::{
         ConsensusMsg, ConsensusNetworkSender, IncomingBlockRetrievalRequest,
     },
     pending_votes::VoteReceptionResult,
-    persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
-    state_replication::StateComputer,
+    persistent_liveness_storage::PersistentLivenessStorage,
 };
 
 #[derive(Serialize, Clone)]
@@ -130,77 +129,6 @@ pub enum VerifiedEvent {
 #[cfg(feature = "fuzzing")]
 #[path = "round_manager_fuzzing.rs"]
 pub mod round_manager_fuzzing;
-
-/// If the node can't recover corresponding blocks from local storage,
-/// RecoveryManager is responsible for processing the events carrying sync info
-/// and use the info to retrieve blocks from peers
-pub struct RecoveryManager {
-    epoch_state: EpochState,
-    network: ConsensusNetworkSender,
-    storage: Arc<dyn PersistentLivenessStorage>,
-    state_computer: Arc<dyn StateComputer>,
-    last_committed_round: Round,
-}
-
-impl RecoveryManager {
-    pub fn new(
-        epoch_state: EpochState, network: ConsensusNetworkSender,
-        storage: Arc<dyn PersistentLivenessStorage>,
-        state_computer: Arc<dyn StateComputer>, last_committed_round: Round,
-    ) -> Self {
-        RecoveryManager {
-            epoch_state,
-            network,
-            storage,
-            state_computer,
-            last_committed_round,
-        }
-    }
-
-    pub async fn process_proposal_msg(
-        &mut self, proposal_msg: ProposalMsg,
-    ) -> Result<RecoveryData> {
-        let author = proposal_msg.proposer();
-        let sync_info = proposal_msg.sync_info();
-        self.sync_up(&sync_info, author).await
-    }
-
-    pub async fn process_vote_msg(
-        &mut self, vote_msg: VoteMsg,
-    ) -> Result<RecoveryData> {
-        let author = vote_msg.vote().author();
-        let sync_info = vote_msg.sync_info();
-        self.sync_up(&sync_info, author).await
-    }
-
-    pub async fn sync_up(
-        &mut self, sync_info: &SyncInfo, peer: Author,
-    ) -> Result<RecoveryData> {
-        sync_info
-            .verify(&self.epoch_state.verifier())
-            .map_err(VerifyError::from)?;
-        ensure!(
-            sync_info.highest_round() > self.last_committed_round,
-            "[RecoveryManager] Received sync info has lower round number than committed block"
-        );
-        ensure!(
-            sync_info.epoch() == self.epoch_state.epoch,
-            "[RecoveryManager] Received sync info is in different epoch than committed block"
-        );
-        let mut retriever = BlockRetriever::new(self.network.clone(), peer);
-        let recovery_data = BlockStore::fast_forward_sync(
-            &sync_info.highest_commit_cert(),
-            &mut retriever,
-            self.storage.clone(),
-            self.state_computer.clone(),
-        )
-        .await?;
-
-        Ok(recovery_data)
-    }
-
-    pub fn epoch_state(&self) -> &EpochState { &self.epoch_state }
-}
 
 /// Consensus SMR is working in an event based fashion: RoundManager is
 /// responsible for processing the individual events (e.g., process_new_round,

@@ -154,6 +154,7 @@ pub async fn launch_cfx_async_rpc_servers(
     );
 
     let rpc_conf = conf.rpc_impl_config();
+    let enable_metrics = rpc_conf.enable_metrics;
     let rpc_module_builder = CfxRpcModuleBuilder::new(
         rpc_conf,
         consensus,
@@ -174,8 +175,16 @@ pub async fn launch_cfx_async_rpc_servers(
     let transport_rpc_modules =
         rpc_module_builder.build(transport_rpc_module_config);
 
+    let throttling_conf_file = conf.raw_conf.throttling_conf.clone();
+    let throttling_section = if is_debug { "rpc_local" } else { "rpc" };
+
     let server_handle = server_config
-        .start(&transport_rpc_modules)
+        .start(
+            &transport_rpc_modules,
+            throttling_conf_file,
+            throttling_section,
+            enable_metrics,
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -327,8 +336,18 @@ pub async fn launch_cfx_light_async_rpc_servers(
         _ => unreachable!(),
     }
 
+    let rpc_conf = conf.rpc_impl_config();
+    let enable_metrics = rpc_conf.enable_metrics;
+    let throttling_conf_file = conf.raw_conf.throttling_conf.clone();
+    let throttling_section = if is_debug { "rpc_local" } else { "rpc" };
+
     let server_handle = server_config
-        .start(&transport_modules)
+        .start(
+            &transport_modules,
+            throttling_conf_file,
+            throttling_section,
+            enable_metrics,
+        )
         .await
         .map_err(|e| e.to_string())?;
 

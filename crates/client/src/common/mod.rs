@@ -155,7 +155,7 @@ pub fn initialize_common_modules(
         let key_path = Path::new(&conf.raw_conf.pos_private_key_path);
 
         let read_pos_password = |prompt: &str| -> Result<Vec<u8>, String> {
-            match rpassword::read_password_from_tty(Some(prompt)) {
+            match rpassword::prompt_password(prompt) {
                 Ok(password) => Ok(password.into_bytes()),
                 Err(e) => {
                     let mut msg = format!("{:?}", e);
@@ -621,9 +621,12 @@ pub fn initialize_not_light_node_modules(
         }
         if pow_config.enable_mining() {
             let bg = blockgen.clone();
-            tokio_runtime.spawn(async move {
-                bg.mine().await;
-            });
+            thread::Builder::new()
+                .name("mining".into())
+                .spawn(move || {
+                    bg.mine();
+                })
+                .expect("Mining thread spawn error");
         }
     }
 

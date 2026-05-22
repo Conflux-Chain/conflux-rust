@@ -33,7 +33,6 @@ pub use crate::{
     error::*, id_provider::SubscriptionIdProvider, RpcServerHandle,
 };
 use cfx_rpc_middlewares::{Logger, Metrics, Throttle};
-use log::debug;
 pub use module::{EthRpcModule, RpcModuleSelection};
 
 use cfx_rpc_cfx_types::RpcImplConfiguration;
@@ -187,6 +186,7 @@ impl RpcRegistryInner {
         TraceApi::new(
             self.consensus.clone(),
             self.sync.network.get_network_type().clone(),
+            self.config.max_estimation_gas_limit,
         )
     }
 
@@ -269,6 +269,7 @@ impl RpcRegistryInner {
                     EthRpcModule::Trace => TraceApi::new(
                         self.consensus.clone(),
                         self.sync.network.get_network_type().clone(),
+                        self.config.max_estimation_gas_limit,
                     )
                     .into_rpc()
                     .into(),
@@ -460,9 +461,6 @@ impl RpcServerConfig {
         self, modules: &TransportRpcModules,
         throttling_conf_file: Option<String>, enable_metrics: bool,
     ) -> Result<RpcServerHandle, RpcError> {
-        // TODO: handle enable metrics
-        debug!("enable metrics: {}", enable_metrics);
-
         let rpc_middleware = RpcServiceBuilder::new()
             .layer_fn(move |s| {
                 Throttle::new(
@@ -471,7 +469,7 @@ impl RpcServerConfig {
                     s,
                 )
             })
-            .layer_fn(|s| Metrics::new(s))
+            .layer_fn(move |s| Metrics::new(s, enable_metrics))
             .layer_fn(|s| Logger::new(s));
 
         let http_socket_addr = self.http_addr.unwrap_or(SocketAddr::V4(

@@ -22,12 +22,8 @@ use super::{
         ConsensusMsg, ConsensusNetworkSender, IncomingBlockRetrievalRequest,
         NetworkReceivers,
     },
-    persistent_liveness_storage::{
-        LedgerRecoveryData, PersistentLivenessStorage, RecoveryData,
-    },
-    round_manager::{
-        RecoveryManager, RoundManager, UnverifiedEvent, VerifiedEvent,
-    },
+    persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
+    round_manager::{RoundManager, UnverifiedEvent, VerifiedEvent},
     state_replication::{StateComputer, TxnManager},
     util::time_service::TimeService,
 };
@@ -74,31 +70,6 @@ use std::{
     time::Duration,
 };
 
-/// RecoveryManager is used to process events in order to sync up with peer if
-/// we can't recover from local consensusdb RoundManager is used for normal
-/// event handling. We suppress clippy warning here because we expect most of
-/// the time we will have RoundManager
-#[allow(clippy::large_enum_variant)]
-pub enum RoundProcessor {
-    Recovery(RecoveryManager),
-    Normal(RoundManager),
-}
-
-#[allow(clippy::large_enum_variant)]
-pub enum LivenessStorageData {
-    RecoveryData(RecoveryData),
-    LedgerRecoveryData(LedgerRecoveryData),
-}
-
-impl LivenessStorageData {
-    pub fn expect_recovery_data(self, msg: &str) -> RecoveryData {
-        match self {
-            LivenessStorageData::RecoveryData(data) => data,
-            LivenessStorageData::LedgerRecoveryData(_) => panic!("{}", msg),
-        }
-    }
-}
-
 // Manager the components that shared across epoch and spawn per-epoch
 // RoundManager with epoch-specific input.
 pub struct EpochManager {
@@ -118,7 +89,7 @@ pub struct EpochManager {
     state_computer: Arc<dyn StateComputer>,
     storage: Arc<dyn PersistentLivenessStorage>,
     safety_rules: Arc<RwLock<SafetyRules>>,
-    processor: Option<RoundProcessor>,
+    processor: Option<RoundManager>,
     // Conflux PoW handler
     pow_handler: Arc<dyn PowInterface>,
     election_control: Arc<AtomicBool>,
@@ -197,14 +168,10 @@ impl EpochManager {
     }
 
     fn epoch_state(&self) -> &EpochState {
-        match self
-            .processor
+        self.processor
             .as_ref()
             .expect("EpochManager not started yet")
-        {
-            RoundProcessor::Normal(p) => p.epoch_state(),
-            RoundProcessor::Recovery(p) => p.epoch_state(),
-        }
+            .epoch_state()
     }
 
     fn epoch(&self) -> u64 { self.epoch_state().epoch }
@@ -350,36 +317,18 @@ impl EpochManager {
             "Received verified epoch change",
         );
 
-        // make sure storage is on this ledger_info too, it should be no-op if
-        // it's already committed
-        // self.state_computer
-        //     .sync_to(ledger_info.clone())
-        //     .await
-        //     .context(format!(
-        //         "[EpochManager] State sync to new epoch {}",
-        //         ledger_info
-        //     ))?;
         for ledger_info in proof.get_all_ledger_infos() {
-            match self.processor_mut() {
-                RoundProcessor::Recovery(_) => {
-                    bail!("start_new_epoch for Recovery processor");
-                }
-                RoundProcessor::Normal(p) => {
-                    if ledger_info.ledger_info().epoch()
-                        == p.epoch_state().epoch
-                    {
-                        p.sync_to_ledger_info(&ledger_info, peer_id).await?;
-                        let epoch_state = self.latest_epoch_state();
-                        self.start_processor_with_epoch_state(epoch_state)
-                            .await;
-                    } else {
-                        diem_error!(
-                            "Unexpected epoch change: me={} get={}",
-                            p.epoch_state().epoch,
-                            ledger_info.ledger_info().epoch()
-                        );
-                    }
-                }
+            let p = self.processor_mut();
+            if ledger_info.ledger_info().epoch() == p.epoch_state().epoch {
+                p.sync_to_ledger_info(&ledger_info, peer_id).await?;
+                let epoch_state = self.latest_epoch_state();
+                self.start_processor_with_epoch_state(epoch_state).await;
+            } else {
+                diem_error!(
+                    "Unexpected epoch change: me={} get={}",
+                    p.epoch_state().epoch,
+                    ledger_info.ledger_info().epoch()
+                );
             }
         }
 
@@ -488,33 +437,8 @@ impl EpochManager {
             Some(self.vrf_private_key.clone()),
         );
         processor.start(last_vote).await;
-        self.processor = Some(RoundProcessor::Normal(processor));
+        self.processor = Some(processor);
         diem_info!(epoch = epoch, "RoundManager started");
-    }
-
-    // Depending on what data we can extract from consensusdb, we may or may not
-    // have an event processor at startup. If we need to sync up with peers
-    // for blocks to construct a valid block store, which is required to
-    // construct an event processor, we will take care of the sync up here.
-    async fn start_recovery_manager(
-        &mut self, ledger_recovery_data: LedgerRecoveryData,
-        epoch_state: EpochState,
-    ) {
-        let epoch = epoch_state.epoch;
-        let network_sender = ConsensusNetworkSender::new(
-            self.author,
-            self.network_sender.clone(),
-            //self.self_sender.clone(),
-            epoch_state.verifier().clone(),
-        );
-        self.processor = Some(RoundProcessor::Recovery(RecoveryManager::new(
-            epoch_state,
-            network_sender,
-            self.storage.clone(),
-            self.state_computer.clone(),
-            ledger_recovery_data.commit_round(),
-        )));
-        diem_info!(epoch = epoch, "SyncProcessor started");
     }
 
     async fn start_processor_with_epoch_state(
@@ -524,15 +448,8 @@ impl EpochManager {
             "start_processor_with_epoch_state: epoch_state={:?}",
             epoch_state
         );
-        match self.storage.start() {
-            LivenessStorageData::RecoveryData(initial_data) => {
-                self.start_round_manager(initial_data, epoch_state).await
-            }
-            LivenessStorageData::LedgerRecoveryData(ledger_recovery_data) => {
-                self.start_recovery_manager(ledger_recovery_data, epoch_state)
-                    .await
-            }
-        }
+        let initial_data = self.storage.start();
+        self.start_round_manager(initial_data, epoch_state).await;
     }
 
     async fn process_message(
@@ -623,33 +540,15 @@ impl EpochManager {
     async fn process_event(
         &mut self, peer_id: AccountAddress, event: VerifiedEvent,
     ) -> anyhow::Result<()> {
-        match self.processor_mut() {
-            RoundProcessor::Recovery(p) => {
-                let recovery_data = match event {
-                    VerifiedEvent::ProposalMsg(proposal) => {
-                        p.process_proposal_msg(*proposal).await
-                    }
-                    VerifiedEvent::VoteMsg(vote) => {
-                        p.process_vote_msg(*vote).await
-                    }
-                    VerifiedEvent::SyncInfo(sync_info) => {
-                        p.sync_up(&sync_info, peer_id).await
-                    }
-                }?;
-                let epoch_state = p.epoch_state().clone();
-                diem_info!("Recovered from SyncProcessor");
-                self.start_round_manager(recovery_data, epoch_state).await;
-                Ok(())
+        let p = self.processor_mut();
+        match event {
+            VerifiedEvent::ProposalMsg(proposal) => {
+                p.process_proposal_msg(*proposal).await
             }
-            RoundProcessor::Normal(p) => match event {
-                VerifiedEvent::ProposalMsg(proposal) => {
-                    p.process_proposal_msg(*proposal).await
-                }
-                VerifiedEvent::VoteMsg(vote) => p.process_vote_msg(*vote).await,
-                VerifiedEvent::SyncInfo(sync_info) => {
-                    p.process_sync_info_msg(*sync_info, peer_id).await
-                }
-            },
+            VerifiedEvent::VoteMsg(vote) => p.process_vote_msg(*vote).await,
+            VerifiedEvent::SyncInfo(sync_info) => {
+                p.process_sync_info_msg(*sync_info, peer_id).await
+            }
         }
     }
 
@@ -661,10 +560,7 @@ impl EpochManager {
             Some(event) => event,
             None => return false,
         };
-        let processor = match self.processor_mut() {
-            RoundProcessor::Recovery(_) => return true,
-            RoundProcessor::Normal(p) => p,
-        };
+        let processor = self.processor_mut();
         match event {
             UnverifiedEvent::ProposalMsg(p) => {
                 processor.filter_proposal(p.as_ref())
@@ -674,7 +570,7 @@ impl EpochManager {
         }
     }
 
-    fn processor_mut(&mut self) -> &mut RoundProcessor {
+    fn processor_mut(&mut self) -> &mut RoundManager {
         self.processor
             .as_mut()
             .expect("[EpochManager] not started yet")
@@ -683,45 +579,31 @@ impl EpochManager {
     async fn process_block_retrieval(
         &mut self, request: IncomingBlockRetrievalRequest,
     ) -> anyhow::Result<()> {
-        match self.processor_mut() {
-            RoundProcessor::Normal(p) => {
-                p.process_block_retrieval(request).await
-            }
-            _ => bail!("[EpochManager] RoundManager not started yet"),
-        }
+        self.processor_mut().process_block_retrieval(request).await
     }
 
     async fn process_local_timeout(
         &mut self, epoch_round: (u64, Round),
     ) -> anyhow::Result<()> {
-        match self.processor_mut() {
-            RoundProcessor::Normal(p) => {
-                p.process_local_timeout(epoch_round).await
-            }
-            _ => unreachable!("RoundManager not started yet"),
-        }
+        self.processor_mut()
+            .process_local_timeout(epoch_round)
+            .await
     }
 
     async fn process_proposal_timeout(
         &mut self, epoch_round: (u64, Round),
     ) -> anyhow::Result<()> {
-        match self.processor_mut() {
-            RoundProcessor::Normal(p) => {
-                p.process_proposal_timeout(epoch_round).await
-            }
-            _ => unreachable!("RoundManager not started yet"),
-        }
+        self.processor_mut()
+            .process_proposal_timeout(epoch_round)
+            .await
     }
 
     async fn process_new_round_timeout(
         &mut self, epoch_round: (u64, Round),
     ) -> anyhow::Result<()> {
-        match self.processor_mut() {
-            RoundProcessor::Normal(p) => {
-                p.process_new_round_timeout(epoch_round).await
-            }
-            _ => unreachable!("RoundManager not started yet"),
-        }
+        self.processor_mut()
+            .process_new_round_timeout(epoch_round)
+            .await
     }
 
     pub async fn start(
@@ -760,12 +642,7 @@ impl EpochManager {
                     self.process_block_retrieval(block_retrieval).await
                 }
             };
-            let round_state =
-                if let RoundProcessor::Normal(p) = self.processor_mut() {
-                    Some(p.round_state())
-                } else {
-                    None
-                };
+            let round_state = self.processor.as_mut().map(|p| p.round_state());
             match result {
                 Ok(_) => diem_trace!(RoundStateLogSchema::new(round_state)),
                 Err(e) => {
@@ -792,32 +669,23 @@ impl EpochManager {
                 payload,
             } => self.force_propose(round, parent_id, payload).await,
             TestCommand::ProposalTimeOut => {
-                let round = match self.processor_mut() {
-                    RoundProcessor::Normal(p) => {
-                        (p.epoch_state().epoch, p.round_state().current_round())
-                    }
-                    _ => anyhow::bail!("RoundManager not started yet"),
-                };
+                let p = self.processor_mut();
+                let round =
+                    (p.epoch_state().epoch, p.round_state().current_round());
                 diem_debug!("TestCommand::ProposalTimeOut, round={:?}", round);
                 self.process_proposal_timeout(round).await
             }
             TestCommand::LocalTimeout => {
-                let round = match self.processor_mut() {
-                    RoundProcessor::Normal(p) => {
-                        (p.epoch_state().epoch, p.round_state().current_round())
-                    }
-                    _ => anyhow::bail!("RoundManager not started yet"),
-                };
+                let p = self.processor_mut();
+                let round =
+                    (p.epoch_state().epoch, p.round_state().current_round());
                 diem_debug!("TestCommand::LocalTimeout, round={:?}", round);
                 self.process_local_timeout(round).await
             }
             TestCommand::NewRoundTimeout => {
-                let round = match self.processor_mut() {
-                    RoundProcessor::Normal(p) => {
-                        (p.epoch_state().epoch, p.round_state().current_round())
-                    }
-                    _ => anyhow::bail!("RoundManager not started yet"),
-                };
+                let p = self.processor_mut();
+                let round =
+                    (p.epoch_state().epoch, p.round_state().current_round());
                 diem_debug!("TestCommand::NewRoundTimeout, round={:?}", round);
                 self.process_new_round_timeout(round).await
             }
@@ -834,13 +702,10 @@ impl EpochManager {
                 tx.send(final_serving_round)
                     .map_err(|e| anyhow!("send: err={:?}", e))
             }
-            TestCommand::GetChosenProposal(tx) => match self.processor_mut() {
-                RoundProcessor::Normal(p) => {
-                    let chosen = p.get_chosen_proposal()?;
-                    tx.send(chosen).map_err(|e| anyhow!("send: err={:?}", e))
-                }
-                _ => anyhow::bail!("RoundManager not started yet"),
-            },
+            TestCommand::GetChosenProposal(tx) => {
+                let chosen = self.processor_mut().get_chosen_proposal()?;
+                tx.send(chosen).map_err(|e| anyhow!("send: err={:?}", e))
+            }
             TestCommand::StartVoting((initialize, tx)) => {
                 let r = self.start_voting(initialize).await;
                 tx.send(r).map_err(|e| anyhow!("send: err={:?}", e))
@@ -862,12 +727,9 @@ impl EpochManager {
         diem_debug!("force_vote_proposal: {:?}", block_id);
         let bls_key = self.consensus_private_key.private_key();
         let author = self.author;
-        match self.processor_mut() {
-            RoundProcessor::Normal(p) => {
-                p.force_vote_proposal(block_id, author, &bls_key).await
-            }
-            _ => anyhow::bail!("RoundManager not started yet"),
-        }
+        self.processor_mut()
+            .force_vote_proposal(block_id, author, &bls_key)
+            .await
     }
 
     async fn force_propose(
@@ -875,40 +737,27 @@ impl EpochManager {
         payload: Vec<TransactionPayload>,
     ) -> anyhow::Result<()> {
         let bls_key = self.consensus_private_key.private_key();
-        match self.processor_mut() {
-            RoundProcessor::Normal(p) => {
-                p.force_propose(round, parent_block_id, payload, &bls_key)
-                    .await
-            }
-            _ => anyhow::bail!("RoundManager not started yet"),
-        }
+        self.processor_mut()
+            .force_propose(round, parent_block_id, payload, &bls_key)
+            .await
     }
 
     async fn force_sign_pivot_decision(
         &mut self, pivot_decision: PivotBlockDecision,
     ) -> anyhow::Result<()> {
-        match self.processor_mut() {
-            RoundProcessor::Normal(p) => {
-                p.force_sign_pivot_decision(pivot_decision).await
-            }
-            _ => anyhow::bail!("RoundManager not started yet"),
-        }
+        self.processor_mut()
+            .force_sign_pivot_decision(pivot_decision)
+            .await
     }
 
     async fn start_voting(&mut self, initialize: bool) -> anyhow::Result<()> {
-        match self.processor_mut() {
-            RoundProcessor::Normal(p) => p.start_voting(initialize)?,
-            _ => anyhow::bail!("RoundManager not started yet"),
-        };
+        self.processor_mut().start_voting(initialize)?;
         self.is_voting = true;
         Ok(())
     }
 
     async fn stop_voting(&mut self) -> anyhow::Result<()> {
-        match self.processor_mut() {
-            RoundProcessor::Normal(p) => p.stop_voting()?,
-            _ => anyhow::bail!("RoundManager not started yet"),
-        }
+        self.processor_mut().stop_voting()?;
         self.is_voting = false;
         Ok(())
     }

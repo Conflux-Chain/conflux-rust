@@ -3,7 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::error::jsonrpsee_error_helpers::{
-    internal_error_with_msg, invalid_params_msg, rpc_err, rpc_error_with_code,
+    internal_error_with_msg, invalid_params_rpc_err, rpc_err,
+    rpc_error_with_code,
 };
 use alloy_primitives::{hex, Address, Bytes};
 use alloy_rpc_types::error::EthRpcErrorCode;
@@ -140,7 +141,7 @@ impl From<EthApiError> for ErrorObjectOwned {
             // EthApiError::Signing(_) |
             EthApiError::BothStateAndStateDiffInOverride(_) |
             EthApiError::InvalidTracerConfig |
-            EthApiError::TransactionConversionError => invalid_params_msg(&error.to_string()),
+            EthApiError::TransactionConversionError => invalid_params_rpc_err(&error.to_string(), None::<()>),
             EthApiError::InvalidTransaction(err) => err.into(),
             EthApiError::PoolError(err) => err.into(),
             EthApiError::PrevrandaoNotSet |
@@ -158,14 +159,14 @@ impl From<EthApiError> for ErrorObjectOwned {
             }
             EthApiError::Unsupported(msg) => internal_error_with_msg(msg.into()),
             EthApiError::InternalJsTracerError(msg) => internal_error_with_msg(msg),
-            EthApiError::InvalidParams(msg) => invalid_params_msg(&msg),
+            EthApiError::InvalidParams(msg) => invalid_params_rpc_err(&msg, None::<()>),
             err @ EthApiError::ExecutionTimedOut(_) => {
                 rpc_error_with_code(-32000, err.to_string()) // CALL_EXECUTION_FAILED_CODE = -32000
             }
             err @ EthApiError::InternalBlockingTaskError | err @ EthApiError::InternalEthError => {
                 internal_error_with_msg(err.to_string())
             }
-            err @ EthApiError::TransactionInputError(_) => invalid_params_msg(&err.to_string()),
+            err @ EthApiError::TransactionInputError(_) => invalid_params_rpc_err(&err.to_string(), None::<()>),
             EthApiError::Other(err) => internal_error_with_msg(err),
             // EthApiError::MuxTracerError(msg) => internal_rpc_err(msg.to_string()),
         }

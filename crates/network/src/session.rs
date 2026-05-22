@@ -579,7 +579,7 @@ impl Session {
 
     /// Send a Disconnect packet immediately to the remote peer.
     pub fn send_disconnect(&mut self, reason: DisconnectReason) -> Error {
-        let packet = rlp::encode(&reason);
+        let packet = rlp::encode(&reason).to_vec();
         let _ = self.send_packet_immediately(
             None,
             ProtocolVersion::default(),
@@ -609,7 +609,7 @@ impl Session {
             None,
             ProtocolVersion::default(),
             PACKET_HELLO,
-            rlp.drain(),
+            rlp.out().to_vec(),
             SendQueuePriority::High,
         )
         .map(|_| ())

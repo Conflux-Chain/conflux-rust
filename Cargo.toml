@@ -48,6 +48,7 @@ members = [
     "crates/util/metrics",
     "crates/util/priority-send-queue",
     "crates/util/random_crash",
+    "crates/util/rlp_compat",
     "crates/util/sha3-macro",
     "crates/execution/solidity-abi",
     "crates/execution/solidity-abi-derive",
@@ -70,7 +71,6 @@ members = [
     "crates/rpc/rpc-cfx-api",
     "crates/pos/common/bounded-executor",
     "crates/pos/common/logger",
-    "crates/pos/common/temppath",
     "crates/pos/config/global-constants",
     "crates/pos/consensus/consensus-types",
     "crates/pos/config/config",
@@ -193,7 +193,6 @@ bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 #diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
 channel = { path = "./crates/pos/common/channel" }
 diem-logger = { path = "./crates/pos/common/logger" }
-diem-temppath = { path = "./crates/pos/common/temppath" }
 diem-global-constants = { path = "./crates/pos/config/global-constants" }
 diem-config = { path = "./crates/pos/config/config" }
 consensus-types = { path = "./crates/pos/consensus/consensus-types" }
@@ -259,11 +258,12 @@ alloy-sol-types = "1.4.1"
 alloy-primitives = "1.4.1"
 alloy-rpc-types = "~1.0.41"
 alloy-rpc-types-trace = "~1.0.41"
-revm = { version = "30.2.0", default-features = false }
-revm-primitives = "21.0.1"
-revm-interpreter = "28.0.0"
-revm-context-interface = "11.1.2"
-revm-bytecode = "7.0.2"
+revm = { version = "33.1", default-features = false }
+revm-primitives = "21.0"
+revm-interpreter = "31.1"
+revm-context-interface = "13.1"
+revm-bytecode = "7.1"
+alloy-primitives-wrapper = { git = "https://github.com/Conflux-Chain/alloy-primitives-wrapper.git", rev = "2683b5d133ebd1035afb98285fb8a50209a5dc19" }
 
 jsonrpsee = "0.26"
 jsonrpsee-core = "0.26"
@@ -298,7 +298,7 @@ snmalloc-rs = { version = "0.3.7", features = ["build_cc"] }
 
 # crypto & hash
 #fixed-hash = "0.5"
-keccak-hash = "0.5"
+keccak-hash = "0.12"
 tiny-keccak = "2.0"
 bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = [
     "multicore",
@@ -348,7 +348,7 @@ strum_macros = "0.26"
 toml = "0.8"
 app_dirs = "1.2.1"
 slab = "0.4"
-rpassword = "5.0.1"
+rpassword = "7.5"
 static_assertions = "1.1.0"
 transient-hashmap = "0.4"
 num_cpus = "1.17"
@@ -412,12 +412,13 @@ chrono = "0.4"
 duration-str = "0.17"
 
 # parity crates
-rlp = "0.4.0"
+rlp = "0.6"
 rlp_derive = { package = "rlp-derive", version = "0.2.0" }
+rlp-compat = { path = "./crates/util/rlp_compat" }
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
-ethereum-types = "0.9"
+ethereum-types = "0.16.0"
 parity-wordlist = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "08d6a6df3caa0a169177e22a7d082ce97b2830ae" }
 parity-path = "0.1"
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev = "b523017108bb2d571a7a69bd97bc406e63bc7a9d" }

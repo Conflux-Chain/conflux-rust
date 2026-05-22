@@ -7,11 +7,11 @@
 
 use super::*;
 use consensus_types::block::block_test_utils::certificate_for_genesis;
-use diem_temppath::TempPath;
+use tempfile::TempDir;
 
 #[test]
 fn test_put_get() {
-    let tmp_dir = TempPath::new();
+    let tmp_dir = TempDir::new().unwrap();
     let db = ConsensusDB::new(&tmp_dir);
 
     let block = Block::make_genesis_block();
@@ -47,7 +47,7 @@ fn test_put_get() {
 
 #[test]
 fn test_delete_block_and_qc() {
-    let tmp_dir = TempPath::new();
+    let tmp_dir = TempDir::new().unwrap();
     let db = ConsensusDB::new(&tmp_dir);
 
     assert_eq!(db.get_blocks().unwrap().len(), 0);

@@ -1,13 +1,13 @@
 //! Util functions for revm related ops
 use crate::config::TraceStyle;
-use alloy_primitives::{hex, B256};
+use alloy_primitives::{hex, Address as RAddress, B256, U256 as RU256};
+use alloy_primitives_wrapper::{WAddress, WB256, WU256};
 use alloy_sol_types::{ContractError, GenericRevertReason};
 use cfx_types::{Address, H160, H256, U256};
 use cfx_vm_interpreter::instructions::{
     INSTRUCTIONS, INSTRUCTIONS_CANCUN, INSTRUCTIONS_CIP645,
 };
 use revm::interpreter::InstructionResult;
-use revm_primitives::{Address as RAddress, U256 as RU256};
 
 /// Converts a non successful [`InstructionResult`] to an error message.
 ///
@@ -159,20 +159,17 @@ pub(crate) fn stack_push_count(
 }
 
 // convert from cfx U256 to alloy U256
-pub fn to_alloy_u256(u: U256) -> RU256 {
-    let mut be_bytes: [u8; 32] = [0; 32];
-    u.to_big_endian(&mut be_bytes);
-    RU256::from_be_bytes(be_bytes)
-}
+pub fn to_alloy_u256(u: U256) -> RU256 { WU256::from(u).into() }
 
-pub fn to_alloy_address(h: H160) -> RAddress {
-    RAddress::from_slice(h.as_bytes())
-}
+pub fn to_alloy_address(h: H160) -> RAddress { WAddress::from(h).into() }
 
-pub fn to_alloy_h256(h: H256) -> B256 { B256::from(h.0) }
+pub fn to_alloy_h256(h: H256) -> B256 {
+    // B256::from(h.0)
+    WB256::from(h).into()
+}
 
 pub fn from_alloy_address(address: RAddress) -> Address {
-    Address::from_slice(address.as_slice())
+    WAddress::from(address).into()
 }
 
 #[cfg(test)]

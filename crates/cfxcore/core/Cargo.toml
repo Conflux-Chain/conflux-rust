@@ -98,7 +98,6 @@ move-core-types = { workspace = true }
 pow-types = { workspace = true }
 proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
-diem-temppath = { workspace = true }
 heap-map = { workspace = true }
 treap-map = { workspace = true }
 cfx-packing-pool = { workspace = true }
@@ -118,6 +117,7 @@ cfx-storage = { workspace = true, features = ["testonly_code"] }
 cfx-vm-types = { workspace = true, features = ["testonly_code"] }
 proptest = { workspace = true }
 proptest-derive = { workspace = true }
+tempfile = { workspace = true }
 consensus-types = { workspace = true, features = ["fuzzing"] }
 
 [features]
