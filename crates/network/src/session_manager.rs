@@ -20,27 +20,32 @@ use std::{
     net::{IpAddr, SocketAddr},
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc,
+        Arc, OnceLock,
     },
+    time::Instant,
 };
 
-/// An entry in `SessionManager::node_id_index`. Tracks both the slab token
-/// of the session and whether that session is the local node's own outbound
-/// (`originated = true`) or an inbound from the remote (`originated = false`).
+/// An entry in `SessionManager::node_id_index`: the session's slab token, its
+/// direction (`originated`), and a lock-free view of its expired flag.
 ///
-/// We store `originated` here — alongside the token — so that the
-/// simultaneous-dial tie-breaker in `update_ingress_node_id` can read it
-/// without acquiring the per-session `RwLock<Session>`. Acquiring that lock
-/// while holding `node_id_index.write()` would deadlock with any other
-/// thread that holds `Session::write()` and is itself trying to call
-/// `update_ingress_node_id` (which is a common case in the simultaneous-dial
-/// scenario the tie-breaker exists to fix).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// `originated` and `expired` are cached here so the tie-breaker in
+/// `update_ingress_node_id` can read them without locking the `Session` —
+/// doing so while holding `node_id_index.write()` would deadlock the kill
+/// path. `expired` is the *same* `OnceLock` the `Session` holds, so it can't
+/// drift.
+#[derive(Clone, Debug)]
 pub struct IndexEntry {
     pub token: usize,
-    /// `true` if this session is our outbound to the remote (egress);
-    /// `false` if it is the remote's outbound to us (ingress).
+    /// `true` = our outbound (egress); `false` = remote's inbound (ingress).
     pub originated: bool,
+    /// Shares `Session::expired` — see the struct doc.
+    expired: Arc<OnceLock<Instant>>,
+}
+
+impl IndexEntry {
+    /// `true` once the pointed-at session is expired. The entry lingers in
+    /// `node_id_index` past expiry until `deregister_stream` removes it.
+    fn is_expired(&self) -> bool { self.expired.get().is_some() }
 }
 
 /// Outcome of `SessionManager::update_ingress_node_id`.
@@ -154,8 +159,8 @@ impl SessionManager {
     /// Get the session of specified node id.
     pub fn get_by_id(&self, node_id: &NodeId) -> Option<Arc<RwLock<Session>>> {
         let sessions = self.sessions.read();
-        let entry = *self.node_id_index.read().get(node_id)?;
-        sessions.get(entry.token).cloned()
+        let token = self.node_id_index.read().get(node_id)?.token;
+        sessions.get(token).cloned()
     }
 
     /// Get all the sessions in `SessionManager`.
@@ -269,7 +274,7 @@ impl SessionManager {
         }
         let entry = sessions.vacant_entry();
         let index = entry.key();
-        match Session::new(
+        let session = match Session::new(
             io,
             socket,
             address,
@@ -285,8 +290,10 @@ impl SessionManager {
                 );
                 return Err(format!("{:?}", e));
             }
-            Ok(session) => entry.insert(Arc::new(RwLock::new(session))),
+            Ok(session) => session,
         };
+        let expired = session.expired_handle();
+        entry.insert(Arc::new(RwLock::new(session)));
 
         // update on creation succeeded
         if let Some(node_id) = id {
@@ -296,6 +303,7 @@ impl SessionManager {
                 IndexEntry {
                     token: index,
                     originated: true,
+                    expired,
                 },
             );
         }
@@ -346,6 +354,9 @@ impl SessionManager {
     /// Update the node id index for an ingress session whose HELLO has
     /// just been processed and the remote `node_id` is now known.
     ///
+    /// `new_expired` is the new ingress's expired handle, passed in because the
+    /// caller already holds that `Session`'s write lock.
+    ///
     /// Returns:
     /// - `Err(_)` if the session at `idx` is no longer in the slab (the session
     ///   was killed concurrently — caller should drop the new ingress).
@@ -358,6 +369,7 @@ impl SessionManager {
     ///   ingress (`idx`) it was about to register.
     pub fn update_ingress_node_id(
         &self, idx: usize, node_id: &NodeId,
+        new_expired: Arc<OnceLock<Instant>>,
     ) -> Result<UpdateIngressResult, String> {
         debug!("SessionManager.update_ingress_node_id: enter");
 
@@ -373,23 +385,33 @@ impl SessionManager {
             ));
         }
 
-        if let Some(existing) = node_id_index.get(node_id).copied() {
+        let new_entry = IndexEntry {
+            token: idx,
+            originated: false,
+            expired: new_expired,
+        };
+
+        if let Some(existing) = node_id_index.get(node_id).cloned() {
             if existing.token == idx {
                 panic!("The same token already exists for the same node!!!");
             }
-            match simultaneous_dial_outcome(
-                &self.own_node_id,
-                node_id,
-                existing.originated,
-            ) {
+            // The existing entry may point at an already-expired session — its
+            // entry lingers until `deregister_stream`. Tie-breaking against a
+            // dying session could return `DropNew` and leave us with no
+            // connection, so treat an expired existing entry as a tie-break
+            // loss: the new ingress wins.
+            let outcome = if existing.is_expired() {
+                SimDialOutcome::KeepNew
+            } else {
+                simultaneous_dial_outcome(
+                    &self.own_node_id,
+                    node_id,
+                    existing.originated,
+                )
+            };
+            match outcome {
                 SimDialOutcome::KeepNew => {
-                    node_id_index.insert(
-                        node_id.clone(),
-                        IndexEntry {
-                            token: idx,
-                            originated: false,
-                        },
-                    );
+                    node_id_index.insert(node_id.clone(), new_entry);
                     debug!("SessionManager.update_ingress_node_id: leave (replaced)");
                     Ok(UpdateIngressResult::Replaced(existing.token))
                 }
@@ -399,13 +421,7 @@ impl SessionManager {
                 }
             }
         } else {
-            node_id_index.insert(
-                node_id.clone(),
-                IndexEntry {
-                    token: idx,
-                    originated: false,
-                },
-            );
+            node_id_index.insert(node_id.clone(), new_entry);
             debug!("SessionManager.update_ingress_node_id: leave (inserted)");
             Ok(UpdateIngressResult::Inserted)
         }
