@@ -1917,12 +1917,11 @@ name = "cfx-stratum"
 version = "1.12.0"
 dependencies = [
  "cfx-types",
- "jsonrpsee",
+ "jsonrpc-core",
+ "jsonrpc-tcp-server",
  "keccak-hash",
  "log",
  "parking_lot 0.12.1",
- "serde_json",
- "tokio",
 ]
 
 [[package]]
