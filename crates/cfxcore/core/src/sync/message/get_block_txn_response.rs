@@ -53,6 +53,7 @@ impl Handleable for GetBlockTxnResponse {
             ctx.manager.graph.block_header_by_hash(&resp_hash)
         {
             debug!("Process blocktxn hash={:?}", resp_hash);
+            
             let signed_txns = ctx
                 .manager
                 .graph
@@ -60,18 +61,14 @@ impl Handleable for GetBlockTxnResponse {
                 .recover_unsigned_tx_with_order(&self.block_txn)?;
             match ctx.manager.graph.data_man.compact_block_by_hash(&resp_hash) {
                 Some(cmpct) => {
-                    let mut trans =
-                        Vec::with_capacity(cmpct.reconstructed_txns.len());
-                    let mut index = 0;
-                    for tx in cmpct.reconstructed_txns {
-                        match tx {
-                            Some(tx) => trans.push(tx),
-                            None => {
-                                trans.push(signed_txns[index].clone());
-                                index += 1;
-                            }
-                        }
-                    }
+                    // FIXME: Invalid blocktxn responses after match_request must still
+                    // clean up block inflight state and resend the request. Otherwise the 
+                    // corresponding request will never be satisfied.
+                    let trans = fill_missing_slots(
+                        cmpct.reconstructed_txns,
+                        &signed_txns,
+                    )
+                    .ok_or(Error::UnexpectedResponse)?;
                     // FIXME Should check if hash matches
                     let block = Block::new(header, trans);
                     debug!(
@@ -143,5 +140,52 @@ impl Handleable for GetBlockTxnResponse {
             None, /* preferred_node_type_for_block_request */
         );
         Ok(())
+    }
+}
+
+/// Fill missing slots with candidates in order.
+///
+/// `items` contains already-known values as `Some` and holes as `None`.
+/// `candidates` must match those holes exactly: too few candidates would leave
+/// missing values unresolved, while too many candidates means the response does
+/// not match the requested layout. Returns `None` for either mismatch.
+fn fill_missing_slots<'a, T: Clone>(
+    items: Vec<Option<T>>, candidates: &[T],
+) -> Option<Vec<T>> {
+    let mut candidates_iter = candidates.iter();
+    let result: Vec<T> = items
+        .into_iter()
+        .map(|slot| slot.or_else(|| candidates_iter.next().cloned()))
+        // Any single None that can't be filled fails the entire reconstruction.
+        .collect::<Option<Vec<T>>>()?;
+
+    // Extra candidates means the response doesn't match the compact layout.
+    if candidates_iter.next().is_some() {
+        return None;
+    }
+
+    Some(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reject_too_few_candidates() {
+        assert!(fill_missing_slots(vec![None::<u8>], &[]).is_none());
+    }
+
+    #[test]
+    fn reject_too_many_candidates() {
+        assert!(fill_missing_slots(vec![Some(1u8)], &[2]).is_none());
+    }
+
+    #[test]
+    fn fill_missing_slots_in_order() {
+        assert_eq!(
+            fill_missing_slots(vec![Some(1u8), None, Some(3)], &[2]).unwrap(),
+            vec![1, 2, 3],
+        );
     }
 }
