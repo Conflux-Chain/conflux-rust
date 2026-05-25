@@ -136,21 +136,11 @@ pub(crate) async fn process_transaction_broadcast(
 fn gen_ack_response(
     request_id: Vec<u8>, results: Vec<SubmissionStatusBundle>, peer: &NodeId,
 ) -> MempoolSyncMsg {
-    let mut backoff = false;
-    let mut retry = false;
-    for r in results.into_iter() {
-        let submission_status = r.1;
-        if submission_status.0.code == MempoolStatusCode::MempoolIsFull {
-            backoff = true;
-        }
-        if is_txn_retryable(submission_status) {
-            retry = true;
-        }
-
-        if backoff && retry {
-            break;
-        }
-    }
+    // No global cap (`MempoolIsFull` is unreachable), so `backoff`
+    // stays off. Retry on the per-sender cap; GC or commit frees a slot.
+    let retry = results.iter().any(|(_, (status, _))| {
+        matches!(status.code, MempoolStatusCode::TooManyTransactions)
+    });
 
     diem_trace!(
         "request[{:?}] from peer[{:?}] retry[{:?}]",
@@ -162,12 +152,8 @@ fn gen_ack_response(
     MempoolSyncMsg::BroadcastTransactionsResponse {
         request_id,
         retry,
-        backoff,
+        backoff: false,
     }
-}
-
-fn is_txn_retryable(result: SubmissionStatus) -> bool {
-    result.0.code == MempoolStatusCode::MempoolIsFull
 }
 
 /// Submits a list of SignedTransaction to the local mempool

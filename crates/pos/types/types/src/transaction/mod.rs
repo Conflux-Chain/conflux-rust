@@ -496,15 +496,22 @@ impl SignedTransaction {
             .len()
     }
 
-    /// Checks that the signature of given transaction. Returns
-    /// `Ok(SignatureCheckedTransaction)` if the signature is valid.
-    pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
+    /// Verifies the authenticator's signature against the appropriate
+    /// signed message without consuming `self`. Returns `Ok(())` on a
+    /// valid signature.
+    pub fn verify_signature(&self) -> Result<()> {
         match self.payload() {
             TransactionPayload::PivotDecision(pivot_decision) => {
-                self.authenticator.verify(pivot_decision)?
+                self.authenticator.verify(pivot_decision)
             }
-            _ => self.authenticator.verify(&self.raw_txn)?,
+            _ => self.authenticator.verify(&self.raw_txn),
         }
+    }
+
+    /// Same as `verify_signature`, but consumes `self` and returns a
+    /// `SignatureCheckedTransaction` newtype that proves the check ran.
+    pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
+        self.verify_signature()?;
         Ok(SignatureCheckedTransaction(self))
     }
 }
