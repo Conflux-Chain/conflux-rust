@@ -148,7 +148,7 @@ pub fn decode_msg(mut msg: &[u8]) -> Option<(MsgId, Rlp<'_>)> {
         return None;
     }
 
-    let msg_id = parse_msg_id_leb128_2_bytes_at_most(&mut msg);
+    let msg_id = parse_msg_id_leb128_2_bytes_at_most(&mut msg).ok()?;
     if msg.is_empty() {
         return None;
     }
