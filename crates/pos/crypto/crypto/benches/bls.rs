@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate criterion;
+extern crate rand_08 as rand;
 use criterion::Criterion;
 use diem_crypto::{
     bls::*,

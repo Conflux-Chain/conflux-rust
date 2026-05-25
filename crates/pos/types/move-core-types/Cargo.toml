@@ -15,7 +15,7 @@ bcs = "0.1.2"
 hex = "0.4.3"
 proptest = { version = "1.0.0", default-features = false, optional = true }
 proptest-derive = { version = "0.5.1", default-features = false, optional = true }
-rand = "0.8.3"
+rand_08 = { workspace = true }
 serde = { workspace = true, default-features = false }
 
 [dev-dependencies]

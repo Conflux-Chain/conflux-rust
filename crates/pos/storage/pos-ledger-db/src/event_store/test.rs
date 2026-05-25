@@ -5,6 +5,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+extern crate rand_08 as rand;
+
 use super::*;
 use crate::PosLedgerDB;
 use diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
