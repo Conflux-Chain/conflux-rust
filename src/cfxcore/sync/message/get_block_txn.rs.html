@@ -75,24 +75,24 @@
 <a href=#75 id=75 data-nosnippet>75</a>        <span class="kw">match </span>ctx.manager.graph.block_by_hash(<span class="kw-2">&amp;</span><span class="self">self</span>.block_hash) {
 <a href=#76 id=76 data-nosnippet>76</a>            <span class="prelude-val">Some</span>(block) =&gt; {
 <a href=#77 id=77 data-nosnippet>77</a>                <span class="macro">debug!</span>(<span class="string">"Process get_blocktxn hash={:?}"</span>, block.hash());
-<a href=#78 id=78 data-nosnippet>78</a>                <span class="kw">let </span><span class="kw-2">mut </span>tx_resp = Vec::with_capacity(<span class="self">self</span>.index_skips.len());
-<a href=#79 id=79 data-nosnippet>79</a>                <span class="kw">let </span><span class="kw-2">mut </span>last = <span class="number">0</span>;
-<a href=#80 id=80 data-nosnippet>80</a>                <span class="kw">for </span>index_skip <span class="kw">in </span><span class="self">self</span>.index_skips.iter() {
-<a href=#81 id=81 data-nosnippet>81</a>                    last += <span class="kw-2">*</span>index_skip;
-<a href=#82 id=82 data-nosnippet>82</a>                    <span class="kw">if </span>last &gt;= block.transactions.len() {
-<a href=#83 id=83 data-nosnippet>83</a>                        <span class="macro">warn!</span>(
-<a href=#84 id=84 data-nosnippet>84</a>                            <span class="string">"Request tx index out of bound, peer={}, hash={}"</span>,
-<a href=#85 id=85 data-nosnippet>85</a>                            ctx.node_id,
-<a href=#86 id=86 data-nosnippet>86</a>                            block.hash()
-<a href=#87 id=87 data-nosnippet>87</a>                        );
-<a href=#88 id=88 data-nosnippet>88</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidGetBlockTxn(
-<a href=#89 id=89 data-nosnippet>89</a>                            <span class="string">"index out-of-bound"</span>.into(),
-<a href=#90 id=90 data-nosnippet>90</a>                        )
-<a href=#91 id=91 data-nosnippet>91</a>                        .into());
-<a href=#92 id=92 data-nosnippet>92</a>                    }
-<a href=#93 id=93 data-nosnippet>93</a>                    tx_resp.push(block.transactions[last].transaction.clone());
-<a href=#94 id=94 data-nosnippet>94</a>                    last += <span class="number">1</span>;
-<a href=#95 id=95 data-nosnippet>95</a>                }
+<a href=#78 id=78 data-nosnippet>78</a>                <span class="kw">let </span><span class="kw-2">mut </span>transactions = block.transactions.iter();
+<a href=#79 id=79 data-nosnippet>79</a>                <span class="kw">let </span>tx_resp = <span class="self">self
+<a href=#80 id=80 data-nosnippet>80</a>                    </span>.index_skips
+<a href=#81 id=81 data-nosnippet>81</a>                    .iter()
+<a href=#82 id=82 data-nosnippet>82</a>                    .map(|index_skip| {
+<a href=#83 id=83 data-nosnippet>83</a>                        transactions
+<a href=#84 id=84 data-nosnippet>84</a>                            .nth(<span class="kw-2">*</span>index_skip)
+<a href=#85 id=85 data-nosnippet>85</a>                            .map(|tx| tx.transaction.clone())
+<a href=#86 id=86 data-nosnippet>86</a>                    })
+<a href=#87 id=87 data-nosnippet>87</a>                    .collect::&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()
+<a href=#88 id=88 data-nosnippet>88</a>                    .ok_or_else(|| {
+<a href=#89 id=89 data-nosnippet>89</a>                        <span class="macro">warn!</span>(
+<a href=#90 id=90 data-nosnippet>90</a>                            <span class="string">"Request tx index out of bound, peer={}, hash={}"</span>,
+<a href=#91 id=91 data-nosnippet>91</a>                            ctx.node_id,
+<a href=#92 id=92 data-nosnippet>92</a>                            block.hash()
+<a href=#93 id=93 data-nosnippet>93</a>                        );
+<a href=#94 id=94 data-nosnippet>94</a>                        Error::InvalidGetBlockTxn(<span class="string">"index out-of-bound"</span>.into())
+<a href=#95 id=95 data-nosnippet>95</a>                    })<span class="question-mark">?</span>;
 <a href=#96 id=96 data-nosnippet>96</a>                <span class="kw">let </span>response = GetBlockTxnResponse {
 <a href=#97 id=97 data-nosnippet>97</a>                    request_id: <span class="self">self</span>.request_id,
 <a href=#98 id=98 data-nosnippet>98</a>                    block_hash: <span class="self">self</span>.block_hash,

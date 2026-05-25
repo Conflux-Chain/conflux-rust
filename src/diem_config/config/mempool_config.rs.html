@@ -10,28 +10,31 @@
 <a href=#10 id=10 data-nosnippet>10</a><span class="attr">#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 <a href=#11 id=11 data-nosnippet>11</a>#[serde(default, deny_unknown_fields)]
 <a href=#12 id=12 data-nosnippet>12</a></span><span class="kw">pub struct </span>MempoolConfig {
-<a href=#13 id=13 data-nosnippet>13</a>    <span class="kw">pub </span>max_broadcasts_per_peer: usize,
-<a href=#14 id=14 data-nosnippet>14</a>    <span class="kw">pub </span>shared_mempool_ack_timeout_ms: u64,
-<a href=#15 id=15 data-nosnippet>15</a>    <span class="kw">pub </span>shared_mempool_backoff_interval_ms: u64,
-<a href=#16 id=16 data-nosnippet>16</a>    <span class="kw">pub </span>shared_mempool_batch_size: usize,
-<a href=#17 id=17 data-nosnippet>17</a>    <span class="kw">pub </span>shared_mempool_max_concurrent_inbound_syncs: usize,
-<a href=#18 id=18 data-nosnippet>18</a>    <span class="kw">pub </span>shared_mempool_tick_interval_ms: u64,
-<a href=#19 id=19 data-nosnippet>19</a>    <span class="kw">pub </span>system_transaction_timeout_secs: u64,
-<a href=#20 id=20 data-nosnippet>20</a>    <span class="kw">pub </span>system_transaction_gc_interval_ms: u64,
-<a href=#21 id=21 data-nosnippet>21</a>}
-<a href=#22 id=22 data-nosnippet>22</a>
-<a href=#23 id=23 data-nosnippet>23</a><span class="kw">impl </span>Default <span class="kw">for </span>MempoolConfig {
-<a href=#24 id=24 data-nosnippet>24</a>    <span class="kw">fn </span>default() -&gt; MempoolConfig {
-<a href=#25 id=25 data-nosnippet>25</a>        MempoolConfig {
-<a href=#26 id=26 data-nosnippet>26</a>            shared_mempool_tick_interval_ms: <span class="number">1000</span>,
-<a href=#27 id=27 data-nosnippet>27</a>            shared_mempool_backoff_interval_ms: <span class="number">30_000</span>,
-<a href=#28 id=28 data-nosnippet>28</a>            shared_mempool_batch_size: <span class="number">100</span>,
-<a href=#29 id=29 data-nosnippet>29</a>            shared_mempool_ack_timeout_ms: <span class="number">5_000</span>,
-<a href=#30 id=30 data-nosnippet>30</a>            shared_mempool_max_concurrent_inbound_syncs: <span class="number">2</span>,
-<a href=#31 id=31 data-nosnippet>31</a>            <span class="comment">// Allow for 1s latency with the default 500ms tick.
-<a href=#32 id=32 data-nosnippet>32</a>            </span>max_broadcasts_per_peer: <span class="number">2</span>,
-<a href=#33 id=33 data-nosnippet>33</a>            system_transaction_timeout_secs: <span class="number">600</span>,
-<a href=#34 id=34 data-nosnippet>34</a>            system_transaction_gc_interval_ms: <span class="number">60_000</span>,
-<a href=#35 id=35 data-nosnippet>35</a>        }
-<a href=#36 id=36 data-nosnippet>36</a>    }
-<a href=#37 id=37 data-nosnippet>37</a>}</code></pre></div></section></main></body></html>
+<a href=#13 id=13 data-nosnippet>13</a>    <span class="kw">pub </span>capacity_per_sender: usize,
+<a href=#14 id=14 data-nosnippet>14</a>    <span class="kw">pub </span>max_broadcasts_per_peer: usize,
+<a href=#15 id=15 data-nosnippet>15</a>    <span class="kw">pub </span>shared_mempool_ack_timeout_ms: u64,
+<a href=#16 id=16 data-nosnippet>16</a>    <span class="kw">pub </span>shared_mempool_backoff_interval_ms: u64,
+<a href=#17 id=17 data-nosnippet>17</a>    <span class="kw">pub </span>shared_mempool_batch_size: usize,
+<a href=#18 id=18 data-nosnippet>18</a>    <span class="kw">pub </span>shared_mempool_max_concurrent_inbound_syncs: usize,
+<a href=#19 id=19 data-nosnippet>19</a>    <span class="kw">pub </span>shared_mempool_tick_interval_ms: u64,
+<a href=#20 id=20 data-nosnippet>20</a>    <span class="kw">pub </span>system_transaction_timeout_secs: u64,
+<a href=#21 id=21 data-nosnippet>21</a>    <span class="kw">pub </span>system_transaction_gc_interval_ms: u64,
+<a href=#22 id=22 data-nosnippet>22</a>}
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">impl </span>Default <span class="kw">for </span>MempoolConfig {
+<a href=#25 id=25 data-nosnippet>25</a>    <span class="kw">fn </span>default() -&gt; MempoolConfig {
+<a href=#26 id=26 data-nosnippet>26</a>        MempoolConfig {
+<a href=#27 id=27 data-nosnippet>27</a>            shared_mempool_tick_interval_ms: <span class="number">1000</span>,
+<a href=#28 id=28 data-nosnippet>28</a>            shared_mempool_backoff_interval_ms: <span class="number">30_000</span>,
+<a href=#29 id=29 data-nosnippet>29</a>            shared_mempool_batch_size: <span class="number">100</span>,
+<a href=#30 id=30 data-nosnippet>30</a>            shared_mempool_ack_timeout_ms: <span class="number">5_000</span>,
+<a href=#31 id=31 data-nosnippet>31</a>            shared_mempool_max_concurrent_inbound_syncs: <span class="number">2</span>,
+<a href=#32 id=32 data-nosnippet>32</a>            <span class="comment">// Allow for 1s latency with the default 500ms tick.
+<a href=#33 id=33 data-nosnippet>33</a>            </span>max_broadcasts_per_peer: <span class="number">2</span>,
+<a href=#34 id=34 data-nosnippet>34</a>            <span class="comment">// ~3x burst headroom over legitimate per-validator traffic.
+<a href=#35 id=35 data-nosnippet>35</a>            </span>capacity_per_sender: <span class="number">128</span>,
+<a href=#36 id=36 data-nosnippet>36</a>            system_transaction_timeout_secs: <span class="number">600</span>,
+<a href=#37 id=37 data-nosnippet>37</a>            system_transaction_gc_interval_ms: <span class="number">60_000</span>,
+<a href=#38 id=38 data-nosnippet>38</a>        }
+<a href=#39 id=39 data-nosnippet>39</a>    }
+<a href=#40 id=40 data-nosnippet>40</a>}</code></pre></div></section></main></body></html>

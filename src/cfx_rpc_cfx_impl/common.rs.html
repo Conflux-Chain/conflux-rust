@@ -273,7 +273,7 @@
 <a href=#273 id=273 data-nosnippet>273</a>    ) -&gt; CoreResult&lt;RpcBlock&gt; {
 <a href=#274 id=274 data-nosnippet>274</a>        <span class="kw">let </span>consensus_graph = <span class="self">self</span>.consensus_graph();
 <a href=#275 id=275 data-nosnippet>275</a>        <span class="kw">let </span>inner = <span class="kw-2">&amp;*</span>consensus_graph.inner.read();
-<a href=#276 id=276 data-nosnippet>276</a>        <span class="kw">let </span>epoch_number = epoch_number.as_usize() <span class="kw">as </span>u64;
+<a href=#276 id=276 data-nosnippet>276</a>        <span class="kw">let </span>epoch_number = epoch_number.as_u64();
 <a href=#277 id=277 data-nosnippet>277</a>
 <a href=#278 id=278 data-nosnippet>278</a>        <span class="macro">info!</span>(
 <a href=#279 id=279 data-nosnippet>279</a>            <span class="string">"RPC Request: cfx_getBlockByHashWithPivotAssumption block_hash={:?} pivot_hash={:?} epoch_number={:?}"</span>,

@@ -418,21 +418,30 @@
 <a href=#418 id=418 data-nosnippet>418</a>    </span><span class="prelude-val">None</span>,
 <a href=#419 id=419 data-nosnippet>419</a>}
 <a href=#420 id=420 data-nosnippet>420</a>
-<a href=#421 id=421 data-nosnippet>421</a><span class="kw">pub fn </span>parse_msg_id_leb128_2_bytes_at_most(msg: <span class="kw-2">&amp;mut &amp;</span>[u8]) -&gt; u16 {
-<a href=#422 id=422 data-nosnippet>422</a>    <span class="kw">let </span>buf = <span class="kw-2">*</span>msg;
-<a href=#423 id=423 data-nosnippet>423</a>
-<a href=#424 id=424 data-nosnippet>424</a>    <span class="kw">let </span><span class="kw-2">mut </span>ret = <span class="number">0</span>;
-<a href=#425 id=425 data-nosnippet>425</a>    <span class="kw">let </span><span class="kw-2">mut </span>pos = buf.len() - <span class="number">1</span>;
-<a href=#426 id=426 data-nosnippet>426</a>
-<a href=#427 id=427 data-nosnippet>427</a>    <span class="kw">let </span>byte = buf[pos] <span class="kw">as </span>u16;
-<a href=#428 id=428 data-nosnippet>428</a>    ret |= byte &amp; <span class="number">0x7f</span>;
-<a href=#429 id=429 data-nosnippet>429</a>    <span class="kw">if </span>byte &amp; <span class="number">0x80 </span>!= <span class="number">0 </span>{
-<a href=#430 id=430 data-nosnippet>430</a>        pos -= <span class="number">1</span>;
-<a href=#431 id=431 data-nosnippet>431</a>        <span class="kw">let </span>byte = buf[pos] <span class="kw">as </span>u16;
-<a href=#432 id=432 data-nosnippet>432</a>        ret |= (byte &amp; <span class="number">0x7f</span>) &lt;&lt; <span class="number">7</span>;
-<a href=#433 id=433 data-nosnippet>433</a>    }
-<a href=#434 id=434 data-nosnippet>434</a>
-<a href=#435 id=435 data-nosnippet>435</a>    <span class="kw-2">*</span>msg = <span class="kw-2">&amp;</span>buf[..pos];
-<a href=#436 id=436 data-nosnippet>436</a>
-<a href=#437 id=437 data-nosnippet>437</a>    ret
-<a href=#438 id=438 data-nosnippet>438</a>}</code></pre></div></section></main></body></html>
+<a href=#421 id=421 data-nosnippet>421</a><span class="kw">pub fn </span>parse_msg_id_leb128_2_bytes_at_most(
+<a href=#422 id=422 data-nosnippet>422</a>    msg: <span class="kw-2">&amp;mut &amp;</span>[u8],
+<a href=#423 id=423 data-nosnippet>423</a>) -&gt; <span class="prelude-ty">Result</span>&lt;u16, <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; {
+<a href=#424 id=424 data-nosnippet>424</a>    <span class="kw">let </span>buf = <span class="kw-2">*</span>msg;
+<a href=#425 id=425 data-nosnippet>425</a>
+<a href=#426 id=426 data-nosnippet>426</a>    <span class="kw">if </span>buf.is_empty() {
+<a href=#427 id=427 data-nosnippet>427</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"empty buffer"</span>);
+<a href=#428 id=428 data-nosnippet>428</a>    }
+<a href=#429 id=429 data-nosnippet>429</a>
+<a href=#430 id=430 data-nosnippet>430</a>    <span class="kw">let </span><span class="kw-2">mut </span>ret = <span class="number">0</span>;
+<a href=#431 id=431 data-nosnippet>431</a>    <span class="kw">let </span><span class="kw-2">mut </span>pos = buf.len() - <span class="number">1</span>;
+<a href=#432 id=432 data-nosnippet>432</a>
+<a href=#433 id=433 data-nosnippet>433</a>    <span class="kw">let </span>byte = buf[pos] <span class="kw">as </span>u16;
+<a href=#434 id=434 data-nosnippet>434</a>    ret |= byte &amp; <span class="number">0x7f</span>;
+<a href=#435 id=435 data-nosnippet>435</a>    <span class="kw">if </span>byte &amp; <span class="number">0x80 </span>!= <span class="number">0 </span>{
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="kw">if </span>pos == <span class="number">0 </span>{
+<a href=#437 id=437 data-nosnippet>437</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"leb128 continuation bit set but no second byte"</span>);
+<a href=#438 id=438 data-nosnippet>438</a>        }
+<a href=#439 id=439 data-nosnippet>439</a>        pos -= <span class="number">1</span>;
+<a href=#440 id=440 data-nosnippet>440</a>        <span class="kw">let </span>byte = buf[pos] <span class="kw">as </span>u16;
+<a href=#441 id=441 data-nosnippet>441</a>        ret |= (byte &amp; <span class="number">0x7f</span>) &lt;&lt; <span class="number">7</span>;
+<a href=#442 id=442 data-nosnippet>442</a>    }
+<a href=#443 id=443 data-nosnippet>443</a>
+<a href=#444 id=444 data-nosnippet>444</a>    <span class="kw-2">*</span>msg = <span class="kw-2">&amp;</span>buf[..pos];
+<a href=#445 id=445 data-nosnippet>445</a>
+<a href=#446 id=446 data-nosnippet>446</a>    <span class="prelude-val">Ok</span>(ret)
+<a href=#447 id=447 data-nosnippet>447</a>}</code></pre></div></section></main></body></html>

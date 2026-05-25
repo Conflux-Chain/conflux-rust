@@ -25,10 +25,19 @@
 <a href=#25 id=25 data-nosnippet>25</a><span class="comment">// General function for solidity storage rule
 <a href=#26 id=26 data-nosnippet>26</a></span><span class="kw">pub fn </span>array_slot(base: U256, index: usize, element_size: usize) -&gt; U256 {
 <a href=#27 id=27 data-nosnippet>27</a>    <span class="comment">// Solidity will apply an overflowing add here.
-<a href=#28 id=28 data-nosnippet>28</a>    // However, if this function is used correctly, the overflowing will
-<a href=#29 id=29 data-nosnippet>29</a>    // happen with a negligible exception, so we let it panic when
-<a href=#30 id=30 data-nosnippet>30</a>    // overflowing happen.
-<a href=#31 id=31 data-nosnippet>31</a>    </span>base + index * element_size
-<a href=#32 id=32 data-nosnippet>32</a>}
-<a href=#33 id=33 data-nosnippet>33</a>
-<a href=#34 id=34 data-nosnippet>34</a><span class="kw">pub fn </span>u256_to_array(input: U256) -&gt; [u8; <span class="number">32</span>] { input.to_big_endian() }</code></pre></div></section></main></body></html>
+<a href=#28 id=28 data-nosnippet>28</a>    </span><span class="kw">let </span>(offset, <span class="kw">_</span>) =
+<a href=#29 id=29 data-nosnippet>29</a>        U256::from(index).overflowing_mul(U256::from(element_size));
+<a href=#30 id=30 data-nosnippet>30</a>    base.overflowing_add(offset).<span class="number">0
+<a href=#31 id=31 data-nosnippet>31</a></span>}
+<a href=#32 id=32 data-nosnippet>32</a>
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">pub fn </span>u256_to_array(input: U256) -&gt; [u8; <span class="number">32</span>] { input.to_big_endian() }
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a><span class="attr">#[cfg(test)]
+<a href=#36 id=36 data-nosnippet>36</a></span><span class="kw">mod </span>tests {
+<a href=#37 id=37 data-nosnippet>37</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a>    <span class="attr">#[test]
+<a href=#40 id=40 data-nosnippet>40</a>    </span><span class="kw">fn </span>array_slot_wraps_like_solidity() {
+<a href=#41 id=41 data-nosnippet>41</a>        <span class="macro">assert_eq!</span>(array_slot(U256::MAX, <span class="number">1</span>, <span class="number">1</span>), U256::zero());
+<a href=#42 id=42 data-nosnippet>42</a>    }
+<a href=#43 id=43 data-nosnippet>43</a>}</code></pre></div></section></main></body></html>
