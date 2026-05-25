@@ -150,7 +150,7 @@ impl Handleable for GetBlockTxnResponse {
 /// `candidates` must match those holes exactly: too few candidates would leave
 /// missing values unresolved, while too many candidates means the response does
 /// not match the requested layout. Returns `None` for either mismatch.
-fn fill_missing_slots<'a, T: Clone>(
+fn fill_missing_slots<T: Clone>(
     items: Vec<Option<T>>, candidates: &[T],
 ) -> Option<Vec<T>> {
     let mut candidates_iter = candidates.iter();
