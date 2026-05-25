@@ -25,13 +25,9 @@ use std::{
 };
 
 /// An entry in `SessionManager::node_id_index`: the session's slab token and
-/// its direction (`originated`).
-///
-/// `originated` is cached here so the simultaneous-dial tie-breaker in
-/// `update_ingress_node_id` can read it without locking the `Session`. Kill
-/// paths remove the entry (`remove_node_id_entry`) before marking the session
-/// expired, so a present entry is not left pointing at an already-expired
-/// session.
+/// its direction (`originated`). `originated` is cached here so the
+/// simultaneous-dial tie-breaker can read it without locking the `Session`.
+/// See `node_id_index` for the lifetime invariant.
 #[derive(Clone, Debug)]
 pub struct IndexEntry {
     pub token: usize,
@@ -103,10 +99,16 @@ pub struct SessionManager {
     /// compute the simultaneous-dial tie-break.
     own_node_id: NodeId,
 
-    /// session indices. Each entry stores the slab token plus whether
-    /// that session is egress (`originated = true`) or ingress
-    /// (`originated = false`); the latter is consulted by the
-    /// simultaneous-dial tie-breaker in `update_ingress_node_id`.
+    /// Reverse index from `NodeId` to slab token (plus direction). The
+    /// simultaneous-dial tie-breaker in `update_ingress_node_id` reads it
+    /// to detect and resolve duplicate sessions for the same peer.
+    ///
+    /// **Invariant:** `node_id_index` contains only sessions whose remote
+    /// node id is known and whose local session state is still active.
+    /// Sessions must be removed from this index (via `remove_node_id_entry`)
+    /// before their `Session::expired` state is set — otherwise the
+    /// tie-breaker could `DropNew` a fresh ingress in favour of an
+    /// already-dead session.
     node_id_index: RwLock<HashMap<NodeId, IndexEntry>>,
     ip_limit: RwLock<Box<dyn SessionIpLimit>>,
     tag_index: RwLock<SessionTagIndex>,
