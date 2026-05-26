@@ -202,11 +202,16 @@ pub enum StatusCode {
     // The pos transaction does not pass validation based on pos state
     CFX_INVALID_TX = 28,
     ELECTION_NON_EXISTENT_NODE = 29,
+    ELECTION_SIGNER_MISMATCH = 30,
     ELECTION_TARGET_TERM_NOT_OPEN = 31,
     ELECTION_WITHOUT_VOTES = 32,
     PIVOT_DECISION_HEIGHT_TOO_OLD = 33,
+    PIVOT_DECISION_SENDER_NOT_REGISTERED = 34,
+    DISPUTE_SENDER_NOT_REGISTERED = 35,
+    AUTHENTICATOR_KEY_MISMATCH = 36,
+    PAYLOAD_NOT_ALLOWED_VIA_MEMPOOL = 37,
     // `expiration_timestamp_secs` must be u64::MAX; any other value is invalid.
-    INVALID_EXPIRATION_TIME = 34,
+    INVALID_EXPIRATION_TIME = 38,
 
     // Runtime Errors: 4000-4999
     EXECUTED = 4001,

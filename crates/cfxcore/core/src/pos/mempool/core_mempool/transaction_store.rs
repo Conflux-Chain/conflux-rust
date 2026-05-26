@@ -23,7 +23,10 @@ use diem_types::{
     mempool_status::{MempoolStatus, MempoolStatusCode},
     transaction::{SignedTransaction, TransactionPayload},
 };
-use std::collections::{hash_map::Values, HashMap, HashSet};
+use std::{
+    collections::{hash_map::Values, HashMap, HashSet},
+    time::Duration,
+};
 
 /// TransactionStore is in-memory storage for all transactions in mempool.
 pub struct TransactionStore {
@@ -32,19 +35,26 @@ pub struct TransactionStore {
     // pivot decision helper structure
     pivot_decisions: HashMap<HashValue, HashSet<(AccountAddress, HashValue)>>,
 
-    // TTL keyed on `MempoolTransaction.expiration_time = add_time +
-    // system_transaction_timeout`. Every txn is evicted after the timeout,
-    // regardless of its payload — keeps old txns from clogging the mempool
-    // when commit callbacks are delayed.
+    // Evicts txns after `system_transaction_timeout` so stalled commit
+    // callbacks cannot clog the mempool indefinitely.
     system_ttl_index: TTLIndex,
     timeline_index: TimelineIndex,
+
+    // Per-sender cap against Byzantine spam. Invariant: every removal
+    // of `self.transactions` must route through `index_remove`.
+    per_sender_count: HashMap<AccountAddress, usize>,
+    capacity_per_sender: usize,
 }
 
 pub type PivotDecisionIter<'a> =
     Values<'a, HashValue, HashSet<(AccountAddress, HashValue)>>;
 
 impl TransactionStore {
-    pub(crate) fn new(_config: &MempoolConfig) -> Self {
+    pub(crate) fn new(config: &MempoolConfig) -> Self {
+        assert!(
+            config.capacity_per_sender > 0,
+            "mempool.capacity_per_sender must be > 0",
+        );
         Self {
             // main DS
             transactions: AccountTransactions::new(),
@@ -55,6 +65,9 @@ impl TransactionStore {
                 |t: &MempoolTransaction| t.expiration_time,
             )),
             timeline_index: TimelineIndex::new(),
+
+            per_sender_count: HashMap::new(),
+            capacity_per_sender: config.capacity_per_sender,
         }
     }
 
@@ -93,11 +106,33 @@ impl TransactionStore {
             return MempoolStatus::new(MempoolStatusCode::Accepted);
         }
 
+        let sender_entry = self.per_sender_count.entry(address).or_insert(0);
+        if *sender_entry >= self.capacity_per_sender {
+            let sender_count = *sender_entry;
+            // Rate-limited so a sustained attack doesn't flood logs.
+            diem_sample!(
+                SampleRate::Duration(Duration::from_secs(60)),
+                diem_warn!(
+                    sender = %address,
+                    sender_count = sender_count,
+                    cap = self.capacity_per_sender,
+                    "mempool: per-sender capacity reached, rejecting txn",
+                )
+            );
+            return MempoolStatus::new(MempoolStatusCode::TooManyTransactions)
+                .with_message(format!(
+                    "sender {} already has {} transactions (cap {})",
+                    address, sender_count, self.capacity_per_sender,
+                ));
+        }
+        *sender_entry += 1;
+
         self.timeline_index.insert(&mut txn);
         self.system_ttl_index.insert(&txn);
 
-        let payload = txn.txn.clone().into_raw_transaction().into_payload();
-        if let TransactionPayload::PivotDecision(pivot_decision) = payload {
+        if let TransactionPayload::PivotDecision(pivot_decision) =
+            txn.txn.payload()
+        {
             let pivot_decision_hash = pivot_decision.hash();
             self.pivot_decisions
                 .entry(pivot_decision_hash)
@@ -152,6 +187,18 @@ impl TransactionStore {
     fn index_remove(&mut self, txn: &MempoolTransaction) {
         self.system_ttl_index.remove(&txn);
         self.timeline_index.remove(&txn);
+        let sender = txn.get_sender();
+        debug_assert!(
+            self.per_sender_count.contains_key(&sender),
+            "per_sender_count missing entry for {} at index_remove",
+            sender,
+        );
+        if let Some(count) = self.per_sender_count.get_mut(&sender) {
+            *count -= 1;
+            if *count == 0 {
+                self.per_sender_count.remove(&sender);
+            }
+        }
     }
 
     /// Read `count` transactions from timeline since `timeline_id`.
@@ -219,5 +266,121 @@ impl TransactionStore {
 
     pub(crate) fn iter_pivot_decision(&self) -> PivotDecisionIter<'_> {
         self.pivot_decisions.values()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diem_crypto::{
+        bls::{BLSPrivateKey, BLSPublicKey},
+        PrivateKey, SigningKey, Uniform,
+    };
+    use diem_types::{
+        chain_id::ChainId,
+        transaction::{RawTransaction, RetirePayload, TransactionPayload},
+    };
+    use std::time::Duration;
+
+    fn store_with_cap(cap: usize) -> TransactionStore {
+        let mut cfg = MempoolConfig::default();
+        cfg.capacity_per_sender = cap;
+        TransactionStore::new(&cfg)
+    }
+
+    // Address is arbitrary — `per_sender_count` keys on address only.
+    fn new_sender() -> (BLSPrivateKey, BLSPublicKey, AccountAddress) {
+        let sk = BLSPrivateKey::generate_for_testing();
+        let pk = sk.public_key();
+        (sk, pk, AccountAddress::random())
+    }
+
+    fn mk_txn(
+        sk: &BLSPrivateKey, pk: &BLSPublicKey, sender: AccountAddress,
+        nonce: u64,
+    ) -> MempoolTransaction {
+        let payload = TransactionPayload::Retire(RetirePayload {
+            node_id: sender,
+            votes: nonce,
+        });
+        let raw =
+            RawTransaction::new(sender, payload, u64::MAX, ChainId::test());
+        let sig = sk.sign(&raw);
+        MempoolTransaction::new(
+            SignedTransaction::new(raw, pk.clone(), sig),
+            Duration::from_secs(3600),
+            TimelineState::NotReady,
+        )
+    }
+
+    #[test]
+    fn per_sender_count_insert_and_commit_lifecycle() {
+        let mut store = store_with_cap(3);
+        let (sk, pk, sender) = new_sender();
+        assert!(!store.per_sender_count.contains_key(&sender));
+
+        let mut hashes = Vec::new();
+        for n in 0..3 {
+            let txn = mk_txn(&sk, &pk, sender, n);
+            hashes.push(txn.get_hash());
+            assert_eq!(store.insert(txn).code, MempoolStatusCode::Accepted);
+        }
+        assert_eq!(store.per_sender_count[&sender], 3);
+
+        for (i, h) in hashes.iter().enumerate() {
+            store.commit_transaction(*h);
+            let remaining = 3 - (i + 1);
+            if remaining == 0 {
+                assert!(!store.per_sender_count.contains_key(&sender));
+            } else {
+                assert_eq!(store.per_sender_count[&sender], remaining);
+            }
+        }
+    }
+
+    #[test]
+    fn per_sender_count_cap_rejects_without_growth() {
+        let mut store = store_with_cap(2);
+        let (sk, pk, sender) = new_sender();
+
+        for n in 0..2 {
+            assert_eq!(
+                store.insert(mk_txn(&sk, &pk, sender, n)).code,
+                MempoolStatusCode::Accepted
+            );
+        }
+        assert_eq!(store.per_sender_count[&sender], 2);
+
+        for n in 2..6 {
+            assert_eq!(
+                store.insert(mk_txn(&sk, &pk, sender, n)).code,
+                MempoolStatusCode::TooManyTransactions
+            );
+            assert_eq!(store.per_sender_count[&sender], 2);
+        }
+    }
+
+    #[test]
+    fn per_sender_count_duplicate_hash_no_double_count() {
+        let mut store = store_with_cap(8);
+        let (sk, pk, sender) = new_sender();
+        let txn = mk_txn(&sk, &pk, sender, 0);
+        let dup = MempoolTransaction::new(
+            txn.txn.clone(),
+            txn.expiration_time,
+            txn.timeline_state,
+        );
+
+        assert_eq!(store.insert(txn).code, MempoolStatusCode::Accepted);
+        assert_eq!(store.per_sender_count[&sender], 1);
+
+        assert_eq!(store.insert(dup).code, MempoolStatusCode::Accepted);
+        assert_eq!(store.per_sender_count[&sender], 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "mempool.capacity_per_sender must be > 0")]
+    fn capacity_per_sender_zero_panics_on_construction() {
+        let _ = store_with_cap(0);
     }
 }

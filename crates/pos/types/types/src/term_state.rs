@@ -629,8 +629,23 @@ impl PosState {
 
 /// Read-only functions use in `TransactionValidator`
 impl PosState {
+    /// Binds `sender` to a slot the submitter actually controls by
+    /// requiring `node_map[sender].public_key == auth_pk`. Returns the
+    /// `NodeData` so callers can reuse the borrow.
+    fn check_sender_owns_auth_key(
+        &self, sender: &AccountAddress, auth_pk: &ConsensusPublicKey,
+        not_registered: DiscardedVMStatus,
+    ) -> Result<&NodeData, DiscardedVMStatus> {
+        let node = self.account_node_data(*sender).ok_or(not_registered)?;
+        if &node.public_key != auth_pk {
+            return Err(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH);
+        }
+        Ok(node)
+    }
+
     pub fn validate_election_simple(
-        &self, election_tx: &ElectionPayload,
+        &self, sender: &AccountAddress, auth_pk: &ConsensusPublicKey,
+        election_tx: &ElectionPayload,
     ) -> Option<DiscardedVMStatus> {
         let node_id = NodeID::new(
             election_tx.public_key.clone(),
@@ -641,11 +656,19 @@ impl PosState {
             node_id.addr,
             election_tx.target_term
         );
-        let node = match self.node_map.get(&node_id.addr) {
-            Some(node) => node,
-            None => {
-                return Some(DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE);
-            }
+        // Sender must match the addr derived from the payload's
+        // declared keys, so a registered submitter can't stuff another
+        // node's payload keys.
+        if *sender != node_id.addr {
+            return Some(DiscardedVMStatus::ELECTION_SIGNER_MISMATCH);
+        }
+        let node = match self.check_sender_owns_auth_key(
+            sender,
+            auth_pk,
+            DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
+        ) {
+            Ok(node) => node,
+            Err(err) => return Some(err),
         };
 
         let target_view = match POS_STATE_CONFIG
@@ -672,12 +695,35 @@ impl PosState {
     }
 
     pub fn validate_pivot_decision_simple(
-        &self, pivot_decision_tx: &PivotBlockDecision,
+        &self, sender: &AccountAddress, auth_pk: &ConsensusPublicKey,
+        pivot_decision_tx: &PivotBlockDecision,
     ) -> Option<DiscardedVMStatus> {
+        // node_map (not active-committee): PivotDecision is gossiped
+        // per round and committee gating would drop newly-joined
+        // members at every term boundary.
+        if let Err(err) = self.check_sender_owns_auth_key(
+            sender,
+            auth_pk,
+            DiscardedVMStatus::PIVOT_DECISION_SENDER_NOT_REGISTERED,
+        ) {
+            return Some(err);
+        }
         if pivot_decision_tx.height <= self.pivot_decision.height {
             return Some(DiscardedVMStatus::PIVOT_DECISION_HEIGHT_TOO_OLD);
         }
         None
+    }
+
+    pub fn validate_dispute_simple(
+        &self, sender: &AccountAddress, auth_pk: &ConsensusPublicKey,
+    ) -> Option<DiscardedVMStatus> {
+        // Registered-node gating; `verify_dispute` runs at execute time.
+        self.check_sender_owns_auth_key(
+            sender,
+            auth_pk,
+            DiscardedVMStatus::DISPUTE_SENDER_NOT_REGISTERED,
+        )
+        .err()
     }
 }
 
@@ -1372,5 +1418,222 @@ impl DisputeEvent {
 
     pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        block_info::PivotBlockDecision, transaction::ElectionPayload,
+        validator_config::ConsensusVRFProof,
+    };
+    use diem_crypto::{
+        bls::BLSPrivateKey,
+        ec_vrf::{EcVrfPrivateKey, EcVrfProof},
+        PrivateKey, Uniform,
+    };
+    use rand::{rngs::StdRng, SeedableRng};
+
+    struct Keys {
+        bls_pk: ConsensusPublicKey,
+        vrf_pk: ConsensusVRFPublicKey,
+        addr: AccountAddress,
+    }
+
+    fn keys_from_seed(seed: u64) -> Keys {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let bls_sk = BLSPrivateKey::generate(&mut rng);
+        let bls_pk = bls_sk.public_key();
+        let vrf_sk = EcVrfPrivateKey::generate(&mut rng);
+        let vrf_pk = vrf_sk.public_key();
+        let node_id = NodeID::new(bls_pk.clone(), vrf_pk.clone());
+        Keys {
+            bls_pk,
+            vrf_pk,
+            addr: node_id.addr,
+        }
+    }
+
+    // simple-validation doesn't verify the VRF proof, so any bytes work.
+    fn dummy_vrf_proof() -> ConsensusVRFProof {
+        EcVrfProof::try_from(&[][..]).unwrap()
+    }
+
+    fn state_with_node(k: &Keys) -> PosState {
+        let mut state = PosState::new_empty();
+        state
+            .register_node(NodeID::new(k.bls_pk.clone(), k.vrf_pk.clone()))
+            .expect("register_node");
+        state
+    }
+
+    #[test]
+    fn pivot_decision_rejects_unregistered_sender() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        let tx = PivotBlockDecision {
+            block_hash: Default::default(),
+            height: 1,
+        };
+        assert_eq!(
+            state.validate_pivot_decision_simple(
+                &mallory.addr,
+                &mallory.bls_pk,
+                &tx
+            ),
+            Some(DiscardedVMStatus::PIVOT_DECISION_SENDER_NOT_REGISTERED),
+        );
+    }
+
+    #[test]
+    fn pivot_decision_rejects_auth_key_mismatch() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        let tx = PivotBlockDecision {
+            block_hash: Default::default(),
+            height: 1,
+        };
+        assert_eq!(
+            state.validate_pivot_decision_simple(
+                &alice.addr,
+                &mallory.bls_pk,
+                &tx
+            ),
+            Some(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH),
+        );
+    }
+
+    #[test]
+    fn pivot_decision_accepts_legitimate_self_signed() {
+        let alice = keys_from_seed(1);
+        let state = state_with_node(&alice);
+
+        let tx = PivotBlockDecision {
+            block_hash: Default::default(),
+            height: 1,
+        };
+        assert_eq!(
+            state.validate_pivot_decision_simple(
+                &alice.addr,
+                &alice.bls_pk,
+                &tx
+            ),
+            None,
+        );
+    }
+
+    #[test]
+    fn dispute_rejects_unregistered_sender() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        assert_eq!(
+            state.validate_dispute_simple(&mallory.addr, &mallory.bls_pk),
+            Some(DiscardedVMStatus::DISPUTE_SENDER_NOT_REGISTERED),
+        );
+    }
+
+    #[test]
+    fn dispute_rejects_auth_key_mismatch() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        assert_eq!(
+            state.validate_dispute_simple(&alice.addr, &mallory.bls_pk),
+            Some(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH),
+        );
+    }
+
+    #[test]
+    fn dispute_accepts_legitimate_self_signed() {
+        let alice = keys_from_seed(1);
+        let state = state_with_node(&alice);
+
+        assert_eq!(
+            state.validate_dispute_simple(&alice.addr, &alice.bls_pk),
+            None,
+        );
+    }
+
+    fn election_payload_for(k: &Keys) -> ElectionPayload {
+        ElectionPayload {
+            public_key: k.bls_pk.clone(),
+            vrf_public_key: k.vrf_pk.clone(),
+            target_term: 1,
+            vrf_proof: dummy_vrf_proof(),
+        }
+    }
+
+    #[test]
+    fn election_rejects_signer_mismatch() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        let payload = election_payload_for(&alice);
+        assert_eq!(
+            state.validate_election_simple(
+                &mallory.addr,
+                &mallory.bls_pk,
+                &payload
+            ),
+            Some(DiscardedVMStatus::ELECTION_SIGNER_MISMATCH),
+        );
+    }
+
+    #[test]
+    fn election_rejects_auth_key_mismatch() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        let payload = election_payload_for(&alice);
+        assert_eq!(
+            state.validate_election_simple(
+                &alice.addr,
+                &mallory.bls_pk,
+                &payload
+            ),
+            Some(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH),
+        );
+    }
+
+    #[test]
+    fn check_sender_owns_auth_key_unregistered() {
+        let alice = keys_from_seed(1);
+        let mallory = keys_from_seed(2);
+        let state = state_with_node(&alice);
+
+        assert_eq!(
+            state
+                .check_sender_owns_auth_key(
+                    &mallory.addr,
+                    &mallory.bls_pk,
+                    DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
+                )
+                .err(),
+            Some(DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE),
+        );
+    }
+
+    #[test]
+    fn check_sender_owns_auth_key_accepts_matching() {
+        let alice = keys_from_seed(1);
+        let state = state_with_node(&alice);
+
+        assert!(state
+            .check_sender_owns_auth_key(
+                &alice.addr,
+                &alice.bls_pk,
+                DiscardedVMStatus::ELECTION_NON_EXISTENT_NODE,
+            )
+            .is_ok());
     }
 }

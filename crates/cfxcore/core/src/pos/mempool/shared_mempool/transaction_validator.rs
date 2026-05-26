@@ -18,14 +18,31 @@ impl TransactionValidator {
     pub fn validate_transaction(
         &self, tx: &SignedTransaction, pos_state: Arc<PosState>,
     ) -> Option<DiscardedVMStatus> {
-        // This check is cheaper than signature verification, so we do not
-        // need to verify signatures for old transactions.
+        let authenticator = tx.authenticator();
+        let auth_pk = match &authenticator {
+            TransactionAuthenticator::BLS { public_key, .. } => public_key,
+            _ => return Some(DiscardedVMStatus::INVALID_SIGNATURE),
+        };
+
+        let sender = tx.sender();
         let result = match tx.payload() {
-            TransactionPayload::Election(election_payload) => {
-                pos_state.validate_election_simple(election_payload)
+            TransactionPayload::Election(election_payload) => pos_state
+                .validate_election_simple(&sender, auth_pk, election_payload),
+            TransactionPayload::PivotDecision(pivot_decision) => pos_state
+                .validate_pivot_decision_simple(
+                    &sender,
+                    auth_pk,
+                    pivot_decision,
+                ),
+            TransactionPayload::Dispute(_) => {
+                pos_state.validate_dispute_simple(&sender, auth_pk)
             }
-            TransactionPayload::PivotDecision(pivot_decision) => {
-                pos_state.validate_pivot_decision_simple(pivot_decision)
+            TransactionPayload::Register(_)
+            | TransactionPayload::Retire(_)
+            | TransactionPayload::UpdateVotingPower(_) => {
+                return Some(
+                    DiscardedVMStatus::PAYLOAD_NOT_ALLOWED_VIA_MEMPOOL,
+                );
             }
             _ => None,
         };
@@ -40,12 +57,7 @@ impl TransactionValidator {
             return Some(DiscardedVMStatus::INVALID_EXPIRATION_TIME);
         }
 
-        match tx.authenticator() {
-            TransactionAuthenticator::BLS { .. } => {}
-            _ => return Some(DiscardedVMStatus::INVALID_SIGNATURE),
-        }
-
-        if tx.clone().check_signature().is_err() {
+        if tx.verify_signature().is_err() {
             return Some(DiscardedVMStatus::INVALID_SIGNATURE);
         }
 

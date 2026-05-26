@@ -458,11 +458,15 @@ impl RequestManager {
         &self, io: &dyn NetworkContext, peer_id: NodeId,
         responded_tx_hashes: Vec<H256>, window_index: usize,
         tx_hashes_indices: &Vec<usize>,
-    ) {
+    ) -> Result<(), Error> {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
 
         if responded_tx_hashes.is_empty() {
-            return;
+            return Ok(());
+        }
+
+        if responded_tx_hashes.len() > tx_hashes_indices.len() {
+            return Err(Error::UnexpectedResponse.into());
         }
 
         let mut tx_from_hashes_inflight_keys = self
@@ -511,7 +515,7 @@ impl RequestManager {
         };
 
         if request.is_empty() {
-            return;
+            return Ok(());
         }
 
         if self
@@ -523,6 +527,8 @@ impl RequestManager {
                 tx_from_hashes_inflight_keys.remove(&Key::Hash(id));
             }
         }
+
+        Ok(())
     }
 
     pub fn request_compact_blocks(

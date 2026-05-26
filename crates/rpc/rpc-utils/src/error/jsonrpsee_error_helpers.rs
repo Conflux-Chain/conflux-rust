@@ -61,6 +61,11 @@ pub fn internal_error() -> ErrorObjectOwned {
     ErrorObjectOwned::owned(INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, data)
 }
 
+pub fn internal_error_with_msg(msg: String) -> ErrorObjectOwned {
+    let data: Option<bool> = None;
+    ErrorObjectOwned::owned(INTERNAL_ERROR_CODE, msg, data)
+}
+
 /// Constructs an internal JSON-RPC error.
 pub fn internal_error_with_data<S: Serialize>(data: S) -> ErrorObjectOwned {
     rpc_err(INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, Some(data))
@@ -90,6 +95,16 @@ pub fn request_rejected_in_catch_up_mode(
     ErrorObjectOwned::owned(
         codes::REQUEST_REJECTED_IN_CATCH_UP as i32,
         "Request rejected due to still in the catch up mode.",
+        details,
+    )
+}
+
+pub fn request_rejected_too_many_request_error(
+    details: Option<String>,
+) -> ErrorObjectOwned {
+    ErrorObjectOwned::owned(
+        codes::REQUEST_REJECTED_TOO_MANY_REQUESTS as i32,
+        "Request rejected.",
         details,
     )
 }
@@ -126,4 +141,8 @@ pub fn rpc_err<S: Serialize>(
     code: i32, msg: impl Into<String>, data: Option<S>,
 ) -> ErrorObjectOwned {
     ErrorObjectOwned::owned(code, msg, data)
+}
+
+pub fn unknown_block() -> ErrorObjectOwned {
+    invalid_params_rpc_err("Unknown block number", None::<()>)
 }

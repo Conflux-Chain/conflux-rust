@@ -265,15 +265,6 @@ revm-context-interface = "13.1"
 revm-bytecode = "7.1"
 alloy-primitives-wrapper = { git = "https://github.com/Conflux-Chain/alloy-primitives-wrapper.git", rev = "2683b5d133ebd1035afb98285fb8a50209a5dc19" }
 
-# jsonrpc framework(old)
-jsonrpc-core = "18.0.0"
-jsonrpc-tcp-server = "18.0.0"
-jsonrpc-http-server = "18.0.0"
-jsonrpc-derive = "18.0.0"
-jsonrpc-pubsub = "18.0.0"
-jsonrpc-ws-server = "18.0.0"
-
-# jsonrpc framework(new)
 jsonrpsee = "0.26"
 jsonrpsee-core = "0.26"
 jsonrpsee-types = "0.26"
@@ -340,8 +331,7 @@ rand_xorshift = "0.4"
 rand_chacha = "0.9"
 
 # old rand
-rand_07 = { package = "rand", version = "0.7" }
-rand_08 = { package = "rand", version = "0.8" }
+rand_08 = { package = "rand", version = "0.8.6" }
 
 # misc
 log = "0.4"
