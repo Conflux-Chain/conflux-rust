@@ -135,9 +135,8 @@ impl<K: hash::Hash + Eq, V> DiskMap<K, V> {
         let _ = fs::File::open(self.path.clone())
 			.map_err(|e| trace!(target: "diskmap", "Couldn't open disk map: {}", e))
 			.and_then(|f| read(f).map_err(|e| warn!(target: "diskmap", "Couldn't read disk map at: {:?} {}", self.path, e)))
-			.and_then(|m| {
+			.map(|m| {
 				self.cache = m;
-				Ok(())
 			});
     }
 

@@ -63,6 +63,7 @@ impl BlockGeneratorTestApi {
 
     /// Generate a block with transactions in the pool.
     /// This is used for testing only
+    #[allow(clippy::too_many_arguments)]
     pub fn generate_block_with_blame_info(
         &self, num_txs: usize, block_size_limit: usize,
         additional_transactions: Vec<Arc<SignedTransaction>>,
@@ -169,5 +170,5 @@ impl BlockGeneratorTestApi {
 impl Deref for BlockGeneratorTestApi {
     type Target = BlockGenerator;
 
-    fn deref(&self) -> &Self::Target { &*self.0 }
+    fn deref(&self) -> &Self::Target { &self.0 }
 }

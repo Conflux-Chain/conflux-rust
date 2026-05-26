@@ -204,7 +204,7 @@ fn display(result: (KeyPair, Option<String>), mode: DisplayMode) -> String {
 
 fn execute(cli: Cli) -> Result<String, Error> {
     let display_mode = DisplayMode::new(&cli);
-    return match &cli.command {
+    match &cli.command {
         Commands::Info { secret_or_phrase } => {
             execute_info(secret_or_phrase, cli.brain, display_mode)
         }
@@ -219,7 +219,7 @@ fn execute(cli: Cli) -> Result<String, Error> {
             known_phrase,
             address,
         } => execute_recover(known_phrase, address, display_mode),
-    };
+    }
 }
 
 fn execute_info(
@@ -248,7 +248,7 @@ fn execute_generate(
         GenerateCommands::Random {} => {
             if brain {
                 let mut brain =
-                    BrainPrefix::new(vec![], usize::max_value(), BRAIN_WORDS);
+                    BrainPrefix::new(vec![], usize::MAX, BRAIN_WORDS);
                 let keypair = brain.generate()?;
                 let phrase = format!("recovery phrase: {}", brain.phrase());
                 (keypair, Some(phrase))
@@ -339,7 +339,7 @@ fn execute_recover(
     let address = address.parse().map_err(|_| EthkeyError::InvalidAddress)?;
     let (phrase, keypair) = in_threads(move || {
         let mut it = brain_recover::PhrasesIterator::from_known_phrase(
-            &known_phrase,
+            known_phrase,
             BRAIN_WORDS,
         )
         .enumerate();

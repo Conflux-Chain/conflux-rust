@@ -142,7 +142,7 @@ impl AccountProvider {
         let acc = Random
             .generate()
             .expect("secp context has generation capabilities; qed");
-        let public = acc.public().clone();
+        let public = *acc.public();
         let secret = acc.secret().clone();
         let account = self.sstore.insert_account(
             SecretVaultRef::Root,
@@ -176,7 +176,7 @@ impl AccountProvider {
         &self, address: &Address, password: Option<Password>,
         derivation: Derivation, save: bool,
     ) -> Result<Address, SignError> {
-        let account = self.sstore.account_ref(&address)?;
+        let account = self.sstore.account_ref(address)?;
         let password = password
             .map(Ok)
             .unwrap_or_else(|| self.password(&account))?;
@@ -264,7 +264,7 @@ impl AccountProvider {
             .filter(|a| !self.blacklisted_accounts.contains(&a.address))
             .map(|a| {
                 (
-                    a.address.clone(),
+                    a.address,
                     self.account_meta(a.address).ok().unwrap_or_default(),
                 )
             })
@@ -314,8 +314,7 @@ impl AccountProvider {
         &self, address: &Address, password: &Password,
     ) -> Result<bool, Error> {
         self.sstore
-            .test_password(&self.sstore.account_ref(&address)?, password)
-            .map_err(Into::into)
+            .test_password(&self.sstore.account_ref(address)?, password)
     }
 
     /// Permanently removes an account.
@@ -323,7 +322,7 @@ impl AccountProvider {
         &self, address: &Address, password: &Password,
     ) -> Result<(), Error> {
         self.sstore
-            .remove_account(&self.sstore.account_ref(&address)?, &password)?;
+            .remove_account(&self.sstore.account_ref(address)?, password)?;
         Ok(())
     }
 
@@ -468,7 +467,7 @@ impl AccountProvider {
             .map(|r| {
                 unlocked
                     .get(&r)
-                    .map_or(false, |account| account.unlock == Unlock::Perm)
+                    .is_some_and(|account| account.unlock == Unlock::Perm)
             })
             .unwrap_or(false)
     }
@@ -483,7 +482,7 @@ impl AccountProvider {
         let mut unlocked = self.unlocked.write();
         match self.unlocked_secrets.read().get(&account) {
             Some(secret) => {
-                Ok(self.sstore.sign_with_secret(&secret, &message)?)
+                Ok(self.sstore.sign_with_secret(secret, &message)?)
             }
             None => {
                 let password = password.map(Ok).unwrap_or_else(|| {
@@ -615,45 +614,42 @@ impl AccountProvider {
         self.sstore
             .import_geth_accounts(SecretVaultRef::Root, desired, testnet)
             .map(|a| a.into_iter().map(|a| a.address).collect())
-            .map_err(Into::into)
     }
 
     /// Create new vault.
     pub fn create_vault(
         &self, name: &str, password: &Password,
     ) -> Result<(), Error> {
-        self.sstore.create_vault(name, password).map_err(Into::into)
+        self.sstore.create_vault(name, password)
     }
 
     /// Open existing vault.
     pub fn open_vault(
         &self, name: &str, password: &Password,
     ) -> Result<(), Error> {
-        self.sstore.open_vault(name, password).map_err(Into::into)
+        self.sstore.open_vault(name, password)
     }
 
     /// Close previously opened vault.
     pub fn close_vault(&self, name: &str) -> Result<(), Error> {
-        self.sstore.close_vault(name).map_err(Into::into)
+        self.sstore.close_vault(name)
     }
 
     /// List all vaults
     pub fn list_vaults(&self) -> Result<Vec<String>, Error> {
-        self.sstore.list_vaults().map_err(Into::into)
+        self.sstore.list_vaults()
     }
 
     /// List all currently opened vaults
     pub fn list_opened_vaults(&self) -> Result<Vec<String>, Error> {
-        self.sstore.list_opened_vaults().map_err(Into::into)
+        self.sstore.list_opened_vaults()
     }
 
     /// Change vault password.
     pub fn change_vault_password(
         &self, name: &str, new_password: &Password,
     ) -> Result<(), Error> {
-        self.sstore
-            .change_vault_password(name, new_password)
-            .map_err(Into::into)
+        self.sstore.change_vault_password(name, new_password)
     }
 
     /// Change vault of the given address.
@@ -668,18 +664,17 @@ impl AccountProvider {
         let old_account_ref = self.sstore.account_ref(&address)?;
         self.sstore
             .change_account_vault(new_vault_ref, old_account_ref)
-            .map_err(Into::into)
             .map(|_| ())
     }
 
     /// Get vault metadata string.
     pub fn get_vault_meta(&self, name: &str) -> Result<String, Error> {
-        self.sstore.get_vault_meta(name).map_err(Into::into)
+        self.sstore.get_vault_meta(name)
     }
 
     /// Set vault metadata string.
     pub fn set_vault_meta(&self, name: &str, meta: &str) -> Result<(), Error> {
-        self.sstore.set_vault_meta(name, meta).map_err(Into::into)
+        self.sstore.set_vault_meta(name, meta)
     }
 }
 

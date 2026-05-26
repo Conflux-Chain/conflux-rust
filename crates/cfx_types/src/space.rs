@@ -17,9 +17,11 @@ use std::{
     PartialOrd,
     Serialize,
     Deserialize,
+    Default,
 )]
 #[serde(rename_all = "lowercase")]
 pub enum Space {
+    #[default]
     Native,
     #[serde(rename(serialize = "evm", deserialize = "evm"))]
     Ethereum,
@@ -71,10 +73,6 @@ impl Decodable for Space {
             _ => Err(DecoderError::Custom("Unrecognized space byte.")),
         }
     }
-}
-
-impl Default for Space {
-    fn default() -> Self { Space::Native }
 }
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]

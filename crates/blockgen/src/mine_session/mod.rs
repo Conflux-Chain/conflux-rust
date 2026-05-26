@@ -148,5 +148,5 @@ impl<'a> MiningSession<'a> {
 impl<'a> Deref for MiningSession<'a> {
     type Target = BlockGenerator;
 
-    fn deref(&self) -> &Self::Target { &*self.bg }
+    fn deref(&self) -> &Self::Target { self.bg }
 }

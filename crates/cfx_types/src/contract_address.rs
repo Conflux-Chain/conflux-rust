@@ -87,7 +87,7 @@ pub fn cal_contract_address(
             (h, code_hash)
         }
     };
-    return (address, code_hash);
+    (address, code_hash)
 }
 
 pub fn cal_contract_address_with_space(

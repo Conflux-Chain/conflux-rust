@@ -325,8 +325,8 @@ fn open_args_vault(
         return Ok(SecretVaultRef::Root);
     }
 
-    let vault_pwd = load_password(&flag_vault_pwd)?;
-    store.open_vault(&flag_vault, &vault_pwd)?;
+    let vault_pwd = load_password(flag_vault_pwd)?;
+    store.open_vault(flag_vault, &vault_pwd)?;
     Ok(SecretVaultRef::Vault(flag_vault.to_string()))
 }
 
@@ -372,7 +372,7 @@ fn load_password(path: &str) -> Result<Password, Error> {
 }
 
 fn execute(cli: Cli) -> Result<String, Error> {
-    return match &cli.command {
+    match &cli.command {
         Commands::Insert {
             secret,
             password,
@@ -383,7 +383,7 @@ fn execute(cli: Cli) -> Result<String, Error> {
             let store = CfxStore::open(key_dir(dir, None)?)?;
             let secret =
                 secret.parse().map_err(|_| cfxstore::Error::InvalidSecret)?;
-            let password = load_password(&password)?;
+            let password = load_password(password)?;
             let vault_ref = open_args_vault(&store, vault, vault_pwd)?;
             let account_ref =
                 store.insert_account(vault_ref, secret, &password)?;
@@ -420,7 +420,7 @@ fn execute(cli: Cli) -> Result<String, Error> {
             let accounts = store.accounts()?;
             let accounts: Vec<_> = accounts
                 .into_iter()
-                .filter(|a| &a.vault == &vault_ref)
+                .filter(|a| a.vault == vault_ref)
                 .map(|a| a.address)
                 .collect();
             Ok(format_accounts(&accounts))
@@ -429,7 +429,7 @@ fn execute(cli: Cli) -> Result<String, Error> {
         Commands::Import { password, src, dir } => {
             let password = match password.as_ref() {
                 "" => None,
-                _ => Some(load_password(&password)?),
+                _ => Some(load_password(password)?),
             };
             let src = key_dir(src, password)?;
             let dst = key_dir(dir, None)?;
@@ -462,7 +462,7 @@ fn execute(cli: Cli) -> Result<String, Error> {
                 .map(|line| str::to_owned(line).into())
                 .collect::<VecDeque<_>>();
             crack::run(passwords, path)?;
-            Ok(format!("Password not found."))
+            Ok("Password not found.".to_string())
         }
         Commands::Remove {
             address,
@@ -590,5 +590,5 @@ fn execute(cli: Cli) -> Result<String, Error> {
             )?;
             Ok("OK".to_owned())
         }
-    };
+    }
 }

@@ -362,7 +362,7 @@ impl CfxMultiStore {
                 dir_hash: None,
                 last_checked: Instant::now(),
                 // by default we never refresh accounts
-                refresh_time: Duration::from_secs(u64::max_value()),
+                refresh_time: Duration::from_secs(u64::MAX),
             }),
         };
         store.reload_accounts()?;
@@ -476,12 +476,9 @@ impl CfxMultiStore {
         };
 
         // update cache
-        let account_ref = StoreAccountRef::new(vault, account.address.clone());
+        let account_ref = StoreAccountRef::new(vault, account.address);
         let mut cache = self.cache.write();
-        cache
-            .entry(account_ref.clone())
-            .or_insert_with(Vec::new)
-            .push(account);
+        cache.entry(account_ref.clone()).or_default().push(account);
 
         Ok(account_ref)
     }
@@ -503,8 +500,7 @@ impl CfxMultiStore {
 
         // update cache
         let mut cache = self.cache.write();
-        let accounts =
-            cache.entry(account_ref.clone()).or_insert_with(Vec::new);
+        let accounts = cache.entry(account_ref.clone()).or_default();
         // Remove old account
         accounts.retain(|acc| acc != &old);
         // And push updated to the end
@@ -517,13 +513,13 @@ impl CfxMultiStore {
     ) -> Result<(), Error> {
         // Remove from dir
         match account_ref.vault {
-            SecretVaultRef::Root => self.dir.remove(&account)?,
+            SecretVaultRef::Root => self.dir.remove(account)?,
             SecretVaultRef::Vault(ref vault_name) => self
                 .vaults
                 .lock()
                 .get(vault_name)
                 .ok_or(Error::VaultNotFound)?
-                .remove(&account)?,
+                .remove(account)?,
         };
 
         // Remove from cache
@@ -615,7 +611,7 @@ impl SimpleSecretStore for CfxMultiStore {
         &self, account_ref: &StoreAccountRef, password: &Password,
         derivation: Derivation,
     ) -> Result<Address, Error> {
-        let accounts = self.get_matching(&account_ref, password)?;
+        let accounts = self.get_matching(account_ref, password)?;
         if let Some(account) = accounts.first() {
             let extended =
                 self.generate(account.crypto.secret(password)?, derivation)?;
@@ -629,12 +625,12 @@ impl SimpleSecretStore for CfxMultiStore {
         &self, account_ref: &StoreAccountRef, password: &Password,
         derivation: Derivation, message: &Message,
     ) -> Result<Signature, Error> {
-        let accounts = self.get_matching(&account_ref, password)?;
+        let accounts = self.get_matching(account_ref, password)?;
         if let Some(account) = accounts.first() {
             let extended =
                 self.generate(account.crypto.secret(password)?, derivation)?;
             let secret = extended.secret().as_raw();
-            Ok(cfxkey::sign(&secret, message)?)
+            Ok(cfxkey::sign(secret, message)?)
         } else {
             Err(Error::InvalidPassword)
         }
@@ -669,7 +665,7 @@ impl SimpleSecretStore for CfxMultiStore {
         let accounts = self.get_matching(account_ref, password)?;
 
         if let Some(account) = accounts.first() {
-            self.remove_safe_account(account_ref, &account)
+            self.remove_safe_account(account_ref, account)
         } else {
             Err(Error::InvalidPassword)
         }
@@ -714,7 +710,7 @@ impl SimpleSecretStore for CfxMultiStore {
     ) -> Result<Signature, Error> {
         let accounts = self.get_matching(account, password)?;
         match accounts.first() {
-            Some(ref account) => account.sign(password, message),
+            Some(account) => account.sign(password, message),
             None => Err(Error::InvalidPassword),
         }
     }
@@ -725,7 +721,7 @@ impl SimpleSecretStore for CfxMultiStore {
     ) -> Result<Vec<u8>, Error> {
         let accounts = self.get_matching(account, password)?;
         match accounts.first() {
-            Some(ref account) => account.decrypt(password, shared_mac, message),
+            Some(account) => account.decrypt(password, shared_mac, message),
             None => Err(Error::InvalidPassword),
         }
     }
@@ -735,7 +731,7 @@ impl SimpleSecretStore for CfxMultiStore {
     ) -> Result<Secret, Error> {
         let accounts = self.get_matching(account, password)?;
         match accounts.first() {
-            Some(ref account) => account.agree(password, other),
+            Some(account) => account.agree(password, other),
             None => Err(Error::InvalidPassword),
         }
     }
@@ -746,14 +742,16 @@ impl SimpleSecretStore for CfxMultiStore {
         let is_vault_created = {
             // lock border
             let mut vaults = self.vaults.lock();
-            if !vaults.contains_key(&name.to_owned()) {
+            if let std::collections::hash_map::Entry::Vacant(e) =
+                vaults.entry(name.to_owned())
+            {
                 let vault_provider = self
                     .dir
                     .as_vault_provider()
                     .ok_or(Error::VaultsAreNotSupported)?;
                 let vault = vault_provider
                     .create(name, VaultKey::new(password, self.iterations))?;
-                vaults.insert(name.to_owned(), vault);
+                e.insert(vault);
                 true
             } else {
                 false
@@ -771,14 +769,16 @@ impl SimpleSecretStore for CfxMultiStore {
         let is_vault_opened = {
             // lock border
             let mut vaults = self.vaults.lock();
-            if !vaults.contains_key(&name.to_owned()) {
+            if let std::collections::hash_map::Entry::Vacant(e) =
+                vaults.entry(name.to_owned())
+            {
                 let vault_provider = self
                     .dir
                     .as_vault_provider()
                     .ok_or(Error::VaultsAreNotSupported)?;
                 let vault = vault_provider
                     .open(name, VaultKey::new(password, self.iterations))?;
-                vaults.insert(name.to_owned(), vault);
+                e.insert(vault);
                 true
             } else {
                 false

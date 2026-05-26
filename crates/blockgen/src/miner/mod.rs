@@ -26,7 +26,7 @@ pub fn spawn(
     let (worker, solution_receiver): (Box<dyn MineWorker>, _) = match miner_type
     {
         MinerType::Stratum => {
-            let (stratum, receiver) = Stratum::spawn(&*bg);
+            let (stratum, receiver) = Stratum::spawn(&bg);
             (Box::new(stratum), receiver)
         }
         MinerType::Cpu(num_workers) => {
