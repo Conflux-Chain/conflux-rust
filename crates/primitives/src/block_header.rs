@@ -732,7 +732,7 @@ mod tests {
         let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         assert_eq!(hash, KECCAK_EMPTY_BLOOM);
 
-        let receipts = (1..11)
+        let receipts: Vec<Arc<BlockReceipts>> = (1..11)
             .map(|_| {
                 Arc::new(BlockReceipts {
                     receipts: vec![],
@@ -741,7 +741,7 @@ mod tests {
                     tx_execution_error_messages: vec![],
                 })
             })
-            .collect(); // Vec<Arc<Vec<_>>>
+            .collect();
         let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         assert_eq!(hash, KECCAK_EMPTY_BLOOM);
     }
@@ -762,7 +762,7 @@ mod tests {
         };
 
         // 10 blocks with 10 empty receipts each
-        let receipts = (1..11)
+        let receipts: Vec<Arc<BlockReceipts>> = (1..11)
             .map(|_| {
                 Arc::new(BlockReceipts {
                     receipts: (1..11).map(|_| receipt.clone()).collect(),
