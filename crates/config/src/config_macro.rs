@@ -68,7 +68,6 @@ macro_rules! build_config{
             pub fn parse(matches: &clap::ArgMatches) -> Result<RawConfiguration, String> {
                 let mut config = if let Ok(Some(config_filename)) = matches.try_get_one::<String>("config")  {
                     RawConfiguration::from_file(config_filename)?
-
                 } else {
                     RawConfiguration::default()
                 };

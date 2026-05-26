@@ -49,13 +49,9 @@ struct TimeWindow<T> {
 
 impl<T> TimeWindow<T> {
     pub fn new(timeout: u64, window_size: usize) -> Self {
-        assert!(
-            timeout >= window_size as u64,
-            "TimeWindow timeout ({}s) must be >= window_size ({}); \
-             otherwise slot_duration_as_secs would be 0",
-            timeout,
-            window_size,
-        );
+        assert!(window_size > 0);
+        assert!(timeout >= window_size as u64);
+
         let mut time_windowed_indices = Vec::new();
         for _ in 0..window_size {
             time_windowed_indices.push(None);

@@ -477,10 +477,73 @@ impl Default for Configuration {
     }
 }
 
+impl RawConfiguration {
+    pub fn validate(&self) -> Result<(), String> {
+        macro_rules! check_nonzero {
+            ($field:ident) => {
+                if self.$field == 0 {
+                    return Err(concat!(stringify!($field), " must not be 0")
+                        .to_string());
+                }
+            };
+        }
+
+        check_nonzero!(send_tx_period_ms);
+
+        // timeout must be larger than the window size
+        let tx_cache_window_size =
+            TransactionCacheContainer::TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE
+                as u64
+                * 1000;
+        let tx_cache_timeout_ms = self.tx_cache_index_maintain_timeout_ms;
+        if tx_cache_timeout_ms < tx_cache_window_size {
+            return Err(format!(
+                "tx_cache_index_maintain_timeout_ms ({}) must be >= {}ms",
+                tx_cache_timeout_ms, tx_cache_window_size
+            ));
+        }
+
+        let received_tx_window_size_ms = ReceivedTransactionContainer::RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE as u64 * 1000;
+        let inflight_window_size_ms = InflightPendingTransactionContainer::INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE as u64 * 1000;
+        if self.received_tx_index_maintain_timeout_ms
+            < received_tx_window_size_ms
+        {
+            return Err(format!(
+                "received_tx_index_maintain_timeout_ms ({}) must be >= {}ms",
+                self.received_tx_index_maintain_timeout_ms,
+                received_tx_window_size_ms
+            ));
+        }
+        if self.inflight_pending_tx_index_maintain_timeout_ms
+            < inflight_window_size_ms
+        {
+            return Err(format!(
+                "inflight_pending_tx_index_maintain_timeout_ms ({}) must be >= {}ms",
+                self.inflight_pending_tx_index_maintain_timeout_ms, inflight_window_size_ms
+            ));
+        }
+        if self.tx_maintained_for_peer_timeout_ms < self.send_tx_period_ms {
+            return Err(
+                "tx_maintained_for_peer_timeout_ms must be >= send_tx_period_ms"
+                    .to_string()
+            );
+        }
+
+        // The current implementation requires the round number to be an even
+        // number.
+        if self.pos_round_per_term % 2 != 0 {
+            return Err("pos_round_per_term must be an even number".to_string());
+        }
+
+        Ok(())
+    }
+}
+
 impl Configuration {
     pub fn parse(matches: &clap::ArgMatches) -> Result<Configuration, String> {
         let mut config = Configuration::default();
         config.raw_conf = RawConfiguration::parse(matches)?;
+        config.raw_conf.validate()?;
 
         if matches.get_flag("archive") {
             config.raw_conf.node_type = Some(NodeType::Archive);
@@ -502,9 +565,11 @@ impl Configuration {
     }
 
     pub fn from_file(config_path: &str) -> Result<Configuration, String> {
-        Ok(Configuration {
+        let config = Configuration {
             raw_conf: RawConfiguration::from_file(config_path)?,
-        })
+        };
+        config.raw_conf.validate()?;
+        Ok(config)
     }
 
     fn network_id(&self) -> u64 {
@@ -877,36 +942,6 @@ impl Configuration {
     }
 
     pub fn protocol_config(&self) -> ProtocolConfiguration {
-        // Window sizes are defined in tx_handler.rs.
-        // timeout (in seconds) must be >= window_size,
-        // so timeout_ms >= window_size * 1000.
-        let received_tx_window_size_ms = ReceivedTransactionContainer::RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE as u64 * 1000;
-        let inflight_window_size_ms = InflightPendingTransactionContainer::INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE as u64 * 1000;
-        assert!(
-            self.raw_conf.received_tx_index_maintain_timeout_ms
-                >= received_tx_window_size_ms,
-            "received_tx_index_maintain_timeout_ms ({}) must be >= {}ms",
-            self.raw_conf.received_tx_index_maintain_timeout_ms,
-            received_tx_window_size_ms
-        );
-        assert!(
-            self.raw_conf.inflight_pending_tx_index_maintain_timeout_ms
-                >= inflight_window_size_ms,
-            "inflight_pending_tx_index_maintain_timeout_ms ({}) must be >= {}ms",
-            self.raw_conf.inflight_pending_tx_index_maintain_timeout_ms,
-            inflight_window_size_ms
-        );
-
-        assert!(
-            self.raw_conf.send_tx_period_ms > 0,
-            "send_tx_period must be > 0"
-        );
-        assert!(
-            self.raw_conf.tx_maintained_for_peer_timeout_ms
-                >= self.raw_conf.send_tx_period_ms,
-            "tx_maintained_for_peer_timeout_ms must be >= send_tx_period_ms"
-        );
-
         ProtocolConfiguration {
             is_consortium: self.raw_conf.is_consortium,
             send_tx_period: Duration::from_millis(
@@ -1027,28 +1062,13 @@ impl Configuration {
     }
 
     pub fn data_mananger_config(&self) -> DataManagerConfiguration {
-        // Window size is defined in tx_handler.rs.
-        // timeout (in seconds) must be >= window_size,
-        // so timeout_ms >= window_size * 1000.
-        let tx_cache_window_size =
-            TransactionCacheContainer::TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE
-                as u64
-                * 1000;
-        let tx_cache_timeout_ms =
-            self.raw_conf.tx_cache_index_maintain_timeout_ms;
-        assert!(
-            tx_cache_timeout_ms >= tx_cache_window_size,
-            "tx_cache_index_maintain_timeout_ms ({}) must be >= {}ms",
-            tx_cache_timeout_ms,
-            tx_cache_window_size
-        );
         let mut conf = DataManagerConfiguration {
             persist_tx_index: self.raw_conf.persist_tx_index,
             persist_block_number_index: self
                 .raw_conf
                 .persist_block_number_index,
             tx_cache_index_maintain_timeout: Duration::from_millis(
-                tx_cache_timeout_ms,
+                self.raw_conf.tx_cache_index_maintain_timeout_ms,
             ),
             db_type: match self.raw_conf.block_db_type.as_str() {
                 "rocksdb" => DbType::Rocksdb,
@@ -1406,9 +1426,6 @@ impl Configuration {
     }
 
     pub fn pos_state_config(&self) -> PosStateConfig {
-        // The current implementation requires the round number to be an even
-        // number.
-        assert_eq!(self.raw_conf.pos_round_per_term % 2, 0);
         PosStateConfig::new(
             self.raw_conf.pos_round_per_term,
             self.raw_conf.pos_term_max_size,
