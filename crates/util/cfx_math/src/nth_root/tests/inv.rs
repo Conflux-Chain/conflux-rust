@@ -91,7 +91,7 @@ fn estimate_input<N: RootDegree>(output: U256) -> U256 {
         power = full_mul_round(power, output);
     }
 
-    let output = U512::MAX / U512::from(power);
+    let output = U512::MAX / power;
     if output.bits() > 256 {
         U256::MAX
     } else {

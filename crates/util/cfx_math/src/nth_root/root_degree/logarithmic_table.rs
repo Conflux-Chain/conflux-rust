@@ -71,8 +71,8 @@ const fn compute_lookup_table_inner<const N: usize>(
         c
     } else {
         let c = compute_lookup_table_inner(c, batch / 2);
-        let c = compute_lookup_table_inner(c, batch / 2);
-        c
+
+        compute_lookup_table_inner(c, batch / 2)
     }
 }
 

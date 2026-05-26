@@ -84,8 +84,8 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: Eq + Ord + Clone> HeapMap<K, V> {
 
     /// In-place update some fields of a node's value.
     pub fn update_with<F>(&mut self, key: &K, mut update_fn: F)
-    where F: FnMut(&mut V) -> () {
-        let index = match self.mapping.get(&key) {
+    where F: FnMut(&mut V) {
+        let index = match self.mapping.get(key) {
             None => {
                 return;
             }
@@ -103,7 +103,7 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: Eq + Ord + Clone> HeapMap<K, V> {
 
     /// Return the top K-V reference tuple.
     pub fn top(&self) -> Option<(&K, &V)> {
-        self.data.get(0).map(|node| (&node.key, &node.value))
+        self.data.first().map(|node| (&node.key, &node.value))
     }
 
     /// Pop the top node and return it as a K-V tuple.

@@ -91,7 +91,7 @@ impl<K: Eq + Hash, V: MallocSizeOf> MemoryLruCache<K, V> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cfx_mallocator_utils;
+
     #[global_allocator]
     static ALLOC: cfx_mallocator_utils::allocator::Allocator =
         cfx_mallocator_utils::allocator::new_allocator();

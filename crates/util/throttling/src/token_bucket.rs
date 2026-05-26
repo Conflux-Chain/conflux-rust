@@ -58,6 +58,7 @@ pub struct TokenBucket {
 }
 
 impl TokenBucket {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         max_cpu_tokens: u64, cur_cpu_tokens: u64, cpu_token_recharge_rate: u64,
         default_cpu_cost: u64, max_message_tokens: u64,

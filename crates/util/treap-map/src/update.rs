@@ -139,7 +139,6 @@ impl<'a, C: TreapMapConfig> TreapNodeUpdate<C> for RemoveOp<'a, C> {
 /// `ApplyOpOutcome` is used to convey the result of a user-defined operation
 /// applied to a node in the `TreapMap`. It provides details to the `TreapMap`
 /// about how to properly maintain the node after the operation.
-
 pub struct ApplyOpOutcome<T> {
     /// The value to be forwarded as the return value of the `update`
     /// function.
@@ -168,7 +167,7 @@ where
     pub insert: I,
 }
 
-impl<'a, 'b, C, U, I, T, E> TreapNodeUpdate<C> for ApplyOp<'a, C, U, I, T, E>
+impl<'a, C, U, I, T, E> TreapNodeUpdate<C> for ApplyOp<'a, C, U, I, T, E>
 where
     C: TreapMapConfig,
     U: FnOnce(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
@@ -193,7 +192,7 @@ where
                 };
 
                 self.ext_map
-                    .view_update(&*self.key.1, Some(&node.value), None);
+                    .view_update(self.key.1, Some(&node.value), None);
                 assert!(
                     C::next_node_dir(self.key, (&node.sort_key, &node.key))
                         .is_none(),
@@ -220,7 +219,7 @@ where
                 let new_value =
                     if delete_item { None } else { Some(&node.value) };
                 self.ext_map.view_update(
-                    &*self.key.1,
+                    self.key.1,
                     new_value,
                     Some(&old_value),
                 );

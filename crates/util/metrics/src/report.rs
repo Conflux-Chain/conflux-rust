@@ -119,13 +119,13 @@ impl Reporter for FileReporter {
 
 pub trait Reportable {
     fn get_value(&self) -> String;
-    fn get_value_with_group(&self, name: &String) -> String;
+    fn get_value_with_group(&self, name: &str) -> String;
 }
 
 impl Reportable for CounterUsize {
     fn get_value(&self) -> String { format!("{}", self.count()) }
 
-    fn get_value_with_group(&self, name: &String) -> String {
+    fn get_value_with_group(&self, name: &str) -> String {
         format!("{}: {}", name, self.count())
     }
 }
@@ -133,7 +133,7 @@ impl Reportable for CounterUsize {
 impl Reportable for GaugeUsize {
     fn get_value(&self) -> String { format!("{}", self.value()) }
 
-    fn get_value_with_group(&self, name: &String) -> String {
+    fn get_value_with_group(&self, name: &str) -> String {
         format!("{}: {}", name, self.value())
     }
 }
@@ -152,7 +152,7 @@ impl Reportable for StandardMeter {
         )
     }
 
-    fn get_value_with_group(&self, name: &String) -> String {
+    fn get_value_with_group(&self, name: &str) -> String {
         let snapshot = self.snapshot();
         format!(
             "{0}.count: {1}, {0}.m1: {2:.2}, {0}.m5: {3:.2}, {0}.m15: {4:.2}, {0}.mean: {5:.2}, {0}.m0: {6:.2}",
@@ -187,7 +187,7 @@ impl<T: Histogram> Reportable for T {
         )
     }
 
-    fn get_value_with_group(&self, name: &String) -> String {
+    fn get_value_with_group(&self, name: &str) -> String {
         let snapshot = self.snapshot();
         format!(
             "{0}.count: {1}, {0}.min: {2}, {0}.mean: {3:.2}, {0}.max: {4}, {0}.stddev: {5:.2}, {0}.variance: {6:.2}, {0}.p50: {7}, {0}.p75: {8}, {0}.p90: {9}, {0}.p95: {10}, {0}.p99: {11}, {0}.p999: {12}",
