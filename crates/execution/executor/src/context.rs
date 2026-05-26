@@ -565,8 +565,8 @@ impl<'a> ContextTrait for Context<'a> {
 
     fn is_warm_account(&self, account: Address) -> bool {
         let address_with_space = account.with_space(self.space);
-        let maybe_builtin = &account[..19] == &[0u8; 19];
-        if maybe_builtin
+        let maybe_precompile = &account[..18] == &[0u8; 18];
+        if maybe_precompile
             && self
                 .machine
                 .builtin(

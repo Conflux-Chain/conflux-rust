@@ -9,6 +9,7 @@ license = "GPL-3.0"
 [dependencies]
 cfxcore = { path = "../../crates/cfxcore/core" }
 cfx-executor = { path = "../../crates/execution/executor" }
+cfx-execute-helper = { path = "../../crates/execution/execute-helper" }
 cfx-rpc-eth-types = { path = "../../crates/rpc/rpc-eth-types" }
 cfx-statedb = { path = "../../crates/dbs/statedb" }
 cfx-types = { path = "../../crates/cfx_types" }
@@ -18,6 +19,7 @@ cfx-config = { path = "../../crates/config" }
 primitives = { path = "../../crates/primitives" }
 eest_types = { path = "../../crates/eest_types" }
 cfx-bytes = { path = "../../crates/cfx_bytes" }
+geth-tracer = { path = "../../crates/execution/geth-tracer" }
 
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 walkdir = "2.5"
@@ -27,6 +29,8 @@ hex = "0.4.3"
 hex-literal = "0.4.1"
 
 log = "0.4"
+
+alloy-rpc-types-trace = "1.0.41"
 
 env_logger = "0.11"
 itertools = "0.14"
