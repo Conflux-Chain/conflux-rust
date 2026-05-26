@@ -57,6 +57,7 @@ impl BlockAssembler {
 
     fn consensus_graph(&self) -> &ConsensusGraph { &self.graph.consensus }
 
+    // TODO: should not hold and pass write lock to consensus.
     #[allow(clippy::too_many_arguments)]
     fn assemble_new_block_impl(
         &self, mut parent_hash: H256, mut referees: Vec<H256>,
@@ -147,6 +148,8 @@ impl BlockAssembler {
         Block::new(block_header, transactions)
     }
 
+    /// Assemble a new block with specified parent and referee, this is for test
+    /// only
     #[allow(clippy::too_many_arguments)]
     pub fn assemble_new_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
@@ -288,6 +291,9 @@ impl BlockAssembler {
         )
     }
 
+    /// Assemble a new block without nonce and with options to override the
+    /// states/blame. This function is used for testing only to generate
+    /// incorrect blocks
     #[allow(clippy::too_many_arguments)]
     pub fn assemble_new_block_with_blame_info(
         &self, num_txs: usize, block_size_limit: usize,

@@ -102,12 +102,12 @@ impl SafeAccount {
 				)?.address();
 
 				if let Some(json_address) = json_address {
-    						let json_address = json_address.into();
-    						if derived_address != json_address {
-                                warn!("Detected address mismatch when opening an account. Derived: {:?}, in json got: {:?}. Are you trying to import an Ethkey for Conflux? Note that the address scheme between Ethereum and Conflux are different.", derived_address, json_address);
-                                return Err(Error::Custom(format!("Address mismatch. Derived: {:?}, in json got: {:?}.", derived_address, json_address)));
-    						}
-    					}
+                    let json_address = json_address.into();
+                    if derived_address != json_address {
+                        warn!("Detected address mismatch when opening an account. Derived: {:?}, in json got: {:?}. Are you trying to import an Ethkey for Conflux? Note that the address scheme between Ethereum and Conflux are different.", derived_address, json_address);
+                        return Err(Error::Custom(format!("Address mismatch. Derived: {:?}, in json got: {:?}.", derived_address, json_address)));
+                    }
+                }
 				derived_address
 			}
 		};

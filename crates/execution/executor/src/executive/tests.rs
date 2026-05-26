@@ -621,6 +621,24 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(state.total_staking_tokens(), U256::zero());
 
+    // getVotePower with a near-u64::MAX block number used to panic when
+    // adding the quarter/year offsets.
+    params.call_type = CallType::Call;
+    let mut get_vote_power_data = vec![0xc9, 0x0a, 0xba, 0xc8];
+    get_vote_power_data.extend_from_slice(&[0u8; 12]);
+    get_vote_power_data.extend_from_slice(sender.as_bytes());
+    get_vote_power_data.extend_from_slice(&U256::MAX.to_big_endian());
+    params.data = Some(get_vote_power_data);
+    let mut tracer = ();
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
+        .call_for_test(params.clone(), &mut substate, &mut tracer)
+        .expect("no db error");
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err(),
+        vm::Error::InternalContract("block number overflow".into())
+    );
+
     // deposit 10^18 - 1, not enough
     params.call_type = CallType::Call;
     params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a763ffff".from_hex().unwrap());

@@ -25,10 +25,19 @@ pub fn dynamic_slot(base: U256) -> U256 {
 // General function for solidity storage rule
 pub fn array_slot(base: U256, index: usize, element_size: usize) -> U256 {
     // Solidity will apply an overflowing add here.
-    // However, if this function is used correctly, the overflowing will
-    // happen with a negligible exception, so we let it panic when
-    // overflowing happen.
-    base + index * element_size
+    let (offset, _) =
+        U256::from(index).overflowing_mul(U256::from(element_size));
+    base.overflowing_add(offset).0
 }
 
 pub fn u256_to_array(input: U256) -> [u8; 32] { input.to_big_endian() }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn array_slot_wraps_like_solidity() {
+        assert_eq!(array_slot(U256::MAX, 1, 1), U256::zero());
+    }
+}

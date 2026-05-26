@@ -1,4 +1,5 @@
 #[cfg(test)]
+extern crate rand_08 as rand;
 mod tests;
 
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;

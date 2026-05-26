@@ -30,14 +30,6 @@ pub struct Cli {
     )]
     pub jsonrpc_ws_port: Option<String>,
 
-    /// Specify the port for the TCP JSON-RPC API server.
-    #[arg(
-        id = "jsonrpc-tcp-port",
-        long = "jsonrpc-tcp-port",
-        value_name = "PORT"
-    )]
-    pub jsonrpc_tcp_port: Option<String>,
-
     /// Specify the port for the HTTP JSON-RPC API server.
     #[arg(
         id = "jsonrpc-http-port",

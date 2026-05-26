@@ -536,7 +536,10 @@ impl Session {
                             protocol,
                             msg_id: parse_msg_id_leb128_2_bytes_at_most(
                                 &mut msg
-                            ),
+                            )
+                            .map_err(|_| Error::Msg(
+                                "msg_id parse failed when checking protocol version".into()
+                            ))?,
                             peer_protocol_version: Some(peer_protocol.version),
                             min_supported_version: None,
                         });

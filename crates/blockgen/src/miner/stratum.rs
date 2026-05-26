@@ -255,7 +255,7 @@ impl MineWorker for Stratum {
 }
 
 impl Stratum {
-    pub async fn spawn(bg: &BlockGenerator) -> (Self, SolutionReceiver) {
+    pub fn spawn(bg: &BlockGenerator) -> (Self, SolutionReceiver) {
         let (solution_sender, solution_receiver) = mpsc::channel();
         let cfg = Options {
             listen_addr: bg.pow_config.stratum_listen_addr.clone(),
@@ -268,7 +268,6 @@ impl Stratum {
             bg.pow_config.pow_problem_window_size,
             solution_sender,
         )
-        .await
         .expect("Failed to start Stratum service.");
 
         (stratum, solution_receiver)
@@ -276,7 +275,7 @@ impl Stratum {
 
     /// New stratum job dispatcher, given the miner, client and dedicated
     /// stratum service
-    pub async fn start(
+    pub fn start(
         options: &Options, pow: Arc<PowComputer>, pow_window_size: usize,
         solution_sender: mpsc::Sender<ProofOfWorkSolution>,
     ) -> Result<Stratum, Error> {
@@ -295,8 +294,7 @@ impl Stratum {
             ),
             dispatcher.clone(),
             options.secret,
-        )
-        .await?;
+        )?;
 
         Ok(Stratum {
             dispatcher,
