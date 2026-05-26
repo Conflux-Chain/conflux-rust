@@ -185,7 +185,7 @@ impl Handshake {
                 data.len(),
                 AUTH_PACKET_SIZE
             );
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
 
         let auth = ecies::decrypt(secret, &[], data)?;
@@ -256,7 +256,7 @@ impl Handshake {
                 data.len(),
                 ACK_OF_AUTH_PACKET_SIZE
             );
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
 
         let ack = ecies::decrypt(secret, &[], data)?;
@@ -265,7 +265,7 @@ impl Handshake {
 
         if self_nonce != &self.nonce[..] {
             debug!("failed to read ack of auth, nonce mismatch");
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
 
         self.write_ack_of_ack(io, remote_nonce)
@@ -302,14 +302,14 @@ impl Handshake {
                 data.len(),
                 ACK_OF_ACK_PACKET_SIZE
             );
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
 
         let nonce = ecies::decrypt(secret, &[], data)?;
 
-        if &nonce[..] != &self.nonce[..] {
+        if nonce[..] != self.nonce[..] {
             debug!("failed to read ack of ack, nonce mismatch");
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
 
         self.state = HandshakeState::StartSession;

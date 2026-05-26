@@ -21,14 +21,14 @@ const BLACKLISTED_NODES_FILE: &str = "blacklisted_nodes.json";
 ///
 /// There are 3 scenarios to insert a node into database:
 /// 1. Receive the "hello" handshaking message from ingress TCP connection,
-/// and add the node with `StreamToken` as untrusted if not exists in database.
-/// Otherwise, overwrite the existing node in trusted or untrusted table,
-/// including endpoint, last contact and connection information.
+///    and add the node with `StreamToken` as untrusted if not exists in database.
+///    Otherwise, overwrite the existing node in trusted or untrusted table,
+///    including endpoint, last contact and connection information.
 /// 2. Receive the "pong" message from UDP discovery, and add the node as
-/// trusted if not exists, or promote it to trusted if it is untrusted.
-/// Otherwise, just update the last contact information in trusted table.
+///    trusted if not exists, or promote it to trusted if it is untrusted.
+///    Otherwise, just update the last contact information in trusted table.
 /// 3. RPC explicitly add a trusted node. If the node is an existing
-/// untrusted one, promote it to trusted.
+///    untrusted one, promote it to trusted.
 ///
 /// # Update node information
 ///
@@ -146,7 +146,7 @@ impl NodeDatabase {
 
         if self.trusted_nodes.contains(&node.id) {
             if self.insert_ip_limit(
-                node.id.clone(),
+                node.id,
                 ip,
                 true, /* trusted */
             ) {
@@ -154,7 +154,7 @@ impl NodeDatabase {
                     .add_node(node, false /* preserve_last_contact */);
             }
         } else if self.insert_ip_limit(
-            node.id.clone(),
+            node.id,
             ip,
             false, /* trusted */
         ) {
@@ -211,7 +211,7 @@ impl NodeDatabase {
                     .add_node(node, false /* preserve_last_contact */);
             }
         } else if self.insert_ip_limit(
-            node.id.clone(),
+            node.id,
             ip,
             true, /* trusted */
         ) {
@@ -237,7 +237,7 @@ impl NodeDatabase {
         }
 
         self.ip_limit.remove(id);
-        self.ip_limit.insert(id.clone(), new_ip, true, evictee);
+        self.ip_limit.insert(*id, new_ip, true, evictee);
 
         self.untrusted_nodes.remove_with_id(id)
     }
@@ -253,7 +253,7 @@ impl NodeDatabase {
             return;
         }
 
-        let mut node = Node::new(entry.id.clone(), entry.endpoint);
+        let mut node = Node::new(entry.id, entry.endpoint);
         let ip = node.endpoint.address.ip();
 
         if self.untrusted_nodes.contains(&node.id) {
@@ -266,7 +266,7 @@ impl NodeDatabase {
                     .add_node(node, false /* preserve_last_contact */);
             }
         } else if self.insert_ip_limit(
-            node.id.clone(),
+            node.id,
             ip,
             true, /* trusted */
         ) {
@@ -385,7 +385,7 @@ impl NodeDatabase {
         ids.iter()
             .filter_map(|id| self.get(id, trusted_only))
             .map(|n| NodeEntry {
-                id: n.id.clone(),
+                id: n.id,
                 endpoint: n.endpoint.clone(),
             })
             .collect()
@@ -458,10 +458,8 @@ impl NodeDatabase {
         } else if let Some(node) = self.untrusted_nodes.remove_with_id(id) {
             self.ip_limit.remove(id);
             Some(node)
-        } else if let Some(node) = self.blacklisted_nodes.remove_with_id(id) {
-            Some(node)
         } else {
-            None
+            self.blacklisted_nodes.remove_with_id(id)
         }
     }
 
@@ -503,7 +501,7 @@ impl NodeDatabase {
             }
 
             if allowed {
-                if let Some(evictee_id) = &evictee {
+                if let Some(evictee_id) = evictee {
                     if trusted {
                         self.trusted_nodes.remove_with_id(&evictee_id);
                     } else {
