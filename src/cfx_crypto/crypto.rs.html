@@ -66,7 +66,7 @@
 <a href=#66 id=66 data-nosnippet>66</a>            <span class="kw">if </span>pub_bytes.len() &lt; <span class="number">64 </span>{
 <a href=#67 id=67 data-nosnippet>67</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(Error::Secp(secp256k1::Error::InvalidPublicKey));
 <a href=#68 id=68 data-nosnippet>68</a>            }
-<a href=#69 id=69 data-nosnippet>69</a>            (<span class="kw-2">&amp;mut </span>temp[<span class="number">1</span>..<span class="number">65</span>]).copy_from_slice(<span class="kw-2">&amp;</span>pub_bytes[<span class="number">0</span>..<span class="number">64</span>]);
+<a href=#69 id=69 data-nosnippet>69</a>            temp[<span class="number">1</span>..<span class="number">65</span>].copy_from_slice(<span class="kw-2">&amp;</span>pub_bytes[<span class="number">0</span>..<span class="number">64</span>]);
 <a href=#70 id=70 data-nosnippet>70</a>            temp
 <a href=#71 id=71 data-nosnippet>71</a>        };
 <a href=#72 id=72 data-nosnippet>72</a>
@@ -207,7 +207,7 @@
 <a href=#207 id=207 data-nosnippet>207</a>                (ctr &gt;&gt; <span class="number">8</span>) <span class="kw">as </span>u8,
 <a href=#208 id=208 data-nosnippet>208</a>                ctr <span class="kw">as </span>u8,
 <a href=#209 id=209 data-nosnippet>209</a>            ];
-<a href=#210 id=210 data-nosnippet>210</a>            hasher.update(<span class="kw-2">&amp;</span>ctrs);
+<a href=#210 id=210 data-nosnippet>210</a>            hasher.update(ctrs);
 <a href=#211 id=211 data-nosnippet>211</a>            hasher.update(secret.as_ref());
 <a href=#212 id=212 data-nosnippet>212</a>            hasher.update(s1);
 <a href=#213 id=213 data-nosnippet>213</a>            <span class="kw">let </span>d = hasher.finalize();
@@ -265,7 +265,7 @@
 <a href=#265 id=265 data-nosnippet>265</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Data cannot be empty"</span>.to_string());
 <a href=#266 id=266 data-nosnippet>266</a>        }
 <a href=#267 id=267 data-nosnippet>267</a>
-<a href=#268 id=268 data-nosnippet>268</a>        <span class="kw">if </span>data.len() % <span class="number">16 </span>!= <span class="number">0 </span>{
+<a href=#268 id=268 data-nosnippet>268</a>        <span class="kw">if </span>!data.len().is_multiple_of(<span class="number">16</span>) {
 <a href=#269 id=269 data-nosnippet>269</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(
 <a href=#270 id=270 data-nosnippet>270</a>                <span class="string">"Data length must be a multiple of 16 bytes"</span>.to_string()
 <a href=#271 id=271 data-nosnippet>271</a>            );

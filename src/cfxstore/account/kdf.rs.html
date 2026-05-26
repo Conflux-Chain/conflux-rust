@@ -52,9 +52,9 @@
 <a href=#52 id=52 data-nosnippet>52</a>    }
 <a href=#53 id=53 data-nosnippet>53</a>}
 <a href=#54 id=54 data-nosnippet>54</a>
-<a href=#55 id=55 data-nosnippet>55</a><span class="kw">impl </span>Into&lt;json::Prf&gt; <span class="kw">for </span>Prf {
-<a href=#56 id=56 data-nosnippet>56</a>    <span class="kw">fn </span>into(<span class="self">self</span>) -&gt; json::Prf {
-<a href=#57 id=57 data-nosnippet>57</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#55 id=55 data-nosnippet>55</a><span class="kw">impl </span>From&lt;Prf&gt; <span class="kw">for </span>json::Prf {
+<a href=#56 id=56 data-nosnippet>56</a>    <span class="kw">fn </span>from(val: Prf) -&gt; <span class="self">Self </span>{
+<a href=#57 id=57 data-nosnippet>57</a>        <span class="kw">match </span>val {
 <a href=#58 id=58 data-nosnippet>58</a>            Prf::HmacSha256 =&gt; json::Prf::HmacSha256,
 <a href=#59 id=59 data-nosnippet>59</a>        }
 <a href=#60 id=60 data-nosnippet>60</a>    }
@@ -71,13 +71,13 @@
 <a href=#71 id=71 data-nosnippet>71</a>    }
 <a href=#72 id=72 data-nosnippet>72</a>}
 <a href=#73 id=73 data-nosnippet>73</a>
-<a href=#74 id=74 data-nosnippet>74</a><span class="kw">impl </span>Into&lt;json::Pbkdf2&gt; <span class="kw">for </span>Pbkdf2 {
-<a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">fn </span>into(<span class="self">self</span>) -&gt; json::Pbkdf2 {
+<a href=#74 id=74 data-nosnippet>74</a><span class="kw">impl </span>From&lt;Pbkdf2&gt; <span class="kw">for </span>json::Pbkdf2 {
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">fn </span>from(val: Pbkdf2) -&gt; <span class="self">Self </span>{
 <a href=#76 id=76 data-nosnippet>76</a>        json::Pbkdf2 {
-<a href=#77 id=77 data-nosnippet>77</a>            c: <span class="self">self</span>.c,
-<a href=#78 id=78 data-nosnippet>78</a>            dklen: <span class="self">self</span>.dklen,
-<a href=#79 id=79 data-nosnippet>79</a>            prf: <span class="self">self</span>.prf.into(),
-<a href=#80 id=80 data-nosnippet>80</a>            salt: From::from(<span class="self">self</span>.salt),
+<a href=#77 id=77 data-nosnippet>77</a>            c: val.c,
+<a href=#78 id=78 data-nosnippet>78</a>            dklen: val.dklen,
+<a href=#79 id=79 data-nosnippet>79</a>            prf: val.prf.into(),
+<a href=#80 id=80 data-nosnippet>80</a>            salt: From::from(val.salt),
 <a href=#81 id=81 data-nosnippet>81</a>        }
 <a href=#82 id=82 data-nosnippet>82</a>    }
 <a href=#83 id=83 data-nosnippet>83</a>}
@@ -94,14 +94,14 @@
 <a href=#94 id=94 data-nosnippet>94</a>    }
 <a href=#95 id=95 data-nosnippet>95</a>}
 <a href=#96 id=96 data-nosnippet>96</a>
-<a href=#97 id=97 data-nosnippet>97</a><span class="kw">impl </span>Into&lt;json::Scrypt&gt; <span class="kw">for </span>Scrypt {
-<a href=#98 id=98 data-nosnippet>98</a>    <span class="kw">fn </span>into(<span class="self">self</span>) -&gt; json::Scrypt {
+<a href=#97 id=97 data-nosnippet>97</a><span class="kw">impl </span>From&lt;Scrypt&gt; <span class="kw">for </span>json::Scrypt {
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="kw">fn </span>from(val: Scrypt) -&gt; <span class="self">Self </span>{
 <a href=#99 id=99 data-nosnippet>99</a>        json::Scrypt {
-<a href=#100 id=100 data-nosnippet>100</a>            dklen: <span class="self">self</span>.dklen,
-<a href=#101 id=101 data-nosnippet>101</a>            p: <span class="self">self</span>.p,
-<a href=#102 id=102 data-nosnippet>102</a>            n: <span class="self">self</span>.n,
-<a href=#103 id=103 data-nosnippet>103</a>            r: <span class="self">self</span>.r,
-<a href=#104 id=104 data-nosnippet>104</a>            salt: From::from(<span class="self">self</span>.salt),
+<a href=#100 id=100 data-nosnippet>100</a>            dklen: val.dklen,
+<a href=#101 id=101 data-nosnippet>101</a>            p: val.p,
+<a href=#102 id=102 data-nosnippet>102</a>            n: val.n,
+<a href=#103 id=103 data-nosnippet>103</a>            r: val.r,
+<a href=#104 id=104 data-nosnippet>104</a>            salt: From::from(val.salt),
 <a href=#105 id=105 data-nosnippet>105</a>        }
 <a href=#106 id=106 data-nosnippet>106</a>    }
 <a href=#107 id=107 data-nosnippet>107</a>}
@@ -115,9 +115,9 @@
 <a href=#115 id=115 data-nosnippet>115</a>    }
 <a href=#116 id=116 data-nosnippet>116</a>}
 <a href=#117 id=117 data-nosnippet>117</a>
-<a href=#118 id=118 data-nosnippet>118</a><span class="kw">impl </span>Into&lt;json::Kdf&gt; <span class="kw">for </span>Kdf {
-<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">fn </span>into(<span class="self">self</span>) -&gt; json::Kdf {
-<a href=#120 id=120 data-nosnippet>120</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#118 id=118 data-nosnippet>118</a><span class="kw">impl </span>From&lt;Kdf&gt; <span class="kw">for </span>json::Kdf {
+<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">fn </span>from(val: Kdf) -&gt; <span class="self">Self </span>{
+<a href=#120 id=120 data-nosnippet>120</a>        <span class="kw">match </span>val {
 <a href=#121 id=121 data-nosnippet>121</a>            Kdf::Pbkdf2(params) =&gt; json::Kdf::Pbkdf2(params.into()),
 <a href=#122 id=122 data-nosnippet>122</a>            Kdf::Scrypt(params) =&gt; json::Kdf::Scrypt(params.into()),
 <a href=#123 id=123 data-nosnippet>123</a>        }

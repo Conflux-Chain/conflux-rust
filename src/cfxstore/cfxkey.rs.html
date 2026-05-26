@@ -22,9 +22,9 @@
 <a href=#22 id=22 data-nosnippet>22</a></span><span class="kw">use </span><span class="kw">crate</span>::json;
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">pub use </span>cfxkey::<span class="kw-2">*</span>;
 <a href=#24 id=24 data-nosnippet>24</a>
-<a href=#25 id=25 data-nosnippet>25</a><span class="kw">impl </span>Into&lt;json::H160&gt; <span class="kw">for </span>Address {
-<a href=#26 id=26 data-nosnippet>26</a>    <span class="kw">fn </span>into(<span class="self">self</span>) -&gt; json::H160 {
-<a href=#27 id=27 data-nosnippet>27</a>        <span class="kw">let </span>a: [u8; <span class="number">20</span>] = <span class="self">self</span>.into();
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">impl </span>From&lt;Address&gt; <span class="kw">for </span>json::H160 {
+<a href=#26 id=26 data-nosnippet>26</a>    <span class="kw">fn </span>from(val: Address) -&gt; <span class="self">Self </span>{
+<a href=#27 id=27 data-nosnippet>27</a>        <span class="kw">let </span>a: [u8; <span class="number">20</span>] = val.into();
 <a href=#28 id=28 data-nosnippet>28</a>        From::from(a)
 <a href=#29 id=29 data-nosnippet>29</a>    }
 <a href=#30 id=30 data-nosnippet>30</a>}

@@ -56,7 +56,7 @@
 <a href=#56 id=56 data-nosnippet>56</a>
 <a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">let </span><span class="kw-2">mut </span>queue: VecDeque&lt;(u32, H256)&gt; = VecDeque::new();
 <a href=#58 id=58 data-nosnippet>58</a>    <span class="kw">let </span><span class="kw-2">mut </span>visited: HashSet&lt;H256&gt; = HashSet::new();
-<a href=#59 id=59 data-nosnippet>59</a>    queue.push_back((<span class="number">0</span>, from.clone()));
+<a href=#59 id=59 data-nosnippet>59</a>    queue.push_back((<span class="number">0</span>, <span class="kw-2">*</span>from));
 <a href=#60 id=60 data-nosnippet>60</a>
 <a href=#61 id=61 data-nosnippet>61</a>    <span class="kw">while let </span><span class="prelude-val">Some</span>((depth, hash)) = queue.pop_front() {
 <a href=#62 id=62 data-nosnippet>62</a>        <span class="kw">if </span>visited.contains(<span class="kw-2">&amp;</span>hash) || depth == max_depth {
@@ -66,15 +66,15 @@
 <a href=#66 id=66 data-nosnippet>66</a>        <span class="macro">assert!</span>(depth &lt; max_depth);
 <a href=#67 id=67 data-nosnippet>67</a>        visited.insert(hash);
 <a href=#68 id=68 data-nosnippet>68</a>
-<a href=#69 id=69 data-nosnippet>69</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(block) = retrieve_block(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>hash) {
+<a href=#69 id=69 data-nosnippet>69</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(block) = retrieve_block(db, <span class="kw-2">&amp;</span>hash) {
 <a href=#70 id=70 data-nosnippet>70</a>            <span class="kw">let </span>parent = block.block_header.parent_hash();
 <a href=#71 id=71 data-nosnippet>71</a>            <span class="kw">let </span>refs = block.block_header.referee_hashes();
 <a href=#72 id=72 data-nosnippet>72</a>
-<a href=#73 id=73 data-nosnippet>73</a>            print_edge(<span class="kw-2">&amp;</span>hash, <span class="kw-2">&amp;</span>parent);
+<a href=#73 id=73 data-nosnippet>73</a>            print_edge(<span class="kw-2">&amp;</span>hash, parent);
 <a href=#74 id=74 data-nosnippet>74</a>            queue.push_back((depth + <span class="number">1</span>, <span class="kw-2">*</span>parent));
 <a href=#75 id=75 data-nosnippet>75</a>
 <a href=#76 id=76 data-nosnippet>76</a>            <span class="kw">for </span>r <span class="kw">in </span>refs {
-<a href=#77 id=77 data-nosnippet>77</a>                print_ref_edge(<span class="kw-2">&amp;</span>hash, <span class="kw-2">&amp;</span>r);
+<a href=#77 id=77 data-nosnippet>77</a>                print_ref_edge(<span class="kw-2">&amp;</span>hash, r);
 <a href=#78 id=78 data-nosnippet>78</a>                queue.push_back((depth + <span class="number">1</span>, <span class="kw-2">*</span>r));
 <a href=#79 id=79 data-nosnippet>79</a>            }
 <a href=#80 id=80 data-nosnippet>80</a>        }
@@ -125,7 +125,7 @@
 <a href=#125 id=125 data-nosnippet>125</a>        .get_matches();
 <a href=#126 id=126 data-nosnippet>126</a>
 <a href=#127 id=127 data-nosnippet>127</a>    <span class="kw">let </span>db_path = matches.get_one::&lt;String&gt;(<span class="string">"db-path"</span>).unwrap();
-<a href=#128 id=128 data-nosnippet>128</a>    <span class="kw">let </span>max_depth = matches.get_one::&lt;u32&gt;(<span class="string">"max-depth"</span>).unwrap().clone();
+<a href=#128 id=128 data-nosnippet>128</a>    <span class="kw">let </span>max_depth = <span class="kw-2">*</span>matches.get_one::&lt;u32&gt;(<span class="string">"max-depth"</span>).unwrap();
 <a href=#129 id=129 data-nosnippet>129</a>
 <a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">let </span>from_block = {
 <a href=#131 id=131 data-nosnippet>131</a>        <span class="kw">let </span><span class="kw-2">mut </span>from =

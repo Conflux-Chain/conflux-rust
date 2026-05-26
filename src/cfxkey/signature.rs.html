@@ -109,7 +109,7 @@
 <a href=#109 id=109 data-nosnippet>109</a><span class="comment">// manual implementation large arrays don't have trait impls by default.
 <a href=#110 id=110 data-nosnippet>110</a>// remove when integer generics exist
 <a href=#111 id=111 data-nosnippet>111</a></span><span class="kw">impl </span>PartialEq <span class="kw">for </span>Signature {
-<a href=#112 id=112 data-nosnippet>112</a>    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool { <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>[..] == <span class="kw-2">&amp;</span>other.<span class="number">0</span>[..] }
+<a href=#112 id=112 data-nosnippet>112</a>    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool { <span class="self">self</span>.<span class="number">0</span>[..] == other.<span class="number">0</span>[..] }
 <a href=#113 id=113 data-nosnippet>113</a>}
 <a href=#114 id=114 data-nosnippet>114</a>
 <a href=#115 id=115 data-nosnippet>115</a><span class="comment">// manual implementation required in Rust 1.13+, see
@@ -164,8 +164,8 @@
 <a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">fn </span>from(s: [u8; <span class="number">65</span>]) -&gt; <span class="self">Self </span>{ Signature(s) }
 <a href=#165 id=165 data-nosnippet>165</a>}
 <a href=#166 id=166 data-nosnippet>166</a>
-<a href=#167 id=167 data-nosnippet>167</a><span class="kw">impl </span>Into&lt;[u8; <span class="number">65</span>]&gt; <span class="kw">for </span>Signature {
-<a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">fn </span>into(<span class="self">self</span>) -&gt; [u8; <span class="number">65</span>] { <span class="self">self</span>.<span class="number">0 </span>}
+<a href=#167 id=167 data-nosnippet>167</a><span class="kw">impl </span>From&lt;Signature&gt; <span class="kw">for </span>[u8; <span class="number">65</span>] {
+<a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">fn </span>from(val: Signature) -&gt; <span class="self">Self </span>{ val.<span class="number">0 </span>}
 <a href=#169 id=169 data-nosnippet>169</a>}
 <a href=#170 id=170 data-nosnippet>170</a>
 <a href=#171 id=171 data-nosnippet>171</a><span class="kw">impl </span>From&lt;Signature&gt; <span class="kw">for </span>H520 {

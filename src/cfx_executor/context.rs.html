@@ -565,8 +565,8 @@
 <a href=#565 id=565 data-nosnippet>565</a>
 <a href=#566 id=566 data-nosnippet>566</a>    <span class="kw">fn </span>is_warm_account(<span class="kw-2">&amp;</span><span class="self">self</span>, account: Address) -&gt; bool {
 <a href=#567 id=567 data-nosnippet>567</a>        <span class="kw">let </span>address_with_space = account.with_space(<span class="self">self</span>.space);
-<a href=#568 id=568 data-nosnippet>568</a>        <span class="kw">let </span>maybe_builtin = <span class="kw-2">&amp;</span>account[..<span class="number">19</span>] == <span class="kw-2">&amp;</span>[<span class="number">0u8</span>; <span class="number">19</span>];
-<a href=#569 id=569 data-nosnippet>569</a>        <span class="kw">if </span>maybe_builtin
+<a href=#568 id=568 data-nosnippet>568</a>        <span class="kw">let </span>maybe_precompile = <span class="kw-2">&amp;</span>account[..<span class="number">18</span>] == <span class="kw-2">&amp;</span>[<span class="number">0u8</span>; <span class="number">18</span>];
+<a href=#569 id=569 data-nosnippet>569</a>        <span class="kw">if </span>maybe_precompile
 <a href=#570 id=570 data-nosnippet>570</a>            &amp;&amp; <span class="self">self
 <a href=#571 id=571 data-nosnippet>571</a>                </span>.machine
 <a href=#572 id=572 data-nosnippet>572</a>                .builtin(

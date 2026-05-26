@@ -104,7 +104,7 @@
 <a href=#104 id=104 data-nosnippet>104</a>
 <a href=#105 id=105 data-nosnippet>105</a><span class="kw">impl </span>VaultKeyMeta {
 <a href=#106 id=106 data-nosnippet>106</a>    <span class="kw">pub fn </span>load(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, serde_json::Error&gt; {
-<a href=#107 id=107 data-nosnippet>107</a>        serde_json::from_slice(<span class="kw-2">&amp;</span>bytes)
+<a href=#107 id=107 data-nosnippet>107</a>        serde_json::from_slice(bytes)
 <a href=#108 id=108 data-nosnippet>108</a>    }
 <a href=#109 id=109 data-nosnippet>109</a>
 <a href=#110 id=110 data-nosnippet>110</a>    <span class="kw">pub fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, serde_json::Error&gt; {

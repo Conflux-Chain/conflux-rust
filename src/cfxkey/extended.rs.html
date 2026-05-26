@@ -61,7 +61,7 @@
 <a href=#61 id=61 data-nosnippet>61</a>    <span class="kw">fn </span>len() -&gt; usize { <span class="self">Self</span>::len_bytes() }
 <a href=#62 id=62 data-nosnippet>62</a>
 <a href=#63 id=63 data-nosnippet>63</a>    <span class="kw">fn </span>store(<span class="kw-2">&amp;</span><span class="self">self</span>, target: <span class="kw-2">&amp;mut </span>[u8]) {
-<a href=#64 id=64 data-nosnippet>64</a>        (<span class="kw-2">&amp;mut </span>target[<span class="number">0</span>..<span class="number">32</span>]).copy_from_slice(<span class="self">self</span>.as_bytes());
+<a href=#64 id=64 data-nosnippet>64</a>        target[<span class="number">0</span>..<span class="number">32</span>].copy_from_slice(<span class="self">self</span>.as_bytes());
 <a href=#65 id=65 data-nosnippet>65</a>    }
 <a href=#66 id=66 data-nosnippet>66</a>}
 <a href=#67 id=67 data-nosnippet>67</a>
@@ -123,7 +123,7 @@
 <a href=#123 id=123 data-nosnippet>123</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DerivationError&gt; {
 <a href=#124 id=124 data-nosnippet>124</a>        <span class="prelude-val">Ok</span>(ExtendedPublic::new(
 <a href=#125 id=125 data-nosnippet>125</a>            derivation::point(<span class="kw-2">**</span>secret.as_raw())<span class="question-mark">?</span>,
-<a href=#126 id=126 data-nosnippet>126</a>            secret.chain_code.clone(),
+<a href=#126 id=126 data-nosnippet>126</a>            secret.chain_code,
 <a href=#127 id=127 data-nosnippet>127</a>        ))
 <a href=#128 id=128 data-nosnippet>128</a>    }
 <a href=#129 id=129 data-nosnippet>129</a>
@@ -159,7 +159,7 @@
 <a href=#159 id=159 data-nosnippet>159</a>
 <a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">pub fn </span>with_code(secret: Secret, public: Public, chain_code: H256) -&gt; <span class="self">Self </span>{
 <a href=#161 id=161 data-nosnippet>161</a>        ExtendedKeyPair {
-<a href=#162 id=162 data-nosnippet>162</a>            secret: ExtendedSecret::with_code(secret, chain_code.clone()),
+<a href=#162 id=162 data-nosnippet>162</a>            secret: ExtendedSecret::with_code(secret, chain_code),
 <a href=#163 id=163 data-nosnippet>163</a>            public: ExtendedPublic::new(public, chain_code),
 <a href=#164 id=164 data-nosnippet>164</a>        }
 <a href=#165 id=165 data-nosnippet>165</a>    }

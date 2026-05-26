@@ -73,8 +73,8 @@
 <a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">let </span>passwords = passwords_from_files(<span class="kw-2">&amp;</span>[path])<span class="question-mark">?</span>;
 <a href=#74 id=74 data-nosnippet>74</a>    <span class="comment">// use only first password from the file
 <a href=#75 id=75 data-nosnippet>75</a>    </span>passwords
-<a href=#76 id=76 data-nosnippet>76</a>        .get(<span class="number">0</span>)
-<a href=#77 id=77 data-nosnippet>77</a>        .map(Password::clone)
+<a href=#76 id=76 data-nosnippet>76</a>        .first()
+<a href=#77 id=77 data-nosnippet>77</a>        .cloned()
 <a href=#78 id=78 data-nosnippet>78</a>        .ok_or_else(|| <span class="string">"Password file seems to be empty."</span>.to_owned())
 <a href=#79 id=79 data-nosnippet>79</a>}
 <a href=#80 id=80 data-nosnippet>80</a>
@@ -84,7 +84,7 @@
 <a href=#84 id=84 data-nosnippet>84</a>		<span class="kw">let </span>file = File::open(filename).map_err(|<span class="kw">_</span>| <span class="macro">format!</span>(<span class="string">"{} Unable to read password file. Ensure it exists and permissions are correct."</span>, filename))<span class="question-mark">?</span>;
 <a href=#85 id=85 data-nosnippet>85</a>		<span class="kw">let </span>reader = BufReader::new(<span class="kw-2">&amp;</span>file);
 <a href=#86 id=86 data-nosnippet>86</a>		<span class="kw">let </span>lines = reader.lines()
-<a href=#87 id=87 data-nosnippet>87</a>			.filter_map(|l| l.ok())
+<a href=#87 id=87 data-nosnippet>87</a>			.map_while(Result::ok)
 <a href=#88 id=88 data-nosnippet>88</a>			.map(|pwd| pwd.trim().to_owned().into())
 <a href=#89 id=89 data-nosnippet>89</a>			.collect::&lt;Vec&lt;Password&gt;&gt;();
 <a href=#90 id=90 data-nosnippet>90</a>		<span class="prelude-val">Ok</span>(lines)
