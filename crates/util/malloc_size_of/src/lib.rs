@@ -70,12 +70,6 @@ impl MallocSizeOfOps {
 
     /// Call `size_of_op` on `ptr`, first checking that the allocation isn't
     /// empty, because some types (such as `Vec`) utilize empty allocations.
-    ///
-    /// # Safety
-    ///
-    /// `ptr` must point to a live allocation made by the same allocator that
-    /// `size_of_op` queries (or to a sentinel "empty" value as recognized by
-    /// `is_empty`).
     pub unsafe fn malloc_size_of<T: ?Sized>(&self, ptr: *const T) -> usize {
         if MallocSizeOfOps::is_empty(ptr) {
             0
@@ -91,11 +85,6 @@ impl MallocSizeOfOps {
 
     /// Call `enclosing_size_of_op`, which must be available, on `ptr`, which
     /// must not be empty.
-    ///
-    /// # Safety
-    ///
-    /// `ptr` must point to an interior (non-empty) allocation that the
-    /// underlying allocator can resolve to its enclosing heap block.
     pub unsafe fn malloc_enclosing_size_of<T>(&self, ptr: *const T) -> usize {
         assert!(!MallocSizeOfOps::is_empty(ptr));
         (self.enclosing_size_of_op.unwrap())(ptr as *const c_void)
