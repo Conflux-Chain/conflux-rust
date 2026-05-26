@@ -61,3 +61,15 @@ jobs:
         run: |
           cargo install --locked cargo-deny
           ./dev-support/cargo_all.sh deny check
+  cargo-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: cargo-audit
+        run: |
+          cargo install --locked cargo-audit
+          cargo audit
