@@ -71,5 +71,5 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.9
       - name: cargo-audit
         run: |
-          cargo install --locked cargo-audit
+          cargo install --locked cargo-audit@0.22.1
           cargo audit
