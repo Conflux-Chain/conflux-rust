@@ -596,6 +596,7 @@ impl NetworkServiceInner {
         };
 
         let nodes_path = config.config_path.clone();
+        let own_node_id = *keys.public();
 
         let mut inner = NetworkServiceInner {
             metadata: HostMetadata {
@@ -616,6 +617,7 @@ impl NetworkServiceInner {
                 FIRST_SESSION,
                 MAX_SESSIONS,
                 config.max_incoming_peers,
+                own_node_id,
                 &config.session_ip_limit_config,
                 Some(pos_pub_keys),
             ),
@@ -1112,11 +1114,13 @@ impl NetworkServiceInner {
         }
 
         if let Some(token_to_disconnect) = token_to_disconnect {
+            // Sim-dial dedup, not a peer failure — `op = None`, no
+            // note_failure.
             self.kill_connection_by_token(
                 token_to_disconnect.0,
                 io,
                 true,
-                Some(UpdateNodeOperation::Failure),
+                None,
                 token_to_disconnect.1.as_str(), // reason
             );
         }
@@ -1237,6 +1241,11 @@ impl NetworkServiceInner {
             if let Some(session) = self.sessions.get(token) {
                 let mut sess = session.write();
                 if !sess.expired() {
+                    // Removed before the disconnect packets (not just before
+                    // `set_expired`) to minimize the stale-entry window.
+                    if let Some(id) = sess.id() {
+                        self.sessions.remove_node_id_entry(id, token);
+                    }
                     if sess.is_ready() {
                         for (p, _) in self.handlers.read().iter() {
                             if sess.have_capability(*p) {
@@ -1310,6 +1319,9 @@ impl NetworkServiceInner {
         if let Some(session) = self.sessions.get_by_id(node_id) {
             let mut sess = session.write();
             if !sess.expired() {
+                // Removed before the disconnect packets (not just before
+                // `set_expired`) to minimize the stale-entry window.
+                self.sessions.remove_node_id_entry(node_id, sess.token());
                 if sess.is_ready() {
                     for (p, _) in self.handlers.read().iter() {
                         if sess.have_capability(*p) {

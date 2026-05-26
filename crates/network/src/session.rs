@@ -51,7 +51,7 @@ pub struct Session {
     sent_hello: Instant,
     /// Session ready flag that set after successful Hello packet received.
     had_hello: Option<Instant>,
-    /// Session is no longer active flag.
+    /// Set once when a kill path expires the session.
     expired: Option<Instant>,
 
     // statistics for read/write
@@ -304,13 +304,16 @@ impl Session {
                 // For ingress session, update the node id in `SessionManager`
                 let token_to_disconnect = self.update_ingress_node_id(host)?;
 
-                let token_to_disconnect = match token_to_disconnect {
-                    Some(token) => Some((
-                        token,
-                        String::from("Remove old session from the same node"),
-                    )),
-                    None => None,
-                };
+                // Dropped by the tie-break: stop before `Ready` so the loser
+                // never reaches `on_peer_connected`; the caller kills it.
+                if token_to_disconnect.as_ref().map(|(t, _)| *t)
+                    == Some(self.token())
+                {
+                    return Ok(SessionDataWithDisconnectInfo {
+                        session_data: SessionData::None,
+                        token_to_disconnect,
+                    });
+                }
 
                 // Handle Hello packet to exchange protocols
                 let rlp = Rlp::new(&packet.data);
@@ -348,10 +351,12 @@ impl Session {
         }
     }
 
-    /// Update node Id in `SessionManager` for ingress session.
+    /// Apply the simultaneous-dial tie-breaker for this ingress. Returns the
+    /// `(token, reason)` to kill — the old session if this ingress wins, our
+    /// own token if it loses — or `None` if no kill is needed.
     fn update_ingress_node_id(
         &mut self, host: &NetworkServiceInner,
-    ) -> Result<Option<usize>, Error> {
+    ) -> Result<Option<(usize, String)>, Error> {
         // ignore egress session
         if self.metadata.originated {
             return Ok(None);
@@ -363,15 +368,41 @@ impl Session {
             .id
             .expect("should have node id after handshake");
 
-        host.sessions.update_ingress_node_id(token, &node_id)
+        let result = host
+            .sessions
+            .update_ingress_node_id(token, &node_id)
             .map_err(|reason| {
                 debug!(
                     "failed to update node id of ingress session, reason = {:?}, session = {:?}",
                     reason, self
                 );
-
                 self.send_disconnect(DisconnectReason::UpdateNodeIdFailed)
-            })
+            })?;
+
+        match result {
+            crate::session_manager::UpdateIngressResult::Inserted => Ok(None),
+            crate::session_manager::UpdateIngressResult::Replaced(old) => {
+                Ok(Some((
+                    old,
+                    String::from("Remove old session from the same node"),
+                )))
+            }
+            crate::session_manager::UpdateIngressResult::DropNew => {
+                // Lost the tie-break: tell the remote, then return our own
+                // token so the caller kills us via the non-failure path.
+                debug!(
+                    "lost simultaneous-dial tie-break, dropping new ingress session = {:?}",
+                    self
+                );
+                let _ = self.send_disconnect(DisconnectReason::Custom(
+                    "simultaneous dial: drop new connection".into(),
+                ));
+                Ok(Some((
+                    token,
+                    String::from("simultaneous dial: drop new connection"),
+                )))
+            }
+        }
     }
 
     /// Read Hello packet to exchange the supported protocols, and set the
@@ -676,7 +707,7 @@ impl Session {
 impl fmt::Debug for Session {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Session {{ token: {}, id: {:?}, originated: {}, address: {:?}, had_hello: {}, expired: {} }}",
-               self.token(), self.id(), self.metadata.originated, self.address, self.had_hello.is_some(), self.expired.is_some())
+               self.token(), self.id(), self.metadata.originated, self.address, self.had_hello.is_some(), self.expired())
     }
 }
 
