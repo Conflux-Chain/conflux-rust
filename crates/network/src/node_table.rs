@@ -158,8 +158,8 @@ impl FromStr for NodeEndpoint {
             }),
             Ok(None) => bail!(Error::AddressResolve(None)),
             Err(_) => Err(Error::AddressParse), /* always an io::Error
-                                                        * of InvalidInput
-                                                        * kind */
+                                                 * of InvalidInput
+                                                 * kind */
         }
     }
 }

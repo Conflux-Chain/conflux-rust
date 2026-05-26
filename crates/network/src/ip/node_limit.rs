@@ -154,8 +154,8 @@ impl NodeIpLimit {
     /// and possible evictee before insertion.
     ///
     /// When subnet quota is not enough before insertion:
-    ///   1. If node IP changed and still in the same subnet,
-    ///      just evict the node itself.
+    ///   1. If node IP changed and still in the same subnet, just evict the
+    ///      node itself.
     /// 2. Otherwise, someone in the subnet of `ip` may be evicted.
     ///
     /// There are 2 cases that insertion is not allowed:

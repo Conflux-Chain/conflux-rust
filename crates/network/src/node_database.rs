@@ -20,15 +20,15 @@ const BLACKLISTED_NODES_FILE: &str = "blacklisted_nodes.json";
 /// # Insert a node
 ///
 /// There are 3 scenarios to insert a node into database:
-/// 1. Receive the "hello" handshaking message from ingress TCP connection,
-///    and add the node with `StreamToken` as untrusted if not exists in database.
+/// 1. Receive the "hello" handshaking message from ingress TCP connection, and
+///    add the node with `StreamToken` as untrusted if not exists in database.
 ///    Otherwise, overwrite the existing node in trusted or untrusted table,
 ///    including endpoint, last contact and connection information.
 /// 2. Receive the "pong" message from UDP discovery, and add the node as
 ///    trusted if not exists, or promote it to trusted if it is untrusted.
 ///    Otherwise, just update the last contact information in trusted table.
-/// 3. RPC explicitly add a trusted node. If the node is an existing
-///    untrusted one, promote it to trusted.
+/// 3. RPC explicitly add a trusted node. If the node is an existing untrusted
+///    one, promote it to trusted.
 ///
 /// # Update node information
 ///
@@ -145,19 +145,11 @@ impl NodeDatabase {
         let ip = node.endpoint.address.ip();
 
         if self.trusted_nodes.contains(&node.id) {
-            if self.insert_ip_limit(
-                node.id,
-                ip,
-                true, /* trusted */
-            ) {
+            if self.insert_ip_limit(node.id, ip, true /* trusted */) {
                 self.trusted_nodes
                     .add_node(node, false /* preserve_last_contact */);
             }
-        } else if self.insert_ip_limit(
-            node.id,
-            ip,
-            false, /* trusted */
-        ) {
+        } else if self.insert_ip_limit(node.id, ip, false /* trusted */) {
             self.untrusted_nodes
                 .add_node(node, false /* preserve_last_contact */);
         }
@@ -210,11 +202,7 @@ impl NodeDatabase {
                 self.trusted_nodes
                     .add_node(node, false /* preserve_last_contact */);
             }
-        } else if self.insert_ip_limit(
-            node.id,
-            ip,
-            true, /* trusted */
-        ) {
+        } else if self.insert_ip_limit(node.id, ip, true /* trusted */) {
             self.trusted_nodes.update_last_contact(node);
         }
     }
@@ -265,11 +253,7 @@ impl NodeDatabase {
                 self.trusted_nodes
                     .add_node(node, false /* preserve_last_contact */);
             }
-        } else if self.insert_ip_limit(
-            node.id,
-            ip,
-            true, /* trusted */
-        ) {
+        } else if self.insert_ip_limit(node.id, ip, true /* trusted */) {
             self.trusted_nodes
                 .add_node(node, false /* preserve_last_contact */);
         }

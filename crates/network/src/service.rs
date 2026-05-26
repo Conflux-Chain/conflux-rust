@@ -797,7 +797,12 @@ impl NetworkServiceInner {
 
     // Connect to all reserved and trusted peers if not yet
     fn connect_peers(&self, io: &IoContext<NetworkIoMessage>) {
-        if self.metadata.minimum_peer_protocol_version.read().is_empty() {
+        if self
+            .metadata
+            .minimum_peer_protocol_version
+            .read()
+            .is_empty()
+        {
             // The protocol handler has not been registered, we just wait for
             // the next time.
             return;
@@ -2132,14 +2137,14 @@ pub fn load_pos_private_key(
         }
     }
     let key_str: Vec<_> = buf.split(",").collect();
-    let private_key =
-        match ConsensusPrivateKey::from_encoded_string(key_str[0]) {
-            Ok(key) => Some(key),
-            Err(e) => {
-                warn!("Error parsing key file: {:?}", e);
-                None
-            }
-        }?;
+    let private_key = match ConsensusPrivateKey::from_encoded_string(key_str[0])
+    {
+        Ok(key) => Some(key),
+        Err(e) => {
+            warn!("Error parsing key file: {:?}", e);
+            None
+        }
+    }?;
     if key_str.len() <= 1 {
         return Some((private_key, None));
     }

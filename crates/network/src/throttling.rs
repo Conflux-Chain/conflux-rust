@@ -40,8 +40,8 @@ lazy_static! {
 /// TCP sockets. Basically, the throttling is used in 2 ways:
 ///
 /// 1. When the queue size reaches the configured threshold, the synchronization
-///    layer will reduce the number of peers to broadcast messages, e.g. new block
-///    hashes, transaction digests.
+///    layer will reduce the number of peers to broadcast messages, e.g. new
+///    block hashes, transaction digests.
 ///
 /// 2. On the other hand, synchronization layer will also refuse to respond any
 ///    size sensitive message, e.g. blocks.
