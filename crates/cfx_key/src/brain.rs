@@ -17,7 +17,6 @@
 use super::{KeyPair, KeyPairGenerator, Secret};
 use cfx_crypto::crypto::keccak::Keccak256;
 use log::trace;
-use parity_wordlist;
 
 /// Simple brainwallet.
 pub struct Brain(String);

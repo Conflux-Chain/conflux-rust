@@ -24,6 +24,55 @@ use std::{
     },
 };
 
+/// An entry in `SessionManager::node_id_index`: the session's slab token and
+/// its direction (`originated`). `originated` is cached here so the
+/// simultaneous-dial tie-breaker can read it without locking the `Session`.
+/// See `node_id_index` for the lifetime invariant.
+#[derive(Clone, Debug)]
+pub struct IndexEntry {
+    pub token: usize,
+    /// `true` = our outbound (egress); `false` = remote's inbound (ingress).
+    pub originated: bool,
+}
+
+/// Outcome of `SessionManager::update_ingress_node_id`.
+#[derive(Debug)]
+pub enum UpdateIngressResult {
+    Inserted,
+    /// Caller should disconnect the old token.
+    Replaced(usize),
+    /// Caller should disconnect the new ingress it was about to
+    /// register — the existing entry won the simultaneous-dial tie-break.
+    DropNew,
+}
+
+/// Outcome of the simultaneous-dial tie-breaker for a (existing, new-ingress)
+/// pair sharing the same remote `NodeId`.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SimDialOutcome {
+    KeepNew,
+    KeepExisting,
+}
+
+/// Deterministically resolve a simultaneous dial: keep the connection where
+/// the higher-`NodeId` peer is the dialer. Both sides compute the same
+/// comparison over the same two `NodeId`s and converge on the same surviving
+/// TCP connection.
+pub fn simultaneous_dial_outcome(
+    own_node_id: &NodeId, remote_node_id: &NodeId, existing_originated: bool,
+) -> SimDialOutcome {
+    if !existing_originated {
+        // Existing is also an ingress (an older inbound from the same peer):
+        // the fresher inbound replaces it.
+        return SimDialOutcome::KeepNew;
+    }
+    if own_node_id < remote_node_id {
+        SimDialOutcome::KeepNew
+    } else {
+        SimDialOutcome::KeepExisting
+    }
+}
+
 /// Session manager maintains all ingress and egress TCP connections in thread
 /// safe manner.
 ///
@@ -46,8 +95,21 @@ pub struct SessionManager {
     max_ingress_sessions: usize,
     cur_ingress_sessions: AtomicUsize,
 
-    /// session indices
-    node_id_index: RwLock<HashMap<NodeId, usize>>,
+    /// The local node's NodeId, used by `update_ingress_node_id` to
+    /// compute the simultaneous-dial tie-break.
+    own_node_id: NodeId,
+
+    /// Reverse index from `NodeId` to slab token (plus direction). The
+    /// simultaneous-dial tie-breaker in `update_ingress_node_id` reads it
+    /// to detect and resolve duplicate sessions for the same peer.
+    ///
+    /// **Invariant:** `node_id_index` contains only sessions whose remote
+    /// node id is known and whose local session state is still active.
+    /// Sessions must be removed from this index (via `remove_node_id_entry`)
+    /// before their `Session::expired` state is set — otherwise the
+    /// tie-breaker could `DropNew` a fresh ingress in favour of an
+    /// already-dead session.
+    node_id_index: RwLock<HashMap<NodeId, IndexEntry>>,
     ip_limit: RwLock<Box<dyn SessionIpLimit>>,
     tag_index: RwLock<SessionTagIndex>,
     /// pos public key
@@ -59,7 +121,7 @@ impl SessionManager {
     /// Create a new instance.
     pub fn new(
         offset: usize, capacity: usize, max_ingress_sessions: usize,
-        ip_limit_config: &SessionIpLimitConfig,
+        own_node_id: NodeId, ip_limit_config: &SessionIpLimitConfig,
         self_pos_public_key: Option<(
             ConsensusPublicKey,
             ConsensusVRFPublicKey,
@@ -71,6 +133,7 @@ impl SessionManager {
             capacity,
             max_ingress_sessions,
             cur_ingress_sessions: AtomicUsize::new(0),
+            own_node_id,
             node_id_index: RwLock::new(HashMap::new()),
             ip_limit: RwLock::new(new_session_ip_limit(ip_limit_config)),
             tag_index: Default::default(),
@@ -89,8 +152,8 @@ impl SessionManager {
     /// Get the session of specified node id.
     pub fn get_by_id(&self, node_id: &NodeId) -> Option<Arc<RwLock<Session>>> {
         let sessions = self.sessions.read();
-        let idx = *self.node_id_index.read().get(node_id)?;
-        sessions.get(idx).cloned()
+        let token = self.node_id_index.read().get(node_id)?.token;
+        sessions.get(token).cloned()
     }
 
     /// Get all the sessions in `SessionManager`.
@@ -142,7 +205,7 @@ impl SessionManager {
 
     /// Get the session index by node id.
     pub fn get_index_by_id(&self, id: &NodeId) -> Option<usize> {
-        self.node_id_index.read().get(id).cloned()
+        self.node_id_index.read().get(id).map(|entry| entry.token)
     }
 
     /// Check if the specified IP address is allowed to create a new session.
@@ -204,7 +267,7 @@ impl SessionManager {
         }
         let entry = sessions.vacant_entry();
         let index = entry.key();
-        match Session::new(
+        let session = match Session::new(
             io,
             socket,
             address,
@@ -220,12 +283,20 @@ impl SessionManager {
                 );
                 return Err(format!("{:?}", e));
             }
-            Ok(session) => entry.insert(Arc::new(RwLock::new(session))),
+            Ok(session) => session,
         };
+        entry.insert(Arc::new(RwLock::new(session)));
 
         // update on creation succeeded
         if let Some(node_id) = id {
-            node_id_index.insert(node_id.clone(), index);
+            // egress: id is Some at construction
+            node_id_index.insert(
+                node_id.clone(),
+                IndexEntry {
+                    token: index,
+                    originated: true,
+                },
+            );
         }
 
         assert!(ip_limit.add(ip));
@@ -248,14 +319,7 @@ impl SessionManager {
         // TODO This check can be removed?
         if sessions.contains(session.token()) {
             sessions.remove(session.token());
-            if let Some(node_id) = session.id() {
-                let mut node_id_index = self.node_id_index.write();
-                if let Some(token) = node_id_index.get(node_id) {
-                    if *token == session.token() {
-                        node_id_index.remove(node_id);
-                    }
-                }
-            }
+            // node_id_index was already cleared by `remove_node_id_entry`.
 
             assert!(self.ip_limit.write().remove(&session.address().ip()));
 
@@ -271,15 +335,34 @@ impl SessionManager {
         debug!("SessionManager.remove: leave");
     }
 
-    /// Update the node id index for ingress session.
-    /// Return error if the session index does not exist, or the node id already
-    /// in use by other session.
-    /// Return optional to-be-disconnected token if no error happens.
+    /// Drop the reverse-index entry for `node_id` if it still points at
+    /// `token`. Called early in a kill, before the session is marked expired.
+    pub fn remove_node_id_entry(&self, node_id: &NodeId, token: usize) {
+        let mut node_id_index = self.node_id_index.write();
+        if let Some(entry) = node_id_index.get(node_id) {
+            if entry.token == token {
+                node_id_index.remove(node_id);
+            }
+        }
+    }
+
+    /// Update the node id index for an ingress session whose HELLO has
+    /// just been processed and the remote `node_id` is now known.
+    ///
+    /// Returns:
+    /// - `Err(_)` if the session at `idx` is no longer in the slab (the session
+    ///   was killed concurrently — caller should drop the new ingress).
+    /// - `Ok(Inserted)` — no prior entry for this `node_id`; the new ingress is
+    ///   now in the index.
+    /// - `Ok(Replaced(old_token))` — there was a prior entry; it has been
+    ///   replaced. Caller should disconnect `old_token`.
+    /// - `Ok(DropNew)` — there was a prior entry that won the simultaneous-dial
+    ///   tie-break; the index is unchanged. Caller should disconnect the new
+    ///   ingress (`idx`) it was about to register.
     pub fn update_ingress_node_id(
         &self, idx: usize, node_id: &NodeId,
-    ) -> Result<Option<usize>, String> {
+    ) -> Result<UpdateIngressResult, String> {
         debug!("SessionManager.update_ingress_node_id: enter");
-        let mut token_to_disconnect = None;
 
         let sessions = self.sessions.read();
         let mut node_id_index = self.node_id_index.write();
@@ -293,21 +376,36 @@ impl SessionManager {
             ));
         }
 
-        // ensure the node id is unique
-        if let Some(cur_idx) = node_id_index.get(node_id) {
-            debug!("SessionManager.update_ingress_node_id: leave on node_id already exists");
-            if *cur_idx != idx {
-                token_to_disconnect = Some(*cur_idx);
-            } else {
+        let new_entry = IndexEntry {
+            token: idx,
+            originated: false,
+        };
+
+        if let Some(existing) = node_id_index.get(node_id).cloned() {
+            if existing.token == idx {
                 panic!("The same token already exists for the same node!!!");
             }
+            let outcome = simultaneous_dial_outcome(
+                &self.own_node_id,
+                node_id,
+                existing.originated,
+            );
+            match outcome {
+                SimDialOutcome::KeepNew => {
+                    node_id_index.insert(node_id.clone(), new_entry);
+                    debug!("SessionManager.update_ingress_node_id: leave (replaced)");
+                    Ok(UpdateIngressResult::Replaced(existing.token))
+                }
+                SimDialOutcome::KeepExisting => {
+                    debug!("SessionManager.update_ingress_node_id: leave (drop new — tie-break lost)");
+                    Ok(UpdateIngressResult::DropNew)
+                }
+            }
+        } else {
+            node_id_index.insert(node_id.clone(), new_entry);
+            debug!("SessionManager.update_ingress_node_id: leave (inserted)");
+            Ok(UpdateIngressResult::Inserted)
         }
-
-        node_id_index.insert(node_id.clone(), idx);
-
-        debug!("SessionManager.update_ingress_node_id: leave");
-
-        Ok(token_to_disconnect)
     }
 }
 
@@ -390,7 +488,64 @@ impl SessionTagIndex {
 
 #[cfg(test)]
 mod tests {
-    use crate::session_manager::SessionTagIndex;
+    use crate::{
+        node_table::NodeId,
+        session_manager::{
+            simultaneous_dial_outcome, SessionTagIndex, SimDialOutcome,
+        },
+    };
+
+    #[test]
+    fn simdial_two_nodes_converge_on_one_connection() {
+        // Both sides of a simultaneous dial compute the same comparison
+        // over the same two NodeIds and must converge on the same
+        // surviving TCP connection — exactly one side keeps its existing
+        // egress, the other side drops its own and accepts the new
+        // ingress. Run both views of the same (A, B) pair and assert the
+        // XOR property.
+        let a = NodeId::from_low_u64_be(1);
+        let b = NodeId::from_low_u64_be(2);
+
+        // A's view: existing = A's egress to B (originated=true)
+        let a_outcome = simultaneous_dial_outcome(&a, &b, true);
+        // B's view: existing = B's egress to A (originated=true)
+        let b_outcome = simultaneous_dial_outcome(&b, &a, true);
+
+        let a_keeps = matches!(a_outcome, SimDialOutcome::KeepExisting);
+        let b_keeps = matches!(b_outcome, SimDialOutcome::KeepExisting);
+        assert!(
+            a_keeps ^ b_keeps,
+            "exactly one side must keep its egress; got a={:?} b={:?}",
+            a_outcome,
+            b_outcome
+        );
+    }
+
+    #[test]
+    fn simdial_outcome_cases() {
+        let lo = NodeId::from_low_u64_be(1);
+        let hi = NodeId::from_low_u64_be(2);
+
+        // Ingress existing (originated = false): the fresher ingress wins.
+        assert_eq!(
+            simultaneous_dial_outcome(&lo, &hi, false),
+            SimDialOutcome::KeepNew
+        );
+        assert_eq!(
+            simultaneous_dial_outcome(&hi, &lo, false),
+            SimDialOutcome::KeepNew
+        );
+
+        // Egress existing: the connection from the higher-NodeId peer wins.
+        assert_eq!(
+            simultaneous_dial_outcome(&lo, &hi, true),
+            SimDialOutcome::KeepNew
+        );
+        assert_eq!(
+            simultaneous_dial_outcome(&hi, &lo, true),
+            SimDialOutcome::KeepExisting
+        );
+    }
 
     #[test]
     fn test_tag_index() {

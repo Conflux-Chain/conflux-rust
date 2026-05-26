@@ -141,13 +141,13 @@ impl PrometheusReporter {
         let registry = DEFAULT_REGISTRY.read();
 
         for (name, metric) in registry.get_all() {
-            let _ = metric.write_prometheus(name, None, &mut buffer)?;
+            metric.write_prometheus(name, None, &mut buffer)?;
         }
 
         let grouping_registry = DEFAULT_GROUPING_REGISTRY.read();
         for (group_name, metrics) in grouping_registry.get_all() {
             for (metric_name, metric) in metrics {
-                let _ = metric.write_prometheus(
+                metric.write_prometheus(
                     metric_name,
                     Some(group_name),
                     &mut buffer,
@@ -307,7 +307,7 @@ mod tests {
             }
         })
         .await
-        .map_err(|_| format!("Timeout while waiting for server to start"))?
+        .map_err(|_| "Timeout while waiting for server to start".to_string())?
     }
     #[tokio::test]
     async fn test_prometheus_endpoint() {
@@ -333,7 +333,7 @@ mod tests {
         let reporter = PrometheusReporter::new(&listen_addr_str, executor)
             .expect("Failed to create Prometheus reporter");
 
-        let _ = reporter.start_http_server().unwrap();
+        reporter.start_http_server().unwrap();
 
         wait_for_server(server_addr, Duration::from_secs(5))
             .await
@@ -381,7 +381,7 @@ mod tests {
 
         let mut buffer = String::new();
 
-        let _ = counter
+        counter
             .write_prometheus("test_counter", None, &mut buffer)
             .unwrap();
         assert!(buffer.contains("# HELP test_counter test_counter"));
@@ -390,7 +390,7 @@ mod tests {
 
         buffer.clear();
 
-        let _ = counter
+        counter
             .write_prometheus("test_request_counter", Some("api"), &mut buffer)
             .unwrap();
         assert!(buffer.contains(
@@ -407,7 +407,7 @@ mod tests {
         gauge.update(199);
 
         let mut buffer = String::new();
-        let _ = gauge
+        gauge
             .write_prometheus("test_gauge", None, &mut buffer)
             .unwrap();
         assert!(buffer.contains("# HELP test_gauge test_gauge"));
@@ -416,7 +416,7 @@ mod tests {
 
         buffer.clear();
 
-        let _ = gauge
+        gauge
             .write_prometheus("test_request_gauge", Some("node"), &mut buffer)
             .unwrap();
         assert!(buffer.contains(
@@ -434,7 +434,7 @@ mod tests {
         let mut buffer = String::new();
 
         // if use the meter.write_prometheus("test_meter", None, &mut buffer);
-        let _ = meter
+        meter
             .write_prometheus("test_meter", None, &mut buffer)
             .unwrap();
         // PrometheusReportable::write_prometheus(&meter, "test_meter", None,
@@ -463,7 +463,7 @@ mod tests {
 
         buffer.clear();
 
-        let _ = meter
+        meter
             .write_prometheus("test_request_meter", Some("node"), &mut buffer)
             .unwrap();
         assert!(buffer.contains(
@@ -501,7 +501,7 @@ mod tests {
 
         let mut buffer = String::new();
 
-        let _ = histogram
+        histogram
             .write_prometheus("test_histogram", None, &mut buffer)
             .unwrap();
 
@@ -517,7 +517,7 @@ mod tests {
 
         buffer.clear();
 
-        let _ = histogram
+        histogram
             .write_prometheus(
                 "test_request_histogram",
                 Some("node"),

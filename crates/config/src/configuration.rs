@@ -104,7 +104,7 @@ build_config! {
         //
         // `dev` mode is for users to run a single node that automatically
         //     generates blocks with fixed intervals
-        //     * You are expected to also set `jsonrpc_ws_port`, `jsonrpc_tcp_port`,
+        //     * You are expected to also set `jsonrpc_ws_port`,
         //       and `jsonrpc_http_port` if you want RPC functionalities.
         //     * generate blocks automatically without PoW.
         //     * Skip catch-up mode even there is no peer
@@ -203,9 +203,11 @@ build_config! {
         (cip145_fix_transition_height, (Option<u64>), None)
         // For test only
         (align_evm_transition_height, (u64), u64::MAX)
+
         // V3.1
-        (cip166_transition_height, (Option<u64>), None)
         (osaka_opcode_transition_height, (Option<u64>), None)
+        (cip166_transition_height, (Option<u64>), None)
+        (cip167_transition_height, (Option<u64>), None)
 
         // Mining section.
         (mining_author, (Option<String>), None)
@@ -1135,7 +1137,6 @@ impl Configuration {
         HttpConfiguration::new(
             Some((127, 0, 0, 1)),
             self.raw_conf.jsonrpc_local_http_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
         )
@@ -1153,7 +1154,6 @@ impl Configuration {
         HttpConfiguration::new(
             None,
             self.raw_conf.jsonrpc_http_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
         )
@@ -1171,7 +1171,6 @@ impl Configuration {
         HttpConfiguration::new(
             None,
             self.raw_conf.jsonrpc_http_eth_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
         )
@@ -1527,10 +1526,13 @@ impl Configuration {
         // hardfork (V3.1)
         set_conf!(
             self.raw_conf.osaka_opcode_transition_height.unwrap_or(default_transition_time);
-            params.transition_heights => { cip166 }
+            params.transition_heights => { cip166, cip167 }
         );
         if let Some(x) = self.raw_conf.cip166_transition_height {
             params.transition_heights.cip166 = x;
+        }
+        if let Some(x) = self.raw_conf.cip167_transition_height {
+            params.transition_heights.cip167 = x;
         }
     }
 }

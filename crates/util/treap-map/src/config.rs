@@ -106,6 +106,7 @@ pub enum Direction {
 /// among sort keys, search keys and values in a Treap. This is necessary when
 /// the sort key is not directly derivable from the search key or is not a null
 /// element.
+#[allow(clippy::len_without_is_empty)]
 pub trait KeyMngTrait<C: TreapMapConfig>: Default {
     /// Invoked when a new key-value pair is changed in the Treap.
     fn view_update(
@@ -175,7 +176,6 @@ impl<C: TreapMapConfig<SortKey = ()>> KeyMngTrait<C> for Counter {
     fn make_sort_key(
         &self, _key: &C::SearchKey, _value: &C::Value,
     ) -> C::SortKey {
-        ()
     }
 }
 

@@ -447,8 +447,14 @@ pub enum AllowIP {
     None,
 }
 
-pub fn parse_msg_id_leb128_2_bytes_at_most(msg: &mut &[u8]) -> u16 {
+pub fn parse_msg_id_leb128_2_bytes_at_most(
+    msg: &mut &[u8],
+) -> Result<u16, &'static str> {
     let buf = *msg;
+
+    if buf.is_empty() {
+        return Err("empty buffer");
+    }
 
     let mut ret = 0;
     let mut pos = buf.len() - 1;
@@ -456,6 +462,9 @@ pub fn parse_msg_id_leb128_2_bytes_at_most(msg: &mut &[u8]) -> u16 {
     let byte = buf[pos] as u16;
     ret |= byte & 0x7f;
     if byte & 0x80 != 0 {
+        if pos == 0 {
+            return Err("leb128 continuation bit set but no second byte");
+        }
         pos -= 1;
         let byte = buf[pos] as u16;
         ret |= (byte & 0x7f) << 7;
@@ -463,5 +472,5 @@ pub fn parse_msg_id_leb128_2_bytes_at_most(msg: &mut &[u8]) -> u16 {
 
     *msg = &buf[..pos];
 
-    ret
+    Ok(ret)
 }

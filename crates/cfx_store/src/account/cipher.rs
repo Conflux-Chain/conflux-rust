@@ -30,10 +30,10 @@ impl From<json::Aes128Ctr> for Aes128Ctr {
     fn from(json: json::Aes128Ctr) -> Self { Aes128Ctr { iv: json.iv.into() } }
 }
 
-impl Into<json::Aes128Ctr> for Aes128Ctr {
-    fn into(self) -> json::Aes128Ctr {
+impl From<Aes128Ctr> for json::Aes128Ctr {
+    fn from(val: Aes128Ctr) -> Self {
         json::Aes128Ctr {
-            iv: From::from(self.iv),
+            iv: From::from(val.iv),
         }
     }
 }
@@ -48,9 +48,9 @@ impl From<json::Cipher> for Cipher {
     }
 }
 
-impl Into<json::Cipher> for Cipher {
-    fn into(self) -> json::Cipher {
-        match self {
+impl From<Cipher> for json::Cipher {
+    fn from(val: Cipher) -> Self {
+        match val {
             Cipher::Aes128Ctr(params) => json::Cipher::Aes128Ctr(params.into()),
         }
     }

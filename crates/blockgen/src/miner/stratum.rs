@@ -53,13 +53,7 @@ pub struct Options {
     pub secret: Option<H256>,
 }
 
-fn clean_0x(s: &str) -> &str {
-    if s.starts_with("0x") {
-        &s[2..]
-    } else {
-        s
-    }
-}
+fn clean_0x(s: &str) -> &str { s.strip_prefix("0x").unwrap_or(s) }
 
 struct SubmitPayload {
     worker_id: String,
@@ -147,7 +141,7 @@ impl JobDispatcher for StratumJobDispatcher {
                             format!(
                                 "Problem already solved with nonce = {}! worker_id = {}",
                                 sol.nonce, payload.worker_id
-                            ).into(),
+                            ),
                         ));
                     } else if self.pow.validate(pow_prob, &sol) {
                         solved_nonce.insert(sol.nonce);
@@ -161,20 +155,16 @@ impl JobDispatcher for StratumJobDispatcher {
                             format!(
                                 "Incorrect Nonce! worker_id = {}!",
                                 payload.worker_id
-                            )
-                            .into(),
+                            ),
                         ));
                     }
                 }
             }
             if !found {
-                return Err(StratumServiceError::InvalidSolution(
-                    format!(
-                        "Solution for a stale job! worker_id = {}",
-                        payload.worker_id
-                    )
-                    .into(),
-                ));
+                return Err(StratumServiceError::InvalidSolution(format!(
+                    "Solution for a stale job! worker_id = {}",
+                    payload.worker_id
+                )));
             }
 
             match self.solution_sender.lock().send(sol) {
@@ -208,7 +198,7 @@ impl StratumJobDispatcher {
         if probs.len() == self.window_size {
             probs.remove(0);
         }
-        probs.push((current_problem.clone(), HashSet::new()));
+        probs.push((*current_problem, HashSet::new()));
     }
 
     /// Serializes payload for stratum service
@@ -265,7 +255,7 @@ impl MineWorker for Stratum {
 }
 
 impl Stratum {
-    pub async fn spawn(bg: &BlockGenerator) -> (Self, SolutionReceiver) {
+    pub fn spawn(bg: &BlockGenerator) -> (Self, SolutionReceiver) {
         let (solution_sender, solution_receiver) = mpsc::channel();
         let cfg = Options {
             listen_addr: bg.pow_config.stratum_listen_addr.clone(),
@@ -278,7 +268,6 @@ impl Stratum {
             bg.pow_config.pow_problem_window_size,
             solution_sender,
         )
-        .await
         .expect("Failed to start Stratum service.");
 
         (stratum, solution_receiver)
@@ -286,7 +275,7 @@ impl Stratum {
 
     /// New stratum job dispatcher, given the miner, client and dedicated
     /// stratum service
-    pub async fn start(
+    pub fn start(
         options: &Options, pow: Arc<PowComputer>, pow_window_size: usize,
         solution_sender: mpsc::Sender<ProofOfWorkSolution>,
     ) -> Result<Stratum, Error> {
@@ -304,9 +293,8 @@ impl Stratum {
                 options.port,
             ),
             dispatcher.clone(),
-            options.secret.clone(),
-        )
-        .await?;
+            options.secret,
+        )?;
 
         Ok(Stratum {
             dispatcher,

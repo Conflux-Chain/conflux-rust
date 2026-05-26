@@ -76,7 +76,7 @@ impl AddressUtil for Address {
 
     #[inline]
     fn evm_map(&self) -> AddressWithSpace {
-        Address::from(keccak(&self)).with_evm_space()
+        Address::from(keccak(self)).with_evm_space()
     }
 }
 
@@ -92,7 +92,7 @@ impl AddressUtil for &[u8] {
 
     #[inline]
     fn evm_map(&self) -> AddressWithSpace {
-        Address::from(keccak(&self)).with_evm_space()
+        Address::from(keccak(self)).with_evm_space()
     }
 }
 

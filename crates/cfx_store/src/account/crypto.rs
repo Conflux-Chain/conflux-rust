@@ -107,11 +107,11 @@ impl Crypto {
             SmallVec::from_vec(vec![0; plain_len]);
 
         // aes-128-ctr with initial vector of iv
-        aes::encrypt_128_ctr(&derived_left_bits, &iv, plain, &mut *ciphertext)?;
+        aes::encrypt_128_ctr(&derived_left_bits, &iv, plain, &mut ciphertext)?;
 
         // KECCAK(DK[16..31] ++ <ciphertext>), where DK[16..31] -
         // derived_right_bits
-        let mac = derive_mac(&derived_right_bits, &*ciphertext).keccak256();
+        let mac = derive_mac(&derived_right_bits, &ciphertext).keccak256();
 
         Ok(Crypto {
             cipher: Cipher::Aes128Ctr(Aes128Ctr { iv }),

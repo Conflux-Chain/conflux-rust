@@ -28,6 +28,7 @@ mod kzg_point_evaluations;
 mod modexp;
 mod price_plan;
 mod pricer;
+pub mod secp256r1;
 
 pub use bls12_381::build_bls12_builtin_map;
 pub use executable::BuiltinExec;
@@ -56,6 +57,7 @@ pub(crate) use modexp::ModexpPricer;
 pub(crate) use pricer::{
     AltBn128PairingPricer, Blake2FPricer, ConstPricer, Linear,
 };
+use secp256r1::Secp256R1;
 
 /// Determines when a built-in contract becomes active.
 pub enum ActivateAt {
@@ -152,6 +154,7 @@ pub fn builtin_factory(name: &str) -> Box<dyn Precompile> {
         | "bls12_pairing_check"
         | "bls12_map_fp_to_g1"
         | "bls12_map_fp2_to_g2" => bls12_builtin_factory(name),
+        "secp256r1" => Box::new(Secp256R1) as Box<dyn Precompile>,
         _ => panic!("invalid builtin name: {}", name),
     }
 }

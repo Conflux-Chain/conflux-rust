@@ -99,13 +99,11 @@ impl<
     pub fn contains_key(&self, key: &K) -> bool { self.inner.contains_key(key) }
 
     pub fn insert(&mut self, key: K, value: V, weight: W) -> Option<V> {
-        self.inner
-            .insert(key, (weight, value))
-            .and_then(|x| Some(x.1))
+        self.inner.insert(key, (weight, value)).map(|x| x.1)
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
-        self.inner.remove(key).and_then(|x| Some(x.1))
+        self.inner.remove(key).map(|x| x.1)
     }
 
     pub fn sum_weight(&self) -> W {
@@ -117,7 +115,7 @@ impl<
     }
 
     pub fn _get(&self, key: &K) -> Option<&V> {
-        self.inner.get(key).and_then(|x| Some(&(x.1)))
+        self.inner.get(key).map(|x| &(x.1))
     }
 
     pub fn get_by_weight(&self, query_weight: W) -> Option<&V> {
@@ -228,12 +226,12 @@ fn test_insert_query_random() {
                     treap_map.insert(
                         tx.hash(),
                         tx.clone(),
-                        U512::from(tx.gas_price().clone())
+                        U512::from(*tx.gas_price())
                     ),
                     mock_treap_map.insert(
                         tx.hash(),
                         tx.clone(),
-                        U512::from(tx.gas_price().clone())
+                        U512::from(*tx.gas_price())
                     )
                 );
             }
@@ -243,8 +241,8 @@ fn test_insert_query_random() {
                 if sum_weight != 0.into() {
                     let rand_value = next_u512(&mut operation_rng) % sum_weight;
                     assert_eq!(
-                        treap_map.get_by_weight(rand_value.clone()),
-                        mock_treap_map.get_by_weight(rand_value.clone())
+                        treap_map.get_by_weight(rand_value),
+                        mock_treap_map.get_by_weight(rand_value)
                     );
                 }
             }
@@ -298,12 +296,12 @@ fn test_insert_remove_query_random() {
                     treap_map.insert(
                         tx.hash(),
                         tx.clone(),
-                        U512::from(tx.gas_price().clone())
+                        U512::from(*tx.gas_price())
                     ),
                     mock_treap_map.insert(
                         tx.hash(),
                         tx.clone(),
-                        U512::from(tx.gas_price().clone())
+                        U512::from(*tx.gas_price())
                     )
                 );
             }
@@ -313,8 +311,8 @@ fn test_insert_remove_query_random() {
                 if sum_weight != 0.into() {
                     let rand_value = next_u512(&mut operation_rng) % sum_weight;
                     assert_eq!(
-                        treap_map.get_by_weight(rand_value.clone()),
-                        mock_treap_map.get_by_weight(rand_value.clone())
+                        treap_map.get_by_weight(rand_value),
+                        mock_treap_map.get_by_weight(rand_value)
                     );
                 }
             }
@@ -524,7 +522,7 @@ fn test_apply_op_change_key() {
         assert_eq!(res.is_err(), should_fail || (!has_initial && delete_item));
         treap_map.assert_consistency();
 
-        let no_erasure = !(delete_item && !should_fail);
+        let no_erasure = !delete_item || should_fail;
 
         match (should_fail, has_initial) {
             (true, true) => {
@@ -609,7 +607,7 @@ fn test_apply_op_change_key_for_shared_key() {
         assert_eq!(res.is_err(), should_fail || (!has_initial && delete_item));
         treap_map.assert_consistency();
 
-        let no_erasure = !(delete_item && !should_fail);
+        let no_erasure = !delete_item || should_fail;
 
         match (should_fail, has_initial) {
             (true, true) => {

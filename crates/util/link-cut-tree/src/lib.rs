@@ -22,6 +22,12 @@ impl<Ext> MallocSizeOf for MutexLinkCutTree<Ext> {
     }
 }
 
+impl<Ext: Update + DeltaAndPreferredChild + Link + Clone + Default> Default
+    for MutexLinkCutTree<Ext>
+{
+    fn default() -> Self { Self::new() }
+}
+
 impl<Ext: Update + DeltaAndPreferredChild + Link + Clone + Default>
     MutexLinkCutTree<Ext>
 {
@@ -85,6 +91,7 @@ pub type SizeMinLinkCutTree = MutexLinkCutTree<PathLength>;
 pub type CaterpillarMinLinkCutTree = MutexLinkCutTree<Caterpillar>;
 
 #[cfg(test)]
+#[allow(clippy::needless_range_loop)]
 mod tests {
     use super::{
         CaterpillarMinLinkCutTree, DefaultMinLinkCutTree,
@@ -323,7 +330,7 @@ mod tests {
     }
 
     fn path_apply_brutal(
-        parent: &Vec<usize>, value: &mut Vec<i64>, u: usize, v: i64,
+        parent: &[usize], value: &mut [i64], u: usize, v: i64,
     ) {
         let mut p = u;
         while p != NULL {
@@ -333,7 +340,7 @@ mod tests {
     }
 
     fn caterpillar_apply_brutal(
-        parent: &Vec<usize>, value: &mut Vec<i64>, u: usize, v: i64,
+        parent: &[usize], value: &mut [i64], u: usize, v: i64,
     ) {
         let mut mark: Vec<bool> = Vec::new();
         mark.resize(parent.len(), false);
@@ -352,9 +359,7 @@ mod tests {
         }
     }
 
-    fn query_min_brutal(
-        parent: &Vec<usize>, value: &Vec<i64>, u: usize,
-    ) -> i64 {
+    fn query_min_brutal(parent: &[usize], value: &[i64], u: usize) -> i64 {
         let mut v = value[u];
         let mut p = u;
         while p != NULL {
@@ -365,7 +370,7 @@ mod tests {
         v
     }
 
-    fn lca_brutal(parent: &Vec<usize>, u: usize, v: usize) -> usize {
+    fn lca_brutal(parent: &[usize], u: usize, v: usize) -> usize {
         let mut mark: Vec<bool> = Vec::new();
         mark.resize(parent.len(), false);
         let mut p = u;
@@ -383,7 +388,7 @@ mod tests {
         NULL
     }
 
-    fn ancestor_at_brutal(parent: &Vec<usize>, u: usize, at: usize) -> usize {
+    fn ancestor_at_brutal(parent: &[usize], u: usize, at: usize) -> usize {
         let mut path = Vec::new();
         let mut p = u;
         while p != NULL {
