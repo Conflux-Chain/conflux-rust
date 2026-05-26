@@ -40,13 +40,13 @@
         &amp;self,
         parent: H256,
         referees: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;H256&gt;,
-        raw: <a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">Bytes</a>,
+        raw: Bytes,
         adaptive: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>&gt;,
-        custom: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">Bytes</a>&gt;&gt;,
+        custom: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;Bytes&gt;&gt;,
     ) -&gt; RpcResult&lt;H256&gt;;
 <span class="item-spacer"></span>    fn <a href="#tymethod.generate_block_with_fake_txs" class="fn">generate_block_with_fake_txs</a>(
         &amp;self,
-        raw: <a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">Bytes</a>,
+        raw: Bytes,
         adaptive: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>&gt;,
         tx_data_len: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.usize.html">usize</a>&gt;,
     ) -&gt; RpcResult&lt;H256&gt;;
@@ -60,7 +60,7 @@
         &amp;self,
         parent: H256,
         referees: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;H256&gt;,
-        raw: <a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">Bytes</a>,
+        raw: Bytes,
         nonce: U256,
         timestamp: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
         adaptive: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
@@ -75,7 +75,7 @@
 <span class="item-spacer"></span>    fn <a href="#tymethod.send_usable_genesis_accounts" class="fn">send_usable_genesis_accounts</a>(
         &amp;self,
         account_start_index: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.usize.html">usize</a>,
-    ) -&gt; RpcResult&lt;<a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">Bytes</a>&gt;;
+    ) -&gt; RpcResult&lt;Bytes&gt;;
 <span class="item-spacer"></span>    fn <a href="#tymethod.set_db_crash" class="fn">set_db_crash</a>(
         &amp;self,
         crash_probability: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.f64.html">f64</a>,
@@ -86,7 +86,7 @@
         &amp;self,
         voting_power: U64,
         version: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>&gt;,
-    ) -&gt; RpcResult&lt;(<a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">Bytes</a>, AccountAddress)&gt;;
+    ) -&gt; RpcResult&lt;(Bytes, AccountAddress)&gt;;
 <span class="item-spacer"></span>    fn <a href="#tymethod.pos_update_voting_power" class="fn">pos_update_voting_power</a>(
         &amp;self,
         pos_account: AccountAddress,
@@ -138,12 +138,12 @@
     &amp;self,
     parent: H256,
     referees: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;H256&gt;,
-    raw: <a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">Bytes</a>,
+    raw: Bytes,
     adaptive: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>&gt;,
-    custom: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">Bytes</a>&gt;&gt;,
+    custom: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;Bytes&gt;&gt;,
 ) -&gt; RpcResult&lt;H256&gt;</h4></section><section id="tymethod.generate_block_with_fake_txs" class="method"><a class="src rightside" href="../src/cfx_rpc_cfx_api/test.rs.html#74-76">Source</a><h4 class="code-header">fn <a href="#tymethod.generate_block_with_fake_txs" class="fn">generate_block_with_fake_txs</a>(
     &amp;self,
-    raw: <a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">Bytes</a>,
+    raw: Bytes,
     adaptive: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>&gt;,
     tx_data_len: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.usize.html">usize</a>&gt;,
 ) -&gt; RpcResult&lt;H256&gt;</h4></section><section id="tymethod.generate_block_with_blame_info" class="method"><a class="src rightside" href="../src/cfx_rpc_cfx_api/test.rs.html#79-81">Source</a><h4 class="code-header">fn <a href="#tymethod.generate_block_with_blame_info" class="fn">generate_block_with_blame_info</a>(
@@ -155,7 +155,7 @@
     &amp;self,
     parent: H256,
     referees: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;H256&gt;,
-    raw: <a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">Bytes</a>,
+    raw: Bytes,
     nonce: U256,
     timestamp: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
     adaptive: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
@@ -165,7 +165,7 @@
 ) -&gt; RpcResult&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;(H256, U256)&gt;&gt;</h4></section><section id="tymethod.get_executed_info" class="method"><a class="src rightside" href="../src/cfx_rpc_cfx_api/test.rs.html#101">Source</a><h4 class="code-header">fn <a href="#tymethod.get_executed_info" class="fn">get_executed_info</a>(&amp;self, block_hash: H256) -&gt; RpcResult&lt;(H256, H256)&gt;</h4></section><section id="tymethod.send_usable_genesis_accounts" class="method"><a class="src rightside" href="../src/cfx_rpc_cfx_api/test.rs.html#104-106">Source</a><h4 class="code-header">fn <a href="#tymethod.send_usable_genesis_accounts" class="fn">send_usable_genesis_accounts</a>(
     &amp;self,
     account_start_index: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.usize.html">usize</a>,
-) -&gt; RpcResult&lt;<a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">Bytes</a>&gt;</h4></section><section id="tymethod.set_db_crash" class="method"><a class="src rightside" href="../src/cfx_rpc_cfx_api/test.rs.html#109-111">Source</a><h4 class="code-header">fn <a href="#tymethod.set_db_crash" class="fn">set_db_crash</a>(
+) -&gt; RpcResult&lt;Bytes&gt;</h4></section><section id="tymethod.set_db_crash" class="method"><a class="src rightside" href="../src/cfx_rpc_cfx_api/test.rs.html#109-111">Source</a><h4 class="code-header">fn <a href="#tymethod.set_db_crash" class="fn">set_db_crash</a>(
     &amp;self,
     crash_probability: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.f64.html">f64</a>,
     crash_exit_code: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.i32.html">i32</a>,
@@ -173,7 +173,7 @@
     &amp;self,
     voting_power: U64,
     version: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>&gt;,
-) -&gt; RpcResult&lt;(<a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">Bytes</a>, AccountAddress)&gt;</h4></section><section id="tymethod.pos_update_voting_power" class="method"><a class="src rightside" href="../src/cfx_rpc_cfx_api/test.rs.html#122-124">Source</a><h4 class="code-header">fn <a href="#tymethod.pos_update_voting_power" class="fn">pos_update_voting_power</a>(
+) -&gt; RpcResult&lt;(Bytes, AccountAddress)&gt;</h4></section><section id="tymethod.pos_update_voting_power" class="method"><a class="src rightside" href="../src/cfx_rpc_cfx_api/test.rs.html#122-124">Source</a><h4 class="code-header">fn <a href="#tymethod.pos_update_voting_power" class="fn">pos_update_voting_power</a>(
     &amp;self,
     pos_account: AccountAddress,
     increased_voting_power: U64,

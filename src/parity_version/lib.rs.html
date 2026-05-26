@@ -55,42 +55,41 @@
 <a href=#55 id=55 data-nosnippet>55</a>}
 <a href=#56 id=56 data-nosnippet>56</a>
 <a href=#57 id=57 data-nosnippet>57</a><span class="attr">#[cfg(test)]
-<a href=#58 id=58 data-nosnippet>58</a>
-<a href=#59 id=59 data-nosnippet>59</a></span><span class="kw">mod </span>tests {
-<a href=#60 id=60 data-nosnippet>60</a>    <span class="kw">use crate</span>::{platform, version};
-<a href=#61 id=61 data-nosnippet>61</a>
-<a href=#62 id=62 data-nosnippet>62</a>    <span class="kw">use </span><span class="kw">super</span>::Target;
-<a href=#63 id=63 data-nosnippet>63</a>
-<a href=#64 id=64 data-nosnippet>64</a>    <span class="attr">#[test]
-<a href=#65 id=65 data-nosnippet>65</a>    </span><span class="kw">fn </span>test_platform() {
-<a href=#66 id=66 data-nosnippet>66</a>        <span class="kw">let </span>platform = platform();
-<a href=#67 id=67 data-nosnippet>67</a>
-<a href=#68 id=68 data-nosnippet>68</a>        <span class="macro">assert!</span>(!platform.is_empty());
-<a href=#69 id=69 data-nosnippet>69</a>        <span class="macro">assert!</span>(platform.contains(Target::arch()));
-<a href=#70 id=70 data-nosnippet>70</a>        <span class="macro">assert!</span>(platform.contains(Target::os()));
-<a href=#71 id=71 data-nosnippet>71</a>    }
-<a href=#72 id=72 data-nosnippet>72</a>
-<a href=#73 id=73 data-nosnippet>73</a>    <span class="attr">#[test]
-<a href=#74 id=74 data-nosnippet>74</a>    </span><span class="kw">fn </span>test_version() {
-<a href=#75 id=75 data-nosnippet>75</a>        <span class="kw">let </span>test_version = <span class="string">"0.0.0"</span>;
-<a href=#76 id=76 data-nosnippet>76</a>        <span class="kw">let </span>version_string = version(test_version);
-<a href=#77 id=77 data-nosnippet>77</a>        <span class="comment">// example:  conflux-rust/v0.0.0-b7cca2a-20250423/x86_64-linux-gnu/
-<a href=#78 id=78 data-nosnippet>78</a>        // rustc1.77.2
-<a href=#79 id=79 data-nosnippet>79</a>
-<a href=#80 id=80 data-nosnippet>80</a>        </span><span class="macro">println!</span>(<span class="string">"version_string: {}"</span>, version_string);
-<a href=#81 id=81 data-nosnippet>81</a>        <span class="macro">assert!</span>(version_string
-<a href=#82 id=82 data-nosnippet>82</a>            .starts_with(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"conflux-rust/v{}"</span>, test_version)));
-<a href=#83 id=83 data-nosnippet>83</a>        <span class="macro">assert!</span>(version_string.contains(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}"</span>, platform())));
-<a href=#84 id=84 data-nosnippet>84</a>
-<a href=#85 id=85 data-nosnippet>85</a>        <span class="kw">let </span>sha = <span class="macro">env!</span>(<span class="string">"VERGEN_GIT_SHA"</span>);
-<a href=#86 id=86 data-nosnippet>86</a>
-<a href=#87 id=87 data-nosnippet>87</a>        <span class="macro">assert!</span>(version_string.contains(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"-{}"</span>, sha)));
-<a href=#88 id=88 data-nosnippet>88</a>        <span class="kw">let </span>commit_date = <span class="macro">env!</span>(<span class="string">"VERGEN_GIT_COMMIT_DATE"</span>).replace(<span class="string">"-"</span>, <span class="string">""</span>);
-<a href=#89 id=89 data-nosnippet>89</a>
-<a href=#90 id=90 data-nosnippet>90</a>        <span class="macro">assert_eq!</span>(commit_date.len(), <span class="number">8</span>);
-<a href=#91 id=91 data-nosnippet>91</a>        <span class="macro">assert!</span>(version_string.contains(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"-{}"</span>, commit_date)));
-<a href=#92 id=92 data-nosnippet>92</a>
-<a href=#93 id=93 data-nosnippet>93</a>        <span class="kw">let </span>rust_version = <span class="macro">env!</span>(<span class="string">"VERGEN_RUSTC_SEMVER"</span>);
-<a href=#94 id=94 data-nosnippet>94</a>        <span class="macro">assert!</span>(version_string.contains(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"/rustc{}"</span>, rust_version)));
-<a href=#95 id=95 data-nosnippet>95</a>    }
-<a href=#96 id=96 data-nosnippet>96</a>}</code></pre></div></section></main></body></html>
+<a href=#58 id=58 data-nosnippet>58</a></span><span class="kw">mod </span>tests {
+<a href=#59 id=59 data-nosnippet>59</a>    <span class="kw">use crate</span>::{platform, version};
+<a href=#60 id=60 data-nosnippet>60</a>
+<a href=#61 id=61 data-nosnippet>61</a>    <span class="kw">use </span><span class="kw">super</span>::Target;
+<a href=#62 id=62 data-nosnippet>62</a>
+<a href=#63 id=63 data-nosnippet>63</a>    <span class="attr">#[test]
+<a href=#64 id=64 data-nosnippet>64</a>    </span><span class="kw">fn </span>test_platform() {
+<a href=#65 id=65 data-nosnippet>65</a>        <span class="kw">let </span>platform = platform();
+<a href=#66 id=66 data-nosnippet>66</a>
+<a href=#67 id=67 data-nosnippet>67</a>        <span class="macro">assert!</span>(!platform.is_empty());
+<a href=#68 id=68 data-nosnippet>68</a>        <span class="macro">assert!</span>(platform.contains(Target::arch()));
+<a href=#69 id=69 data-nosnippet>69</a>        <span class="macro">assert!</span>(platform.contains(Target::os()));
+<a href=#70 id=70 data-nosnippet>70</a>    }
+<a href=#71 id=71 data-nosnippet>71</a>
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="attr">#[test]
+<a href=#73 id=73 data-nosnippet>73</a>    </span><span class="kw">fn </span>test_version() {
+<a href=#74 id=74 data-nosnippet>74</a>        <span class="kw">let </span>test_version = <span class="string">"0.0.0"</span>;
+<a href=#75 id=75 data-nosnippet>75</a>        <span class="kw">let </span>version_string = version(test_version);
+<a href=#76 id=76 data-nosnippet>76</a>        <span class="comment">// example:  conflux-rust/v0.0.0-b7cca2a-20250423/x86_64-linux-gnu/
+<a href=#77 id=77 data-nosnippet>77</a>        // rustc1.77.2
+<a href=#78 id=78 data-nosnippet>78</a>
+<a href=#79 id=79 data-nosnippet>79</a>        </span><span class="macro">println!</span>(<span class="string">"version_string: {}"</span>, version_string);
+<a href=#80 id=80 data-nosnippet>80</a>        <span class="macro">assert!</span>(version_string
+<a href=#81 id=81 data-nosnippet>81</a>            .starts_with(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"conflux-rust/v{}"</span>, test_version)));
+<a href=#82 id=82 data-nosnippet>82</a>        <span class="macro">assert!</span>(version_string.contains(<span class="kw-2">&amp;</span>platform().to_string()));
+<a href=#83 id=83 data-nosnippet>83</a>
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="kw">let </span>sha = <span class="macro">env!</span>(<span class="string">"VERGEN_GIT_SHA"</span>);
+<a href=#85 id=85 data-nosnippet>85</a>
+<a href=#86 id=86 data-nosnippet>86</a>        <span class="macro">assert!</span>(version_string.contains(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"-{}"</span>, sha)));
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">let </span>commit_date = <span class="macro">env!</span>(<span class="string">"VERGEN_GIT_COMMIT_DATE"</span>).replace(<span class="string">"-"</span>, <span class="string">""</span>);
+<a href=#88 id=88 data-nosnippet>88</a>
+<a href=#89 id=89 data-nosnippet>89</a>        <span class="macro">assert_eq!</span>(commit_date.len(), <span class="number">8</span>);
+<a href=#90 id=90 data-nosnippet>90</a>        <span class="macro">assert!</span>(version_string.contains(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"-{}"</span>, commit_date)));
+<a href=#91 id=91 data-nosnippet>91</a>
+<a href=#92 id=92 data-nosnippet>92</a>        <span class="kw">let </span>rust_version = <span class="macro">env!</span>(<span class="string">"VERGEN_RUSTC_SEMVER"</span>);
+<a href=#93 id=93 data-nosnippet>93</a>        <span class="macro">assert!</span>(version_string.contains(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"/rustc{}"</span>, rust_version)));
+<a href=#94 id=94 data-nosnippet>94</a>    }
+<a href=#95 id=95 data-nosnippet>95</a>}</code></pre></div></section></main></body></html>

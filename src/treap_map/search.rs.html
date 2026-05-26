@@ -144,11 +144,11 @@
 <a href=#144 id=144 data-nosnippet>144</a>        } <span class="kw">else </span>{
 <a href=#145 id=145 data-nosnippet>145</a>            base_weight.clone()
 <a href=#146 id=146 data-nosnippet>146</a>        };
-<a href=#147 id=147 data-nosnippet>147</a>        <span class="kw">let </span>search_dir = f(<span class="kw-2">&amp;</span>left_weight, <span class="kw-2">&amp;</span>node);
+<a href=#147 id=147 data-nosnippet>147</a>        <span class="kw">let </span>search_dir = f(<span class="kw-2">&amp;</span>left_weight, node);
 <a href=#148 id=148 data-nosnippet>148</a>
 <a href=#149 id=149 data-nosnippet>149</a>        <span class="kw">let </span>found = SearchResult::Found {
 <a href=#150 id=150 data-nosnippet>150</a>            base_weight: left_weight,
-<a href=#151 id=151 data-nosnippet>151</a>            node: <span class="kw-2">&amp;</span>node,
+<a href=#151 id=151 data-nosnippet>151</a>            node,
 <a href=#152 id=152 data-nosnippet>152</a>        };
 <a href=#153 id=153 data-nosnippet>153</a>
 <a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">if </span><span class="macro">matches!</span>(search_dir, Left | LeftOrStop) {

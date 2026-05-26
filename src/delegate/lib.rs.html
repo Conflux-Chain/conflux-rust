@@ -195,7 +195,7 @@
 <a href=#195 id=195 data-nosnippet>195</a>) -&gt; (Vec&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>syn::Attribute&gt;, <span class="prelude-ty">Option</span>&lt;syn::Ident&gt;, bool) {
 <a href=#196 id=196 data-nosnippet>196</a>    <span class="kw">let </span><span class="kw-2">mut </span>name: <span class="prelude-ty">Option</span>&lt;syn::Ident&gt; = <span class="prelude-val">None</span>;
 <a href=#197 id=197 data-nosnippet>197</a>    <span class="kw">let </span><span class="kw-2">mut </span>into: <span class="prelude-ty">Option</span>&lt;bool&gt; = <span class="prelude-val">None</span>;
-<a href=#198 id=198 data-nosnippet>198</a>    <span class="kw">let </span><span class="kw-2">mut </span>map: HashMap&lt;<span class="kw-2">&amp;</span>str, Box&lt;<span class="kw">dyn </span>FnMut(TokenStream2) -&gt; ()&gt;&gt; =
+<a href=#198 id=198 data-nosnippet>198</a>    <span class="kw">let </span><span class="kw-2">mut </span>map: HashMap&lt;<span class="kw-2">&amp;</span>str, Box&lt;<span class="kw">dyn </span>FnMut(TokenStream2)&gt;&gt; =
 <a href=#199 id=199 data-nosnippet>199</a>        Default::default();
 <a href=#200 id=200 data-nosnippet>200</a>    map.insert(
 <a href=#201 id=201 data-nosnippet>201</a>        <span class="string">"call"</span>,
@@ -269,7 +269,7 @@
 <a href=#269 id=269 data-nosnippet>269</a>            <span class="kw">let </span>signature = <span class="kw-2">&amp;</span>input.sig;
 <a href=#270 id=270 data-nosnippet>270</a>            <span class="kw">let </span>inputs = <span class="kw-2">&amp;</span>input.sig.inputs;
 <a href=#271 id=271 data-nosnippet>271</a>
-<a href=#272 id=272 data-nosnippet>272</a>            <span class="kw">let </span>(attrs, name, into) = parse_attributes(<span class="kw-2">&amp;</span>method.attributes, <span class="kw-2">&amp;</span>input);
+<a href=#272 id=272 data-nosnippet>272</a>            <span class="kw">let </span>(attrs, name, into) = parse_attributes(<span class="kw-2">&amp;</span>method.attributes, input);
 <a href=#273 id=273 data-nosnippet>273</a>
 <a href=#274 id=274 data-nosnippet>274</a>            <span class="kw">if </span>input.default.is_some() {
 <a href=#275 id=275 data-nosnippet>275</a>                <span class="macro">panic!</span>(
@@ -298,7 +298,7 @@
 <a href=#298 id=298 data-nosnippet>298</a>                .collect();
 <a href=#299 id=299 data-nosnippet>299</a>
 <a href=#300 id=300 data-nosnippet>300</a>            <span class="kw">let </span>name = <span class="kw">match </span><span class="kw-2">&amp;</span>name {
-<a href=#301 id=301 data-nosnippet>301</a>                <span class="prelude-val">Some</span>(n) =&gt; <span class="kw-2">&amp;</span>n,
+<a href=#301 id=301 data-nosnippet>301</a>                <span class="prelude-val">Some</span>(n) =&gt; n,
 <a href=#302 id=302 data-nosnippet>302</a>                <span class="prelude-val">None </span>=&gt; <span class="kw-2">&amp;</span>input.sig.ident
 <a href=#303 id=303 data-nosnippet>303</a>            };
 <a href=#304 id=304 data-nosnippet>304</a>            <span class="kw">let </span>inline = <span class="kw">if </span>has_inline_attribute(<span class="kw-2">&amp;</span>attrs) {

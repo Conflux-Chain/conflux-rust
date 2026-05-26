@@ -70,7 +70,7 @@
 <a href=#70 id=70 data-nosnippet>70</a>    );
 <a href=#71 id=71 data-nosnippet>71</a>
 <a href=#72 id=72 data-nosnippet>72</a>    <span class="kw">let </span><span class="kw-2">mut </span>meters = ARBITER.meters.lock();
-<a href=#73 id=73 data-nosnippet>73</a>    <span class="macro">assert_eq!</span>(meters.contains_key(<span class="kw-2">&amp;</span>full_meter_name), <span class="bool-val">false</span>);
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="macro">assert!</span>(!meters.contains_key(<span class="kw-2">&amp;</span>full_meter_name));
 <a href=#74 id=74 data-nosnippet>74</a>    meters.insert(full_meter_name, meter.clone());
 <a href=#75 id=75 data-nosnippet>75</a>
 <a href=#76 id=76 data-nosnippet>76</a>    meter

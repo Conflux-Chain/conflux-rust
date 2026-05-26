@@ -111,14 +111,14 @@
 <a href=#111 id=111 data-nosnippet>111</a>            <span class="kw">if let </span>(<span class="prelude-val">Some</span>(dir), <span class="bool-val">true</span>) = (next_node_dir, update_priority) {
 <a href=#112 id=112 data-nosnippet>112</a>                <span class="kw">match </span>dir {
 <a href=#113 id=113 data-nosnippet>113</a>                    Direction::Left
-<a href=#114 id=114 data-nosnippet>114</a>                        <span class="kw">if </span>node.left.as_ref().map_or(<span class="bool-val">false</span>, |left| {
+<a href=#114 id=114 data-nosnippet>114</a>                        <span class="kw">if </span>node.left.as_ref().is_some_and(|left| {
 <a href=#115 id=115 data-nosnippet>115</a>                            node.priority &lt; left.priority
 <a href=#116 id=116 data-nosnippet>116</a>                        }) =&gt;
 <a href=#117 id=117 data-nosnippet>117</a>                    {
 <a href=#118 id=118 data-nosnippet>118</a>                        node.right_rotate();
 <a href=#119 id=119 data-nosnippet>119</a>                    }
 <a href=#120 id=120 data-nosnippet>120</a>                    Direction::Right
-<a href=#121 id=121 data-nosnippet>121</a>                        <span class="kw">if </span>node.right.as_ref().map_or(<span class="bool-val">false</span>, |right| {
+<a href=#121 id=121 data-nosnippet>121</a>                        <span class="kw">if </span>node.right.as_ref().is_some_and(|right| {
 <a href=#122 id=122 data-nosnippet>122</a>                            node.priority &lt; right.priority
 <a href=#123 id=123 data-nosnippet>123</a>                        }) =&gt;
 <a href=#124 id=124 data-nosnippet>124</a>                    {
@@ -145,7 +145,7 @@
 <a href=#145 id=145 data-nosnippet>145</a>            OpResult::InsertOnVacant { insert, ret } =&gt; {
 <a href=#146 id=146 data-nosnippet>146</a>                <span class="comment">// `maybe_node` should be empty here. So we ignore the replaced
 <a href=#147 id=147 data-nosnippet>147</a>                // value.
-<a href=#148 id=148 data-nosnippet>148</a>                </span><span class="kw">let _ </span>= mem::replace(maybe_node, <span class="prelude-val">Some</span>(insert));
+<a href=#148 id=148 data-nosnippet>148</a>                </span><span class="kw">let _ </span>= maybe_node.replace(insert);
 <a href=#149 id=149 data-nosnippet>149</a>                (ret, <span class="bool-val">true</span>, <span class="bool-val">true</span>)
 <a href=#150 id=150 data-nosnippet>150</a>            }
 <a href=#151 id=151 data-nosnippet>151</a>            OpResult::Delete(delete_ret) =&gt; {
