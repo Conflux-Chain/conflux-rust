@@ -20,9 +20,9 @@ use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 use cfx_types::{
-    cal_contract_address_with_space, is_internal_address,
-    maybe_precompiled_address, Address, AddressSpaceUtil, AddressWithSpace,
-    BigEndianHash, CreateContractAddressType, Space, H256, U256,
+    cal_contract_address_with_space, Address, AddressSpaceUtil,
+    AddressWithSpace, BigEndianHash, CreateContractAddressType, Space, H256,
+    U256,
 };
 use cfx_vm_types::{
     self as vm, ActionParams, ActionValue, CallType, Context as ContextTrait,
@@ -565,7 +565,7 @@ impl<'a> ContextTrait for Context<'a> {
 
     fn is_warm_account(&self, account: Address) -> bool {
         let address_with_space = account.with_space(self.space);
-        let maybe_precompile = maybe_precompiled_address(&account);
+        let maybe_precompile = &account[..18] == &[0u8; 18];
         if maybe_precompile
             && self
                 .machine
@@ -579,8 +579,9 @@ impl<'a> ContextTrait for Context<'a> {
             return true;
         }
 
-        let maybe_internal =
-            self.space == Space::Native && is_internal_address(&account);
+        let maybe_internal = self.space == Space::Native
+            && &account[..2] == b"\x08\x88"
+            && &account[2..19] == &[0u8; 17];
         if maybe_internal
             && self
                 .machine
