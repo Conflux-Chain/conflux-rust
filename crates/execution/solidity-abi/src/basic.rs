@@ -86,41 +86,22 @@ macro_rules! impl_abi_variable_for_primitive {
             ///
             /// ⚠️ **Non-strict decoding (intentional, consensus-critical).**
             ///
-            /// This implementation only validates that the input word is
-            /// exactly 32 bytes long and then takes the low `BITS/8` bytes
-            /// of the word. The high-order bytes (bytes `0..32 - BYTES`)
-            /// are **silently ignored**, even when they are non-zero.
+            /// Only validates the 32-byte length and takes the low `BITS/8` bytes;
+            /// high-order bytes are **silently ignored even if non-zero**.
             ///
-            /// This deviates from the Solidity / EVM ABI dispatcher
-            /// semantics, which require `value < 2^N` for any `uintN`
-            /// (`N < 256`) parameter and revert otherwise. As a result the
-            /// same calldata can be interpreted differently by a Solidity
-            /// contract and by a Conflux Core-space built-in function:
-            ///   - a Solidity contract would revert on a non-zero high
-            ///     word,
-            ///   - a Conflux built-in will accept the call and observe the
-            ///     truncated low-byte value.
+            /// This deviates from Solidity/EVM ABI semantics, which require
+            /// `value < 2^N` for `uintN` (`N < 256`) and revert otherwise. The same
+            /// calldata may therefore be interpreted differently:
+            ///   - Solidity: reverts on non-zero high bytes.
+            ///   - Conflux built-in: accepts the call with the truncated low value.
             ///
-            /// **Why we keep this behavior.** Tightening the check is a
-            /// consensus-level change: historical on-chain transactions
-            /// may have relied on (or accidentally produced) non-canonical
-            /// calldata with non-zero high bytes for built-in functions,
-            /// and rejecting them now would cause a hard fork. Any future
-            /// alignment with Solidity semantics must be gated by a
-            /// `Spec`-controlled transition (e.g. a CIP) rather than an
-            /// in-place fix here.
+            /// **Caller obligations.** Built-in functions taking sub-256-bit integers
+            /// via this trait MUST perform their own range/overflow checks
+            /// (`checked_add`, `U256` widening, explicit bounds, etc.) and MUST NOT
+            /// assume the decoder has clamped the value. Treat the ABI-level type as
+            /// advisory only.
             ///
-            /// **Caller obligations.** Because this layer does **not**
-            /// enforce the `uintN` upper bound, every built-in function
-            /// that accepts a sub-256-bit integer through this trait MUST
-            /// perform its own range / overflow checks (e.g. via
-            /// `checked_add`, `U256` widening, or explicit upper bounds)
-            /// and MUST NOT assume the value has been clamped by the ABI
-            /// decoder. Reviewers adding new built-in functions should
-            /// treat the ABI-level type as advisory only.
-            ///
-            /// See `tests_basic::test_*_truncates_high_bytes` for the
-            /// behavior that this contract pins down.
+            /// See `tests_basic::test_*_truncates_high_bytes` for pinned behavior.
             fn from_abi(data: &[u8]) -> Result<Self, ABIDecodeError> {
                 const BYTES: usize = ($ty::BITS/8) as usize;
                 abi_require(data.len() == 32, "Invalid call data length")?;
