@@ -1,0 +1,4 @@
+[advisories]
+ignore = [
+    "RUSTSEC-2025-0055", # tracing-subscriber 0.2.25 Introduced by `revm`.
+]
