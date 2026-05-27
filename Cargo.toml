@@ -256,8 +256,8 @@ atom = "0.3"
 # alloy & revm
 alloy-sol-types = "1.4.1"
 alloy-primitives = "1.4.1"
-alloy-rpc-types = "1.0.41"
-alloy-rpc-types-trace = "1.0.41"
+alloy-rpc-types = "2.0.5"
+alloy-rpc-types-trace = "2.0.5"
 revm = { version = "33.1.0", default-features = false }
 revm-primitives = "21.0.1"
 revm-interpreter = "31.1.0"
