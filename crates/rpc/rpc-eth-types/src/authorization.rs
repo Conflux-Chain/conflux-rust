@@ -61,7 +61,9 @@ impl From<AuthorizationListItem> for SignedAuthorization {
     }
 }
 
-fn parse_and_validate_y_parity<'de, D>(deserializer: D) -> Result<U64, D::Error>
+fn parse_and_validate_y_parity<'de, D>(
+    deserializer: D,
+) -> Result<U64, D::Error>
 where D: Deserializer<'de> {
     let v = U64::deserialize(deserializer)?;
     if v.as_u64() > 1 {
