@@ -46,7 +46,7 @@ impl FeeHistoryCache {
                 latest_block - query_len + 1
             }
         } else {
-            inner.upper_bound() + 1
+            inner.upper_bound().unwrap() + 1
         };
 
         let mut curr_hash = latest_hash;
@@ -93,14 +93,14 @@ impl FeeHistoryCache {
 
     pub fn lower_bound(&self) -> u64 { self.inner.read().lower_bound }
 
-    pub fn upper_bound(&self) -> u64 { self.inner.read().upper_bound() }
+    pub fn upper_bound(&self) -> Option<u64> { self.inner.read().upper_bound() }
 
     pub fn get_history(
         &self, start_block: u64, end_block: u64,
     ) -> Option<Vec<FeeHistoryCacheEntry>> {
         let inner = self.inner.read();
         let lower_bound = inner.lower_bound;
-        let upper_bound = inner.upper_bound();
+        let upper_bound = inner.upper_bound()?;
         if start_block >= lower_bound && end_block <= upper_bound {
             let start = (start_block - lower_bound) as usize;
             let end = (end_block - lower_bound) as usize;
@@ -149,14 +149,18 @@ impl FeeHistoryCacheInner {
         }
     }
 
-    pub fn upper_bound(&self) -> u64 {
-        self.lower_bound + self.entries.len() as u64 - 1
+    pub fn upper_bound(&self) -> Option<u64> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.lower_bound + self.entries.len() as u64 - 1)
+        }
     }
 
     // if the cached history is outdated, clear the cache
     fn check_and_clear_cache(&mut self, latest_block: u64) {
         if !self.is_empty()
-            && self.upper_bound() + self.max_blocks <= latest_block
+            && self.upper_bound().unwrap() + self.max_blocks <= latest_block
         {
             self.clear_cache();
         }
@@ -170,7 +174,7 @@ impl FeeHistoryCacheInner {
     fn push_back(
         &mut self, block_number: u64, entry: FeeHistoryCacheEntry,
     ) -> Result<(), String> {
-        if !self.is_empty() && block_number - self.upper_bound() != 1 {
+        if !self.is_empty() && block_number - self.upper_bound().unwrap() != 1 {
             return Err("block number is not consecutive".to_string());
         }
 
@@ -192,7 +196,8 @@ impl FeeHistoryCacheInner {
     pub fn is_empty(&self) -> bool { self.entries.is_empty() }
 
     pub fn get(&self, height: u64) -> Option<FeeHistoryCacheEntry> {
-        if height < self.lower_bound || height > self.upper_bound() {
+        let upper = self.upper_bound()?;
+        if height < self.lower_bound || height > upper {
             return None;
         }
         let key = height - self.lower_bound;
@@ -201,7 +206,11 @@ impl FeeHistoryCacheInner {
 
     #[allow(dead_code)]
     pub fn update(&mut self, height: u64, entry: FeeHistoryCacheEntry) {
-        if height < self.lower_bound || height > self.upper_bound() {
+        let upper = match self.upper_bound() {
+            Some(u) => u,
+            None => return,
+        };
+        if height < self.lower_bound || height > upper {
             return;
         }
         let key = height - self.lower_bound;
