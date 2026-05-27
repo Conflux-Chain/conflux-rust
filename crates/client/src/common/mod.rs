@@ -579,7 +579,7 @@ pub fn initialize_not_light_node_modules(
         sync.clone(),
         secret_store.clone(),
         genesis_accounts,
-        &conf,
+        conf,
         network.net_key_pair().unwrap(),
     );
 
@@ -598,7 +598,7 @@ pub fn initialize_not_light_node_modules(
         maybe_txgen.clone(),
         pow_config.clone(),
         pow.clone(),
-        maybe_author.clone().unwrap_or_default(),
+        maybe_author.unwrap_or_default(),
         pos_verifier.clone(),
     ));
     if conf.is_dev_mode() {

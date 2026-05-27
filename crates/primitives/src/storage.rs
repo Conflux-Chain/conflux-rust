@@ -77,19 +77,9 @@ where ValueType: Deserialize<'a> + TryFrom<String>
 }
 
 impl<ValueType: Default> MptValue<ValueType> {
-    pub fn is_some(&self) -> bool {
-        match self {
-            MptValue::Some(_) => true,
-            _ => false,
-        }
-    }
+    pub fn is_some(&self) -> bool { matches!(self, MptValue::Some(_)) }
 
-    pub fn is_tombstone(&self) -> bool {
-        match self {
-            MptValue::TombStone => true,
-            _ => false,
-        }
-    }
+    pub fn is_tombstone(&self) -> bool { matches!(self, MptValue::TombStone) }
 
     pub fn into_option(self) -> Option<ValueType> {
         match self {

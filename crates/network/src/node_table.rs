@@ -157,9 +157,9 @@ impl FromStr for NodeEndpoint {
                 udp_port: a.port(),
             }),
             Ok(None) => bail!(Error::AddressResolve(None)),
-            Err(_) => Err(Error::AddressParse.into()), /* always an io::Error
-                                                        * of InvalidInput
-                                                        * kind */
+            Err(_) => Err(Error::AddressParse), /* always an io::Error
+                                                 * of InvalidInput
+                                                 * kind */
         }
     }
 }
@@ -221,19 +221,12 @@ impl NodeContact {
     }
 
     pub fn success_for_duration(&self, due: Duration) -> bool {
-        let mut res = false;
-        match *self {
-            NodeContact::Success(t) => {
-                if let Ok(d) = t.elapsed() {
-                    if d > due {
-                        res = true;
-                    }
-                }
+        if let NodeContact::Success(t) = *self {
+            if let Ok(d) = t.elapsed() {
+                return d > due;
             }
-            _ => {}
-        };
-
-        res
+        }
+        false
     }
 
     /// Filters and old contact, returning `None` if it happened longer than a
@@ -357,20 +350,17 @@ impl Hash for Node {
 const MAX_NODES: usize = 4096;
 
 #[derive(
-    Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Enum, EnumIter,
+    Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Enum, EnumIter, Default,
 )]
 enum NodeReputation {
     Success = 0,
+    #[default]
     Unknown = 1,
     Failure = 2,
     Demoted = 3,
 }
 
 const NODE_REPUTATION_LEVEL_COUNT: usize = 3;
-
-impl Default for NodeReputation {
-    fn default() -> Self { NodeReputation::Unknown }
-}
 
 #[derive(Default, Clone, Copy)]
 struct NodeReputationIndex(NodeReputation, usize);
@@ -387,10 +377,10 @@ pub struct NodeTable {
 
 impl NodeTable {
     pub fn new(dir: Option<String>, filename: &str) -> NodeTable {
-        let path = dir.and_then(|dir| {
+        let path = dir.map(|dir| {
             let mut buf = PathBuf::from(dir);
             buf.push(filename);
-            Some(buf)
+            buf
         });
 
         let mut node_table = NodeTable {
@@ -678,7 +668,7 @@ impl NodeTable {
     pub fn nodes(&self, filter: &IpFilter) -> Vec<NodeId> {
         self.ordered_entries()
             .iter()
-            .filter(|n| n.endpoint.is_allowed(&filter))
+            .filter(|n| n.endpoint.is_allowed(filter))
             .map(|n| n.id)
             .collect()
     }
@@ -686,7 +676,7 @@ impl NodeTable {
     pub fn entries_with_filter(&self, filter: &IpFilter) -> Vec<NodeEntry> {
         self.ordered_entries()
             .iter()
-            .filter(|n| n.endpoint.is_allowed(&filter))
+            .filter(|n| n.endpoint.is_allowed(filter))
             .map(|n| NodeEntry {
                 endpoint: n.endpoint.clone(),
                 id: n.id,
@@ -758,22 +748,22 @@ impl NodeTable {
         let target_node_rep = Self::node_reputation(&last_contact);
         if target_node_rep == _index.0 {
             let node = &mut self.node_reputation_table[_index.0][_index.1];
-            node.last_contact = last_contact.clone();
+            node.last_contact = last_contact;
             if by_connection {
-                node.last_connected = last_contact.clone();
+                node.last_connected = last_contact;
             }
         } else if self.is_reputation_level_demoted(&_index) {
             // Only update node.last_connected
             if by_connection {
                 let node = &mut self.node_reputation_table[_index.0][_index.1];
-                node.last_connected = last_contact.clone();
+                node.last_connected = last_contact;
             }
         } else if let Some(mut node) =
             self.remove_from_reputation_level(&_index)
         {
-            node.last_contact = last_contact.clone();
+            node.last_contact = last_contact;
             if by_connection {
-                node.last_connected = last_contact.clone();
+                node.last_connected = last_contact;
             }
             self.add_to_reputation_level(target_node_rep, node);
         } else {
@@ -798,7 +788,7 @@ impl NodeTable {
             node.last_contact = Some(NodeContact::success());
             if by_connection {
                 node.last_connected = Some(NodeContact::success());
-                if token != None {
+                if token.is_some() {
                     node.stream_token = token;
                 }
             }
@@ -807,7 +797,7 @@ impl NodeTable {
             if by_connection {
                 let node = &mut self.node_reputation_table[_index.0][_index.1];
                 node.last_connected = Some(NodeContact::success());
-                if token != None {
+                if token.is_some() {
                     node.stream_token = token;
                 }
             }
@@ -817,7 +807,7 @@ impl NodeTable {
             node.last_contact = Some(NodeContact::success());
             if by_connection {
                 node.last_connected = Some(NodeContact::success());
-                if token != None {
+                if token.is_some() {
                     node.stream_token = token;
                 }
             }
@@ -830,7 +820,7 @@ impl NodeTable {
     /// Mark as useless, no further attempts to connect until next call to
     /// `clear_useless`.
     pub fn mark_as_useless(&mut self, id: &NodeId) {
-        self.useless_nodes.insert(id.clone());
+        self.useless_nodes.insert(*id);
     }
 
     /// Attempt to connect to useless nodes again.
@@ -862,7 +852,7 @@ impl NodeTable {
             .collect();
         let table = json::NodeTable { nodes };
 
-        match fs::File::create(&path) {
+        match fs::File::create(path) {
             Ok(file) => {
                 if let Err(e) = serde_json::to_writer_pretty(file, &table) {
                     warn!("Error writing node table file: {:?}", e);
@@ -885,10 +875,7 @@ impl Drop for NodeTable {
 
 /// Check if node url is valid
 pub fn validate_node_url(url: &str) -> Option<Error> {
-    match Node::from_str(url) {
-        Ok(_) => None,
-        Err(e) => Some(e),
-    }
+    Node::from_str(url).err()
 }
 
 mod json {

@@ -19,11 +19,11 @@ impl SubnetType {
     fn calc_subnet(ip: &IpAddr, prefix_bits: usize) -> u32 {
         match ip {
             IpAddr::V4(ipv4) => {
-                let num: u32 = ipv4.clone().into();
+                let num: u32 = (*ipv4).into();
                 num >> (32 - prefix_bits)
             }
             IpAddr::V6(ipv6) => {
-                let num: u128 = ipv6.clone().into();
+                let num: u128 = (*ipv6).into();
                 (num >> (128 - prefix_bits)) as u32
             }
         }

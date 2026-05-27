@@ -154,8 +154,8 @@ impl NodeIpLimit {
     /// and possible evictee before insertion.
     ///
     /// When subnet quota is not enough before insertion:
-    /// 1. If node IP changed and still in the same subnet,
-    /// just evict the node itself.
+    ///   1. If node IP changed and still in the same subnet, just evict the
+    ///      node itself.
     /// 2. Otherwise, someone in the subnet of `ip` may be evicted.
     ///
     /// There are 2 cases that insertion is not allowed:
@@ -169,7 +169,7 @@ impl NodeIpLimit {
         }
 
         // node exists and ip not changed.
-        let maybe_cur_ip = self.node_index.get(&id);
+        let maybe_cur_ip = self.node_index.get(id);
         if let Some(cur_ip) = maybe_cur_ip {
             if cur_ip == ip {
                 return ValidateInsertResult::AlreadyExists;
@@ -177,8 +177,8 @@ impl NodeIpLimit {
         }
 
         // ip already in use by other node
-        if let Some(old_id) = self.ip_index.get(&ip) {
-            return ValidateInsertResult::OccupyIp(old_id.clone());
+        if let Some(old_id) = self.ip_index.get(ip) {
+            return ValidateInsertResult::OccupyIp(*old_id);
         }
 
         // quota enough
@@ -192,7 +192,7 @@ impl NodeIpLimit {
             let cur_subnet = self.subnet_type.subnet(cur_ip);
             let new_subnet = self.subnet_type.subnet(ip);
             if cur_subnet == new_subnet {
-                return ValidateInsertResult::Evict(id.clone());
+                return ValidateInsertResult::Evict(*id);
             }
         }
 
@@ -247,7 +247,7 @@ impl NodeIpLimit {
             if let Some(b) = self.trusted_buckets.get_mut(&subnet) {
                 if b.remove(id) {
                     if let Some(b) = self.untrusted_buckets.get_mut(&subnet) {
-                        b.add(id.clone());
+                        b.add(*id);
                     }
                 }
             }
@@ -260,8 +260,8 @@ impl NodeIpLimit {
         // clear the old ip information at first
         self.remove(&id);
 
-        self.node_index.insert(id.clone(), ip);
-        self.ip_index.insert(ip, id.clone());
+        self.node_index.insert(id, ip);
+        self.ip_index.insert(ip, id);
 
         let subnet = self.subnet_type.subnet(&ip);
         if trusted {
@@ -294,7 +294,7 @@ impl NodeIpLimit {
 
     /// Select a node to evict.
     fn select_evictee(&self, ip: &IpAddr, db: &NodeDatabase) -> Option<NodeId> {
-        let subnet = self.subnet_type.subnet(&ip);
+        let subnet = self.subnet_type.subnet(ip);
 
         // evict untrusted node prior to trusted node
         self.untrusted_buckets

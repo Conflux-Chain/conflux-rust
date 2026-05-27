@@ -46,9 +46,9 @@ impl NodeTagIndex {
     ) -> bool {
         self.items
             .entry(key)
-            .or_insert_with(Default::default)
+            .or_default()
             .entry(value)
-            .or_insert_with(Default::default)
+            .or_default()
             .get_mut_or_insert_with(subnet, Default::default)
             .insert(id)
     }
@@ -107,7 +107,7 @@ impl NodeTagIndex {
         let subnet = SubnetType::C.subnet(&ip);
 
         for (key, value) in node.tags.iter() {
-            self.insert(node.id.clone(), subnet, key.clone(), value.clone());
+            self.insert(node.id, subnet, key.clone(), value.clone());
         }
     }
 

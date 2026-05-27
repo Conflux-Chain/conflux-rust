@@ -124,7 +124,7 @@ impl<'a> StorageKey<'a> {
 impl<'a> StorageKey<'a> {
     // Compatible interface with rpc
     pub fn to_key_bytes(&self) -> Vec<u8> {
-        self.clone().with_native_space().to_key_bytes()
+        (*self).with_native_space().to_key_bytes()
     }
 }
 
@@ -212,7 +212,7 @@ impl<'a> StorageKeyWithSpace<'a> {
             }
         };
 
-        return if self.space == Space::Native {
+        if self.space == Space::Native {
             key_bytes
         } else {
             // Insert "0x81" at the position 32.
@@ -222,7 +222,7 @@ impl<'a> StorageKeyWithSpace<'a> {
                 &key_bytes[ACCOUNT_KEYPART_BYTES..],
             ]
             .concat()
-        };
+        }
     }
 
     pub fn to_key_bytes(&self) -> Vec<u8> {
@@ -309,7 +309,7 @@ impl<'a> StorageKeyWithSpace<'a> {
             }
         };
 
-        return if self.space == Space::Native {
+        if self.space == Space::Native {
             key_bytes
         } else {
             // Insert "0x81" at the position 20.
@@ -319,7 +319,7 @@ impl<'a> StorageKeyWithSpace<'a> {
                 &key_bytes[Self::ACCOUNT_BYTES..],
             ]
             .concat()
-        };
+        }
     }
 
     // from_key_bytes::<CheckInput>(...) returns Result<StorageKey, String>
@@ -359,7 +359,7 @@ impl<'a> StorageKeyWithSpace<'a> {
                 .starts_with(Self::STORAGE_PREFIX)
             {
                 let bytes = &bytes[Self::STORAGE_PREFIX_LEN..];
-                if bytes.len() > 0 {
+                if !bytes.is_empty() {
                     StorageKey::StorageKey {
                         address_bytes,
                         storage_key: bytes,
@@ -369,7 +369,7 @@ impl<'a> StorageKeyWithSpace<'a> {
                 }
             } else if bytes.starts_with(Self::CODE_HASH_PREFIX) {
                 let bytes = &bytes[Self::CODE_HASH_PREFIX_LEN..];
-                if bytes.len() > 0 {
+                if !bytes.is_empty() {
                     StorageKey::CodeKey {
                         address_bytes,
                         code_hash_bytes: bytes,
@@ -579,7 +579,7 @@ mod delta_mpt_storage_key {
             &mut key,
             address,
             padding,
-            &StorageKeyWithSpace::CODE_HASH_PREFIX,
+            StorageKeyWithSpace::CODE_HASH_PREFIX,
         );
 
         key
@@ -597,7 +597,7 @@ mod delta_mpt_storage_key {
             &mut key,
             address,
             padding,
-            &StorageKeyWithSpace::CODE_HASH_PREFIX,
+            StorageKeyWithSpace::CODE_HASH_PREFIX,
         );
         key.extend_from_slice(code_hash);
 
@@ -614,7 +614,7 @@ mod delta_mpt_storage_key {
             &mut key,
             address,
             padding,
-            &StorageKeyWithSpace::DEPOSIT_LIST_PREFIX,
+            StorageKeyWithSpace::DEPOSIT_LIST_PREFIX,
         );
         key
     }
@@ -629,7 +629,7 @@ mod delta_mpt_storage_key {
             &mut key,
             address,
             padding,
-            &StorageKeyWithSpace::VOTE_LIST_PREFIX,
+            StorageKeyWithSpace::VOTE_LIST_PREFIX,
         );
         key
     }
@@ -655,8 +655,7 @@ mod delta_mpt_storage_key {
                 if cfg!(feature = "test_no_account_length_check") {
                     // The branch is test only. When an address with incomplete
                     // length, it's passed to DeltaMPT directly.
-                    return StorageKey::AccountKey(remaining_bytes)
-                        .with_native_space();
+                    StorageKey::AccountKey(remaining_bytes).with_native_space()
                 } else {
                     unreachable!(
                         "Invalid delta mpt key format. Unrecognized: {:?}",
@@ -705,7 +704,7 @@ mod delta_mpt_storage_key {
                 {
                     let bytes = &remaining_bytes
                         [StorageKeyWithSpace::CODE_HASH_PREFIX_LEN..];
-                    if bytes.len() > 0 {
+                    if !bytes.is_empty() {
                         StorageKey::CodeKey {
                             address_bytes,
                             code_hash_bytes: bytes,

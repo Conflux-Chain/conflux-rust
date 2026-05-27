@@ -291,7 +291,7 @@ impl SessionManager {
         if let Some(node_id) = id {
             // egress: id is Some at construction
             node_id_index.insert(
-                node_id.clone(),
+                *node_id,
                 IndexEntry {
                     token: index,
                     originated: true,
@@ -392,7 +392,7 @@ impl SessionManager {
             );
             match outcome {
                 SimDialOutcome::KeepNew => {
-                    node_id_index.insert(node_id.clone(), new_entry);
+                    node_id_index.insert(*node_id, new_entry);
                     debug!("SessionManager.update_ingress_node_id: leave (replaced)");
                     Ok(UpdateIngressResult::Replaced(existing.token))
                 }
@@ -402,7 +402,7 @@ impl SessionManager {
                 }
             }
         } else {
-            node_id_index.insert(node_id.clone(), new_entry);
+            node_id_index.insert(*node_id, new_entry);
             debug!("SessionManager.update_ingress_node_id: leave (inserted)");
             Ok(UpdateIngressResult::Inserted)
         }
@@ -453,11 +453,11 @@ impl SessionTagIndex {
         let removed_tag_value = self
             .session_to_tags
             .entry(idx)
-            .or_insert_with(Default::default)
+            .or_default()
             .insert(key.clone(), value.clone());
 
         if let Some(removed_tag_value) = removed_tag_value {
-            if &removed_tag_value == &value {
+            if removed_tag_value == value {
                 return;
             }
 
@@ -469,9 +469,9 @@ impl SessionTagIndex {
         assert!(self
             .tag_key_to_value_to_sessions
             .entry(key)
-            .or_insert_with(Default::default)
+            .or_default()
             .entry(value)
-            .or_insert_with(Default::default)
+            .or_default()
             .insert(idx));
     }
 

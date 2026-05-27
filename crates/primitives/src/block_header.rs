@@ -253,7 +253,7 @@ impl BlockHeader {
 
     /// Place this header(except nonce) into an RLP stream `stream`.
     fn stream_rlp_without_nonce(&self, stream: &mut RlpStream) {
-        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
+        let adaptive_n = if self.adaptive { 1_u8 } else { 0_u8 };
         let list_len = HEADER_LIST_MIN_LEN
             + self.pos_reference.is_some() as usize
             + self.base_price.is_some() as usize
@@ -293,7 +293,7 @@ impl BlockHeader {
 
     /// Place this header into an RLP stream `stream`.
     fn stream_rlp(&self, stream: &mut RlpStream) {
-        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
+        let adaptive_n = if self.adaptive { 1_u8 } else { 0_u8 };
         let list_len = HEADER_LIST_MIN_LEN
             + 1
             + self.pos_reference.is_some() as usize
@@ -334,7 +334,7 @@ impl BlockHeader {
 
     /// Place this header and its `pow_hash` into an RLP stream `stream`.
     pub fn stream_rlp_with_pow_hash(&self, stream: &mut RlpStream) {
-        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
+        let adaptive_n = if self.adaptive { 1_u8 } else { 0_u8 };
         let list_len = HEADER_LIST_MIN_LEN
             + 2
             + self.pos_reference.is_some() as usize
@@ -449,6 +449,10 @@ pub struct BlockHeaderBuilder {
     nonce: U256,
     pos_reference: Option<PosBlockId>,
     base_price: Option<BasePrice>,
+}
+
+impl Default for BlockHeaderBuilder {
+    fn default() -> Self { Self::new() }
 }
 
 impl BlockHeaderBuilder {
@@ -595,7 +599,7 @@ impl BlockHeaderBuilder {
                 custom: self.custom.clone(),
                 nonce: self.nonce,
                 pos_reference: self.pos_reference,
-                base_price: self.base_price.clone(),
+                base_price: self.base_price,
             },
             hash: None,
             pow_hash: None,
@@ -612,9 +616,9 @@ impl BlockHeaderBuilder {
     }
 
     pub fn compute_block_logs_bloom_hash(
-        receipts: &Vec<Arc<BlockReceipts>>,
+        receipts: &[Arc<BlockReceipts>],
     ) -> H256 {
-        let bloom = receipts.iter().map(|x| &x.receipts).flatten().fold(
+        let bloom = receipts.iter().flat_map(|x| &x.receipts).fold(
             Bloom::zero(),
             |mut b, r| {
                 b.accrue_bloom(&r.log_bloom);
@@ -633,7 +637,7 @@ impl BlockHeaderBuilder {
     }
 
     pub fn compute_blame_state_root_vec_root(roots: Vec<H256>) -> H256 {
-        let mut accumulated_root = roots.last().unwrap().clone();
+        let mut accumulated_root = *roots.last().unwrap();
         for i in (0..(roots.len() - 1)).rev() {
             accumulated_root =
                 BlockHeaderBuilder::compute_blame_state_root_incremental(
@@ -728,7 +732,7 @@ mod tests {
         let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         assert_eq!(hash, KECCAK_EMPTY_BLOOM);
 
-        let receipts = (1..11)
+        let receipts: Vec<Arc<BlockReceipts>> = (1..11)
             .map(|_| {
                 Arc::new(BlockReceipts {
                     receipts: vec![],
@@ -737,7 +741,7 @@ mod tests {
                     tx_execution_error_messages: vec![],
                 })
             })
-            .collect(); // Vec<Arc<Vec<_>>>
+            .collect();
         let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         assert_eq!(hash, KECCAK_EMPTY_BLOOM);
     }
@@ -758,7 +762,7 @@ mod tests {
         };
 
         // 10 blocks with 10 empty receipts each
-        let receipts = (1..11)
+        let receipts: Vec<Arc<BlockReceipts>> = (1..11)
             .map(|_| {
                 Arc::new(BlockReceipts {
                     receipts: (1..11).map(|_| receipt.clone()).collect(),

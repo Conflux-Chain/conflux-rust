@@ -179,20 +179,20 @@ impl From<io::Error> for Error {
 
 impl From<rlp::DecoderError> for Error {
     fn from(err: rlp::DecoderError) -> Self {
-        Error::Decoder(format!("{}", err)).into()
+        Error::Decoder(format!("{}", err))
     }
 }
 
 impl From<crate::keylib::Error> for Error {
-    fn from(_err: crate::keylib::Error) -> Self { Error::Auth.into() }
+    fn from(_err: crate::keylib::Error) -> Self { Error::Auth }
 }
 
 impl From<cfx_crypto::crypto::Error> for Error {
-    fn from(_err: cfx_crypto::crypto::Error) -> Self { Error::Auth.into() }
+    fn from(_err: cfx_crypto::crypto::Error) -> Self { Error::Auth }
 }
 
 impl From<net::AddrParseError> for Error {
-    fn from(_err: net::AddrParseError) -> Self { Error::BadAddr.into() }
+    fn from(_err: net::AddrParseError) -> Self { Error::BadAddr }
 }
 
 impl From<&str> for Error {

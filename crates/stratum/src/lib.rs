@@ -156,11 +156,11 @@ impl StratumImpl {
             if let Some(valid_secret) = self.secret {
                 let hash = keccak(secret);
                 if hash != valid_secret {
-                    return to_value(&false);
+                    return to_value(false);
                 }
             }
             debug!(target: "stratum", "New worker #{} registered", worker_id);
-            self.workers.write().insert(meta.addr().clone(), worker_id);
+            self.workers.write().insert(*meta.addr(), worker_id);
             to_value(true)
         }).map(|v| v.expect("Only true/false is returned and it's always serializable; qed"))
     }
@@ -208,7 +208,7 @@ impl StratumImpl {
             let workers = self.workers.read();
             let next_request_id = {
                 let mut counter = self.notify_counter.write();
-                if *counter == ::std::u32::MAX {
+                if *counter == u32::MAX {
                     *counter = NOTIFY_COUNTER_INITIAL;
                 } else {
                     *counter += 1
