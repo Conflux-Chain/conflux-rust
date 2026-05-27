@@ -6,7 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::account_address::AccountAddress;
-use anyhow::{ensure, Error, Result};
+use anyhow::{bail, ensure, Error, Result};
 use diem_crypto::{
     bls::{
         BLSPublicKey, BLSPublicKeyUnchecked, BLSSignature,
@@ -40,9 +40,17 @@ use std::{convert::TryFrom, fmt, str::FromStr};
 /// (2).
 
 // TODO: in the future, can tie these to the TransactionAuthenticator enum directly with https://github.com/rust-lang/rust/issues/60553
+//
+// Discriminants must mirror the matching `TransactionAuthenticator` BCS
+// tag — `AuthenticationKeyPreimage::new` appends `scheme as u8`.
 #[derive(Debug)]
 #[repr(u8)]
+#[non_exhaustive]
 pub enum Scheme {
+    /// BCS tag 0 (ex-Ed25519, never used in Conflux PoS).
+    ReservedEd25519 = 0,
+    /// BCS tag 1 (ex-MultiEd25519, never used in Conflux PoS).
+    ReservedMultiEd25519 = 1,
     BLS = 2,
     MultiBLS = 3,
     // ... add more schemes here
@@ -51,6 +59,8 @@ pub enum Scheme {
 impl fmt::Display for Scheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let display = match self {
+            Scheme::ReservedEd25519 => "reserved_ed25519",
+            Scheme::ReservedMultiEd25519 => "reserved_multi_ed25519",
             Scheme::BLS => "bls",
             Scheme::MultiBLS => "multi_bls",
         };
@@ -117,12 +127,11 @@ impl From<TransactionAuthenticatorUnchecked> for TransactionAuthenticator {
 }
 
 impl TransactionAuthenticator {
-    /// Unique identifier for the signature scheme
+    /// Unique identifier for the signature scheme.
     pub fn scheme(&self) -> Scheme {
         match self {
-            Self::_ReservedEd25519 | Self::_ReservedMultiEd25519 => {
-                unreachable!("reserved variant")
-            }
+            Self::_ReservedEd25519 => Scheme::ReservedEd25519,
+            Self::_ReservedMultiEd25519 => Scheme::ReservedMultiEd25519,
             Self::BLS { .. } => Scheme::BLS,
             Self::MultiBLS { .. } => Scheme::MultiBLS,
         }
@@ -140,11 +149,12 @@ impl TransactionAuthenticator {
     }
 
     /// Return Ok if the authenticator's public key matches its signature, Err
-    /// otherwise
+    /// otherwise. Reserved variants always return Err (Byzantine input
+    /// must not crash the executor).
     pub fn verify<T: Serialize + CryptoHash>(&self, message: &T) -> Result<()> {
         match self {
             Self::_ReservedEd25519 | Self::_ReservedMultiEd25519 => {
-                unreachable!("reserved variant")
+                bail!("reserved authenticator variant has no signature")
             }
             Self::BLS {
                 public_key,
@@ -157,25 +167,23 @@ impl TransactionAuthenticator {
         }
     }
 
-    /// Return the raw bytes of `self.public_key`
+    /// Return the raw bytes of `self.public_key`. MultiBLS has no per-tx
+    /// pubkey (the verifying set lives on the committee); Reserved
+    /// variants have no signature material at all.
     pub fn public_key_bytes(&self) -> Vec<u8> {
         match self {
-            Self::_ReservedEd25519 | Self::_ReservedMultiEd25519 => {
-                unreachable!("reserved variant")
-            }
+            Self::_ReservedEd25519 | Self::_ReservedMultiEd25519 => Vec::new(),
             Self::BLS { public_key, .. } => public_key.to_bytes().to_vec(),
-            Self::MultiBLS { .. } => todo!(),
+            Self::MultiBLS { .. } => Vec::new(),
         }
     }
 
     /// Return the raw bytes of `self.signature`
     pub fn signature_bytes(&self) -> Vec<u8> {
         match self {
-            Self::_ReservedEd25519 | Self::_ReservedMultiEd25519 => {
-                unreachable!("reserved variant")
-            }
+            Self::_ReservedEd25519 | Self::_ReservedMultiEd25519 => Vec::new(),
             Self::BLS { signature, .. } => signature.to_bytes().to_vec(),
-            Self::MultiBLS { .. } => todo!(),
+            Self::MultiBLS { signature } => signature.to_bytes(),
         }
     }
 
@@ -339,11 +347,58 @@ impl fmt::Display for AuthenticationKey {
 
 #[cfg(test)]
 mod tests {
-    use crate::transaction::authenticator::AuthenticationKey;
+    use super::{Scheme, TransactionAuthenticator};
+    use crate::{
+        account_address::AccountAddress,
+        transaction::{
+            authenticator::AuthenticationKey, RawTransaction, RetirePayload,
+        },
+    };
     use std::str::FromStr;
 
     #[test]
     fn test_from_str_should_not_panic_by_given_empty_string() {
         assert!(AuthenticationKey::from_str("").is_err());
+    }
+
+    // Regression: a Byzantine PoS proposer can BCS-decode a block
+    // payload into a `_Reserved*` variant; `verify()` must Err, not
+    // panic.
+    #[test]
+    fn reserved_authenticator_verify_returns_err_not_panic() {
+        let raw_txn = RawTransaction::new_retire(
+            AccountAddress::ZERO,
+            RetirePayload {
+                node_id: AccountAddress::ZERO,
+                votes: 0,
+            },
+        );
+
+        for auth in [
+            TransactionAuthenticator::_ReservedEd25519,
+            TransactionAuthenticator::_ReservedMultiEd25519,
+        ] {
+            let err = auth.verify(&raw_txn).unwrap_err();
+            assert!(
+                err.to_string().contains("reserved"),
+                "expected 'reserved' in error, got: {}",
+                err,
+            );
+        }
+    }
+
+    #[test]
+    fn reserved_authenticator_accessors_are_panic_free() {
+        let auth_a = TransactionAuthenticator::_ReservedEd25519;
+        let auth_b = TransactionAuthenticator::_ReservedMultiEd25519;
+
+        // Distinct scheme bytes keep preimages distinct across variants.
+        assert!(matches!(auth_a.scheme(), Scheme::ReservedEd25519));
+        assert!(matches!(auth_b.scheme(), Scheme::ReservedMultiEd25519));
+        assert_ne!(auth_a.scheme() as u8, auth_b.scheme() as u8);
+        assert!(auth_a.public_key_bytes().is_empty());
+        assert!(auth_a.signature_bytes().is_empty());
+        assert!(auth_b.public_key_bytes().is_empty());
+        assert!(auth_b.signature_bytes().is_empty());
     }
 }

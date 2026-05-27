@@ -85,24 +85,27 @@ impl ProposalMsg {
     pub fn verify(
         &self, validator: &ValidatorVerifier, epoch_vrf_seed: &[u8],
     ) -> Result<()> {
+        // Run well-formedness first: it rejects NilBlock/Genesis and
+        // guarantees `author().is_some()` for the VRF branch below.
+        self.verify_well_formed()?;
         self.proposal
             .validate_signature(validator)
             .map_err(|e| format_err!("{:?}", e))?;
 
         if let Some(vrf_proof) = self.proposal.vrf_proof() {
+            let author = self.proposal.author().ok_or_else(|| {
+                format_err!("VRF proof present but block has no author")
+            })?;
             validator.verify_vrf(
-                self.proposal.author().unwrap(),
+                author,
                 &self.proposal.block_data().vrf_round_seed(epoch_vrf_seed),
                 vrf_proof,
             )?;
         }
-        // if there is a timeout certificate, verify its signatures
         if let Some(tc) = self.sync_info.highest_timeout_certificate() {
             tc.verify(validator).map_err(|e| format_err!("{:?}", e))?;
         }
-        // Note that we postpone the verification of SyncInfo until it's being
-        // used.
-        self.verify_well_formed()
+        Ok(())
     }
 
     pub fn proposal(&self) -> &Block { &self.proposal }
@@ -111,11 +114,9 @@ impl ProposalMsg {
 
     pub fn sync_info(&self) -> &SyncInfo { &self.sync_info }
 
-    pub fn proposer(&self) -> Author {
-        self.proposal
-            .author()
-            .expect("Proposal should be verified having an author")
-    }
+    /// `None` for `NilBlock` / `Genesis`. Peer messages may carry either
+    /// before validation, so we don't panic here.
+    pub fn proposer(&self) -> Option<Author> { self.proposal.author() }
 }
 
 impl fmt::Display for ProposalMsg {

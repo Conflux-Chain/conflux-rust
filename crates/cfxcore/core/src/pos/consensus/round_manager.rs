@@ -420,11 +420,17 @@ impl RoundManager {
             Err(anyhow::anyhow!("Injected error in process_proposal_msg"))
         });
 
+        let proposer = proposal_msg.proposer().ok_or_else(|| {
+            anyhow::anyhow!(
+                "ProposalMsg without author reached process_proposal_msg \
+                 — verify_well_formed should have rejected it"
+            )
+        })?;
         if self
             .ensure_round_and_sync_up(
                 proposal_msg.proposal().round(),
                 proposal_msg.sync_info(),
-                proposal_msg.proposer(),
+                proposer,
                 true,
             )
             .await
@@ -449,8 +455,7 @@ impl RoundManager {
                 // because we only broadcast a proposal when we receive it for
                 // the first time.
                 // TODO(lpl): Do not send to the sender and the original author.
-                let exclude =
-                    vec![proposal_msg.proposer(), self.network.author];
+                let exclude = vec![proposer, self.network.author];
                 self.network
                     .broadcast(
                         ConsensusMsg::ProposalMsg(Box::new(proposal_msg)),

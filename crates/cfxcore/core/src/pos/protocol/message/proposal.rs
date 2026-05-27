@@ -11,7 +11,7 @@ use crate::{
 };
 
 use consensus_types::proposal_msg::ProposalMsg;
-use diem_logger::prelude::diem_debug;
+use diem_logger::prelude::{diem_debug, diem_trace};
 use std::mem::discriminant;
 
 impl Handleable for ProposalMsg {
@@ -25,7 +25,12 @@ impl Handleable for ProposalMsg {
             "proposal received must be from the sending peer"
         );*/
 
-        let author = self.proposer();
+        // Drop NilBlock/Genesis-shaped peer proposals: the channel keys
+        // by `(author, discriminant)` so we need a real author here.
+        let author = self.proposer().ok_or_else(|| {
+            diem_trace!("Dropping authorless proposal from {:?}", peer_address);
+            Error::InvalidMessageFormat
+        })?;
         let msg = ConsensusMsg::ProposalMsg(Box::new(self));
         ctx.manager
             .consensus_network_task
