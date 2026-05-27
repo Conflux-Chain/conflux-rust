@@ -210,6 +210,8 @@ pub enum StatusCode {
     DISPUTE_SENDER_NOT_REGISTERED = 35,
     AUTHENTICATOR_KEY_MISMATCH = 36,
     PAYLOAD_NOT_ALLOWED_VIA_MEMPOOL = 37,
+    // `expiration_timestamp_secs` must be u64::MAX; any other value is invalid.
+    INVALID_EXPIRATION_TIME = 38,
 
     // Runtime Errors: 4000-4999
     EXECUTED = 4001,
