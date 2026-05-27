@@ -164,7 +164,7 @@
 <a href=#164 id=164 data-nosnippet>164</a>        stream
 <a href=#165 id=165 data-nosnippet>165</a>            .begin_list(<span class="number">2</span>)
 <a href=#166 id=166 data-nosnippet>166</a>            .append(<span class="kw-2">&amp;</span><span class="self">self</span>.block_header)
-<a href=#167 id=167 data-nosnippet>167</a>            .append_raw(<span class="kw-2">&amp;*</span><span class="self">self</span>.encode_body_with_tx_public(), <span class="number">1</span>);
+<a href=#167 id=167 data-nosnippet>167</a>            .append_raw(<span class="kw-2">&amp;</span><span class="self">self</span>.encode_body_with_tx_public(), <span class="number">1</span>);
 <a href=#168 id=168 data-nosnippet>168</a>        stream.out().to_vec()
 <a href=#169 id=169 data-nosnippet>169</a>    }
 <a href=#170 id=170 data-nosnippet>170</a>
@@ -262,99 +262,104 @@
 <a href=#262 id=262 data-nosnippet>262</a>        <span class="self">self</span>.tx_short_ids.len() / CompactBlock::SHORT_ID_SIZE_IN_BYTES
 <a href=#263 id=263 data-nosnippet>263</a>    }
 <a href=#264 id=264 data-nosnippet>264</a>
-<a href=#265 id=265 data-nosnippet>265</a>    <span class="kw">pub fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H256 { <span class="self">self</span>.block_header.hash() }
+<a href=#265 id=265 data-nosnippet>265</a>    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool { <span class="self">self</span>.tx_short_ids.is_empty() }
 <a href=#266 id=266 data-nosnippet>266</a>
-<a href=#267 id=267 data-nosnippet>267</a>    <span class="kw">pub fn </span>get_shortid_key(header: <span class="kw-2">&amp;</span>BlockHeader, nonce: <span class="kw-2">&amp;</span>u64) -&gt; (u64, u64) {
-<a href=#268 id=268 data-nosnippet>268</a>        <span class="kw">let </span><span class="kw-2">mut </span>stream = RlpStream::new();
-<a href=#269 id=269 data-nosnippet>269</a>        stream.begin_list(<span class="number">2</span>).append(header).append(nonce);
-<a href=#270 id=270 data-nosnippet>270</a>        <span class="kw">let </span>to_hash = stream.out();
-<a href=#271 id=271 data-nosnippet>271</a>        <span class="kw">let </span>key_hash: [u8; <span class="number">32</span>] = keccak(to_hash).into();
-<a href=#272 id=272 data-nosnippet>272</a>        <span class="kw">let </span>k0 = LittleEndian::read_u64(<span class="kw-2">&amp;</span>key_hash[<span class="number">0</span>..<span class="number">8</span>]);
-<a href=#273 id=273 data-nosnippet>273</a>        <span class="kw">let </span>k1 = LittleEndian::read_u64(<span class="kw-2">&amp;</span>key_hash[<span class="number">8</span>..<span class="number">16</span>]);
-<a href=#274 id=274 data-nosnippet>274</a>        (k0, k1)
-<a href=#275 id=275 data-nosnippet>275</a>    }
-<a href=#276 id=276 data-nosnippet>276</a>
-<a href=#277 id=277 data-nosnippet>277</a>    <span class="doccomment">/// Compute Tx ShortId from hash
-<a href=#278 id=278 data-nosnippet>278</a>    </span><span class="kw">pub fn </span>create_shortids(
-<a href=#279 id=279 data-nosnippet>279</a>        transactions: <span class="kw-2">&amp;</span>Vec&lt;Arc&lt;SignedTransaction&gt;&gt;, k0: u64, k1: u64,
-<a href=#280 id=280 data-nosnippet>280</a>    ) -&gt; Vec&lt;u8&gt; {
-<a href=#281 id=281 data-nosnippet>281</a>        <span class="kw">let </span><span class="kw-2">mut </span>short_ids: Vec&lt;u8&gt; = <span class="macro">vec!</span>[];
-<a href=#282 id=282 data-nosnippet>282</a>
-<a href=#283 id=283 data-nosnippet>283</a>        <span class="kw">for </span>tx <span class="kw">in </span>transactions {
-<a href=#284 id=284 data-nosnippet>284</a>            <span class="kw">let </span>hash = tx.hash();
-<a href=#285 id=285 data-nosnippet>285</a>            <span class="kw">let </span>random = CompactBlock::get_random_bytes(<span class="kw-2">&amp;</span>hash, k0, k1);
-<a href=#286 id=286 data-nosnippet>286</a>
-<a href=#287 id=287 data-nosnippet>287</a>            short_ids.push(((random &amp; <span class="number">0xff00</span>) &gt;&gt; <span class="number">8</span>) <span class="kw">as </span>u8);
-<a href=#288 id=288 data-nosnippet>288</a>            short_ids.push((random &amp; <span class="number">0xff</span>) <span class="kw">as </span>u8);
-<a href=#289 id=289 data-nosnippet>289</a>            short_ids.push(hash[<span class="number">28</span>]);
-<a href=#290 id=290 data-nosnippet>290</a>            short_ids.push(hash[<span class="number">29</span>]);
-<a href=#291 id=291 data-nosnippet>291</a>            short_ids.push(hash[<span class="number">30</span>]);
-<a href=#292 id=292 data-nosnippet>292</a>            short_ids.push(hash[<span class="number">31</span>]);
-<a href=#293 id=293 data-nosnippet>293</a>        }
-<a href=#294 id=294 data-nosnippet>294</a>        short_ids
-<a href=#295 id=295 data-nosnippet>295</a>    }
-<a href=#296 id=296 data-nosnippet>296</a>
-<a href=#297 id=297 data-nosnippet>297</a>    <span class="kw">pub fn </span>to_u16(v1: u8, v2: u8) -&gt; u16 { ((v1 <span class="kw">as </span>u16) &lt;&lt; <span class="number">8</span>) + v2 <span class="kw">as </span>u16 }
+<a href=#267 id=267 data-nosnippet>267</a>    <span class="kw">pub fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H256 { <span class="self">self</span>.block_header.hash() }
+<a href=#268 id=268 data-nosnippet>268</a>
+<a href=#269 id=269 data-nosnippet>269</a>    <span class="kw">pub fn </span>get_shortid_key(header: <span class="kw-2">&amp;</span>BlockHeader, nonce: <span class="kw-2">&amp;</span>u64) -&gt; (u64, u64) {
+<a href=#270 id=270 data-nosnippet>270</a>        <span class="kw">let </span><span class="kw-2">mut </span>stream = RlpStream::new();
+<a href=#271 id=271 data-nosnippet>271</a>        stream.begin_list(<span class="number">2</span>).append(header).append(nonce);
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="kw">let </span>to_hash = stream.out();
+<a href=#273 id=273 data-nosnippet>273</a>        <span class="kw">let </span>key_hash: [u8; <span class="number">32</span>] = keccak(to_hash).into();
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="kw">let </span>k0 = LittleEndian::read_u64(<span class="kw-2">&amp;</span>key_hash[<span class="number">0</span>..<span class="number">8</span>]);
+<a href=#275 id=275 data-nosnippet>275</a>        <span class="kw">let </span>k1 = LittleEndian::read_u64(<span class="kw-2">&amp;</span>key_hash[<span class="number">8</span>..<span class="number">16</span>]);
+<a href=#276 id=276 data-nosnippet>276</a>        (k0, k1)
+<a href=#277 id=277 data-nosnippet>277</a>    }
+<a href=#278 id=278 data-nosnippet>278</a>
+<a href=#279 id=279 data-nosnippet>279</a>    <span class="doccomment">/// Compute Tx ShortId from hash
+<a href=#280 id=280 data-nosnippet>280</a>    </span><span class="kw">pub fn </span>create_shortids(
+<a href=#281 id=281 data-nosnippet>281</a>        transactions: <span class="kw-2">&amp;</span>Vec&lt;Arc&lt;SignedTransaction&gt;&gt;, k0: u64, k1: u64,
+<a href=#282 id=282 data-nosnippet>282</a>    ) -&gt; Vec&lt;u8&gt; {
+<a href=#283 id=283 data-nosnippet>283</a>        <span class="kw">let </span><span class="kw-2">mut </span>short_ids: Vec&lt;u8&gt; = <span class="macro">vec!</span>[];
+<a href=#284 id=284 data-nosnippet>284</a>
+<a href=#285 id=285 data-nosnippet>285</a>        <span class="kw">for </span>tx <span class="kw">in </span>transactions {
+<a href=#286 id=286 data-nosnippet>286</a>            <span class="kw">let </span>hash = tx.hash();
+<a href=#287 id=287 data-nosnippet>287</a>            <span class="kw">let </span>random = CompactBlock::get_random_bytes(<span class="kw-2">&amp;</span>hash, k0, k1);
+<a href=#288 id=288 data-nosnippet>288</a>
+<a href=#289 id=289 data-nosnippet>289</a>            short_ids.push(((random &amp; <span class="number">0xff00</span>) &gt;&gt; <span class="number">8</span>) <span class="kw">as </span>u8);
+<a href=#290 id=290 data-nosnippet>290</a>            short_ids.push((random &amp; <span class="number">0xff</span>) <span class="kw">as </span>u8);
+<a href=#291 id=291 data-nosnippet>291</a>            short_ids.push(hash[<span class="number">28</span>]);
+<a href=#292 id=292 data-nosnippet>292</a>            short_ids.push(hash[<span class="number">29</span>]);
+<a href=#293 id=293 data-nosnippet>293</a>            short_ids.push(hash[<span class="number">30</span>]);
+<a href=#294 id=294 data-nosnippet>294</a>            short_ids.push(hash[<span class="number">31</span>]);
+<a href=#295 id=295 data-nosnippet>295</a>        }
+<a href=#296 id=296 data-nosnippet>296</a>        short_ids
+<a href=#297 id=297 data-nosnippet>297</a>    }
 <a href=#298 id=298 data-nosnippet>298</a>
-<a href=#299 id=299 data-nosnippet>299</a>    <span class="kw">pub fn </span>to_u32(v1: u8, v2: u8, v3: u8, v4: u8) -&gt; u32 {
-<a href=#300 id=300 data-nosnippet>300</a>        ((v1 <span class="kw">as </span>u32) &lt;&lt; <span class="number">24</span>)
-<a href=#301 id=301 data-nosnippet>301</a>            + ((v2 <span class="kw">as </span>u32) &lt;&lt; <span class="number">16</span>)
-<a href=#302 id=302 data-nosnippet>302</a>            + ((v3 <span class="kw">as </span>u32) &lt;&lt; <span class="number">8</span>)
-<a href=#303 id=303 data-nosnippet>303</a>            + v4 <span class="kw">as </span>u32
-<a href=#304 id=304 data-nosnippet>304</a>    }
-<a href=#305 id=305 data-nosnippet>305</a>
-<a href=#306 id=306 data-nosnippet>306</a>    <span class="kw">pub fn </span>get_random_bytes(
-<a href=#307 id=307 data-nosnippet>307</a>        transaction_id: <span class="kw-2">&amp;</span>H256, key1: u64, key2: u64,
-<a href=#308 id=308 data-nosnippet>308</a>    ) -&gt; u16 {
-<a href=#309 id=309 data-nosnippet>309</a>        <span class="kw">let </span><span class="kw-2">mut </span>hasher = SipHasher24::new_with_keys(key1, key2);
-<a href=#310 id=310 data-nosnippet>310</a>        hasher.write(transaction_id.as_ref());
-<a href=#311 id=311 data-nosnippet>311</a>        (hasher.finish() &amp; <span class="number">0xffff</span>) <span class="kw">as </span>u16
-<a href=#312 id=312 data-nosnippet>312</a>    }
-<a href=#313 id=313 data-nosnippet>313</a>
-<a href=#314 id=314 data-nosnippet>314</a>    <span class="kw">pub fn </span>get_decomposed_short_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (Vec&lt;u16&gt;, Vec&lt;u32&gt;) {
-<a href=#315 id=315 data-nosnippet>315</a>        <span class="kw">let </span><span class="kw-2">mut </span>random_bytes_vector: Vec&lt;u16&gt; = Vec::new();
-<a href=#316 id=316 data-nosnippet>316</a>        <span class="kw">let </span><span class="kw-2">mut </span>fixed_bytes_vector: Vec&lt;u32&gt; = Vec::new();
-<a href=#317 id=317 data-nosnippet>317</a>
-<a href=#318 id=318 data-nosnippet>318</a>        <span class="kw">for </span>i <span class="kw">in </span>(<span class="number">0</span>..<span class="self">self</span>.tx_short_ids.len())
-<a href=#319 id=319 data-nosnippet>319</a>            .step_by(CompactBlock::SHORT_ID_SIZE_IN_BYTES)
-<a href=#320 id=320 data-nosnippet>320</a>        {
-<a href=#321 id=321 data-nosnippet>321</a>            random_bytes_vector.push(CompactBlock::to_u16(
-<a href=#322 id=322 data-nosnippet>322</a>                <span class="self">self</span>.tx_short_ids[i],
-<a href=#323 id=323 data-nosnippet>323</a>                <span class="self">self</span>.tx_short_ids[i + <span class="number">1</span>],
-<a href=#324 id=324 data-nosnippet>324</a>            ));
-<a href=#325 id=325 data-nosnippet>325</a>            fixed_bytes_vector.push(CompactBlock::to_u32(
-<a href=#326 id=326 data-nosnippet>326</a>                <span class="self">self</span>.tx_short_ids[i + <span class="number">2</span>],
-<a href=#327 id=327 data-nosnippet>327</a>                <span class="self">self</span>.tx_short_ids[i + <span class="number">3</span>],
-<a href=#328 id=328 data-nosnippet>328</a>                <span class="self">self</span>.tx_short_ids[i + <span class="number">4</span>],
-<a href=#329 id=329 data-nosnippet>329</a>                <span class="self">self</span>.tx_short_ids[i + <span class="number">5</span>],
-<a href=#330 id=330 data-nosnippet>330</a>            ));
-<a href=#331 id=331 data-nosnippet>331</a>        }
-<a href=#332 id=332 data-nosnippet>332</a>
-<a href=#333 id=333 data-nosnippet>333</a>        (random_bytes_vector, fixed_bytes_vector)
-<a href=#334 id=334 data-nosnippet>334</a>    }
-<a href=#335 id=335 data-nosnippet>335</a>}
-<a href=#336 id=336 data-nosnippet>336</a>
-<a href=#337 id=337 data-nosnippet>337</a><span class="kw">impl </span>Encodable <span class="kw">for </span>CompactBlock {
-<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">fn </span>rlp_append(<span class="kw-2">&amp;</span><span class="self">self</span>, steam: <span class="kw-2">&amp;mut </span>RlpStream) {
-<a href=#339 id=339 data-nosnippet>339</a>        steam
-<a href=#340 id=340 data-nosnippet>340</a>            .begin_list(<span class="number">3</span>)
-<a href=#341 id=341 data-nosnippet>341</a>            .append(<span class="kw-2">&amp;</span><span class="self">self</span>.block_header)
-<a href=#342 id=342 data-nosnippet>342</a>            .append(<span class="kw-2">&amp;</span><span class="self">self</span>.nonce)
-<a href=#343 id=343 data-nosnippet>343</a>            .append(<span class="kw-2">&amp;</span><span class="self">self</span>.tx_short_ids);
-<a href=#344 id=344 data-nosnippet>344</a>    }
-<a href=#345 id=345 data-nosnippet>345</a>}
-<a href=#346 id=346 data-nosnippet>346</a>
-<a href=#347 id=347 data-nosnippet>347</a><span class="kw">impl </span>Decodable <span class="kw">for </span>CompactBlock {
-<a href=#348 id=348 data-nosnippet>348</a>    <span class="kw">fn </span>decode(rlp: <span class="kw-2">&amp;</span>Rlp) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecoderError&gt; {
-<a href=#349 id=349 data-nosnippet>349</a>        <span class="kw">let </span>short_ids: Vec&lt;u8&gt; = rlp.val_at(<span class="number">2</span>)<span class="question-mark">?</span>;
-<a href=#350 id=350 data-nosnippet>350</a>        <span class="kw">if </span>short_ids.len() % CompactBlock::SHORT_ID_SIZE_IN_BYTES != <span class="number">0 </span>{
-<a href=#351 id=351 data-nosnippet>351</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(DecoderError::Custom(<span class="string">"Compact Block length Error!"</span>));
-<a href=#352 id=352 data-nosnippet>352</a>        }
-<a href=#353 id=353 data-nosnippet>353</a>        <span class="prelude-val">Ok</span>(CompactBlock {
-<a href=#354 id=354 data-nosnippet>354</a>            block_header: rlp.val_at(<span class="number">0</span>)<span class="question-mark">?</span>,
-<a href=#355 id=355 data-nosnippet>355</a>            nonce: rlp.val_at(<span class="number">1</span>)<span class="question-mark">?</span>,
-<a href=#356 id=356 data-nosnippet>356</a>            tx_short_ids: short_ids,
-<a href=#357 id=357 data-nosnippet>357</a>            reconstructed_txns: Vec::new(),
-<a href=#358 id=358 data-nosnippet>358</a>        })
-<a href=#359 id=359 data-nosnippet>359</a>    }
-<a href=#360 id=360 data-nosnippet>360</a>}</code></pre></div></section></main></body></html>
+<a href=#299 id=299 data-nosnippet>299</a>    <span class="kw">pub fn </span>to_u16(v1: u8, v2: u8) -&gt; u16 { ((v1 <span class="kw">as </span>u16) &lt;&lt; <span class="number">8</span>) + v2 <span class="kw">as </span>u16 }
+<a href=#300 id=300 data-nosnippet>300</a>
+<a href=#301 id=301 data-nosnippet>301</a>    <span class="kw">pub fn </span>to_u32(v1: u8, v2: u8, v3: u8, v4: u8) -&gt; u32 {
+<a href=#302 id=302 data-nosnippet>302</a>        ((v1 <span class="kw">as </span>u32) &lt;&lt; <span class="number">24</span>)
+<a href=#303 id=303 data-nosnippet>303</a>            + ((v2 <span class="kw">as </span>u32) &lt;&lt; <span class="number">16</span>)
+<a href=#304 id=304 data-nosnippet>304</a>            + ((v3 <span class="kw">as </span>u32) &lt;&lt; <span class="number">8</span>)
+<a href=#305 id=305 data-nosnippet>305</a>            + v4 <span class="kw">as </span>u32
+<a href=#306 id=306 data-nosnippet>306</a>    }
+<a href=#307 id=307 data-nosnippet>307</a>
+<a href=#308 id=308 data-nosnippet>308</a>    <span class="kw">pub fn </span>get_random_bytes(
+<a href=#309 id=309 data-nosnippet>309</a>        transaction_id: <span class="kw-2">&amp;</span>H256, key1: u64, key2: u64,
+<a href=#310 id=310 data-nosnippet>310</a>    ) -&gt; u16 {
+<a href=#311 id=311 data-nosnippet>311</a>        <span class="kw">let </span><span class="kw-2">mut </span>hasher = SipHasher24::new_with_keys(key1, key2);
+<a href=#312 id=312 data-nosnippet>312</a>        hasher.write(transaction_id.as_ref());
+<a href=#313 id=313 data-nosnippet>313</a>        (hasher.finish() &amp; <span class="number">0xffff</span>) <span class="kw">as </span>u16
+<a href=#314 id=314 data-nosnippet>314</a>    }
+<a href=#315 id=315 data-nosnippet>315</a>
+<a href=#316 id=316 data-nosnippet>316</a>    <span class="kw">pub fn </span>get_decomposed_short_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (Vec&lt;u16&gt;, Vec&lt;u32&gt;) {
+<a href=#317 id=317 data-nosnippet>317</a>        <span class="kw">let </span><span class="kw-2">mut </span>random_bytes_vector: Vec&lt;u16&gt; = Vec::new();
+<a href=#318 id=318 data-nosnippet>318</a>        <span class="kw">let </span><span class="kw-2">mut </span>fixed_bytes_vector: Vec&lt;u32&gt; = Vec::new();
+<a href=#319 id=319 data-nosnippet>319</a>
+<a href=#320 id=320 data-nosnippet>320</a>        <span class="kw">for </span>i <span class="kw">in </span>(<span class="number">0</span>..<span class="self">self</span>.tx_short_ids.len())
+<a href=#321 id=321 data-nosnippet>321</a>            .step_by(CompactBlock::SHORT_ID_SIZE_IN_BYTES)
+<a href=#322 id=322 data-nosnippet>322</a>        {
+<a href=#323 id=323 data-nosnippet>323</a>            random_bytes_vector.push(CompactBlock::to_u16(
+<a href=#324 id=324 data-nosnippet>324</a>                <span class="self">self</span>.tx_short_ids[i],
+<a href=#325 id=325 data-nosnippet>325</a>                <span class="self">self</span>.tx_short_ids[i + <span class="number">1</span>],
+<a href=#326 id=326 data-nosnippet>326</a>            ));
+<a href=#327 id=327 data-nosnippet>327</a>            fixed_bytes_vector.push(CompactBlock::to_u32(
+<a href=#328 id=328 data-nosnippet>328</a>                <span class="self">self</span>.tx_short_ids[i + <span class="number">2</span>],
+<a href=#329 id=329 data-nosnippet>329</a>                <span class="self">self</span>.tx_short_ids[i + <span class="number">3</span>],
+<a href=#330 id=330 data-nosnippet>330</a>                <span class="self">self</span>.tx_short_ids[i + <span class="number">4</span>],
+<a href=#331 id=331 data-nosnippet>331</a>                <span class="self">self</span>.tx_short_ids[i + <span class="number">5</span>],
+<a href=#332 id=332 data-nosnippet>332</a>            ));
+<a href=#333 id=333 data-nosnippet>333</a>        }
+<a href=#334 id=334 data-nosnippet>334</a>
+<a href=#335 id=335 data-nosnippet>335</a>        (random_bytes_vector, fixed_bytes_vector)
+<a href=#336 id=336 data-nosnippet>336</a>    }
+<a href=#337 id=337 data-nosnippet>337</a>}
+<a href=#338 id=338 data-nosnippet>338</a>
+<a href=#339 id=339 data-nosnippet>339</a><span class="kw">impl </span>Encodable <span class="kw">for </span>CompactBlock {
+<a href=#340 id=340 data-nosnippet>340</a>    <span class="kw">fn </span>rlp_append(<span class="kw-2">&amp;</span><span class="self">self</span>, steam: <span class="kw-2">&amp;mut </span>RlpStream) {
+<a href=#341 id=341 data-nosnippet>341</a>        steam
+<a href=#342 id=342 data-nosnippet>342</a>            .begin_list(<span class="number">3</span>)
+<a href=#343 id=343 data-nosnippet>343</a>            .append(<span class="kw-2">&amp;</span><span class="self">self</span>.block_header)
+<a href=#344 id=344 data-nosnippet>344</a>            .append(<span class="kw-2">&amp;</span><span class="self">self</span>.nonce)
+<a href=#345 id=345 data-nosnippet>345</a>            .append(<span class="kw-2">&amp;</span><span class="self">self</span>.tx_short_ids);
+<a href=#346 id=346 data-nosnippet>346</a>    }
+<a href=#347 id=347 data-nosnippet>347</a>}
+<a href=#348 id=348 data-nosnippet>348</a>
+<a href=#349 id=349 data-nosnippet>349</a><span class="kw">impl </span>Decodable <span class="kw">for </span>CompactBlock {
+<a href=#350 id=350 data-nosnippet>350</a>    <span class="kw">fn </span>decode(rlp: <span class="kw-2">&amp;</span>Rlp) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecoderError&gt; {
+<a href=#351 id=351 data-nosnippet>351</a>        <span class="kw">let </span>short_ids: Vec&lt;u8&gt; = rlp.val_at(<span class="number">2</span>)<span class="question-mark">?</span>;
+<a href=#352 id=352 data-nosnippet>352</a>        <span class="kw">if </span>!short_ids
+<a href=#353 id=353 data-nosnippet>353</a>            .len()
+<a href=#354 id=354 data-nosnippet>354</a>            .is_multiple_of(CompactBlock::SHORT_ID_SIZE_IN_BYTES)
+<a href=#355 id=355 data-nosnippet>355</a>        {
+<a href=#356 id=356 data-nosnippet>356</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(DecoderError::Custom(<span class="string">"Compact Block length Error!"</span>));
+<a href=#357 id=357 data-nosnippet>357</a>        }
+<a href=#358 id=358 data-nosnippet>358</a>        <span class="prelude-val">Ok</span>(CompactBlock {
+<a href=#359 id=359 data-nosnippet>359</a>            block_header: rlp.val_at(<span class="number">0</span>)<span class="question-mark">?</span>,
+<a href=#360 id=360 data-nosnippet>360</a>            nonce: rlp.val_at(<span class="number">1</span>)<span class="question-mark">?</span>,
+<a href=#361 id=361 data-nosnippet>361</a>            tx_short_ids: short_ids,
+<a href=#362 id=362 data-nosnippet>362</a>            reconstructed_txns: Vec::new(),
+<a href=#363 id=363 data-nosnippet>363</a>        })
+<a href=#364 id=364 data-nosnippet>364</a>    }
+<a href=#365 id=365 data-nosnippet>365</a>}</code></pre></div></section></main></body></html>

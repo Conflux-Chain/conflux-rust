@@ -365,9 +365,9 @@
 <a href=#365 id=365 data-nosnippet>365</a>            // address from the socket, like `miniupnpc`.
 <a href=#366 id=366 data-nosnippet>366</a>            // Note that using local_ip (0.0.0.0) will cause
 <a href=#367 id=367 data-nosnippet>367</a>            // NOT_AUTHORIZED error.
-<a href=#368 id=368 data-nosnippet>368</a>            </span><span class="kw">let </span>client_sock = TcpStream::connect(<span class="kw-2">&amp;</span>gateway.addr).ok()<span class="question-mark">?</span>;
+<a href=#368 id=368 data-nosnippet>368</a>            </span><span class="kw">let </span>client_sock = TcpStream::connect(gateway.addr).ok()<span class="question-mark">?</span>;
 <a href=#369 id=369 data-nosnippet>369</a>            <span class="kw">match </span>client_sock.local_addr() {
-<a href=#370 id=370 data-nosnippet>370</a>                <span class="prelude-val">Ok</span>(SocketAddr::V4(v4_addr)) =&gt; v4_addr.ip().clone(),
+<a href=#370 id=370 data-nosnippet>370</a>                <span class="prelude-val">Ok</span>(SocketAddr::V4(v4_addr)) =&gt; <span class="kw-2">*</span>v4_addr.ip(),
 <a href=#371 id=371 data-nosnippet>371</a>                <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
 <a href=#372 id=372 data-nosnippet>372</a>            }
 <a href=#373 id=373 data-nosnippet>373</a>        };
@@ -428,7 +428,7 @@
 <a href=#428 id=428 data-nosnippet>428</a>                        <span class="kw">if </span>retry == <span class="number">0 </span>{
 <a href=#429 id=429 data-nosnippet>429</a>                            <span class="macro">debug!</span>(<span class="string">"natpmp retry timeout"</span>);
 <a href=#430 id=430 data-nosnippet>430</a>                            <span class="kw">return </span><span class="prelude-val">Err</span>(
-<a href=#431 id=431 data-nosnippet>431</a>                                natpmp::Error::NATPMP_ERR_UNDEFINEDERROR.into(),
+<a href=#431 id=431 data-nosnippet>431</a>                                natpmp::Error::NATPMP_ERR_UNDEFINEDERROR,
 <a href=#432 id=432 data-nosnippet>432</a>                            );
 <a href=#433 id=433 data-nosnippet>433</a>                        } <span class="kw">else </span>{
 <a href=#434 id=434 data-nosnippet>434</a>                            retry -= <span class="number">1</span>;
@@ -442,7 +442,7 @@
 <a href=#442 id=442 data-nosnippet>442</a>                        <span class="macro">debug!</span>(<span class="string">"IP request error: {}"</span>, e);
 <a href=#443 id=443 data-nosnippet>443</a>                        <span class="prelude-val">Err</span>(e)
 <a href=#444 id=444 data-nosnippet>444</a>                    }
-<a href=#445 id=445 data-nosnippet>445</a>                    <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR.into()),
+<a href=#445 id=445 data-nosnippet>445</a>                    <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR),
 <a href=#446 id=446 data-nosnippet>446</a>                }<span class="question-mark">?</span>;
 <a href=#447 id=447 data-nosnippet>447</a>            };
 <a href=#448 id=448 data-nosnippet>448</a>
@@ -463,7 +463,7 @@
 <a href=#463 id=463 data-nosnippet>463</a>                    <span class="macro">debug!</span>(<span class="string">"Port mapping for TCP error: {}"</span>, e);
 <a href=#464 id=464 data-nosnippet>464</a>                    <span class="prelude-val">Err</span>(e)
 <a href=#465 id=465 data-nosnippet>465</a>                }
-<a href=#466 id=466 data-nosnippet>466</a>                <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR.into()),
+<a href=#466 id=466 data-nosnippet>466</a>                <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR),
 <a href=#467 id=467 data-nosnippet>467</a>            }<span class="question-mark">?</span>;
 <a href=#468 id=468 data-nosnippet>468</a>
 <a href=#469 id=469 data-nosnippet>469</a>            <span class="comment">// this function call want to receive `Response::UDP` response from
@@ -483,7 +483,7 @@
 <a href=#483 id=483 data-nosnippet>483</a>                    <span class="macro">debug!</span>(<span class="string">"Port mapping for UDP error: {}"</span>, e);
 <a href=#484 id=484 data-nosnippet>484</a>                    <span class="prelude-val">Err</span>(e)
 <a href=#485 id=485 data-nosnippet>485</a>                }
-<a href=#486 id=486 data-nosnippet>486</a>                <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR.into()),
+<a href=#486 id=486 data-nosnippet>486</a>                <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR),
 <a href=#487 id=487 data-nosnippet>487</a>            }<span class="question-mark">?</span>;
 <a href=#488 id=488 data-nosnippet>488</a>
 <a href=#489 id=489 data-nosnippet>489</a>            <span class="prelude-val">Ok</span>(NodeEndpoint {

@@ -19,11 +19,11 @@
 <a href=#19 id=19 data-nosnippet>19</a>    <span class="kw">fn </span>calc_subnet(ip: <span class="kw-2">&amp;</span>IpAddr, prefix_bits: usize) -&gt; u32 {
 <a href=#20 id=20 data-nosnippet>20</a>        <span class="kw">match </span>ip {
 <a href=#21 id=21 data-nosnippet>21</a>            IpAddr::V4(ipv4) =&gt; {
-<a href=#22 id=22 data-nosnippet>22</a>                <span class="kw">let </span>num: u32 = ipv4.clone().into();
+<a href=#22 id=22 data-nosnippet>22</a>                <span class="kw">let </span>num: u32 = (<span class="kw-2">*</span>ipv4).into();
 <a href=#23 id=23 data-nosnippet>23</a>                num &gt;&gt; (<span class="number">32 </span>- prefix_bits)
 <a href=#24 id=24 data-nosnippet>24</a>            }
 <a href=#25 id=25 data-nosnippet>25</a>            IpAddr::V6(ipv6) =&gt; {
-<a href=#26 id=26 data-nosnippet>26</a>                <span class="kw">let </span>num: u128 = ipv6.clone().into();
+<a href=#26 id=26 data-nosnippet>26</a>                <span class="kw">let </span>num: u128 = (<span class="kw-2">*</span>ipv6).into();
 <a href=#27 id=27 data-nosnippet>27</a>                (num &gt;&gt; (<span class="number">128 </span>- prefix_bits)) <span class="kw">as </span>u32
 <a href=#28 id=28 data-nosnippet>28</a>            }
 <a href=#29 id=29 data-nosnippet>29</a>        }

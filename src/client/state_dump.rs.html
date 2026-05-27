@@ -127,7 +127,7 @@
 <a href=#127 id=127 data-nosnippet>127</a>
 <a href=#128 id=128 data-nosnippet>128</a>    <span class="kw">let </span>state_db = StateDbGeneric::new(state);
 <a href=#129 id=129 data-nosnippet>129</a>
-<a href=#130 id=130 data-nosnippet>130</a>    <span class="prelude-val">Ok</span>((state_db, state_root.clone()))
+<a href=#130 id=130 data-nosnippet>130</a>    <span class="prelude-val">Ok</span>((state_db, <span class="kw-2">*</span>state_root))
 <a href=#131 id=131 data-nosnippet>131</a>}
 <a href=#132 id=132 data-nosnippet>132</a>
 <a href=#133 id=133 data-nosnippet>133</a><span class="kw">fn </span>export_space_accounts(
@@ -211,7 +211,7 @@
 <a href=#211 id=211 data-nosnippet>211</a>            storage_map.get(<span class="kw-2">&amp;</span>address).cloned()
 <a href=#212 id=212 data-nosnippet>212</a>        } <span class="kw">else </span>{
 <a href=#213 id=213 data-nosnippet>213</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(_storage) = storage_map.get(<span class="kw-2">&amp;</span>address) {
-<a href=#214 id=214 data-nosnippet>214</a>                println(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"no-contract account have storage"</span>));
+<a href=#214 id=214 data-nosnippet>214</a>                println(<span class="string">"no-contract account have storage"</span>);
 <a href=#215 id=215 data-nosnippet>215</a>            }
 <a href=#216 id=216 data-nosnippet>216</a>            <span class="prelude-val">None
 <a href=#217 id=217 data-nosnippet>217</a>        </span>};
@@ -255,7 +255,7 @@
 <a href=#255 id=255 data-nosnippet>255</a>        <span class="kw">let </span><span class="kw-2">mut </span>inner_callback = |(key, value): (Vec&lt;u8&gt;, Box&lt;[u8]&gt;)| {
 <a href=#256 id=256 data-nosnippet>256</a>            total_key_count += <span class="number">1</span>;
 <a href=#257 id=257 data-nosnippet>257</a>
-<a href=#258 id=258 data-nosnippet>258</a>            <span class="kw">if </span>total_key_count % <span class="number">10000 </span>== <span class="number">0 </span>{
+<a href=#258 id=258 data-nosnippet>258</a>            <span class="kw">if </span>total_key_count.is_multiple_of(<span class="number">10000</span>) {
 <a href=#259 id=259 data-nosnippet>259</a>                println(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
 <a href=#260 id=260 data-nosnippet>260</a>                    <span class="string">"total_key_count: {}, core_space_key_count: {}"</span>,
 <a href=#261 id=261 data-nosnippet>261</a>                    total_key_count, core_space_key_count
@@ -283,7 +283,7 @@
 <a href=#283 id=283 data-nosnippet>283</a>
 <a href=#284 id=284 data-nosnippet>284</a>        state.read_all_with_callback(start_key, <span class="kw-2">&amp;mut </span>inner_callback, <span class="bool-val">true</span>)<span class="question-mark">?</span>;
 <a href=#285 id=285 data-nosnippet>285</a>
-<a href=#286 id=286 data-nosnippet>286</a>        <span class="kw">if </span>account_states.len() &gt; <span class="number">0 </span>{
+<a href=#286 id=286 data-nosnippet>286</a>        <span class="kw">if </span>!account_states.is_empty() {
 <a href=#287 id=287 data-nosnippet>287</a>            println(<span class="string">"Start to read account code and storage data..."</span>);
 <a href=#288 id=288 data-nosnippet>288</a>        }
 <a href=#289 id=289 data-nosnippet>289</a>
@@ -367,7 +367,7 @@
 <a href=#367 id=367 data-nosnippet>367</a>                rlp::decode(<span class="kw-2">&amp;</span>value).expect(<span class="string">"Failed to decode storage value"</span>);
 <a href=#368 id=368 data-nosnippet>368</a>            storage.insert(h256_storage_key, storage_value_with_owner.value);
 <a href=#369 id=369 data-nosnippet>369</a>
-<a href=#370 id=370 data-nosnippet>370</a>            <span class="kw">if </span>storage.len() == <span class="number">5000_000 </span>{
+<a href=#370 id=370 data-nosnippet>370</a>            <span class="kw">if </span>storage.len() == <span class="number">5_000_000 </span>{
 <a href=#371 id=371 data-nosnippet>371</a>                chunk_count += <span class="number">1</span>;
 <a href=#372 id=372 data-nosnippet>372</a>                <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"{:?}-chunk{}.json"</span>, address, chunk_count);
 <a href=#373 id=373 data-nosnippet>373</a>                <span class="kw">let </span>file_path = Path::new(<span class="kw-2">&amp;</span>config.out_put_path).join(<span class="kw-2">&amp;</span>name);

@@ -349,7 +349,7 @@
 <a href=#349 id=349 data-nosnippet>349</a>    }
 <a href=#350 id=350 data-nosnippet>350</a>
 <a href=#351 id=351 data-nosnippet>351</a>    <span class="kw">pub fn </span>code_collateral_units(len: usize) -&gt; u64 {
-<a href=#352 id=352 data-nosnippet>352</a>        (len <span class="kw">as </span>u64 + <span class="number">1023</span>) / <span class="number">1024 </span>* CODE_COLLATERAL_UNITS_PER_KI_BYTES
+<a href=#352 id=352 data-nosnippet>352</a>        (len <span class="kw">as </span>u64).div_ceil(<span class="number">1024</span>) * CODE_COLLATERAL_UNITS_PER_KI_BYTES
 <a href=#353 id=353 data-nosnippet>353</a>    }
 <a href=#354 id=354 data-nosnippet>354</a>}
 <a href=#355 id=355 data-nosnippet>355</a>

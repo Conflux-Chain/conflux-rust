@@ -154,8 +154,8 @@
 <a href=#154 id=154 data-nosnippet>154</a>    /// and possible evictee before insertion.
 <a href=#155 id=155 data-nosnippet>155</a>    ///
 <a href=#156 id=156 data-nosnippet>156</a>    /// When subnet quota is not enough before insertion:
-<a href=#157 id=157 data-nosnippet>157</a>    /// 1. If node IP changed and still in the same subnet,
-<a href=#158 id=158 data-nosnippet>158</a>    /// just evict the node itself.
+<a href=#157 id=157 data-nosnippet>157</a>    ///   1. If node IP changed and still in the same subnet, just evict the
+<a href=#158 id=158 data-nosnippet>158</a>    ///      node itself.
 <a href=#159 id=159 data-nosnippet>159</a>    /// 2. Otherwise, someone in the subnet of `ip` may be evicted.
 <a href=#160 id=160 data-nosnippet>160</a>    ///
 <a href=#161 id=161 data-nosnippet>161</a>    /// There are 2 cases that insertion is not allowed:
@@ -169,7 +169,7 @@
 <a href=#169 id=169 data-nosnippet>169</a>        }
 <a href=#170 id=170 data-nosnippet>170</a>
 <a href=#171 id=171 data-nosnippet>171</a>        <span class="comment">// node exists and ip not changed.
-<a href=#172 id=172 data-nosnippet>172</a>        </span><span class="kw">let </span>maybe_cur_ip = <span class="self">self</span>.node_index.get(<span class="kw-2">&amp;</span>id);
+<a href=#172 id=172 data-nosnippet>172</a>        </span><span class="kw">let </span>maybe_cur_ip = <span class="self">self</span>.node_index.get(id);
 <a href=#173 id=173 data-nosnippet>173</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(cur_ip) = maybe_cur_ip {
 <a href=#174 id=174 data-nosnippet>174</a>            <span class="kw">if </span>cur_ip == ip {
 <a href=#175 id=175 data-nosnippet>175</a>                <span class="kw">return </span>ValidateInsertResult::AlreadyExists;
@@ -177,8 +177,8 @@
 <a href=#177 id=177 data-nosnippet>177</a>        }
 <a href=#178 id=178 data-nosnippet>178</a>
 <a href=#179 id=179 data-nosnippet>179</a>        <span class="comment">// ip already in use by other node
-<a href=#180 id=180 data-nosnippet>180</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(old_id) = <span class="self">self</span>.ip_index.get(<span class="kw-2">&amp;</span>ip) {
-<a href=#181 id=181 data-nosnippet>181</a>            <span class="kw">return </span>ValidateInsertResult::OccupyIp(old_id.clone());
+<a href=#180 id=180 data-nosnippet>180</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(old_id) = <span class="self">self</span>.ip_index.get(ip) {
+<a href=#181 id=181 data-nosnippet>181</a>            <span class="kw">return </span>ValidateInsertResult::OccupyIp(<span class="kw-2">*</span>old_id);
 <a href=#182 id=182 data-nosnippet>182</a>        }
 <a href=#183 id=183 data-nosnippet>183</a>
 <a href=#184 id=184 data-nosnippet>184</a>        <span class="comment">// quota enough
@@ -192,7 +192,7 @@
 <a href=#192 id=192 data-nosnippet>192</a>            <span class="kw">let </span>cur_subnet = <span class="self">self</span>.subnet_type.subnet(cur_ip);
 <a href=#193 id=193 data-nosnippet>193</a>            <span class="kw">let </span>new_subnet = <span class="self">self</span>.subnet_type.subnet(ip);
 <a href=#194 id=194 data-nosnippet>194</a>            <span class="kw">if </span>cur_subnet == new_subnet {
-<a href=#195 id=195 data-nosnippet>195</a>                <span class="kw">return </span>ValidateInsertResult::Evict(id.clone());
+<a href=#195 id=195 data-nosnippet>195</a>                <span class="kw">return </span>ValidateInsertResult::Evict(<span class="kw-2">*</span>id);
 <a href=#196 id=196 data-nosnippet>196</a>            }
 <a href=#197 id=197 data-nosnippet>197</a>        }
 <a href=#198 id=198 data-nosnippet>198</a>
@@ -247,7 +247,7 @@
 <a href=#247 id=247 data-nosnippet>247</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(b) = <span class="self">self</span>.trusted_buckets.get_mut(<span class="kw-2">&amp;</span>subnet) {
 <a href=#248 id=248 data-nosnippet>248</a>                <span class="kw">if </span>b.remove(id) {
 <a href=#249 id=249 data-nosnippet>249</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(b) = <span class="self">self</span>.untrusted_buckets.get_mut(<span class="kw-2">&amp;</span>subnet) {
-<a href=#250 id=250 data-nosnippet>250</a>                        b.add(id.clone());
+<a href=#250 id=250 data-nosnippet>250</a>                        b.add(<span class="kw-2">*</span>id);
 <a href=#251 id=251 data-nosnippet>251</a>                    }
 <a href=#252 id=252 data-nosnippet>252</a>                }
 <a href=#253 id=253 data-nosnippet>253</a>            }
@@ -260,8 +260,8 @@
 <a href=#260 id=260 data-nosnippet>260</a>        <span class="comment">// clear the old ip information at first
 <a href=#261 id=261 data-nosnippet>261</a>        </span><span class="self">self</span>.remove(<span class="kw-2">&amp;</span>id);
 <a href=#262 id=262 data-nosnippet>262</a>
-<a href=#263 id=263 data-nosnippet>263</a>        <span class="self">self</span>.node_index.insert(id.clone(), ip);
-<a href=#264 id=264 data-nosnippet>264</a>        <span class="self">self</span>.ip_index.insert(ip, id.clone());
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="self">self</span>.node_index.insert(id, ip);
+<a href=#264 id=264 data-nosnippet>264</a>        <span class="self">self</span>.ip_index.insert(ip, id);
 <a href=#265 id=265 data-nosnippet>265</a>
 <a href=#266 id=266 data-nosnippet>266</a>        <span class="kw">let </span>subnet = <span class="self">self</span>.subnet_type.subnet(<span class="kw-2">&amp;</span>ip);
 <a href=#267 id=267 data-nosnippet>267</a>        <span class="kw">if </span>trusted {
@@ -294,7 +294,7 @@
 <a href=#294 id=294 data-nosnippet>294</a>
 <a href=#295 id=295 data-nosnippet>295</a>    <span class="doccomment">/// Select a node to evict.
 <a href=#296 id=296 data-nosnippet>296</a>    </span><span class="kw">fn </span>select_evictee(<span class="kw-2">&amp;</span><span class="self">self</span>, ip: <span class="kw-2">&amp;</span>IpAddr, db: <span class="kw-2">&amp;</span>NodeDatabase) -&gt; <span class="prelude-ty">Option</span>&lt;NodeId&gt; {
-<a href=#297 id=297 data-nosnippet>297</a>        <span class="kw">let </span>subnet = <span class="self">self</span>.subnet_type.subnet(<span class="kw-2">&amp;</span>ip);
+<a href=#297 id=297 data-nosnippet>297</a>        <span class="kw">let </span>subnet = <span class="self">self</span>.subnet_type.subnet(ip);
 <a href=#298 id=298 data-nosnippet>298</a>
 <a href=#299 id=299 data-nosnippet>299</a>        <span class="comment">// evict untrusted node prior to trusted node
 <a href=#300 id=300 data-nosnippet>300</a>        </span><span class="self">self</span>.untrusted_buckets

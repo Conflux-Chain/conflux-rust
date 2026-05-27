@@ -266,10 +266,10 @@
 <a href=#266 id=266 data-nosnippet>266</a>    <span class="kw">type </span>Target = LogFilterParams;
 <a href=#267 id=267 data-nosnippet>267</a>
 <a href=#268 id=268 data-nosnippet>268</a>    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
-<a href=#269 id=269 data-nosnippet>269</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self </span>{
-<a href=#270 id=270 data-nosnippet>270</a>            <span class="kw-2">&amp;</span>LogFilter::EpochLogFilter { params, .. } =&gt; params,
-<a href=#271 id=271 data-nosnippet>271</a>            <span class="kw-2">&amp;</span>LogFilter::BlockHashLogFilter { params, .. } =&gt; params,
-<a href=#272 id=272 data-nosnippet>272</a>            <span class="kw-2">&amp;</span>LogFilter::BlockNumberLogFilter { params, .. } =&gt; params,
+<a href=#269 id=269 data-nosnippet>269</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#270 id=270 data-nosnippet>270</a>            LogFilter::EpochLogFilter { params, .. } =&gt; params,
+<a href=#271 id=271 data-nosnippet>271</a>            LogFilter::BlockHashLogFilter { params, .. } =&gt; params,
+<a href=#272 id=272 data-nosnippet>272</a>            LogFilter::BlockNumberLogFilter { params, .. } =&gt; params,
 <a href=#273 id=273 data-nosnippet>273</a>        }
 <a href=#274 id=274 data-nosnippet>274</a>    }
 <a href=#275 id=275 data-nosnippet>275</a>}
@@ -290,54 +290,52 @@
 <a href=#290 id=290 data-nosnippet>290</a>        <span class="kw">let </span>blooms = <span class="kw">match </span><span class="self">self</span>.address {
 <a href=#291 id=291 data-nosnippet>291</a>            <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>addresses) <span class="kw">if </span>!addresses.is_empty() =&gt; addresses
 <a href=#292 id=292 data-nosnippet>292</a>                .iter()
-<a href=#293 id=293 data-nosnippet>293</a>                .map(|<span class="kw-2">ref </span>address| {
-<a href=#294 id=294 data-nosnippet>294</a>                    Bloom::from(BloomInput::Raw(address.as_bytes()))
-<a href=#295 id=295 data-nosnippet>295</a>                })
-<a href=#296 id=296 data-nosnippet>296</a>                .collect(),
-<a href=#297 id=297 data-nosnippet>297</a>            <span class="kw">_ </span>=&gt; <span class="macro">vec!</span>[Bloom::default()],
-<a href=#298 id=298 data-nosnippet>298</a>        };
-<a href=#299 id=299 data-nosnippet>299</a>
-<a href=#300 id=300 data-nosnippet>300</a>        <span class="self">self</span>.topics.iter().fold(blooms, |bs, topic| <span class="kw">match </span><span class="kw-2">*</span>topic {
-<a href=#301 id=301 data-nosnippet>301</a>            <span class="prelude-val">None </span>=&gt; bs,
-<a href=#302 id=302 data-nosnippet>302</a>            <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>topics) =&gt; bs
-<a href=#303 id=303 data-nosnippet>303</a>                .into_iter()
-<a href=#304 id=304 data-nosnippet>304</a>                .flat_map(|bloom| {
-<a href=#305 id=305 data-nosnippet>305</a>                    topics
-<a href=#306 id=306 data-nosnippet>306</a>                        .iter()
-<a href=#307 id=307 data-nosnippet>307</a>                        .map(|topic| {
-<a href=#308 id=308 data-nosnippet>308</a>                            <span class="kw">let </span><span class="kw-2">mut </span>b = bloom.clone();
-<a href=#309 id=309 data-nosnippet>309</a>                            b.accrue(BloomInput::Raw(topic.as_bytes()));
-<a href=#310 id=310 data-nosnippet>310</a>                            b
-<a href=#311 id=311 data-nosnippet>311</a>                        })
-<a href=#312 id=312 data-nosnippet>312</a>                        .collect::&lt;Vec&lt;Bloom&gt;&gt;()
-<a href=#313 id=313 data-nosnippet>313</a>                })
-<a href=#314 id=314 data-nosnippet>314</a>                .collect(),
-<a href=#315 id=315 data-nosnippet>315</a>        })
-<a href=#316 id=316 data-nosnippet>316</a>    }
-<a href=#317 id=317 data-nosnippet>317</a>
-<a href=#318 id=318 data-nosnippet>318</a>    <span class="doccomment">/// Returns true if given log entry matches filter.
-<a href=#319 id=319 data-nosnippet>319</a>    </span><span class="kw">pub fn </span>matches(<span class="kw-2">&amp;</span><span class="self">self</span>, log: <span class="kw-2">&amp;</span>LogEntry) -&gt; bool {
-<a href=#320 id=320 data-nosnippet>320</a>        <span class="kw">if </span>log.space != <span class="self">self</span>.space {
-<a href=#321 id=321 data-nosnippet>321</a>            <span class="kw">return </span><span class="bool-val">false</span>;
-<a href=#322 id=322 data-nosnippet>322</a>        }
-<a href=#323 id=323 data-nosnippet>323</a>
-<a href=#324 id=324 data-nosnippet>324</a>        <span class="kw">let </span>matches = <span class="kw">match </span><span class="self">self</span>.address {
-<a href=#325 id=325 data-nosnippet>325</a>            <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>addresses) <span class="kw">if </span>!addresses.is_empty() =&gt; {
-<a href=#326 id=326 data-nosnippet>326</a>                addresses.iter().any(|address| <span class="kw-2">&amp;</span>log.address == address)
-<a href=#327 id=327 data-nosnippet>327</a>            }
-<a href=#328 id=328 data-nosnippet>328</a>            <span class="kw">_ </span>=&gt; <span class="bool-val">true</span>,
-<a href=#329 id=329 data-nosnippet>329</a>        };
-<a href=#330 id=330 data-nosnippet>330</a>
-<a href=#331 id=331 data-nosnippet>331</a>        matches
-<a href=#332 id=332 data-nosnippet>332</a>            &amp;&amp; <span class="self">self
-<a href=#333 id=333 data-nosnippet>333</a>                </span>.topics
-<a href=#334 id=334 data-nosnippet>334</a>                .iter()
-<a href=#335 id=335 data-nosnippet>335</a>                .enumerate()
-<a href=#336 id=336 data-nosnippet>336</a>                .all(|(i, topic)| <span class="kw">match </span><span class="kw-2">*</span>topic {
-<a href=#337 id=337 data-nosnippet>337</a>                    <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>topics) <span class="kw">if </span>!topics.is_empty() =&gt; topics
-<a href=#338 id=338 data-nosnippet>338</a>                        .iter()
-<a href=#339 id=339 data-nosnippet>339</a>                        .any(|topic| log.topics.get(i) == <span class="prelude-val">Some</span>(topic)),
-<a href=#340 id=340 data-nosnippet>340</a>                    <span class="kw">_ </span>=&gt; <span class="bool-val">true</span>,
-<a href=#341 id=341 data-nosnippet>341</a>                })
-<a href=#342 id=342 data-nosnippet>342</a>    }
-<a href=#343 id=343 data-nosnippet>343</a>}</code></pre></div></section></main></body></html>
+<a href=#293 id=293 data-nosnippet>293</a>                .map(|address| Bloom::from(BloomInput::Raw(address.as_bytes())))
+<a href=#294 id=294 data-nosnippet>294</a>                .collect(),
+<a href=#295 id=295 data-nosnippet>295</a>            <span class="kw">_ </span>=&gt; <span class="macro">vec!</span>[Bloom::default()],
+<a href=#296 id=296 data-nosnippet>296</a>        };
+<a href=#297 id=297 data-nosnippet>297</a>
+<a href=#298 id=298 data-nosnippet>298</a>        <span class="self">self</span>.topics.iter().fold(blooms, |bs, topic| <span class="kw">match </span><span class="kw-2">*</span>topic {
+<a href=#299 id=299 data-nosnippet>299</a>            <span class="prelude-val">None </span>=&gt; bs,
+<a href=#300 id=300 data-nosnippet>300</a>            <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>topics) =&gt; bs
+<a href=#301 id=301 data-nosnippet>301</a>                .into_iter()
+<a href=#302 id=302 data-nosnippet>302</a>                .flat_map(|bloom| {
+<a href=#303 id=303 data-nosnippet>303</a>                    topics
+<a href=#304 id=304 data-nosnippet>304</a>                        .iter()
+<a href=#305 id=305 data-nosnippet>305</a>                        .map(|topic| {
+<a href=#306 id=306 data-nosnippet>306</a>                            <span class="kw">let </span><span class="kw-2">mut </span>b = bloom;
+<a href=#307 id=307 data-nosnippet>307</a>                            b.accrue(BloomInput::Raw(topic.as_bytes()));
+<a href=#308 id=308 data-nosnippet>308</a>                            b
+<a href=#309 id=309 data-nosnippet>309</a>                        })
+<a href=#310 id=310 data-nosnippet>310</a>                        .collect::&lt;Vec&lt;Bloom&gt;&gt;()
+<a href=#311 id=311 data-nosnippet>311</a>                })
+<a href=#312 id=312 data-nosnippet>312</a>                .collect(),
+<a href=#313 id=313 data-nosnippet>313</a>        })
+<a href=#314 id=314 data-nosnippet>314</a>    }
+<a href=#315 id=315 data-nosnippet>315</a>
+<a href=#316 id=316 data-nosnippet>316</a>    <span class="doccomment">/// Returns true if given log entry matches filter.
+<a href=#317 id=317 data-nosnippet>317</a>    </span><span class="kw">pub fn </span>matches(<span class="kw-2">&amp;</span><span class="self">self</span>, log: <span class="kw-2">&amp;</span>LogEntry) -&gt; bool {
+<a href=#318 id=318 data-nosnippet>318</a>        <span class="kw">if </span>log.space != <span class="self">self</span>.space {
+<a href=#319 id=319 data-nosnippet>319</a>            <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#320 id=320 data-nosnippet>320</a>        }
+<a href=#321 id=321 data-nosnippet>321</a>
+<a href=#322 id=322 data-nosnippet>322</a>        <span class="kw">let </span>matches = <span class="kw">match </span><span class="self">self</span>.address {
+<a href=#323 id=323 data-nosnippet>323</a>            <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>addresses) <span class="kw">if </span>!addresses.is_empty() =&gt; {
+<a href=#324 id=324 data-nosnippet>324</a>                addresses.iter().any(|address| <span class="kw-2">&amp;</span>log.address == address)
+<a href=#325 id=325 data-nosnippet>325</a>            }
+<a href=#326 id=326 data-nosnippet>326</a>            <span class="kw">_ </span>=&gt; <span class="bool-val">true</span>,
+<a href=#327 id=327 data-nosnippet>327</a>        };
+<a href=#328 id=328 data-nosnippet>328</a>
+<a href=#329 id=329 data-nosnippet>329</a>        matches
+<a href=#330 id=330 data-nosnippet>330</a>            &amp;&amp; <span class="self">self
+<a href=#331 id=331 data-nosnippet>331</a>                </span>.topics
+<a href=#332 id=332 data-nosnippet>332</a>                .iter()
+<a href=#333 id=333 data-nosnippet>333</a>                .enumerate()
+<a href=#334 id=334 data-nosnippet>334</a>                .all(|(i, topic)| <span class="kw">match </span><span class="kw-2">*</span>topic {
+<a href=#335 id=335 data-nosnippet>335</a>                    <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>topics) <span class="kw">if </span>!topics.is_empty() =&gt; topics
+<a href=#336 id=336 data-nosnippet>336</a>                        .iter()
+<a href=#337 id=337 data-nosnippet>337</a>                        .any(|topic| log.topics.get(i) == <span class="prelude-val">Some</span>(topic)),
+<a href=#338 id=338 data-nosnippet>338</a>                    <span class="kw">_ </span>=&gt; <span class="bool-val">true</span>,
+<a href=#339 id=339 data-nosnippet>339</a>                })
+<a href=#340 id=340 data-nosnippet>340</a>    }
+<a href=#341 id=341 data-nosnippet>341</a>}</code></pre></div></section></main></body></html>

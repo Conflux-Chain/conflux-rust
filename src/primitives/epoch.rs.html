@@ -29,8 +29,8 @@
 <a href=#29 id=29 data-nosnippet>29</a>    </span>LatestMined,
 <a href=#30 id=30 data-nosnippet>30</a>}
 <a href=#31 id=31 data-nosnippet>31</a>
-<a href=#32 id=32 data-nosnippet>32</a><span class="kw">impl </span>Into&lt;EpochNumber&gt; <span class="kw">for </span>u64 {
-<a href=#33 id=33 data-nosnippet>33</a>    <span class="kw">fn </span>into(<span class="self">self</span>) -&gt; EpochNumber { EpochNumber::Number(<span class="self">self</span>) }
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">impl </span>From&lt;u64&gt; <span class="kw">for </span>EpochNumber {
+<a href=#33 id=33 data-nosnippet>33</a>    <span class="kw">fn </span>from(val: u64) -&gt; <span class="self">Self </span>{ EpochNumber::Number(val) }
 <a href=#34 id=34 data-nosnippet>34</a>}
 <a href=#35 id=35 data-nosnippet>35</a>
 <a href=#36 id=36 data-nosnippet>36</a><span class="attr">#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

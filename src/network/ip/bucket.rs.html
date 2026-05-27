@@ -67,13 +67,13 @@
 <a href=#67 id=67 data-nosnippet>67</a>        <span class="comment">// evict out-of-date node with high priority
 <a href=#68 id=68 data-nosnippet>68</a>        </span><span class="kw">if </span>!long_time_nodes.is_empty() {
 <a href=#69 id=69 data-nosnippet>69</a>            <span class="kw">let </span>index = rng.random_range(<span class="number">0</span>..long_time_nodes.len());
-<a href=#70 id=70 data-nosnippet>70</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(long_time_nodes[index].clone());
+<a href=#70 id=70 data-nosnippet>70</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="kw-2">*</span>long_time_nodes[index]);
 <a href=#71 id=71 data-nosnippet>71</a>        }
 <a href=#72 id=72 data-nosnippet>72</a>
 <a href=#73 id=73 data-nosnippet>73</a>        <span class="comment">// randomly evict one
 <a href=#74 id=74 data-nosnippet>74</a>        </span><span class="kw">if </span>!evictable_nodes.is_empty() {
 <a href=#75 id=75 data-nosnippet>75</a>            <span class="kw">let </span>index = rng.random_range(<span class="number">0</span>..evictable_nodes.len());
-<a href=#76 id=76 data-nosnippet>76</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(evictable_nodes[index].clone());
+<a href=#76 id=76 data-nosnippet>76</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="kw-2">*</span>evictable_nodes[index]);
 <a href=#77 id=77 data-nosnippet>77</a>        }
 <a href=#78 id=78 data-nosnippet>78</a>
 <a href=#79 id=79 data-nosnippet>79</a>        <span class="prelude-val">None
