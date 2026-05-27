@@ -173,13 +173,10 @@ pub(crate) async fn process_incoming_transactions(
             .filter(|tx| mempool.transactions.get(&tx.hash()).is_none())
             .collect()
     };
+    let pos_state = smp.db_with_cache.db.reader.get_latest_pos_state();
     let validation_results = transactions
         .par_iter()
-        .map(|t| {
-            smp.validator
-                .read()
-                .validate_transaction(&t, smp.commited_pos_state.clone())
-        })
+        .map(|t| smp.validator.read().validate_transaction(&t, &pos_state))
         .collect::<Vec<_>>();
 
     {

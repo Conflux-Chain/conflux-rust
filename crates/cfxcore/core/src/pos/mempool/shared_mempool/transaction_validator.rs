@@ -6,7 +6,6 @@ use diem_types::{
     },
 };
 use move_core_types::vm_status::DiscardedVMStatus;
-use std::sync::Arc;
 
 pub struct TransactionValidator {}
 
@@ -16,7 +15,7 @@ impl TransactionValidator {
     /// Returns `None` if the transaction is accepted, or a
     /// `DiscardedVMStatus` describing why it should be rejected.
     pub fn validate_transaction(
-        &self, tx: &SignedTransaction, pos_state: Arc<PosState>,
+        &self, tx: &SignedTransaction, pos_state: &PosState,
     ) -> Option<DiscardedVMStatus> {
         let authenticator = tx.authenticator();
         let auth_pk = match &authenticator {

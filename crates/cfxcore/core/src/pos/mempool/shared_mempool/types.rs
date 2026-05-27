@@ -23,8 +23,8 @@ use diem_config::config::MempoolConfig;
 use diem_crypto::HashValue;
 use diem_types::{
     account_address::AccountAddress, mempool_status::MempoolStatus,
-    term_state::PosState, transaction::SignedTransaction,
-    validator_verifier::ValidatorVerifier, vm_status::DiscardedVMStatus,
+    transaction::SignedTransaction, validator_verifier::ValidatorVerifier,
+    vm_status::DiscardedVMStatus,
 };
 use futures::{
     channel::{
@@ -49,14 +49,6 @@ pub(crate) struct SharedMempool {
     pub validator: Arc<RwLock<TransactionValidator>>,
     pub peer_manager: Arc<PeerManager>,
     pub subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
-    pub commited_pos_state: Arc<PosState>,
-}
-
-impl SharedMempool {
-    pub(crate) fn update_pos_state(&mut self) {
-        self.commited_pos_state =
-            self.db_with_cache.db.reader.get_latest_pos_state();
-    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
