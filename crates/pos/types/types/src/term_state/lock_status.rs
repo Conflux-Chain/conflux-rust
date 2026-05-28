@@ -113,6 +113,8 @@ impl StatusList {
 
     pub fn len(&self) -> usize { self.inner.len() }
 
+    pub fn is_empty(&self) -> bool { self.inner.is_empty() }
+
     pub fn iter(&self) -> Iter<'_, StatusItem> { self.inner.iter() }
 }
 
@@ -283,7 +285,7 @@ impl NodeLockStatus {
                 // (stake only in out_queue) escaped the lock before the fix.
                 let relock = self.available_votes > 0
                     || (POS_STATE_CONFIG.dispute_lock_includes_out_queue(view)
-                        && self.out_queue.len() > 0);
+                        && !self.out_queue.is_empty());
                 if relock {
                     // We will lock all votes in `in_queue`, `locked`, and
                     // `out_queue`.
