@@ -191,7 +191,7 @@ impl EthApi {
         let transaction_hash = tx.hash();
         let transaction_index: U256 = idx.into();
         let block_hash = b.pivot_header.hash();
-        let block_height: U256 = b.pivot_header.height().into();
+        let block_height: U64 = b.pivot_header.height().into();
 
         let logs: Vec<_> = receipt
             .logs
@@ -346,9 +346,9 @@ impl EthApi {
     pub fn sync_status(&self) -> SyncStatus {
         if self.sync.catch_up_mode() {
             SyncStatus::Info(SyncInfo {
-                starting_block: U256::from(self.consensus.block_count()),
-                current_block: U256::from(self.consensus.block_count()),
-                highest_block: U256::from(
+                starting_block: U64::from(self.consensus.block_count()),
+                current_block: U64::from(self.consensus.block_count()),
+                highest_block: U64::from(
                     self.sync.get_synchronization_graph().block_count(),
                 ),
                 warp_chunks_amount: None,

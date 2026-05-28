@@ -42,7 +42,7 @@ pub struct Transaction {
     /// Block hash
     pub block_hash: Option<H256>,
     /// Block number
-    pub block_number: Option<U256>,
+    pub block_number: Option<U64>,
     /// Transaction Index
     pub transaction_index: Option<U256>,
     /// Sender
@@ -99,7 +99,7 @@ impl Transaction {
     /// Convert `SignedTransaction` into RPC Transaction.
     pub fn from_signed(
         t: &SignedTransaction,
-        block_info: (Option<H256>, Option<U256>, Option<U256>),
+        block_info: (Option<H256>, Option<U64>, Option<U256>),
         exec_info: (Option<U64>, Option<H160>),
     ) -> Transaction {
         let signature = t.signature();
