@@ -279,7 +279,12 @@ impl NodeLockStatus {
         match POS_STATE_CONFIG.dispute_locked_views(view) {
             None => self.exempt_from_forfeit = Some(self.unlocked),
             Some(dispute_locked_views) => {
-                if self.available_votes > 0 {
+                // available_votes excludes out_queue, so a fully-retired node
+                // (stake only in out_queue) escaped the lock before the fix.
+                let relock = self.available_votes > 0
+                    || (POS_STATE_CONFIG.dispute_lock_includes_out_queue(view)
+                        && self.out_queue.len() > 0);
+                if relock {
                     // We will lock all votes in `in_queue`, `locked`, and
                     // `out_queue`.
                     let mut to_lock_votes = self.available_votes;
