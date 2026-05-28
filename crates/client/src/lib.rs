@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 #![recursion_limit = "512"]
-#![allow(deprecated)]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 

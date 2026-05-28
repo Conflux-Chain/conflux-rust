@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 // TODO: check them again and reason about the safety of each usage.
-#![allow(clippy::mut_from_ref, clippy::cast_ref_to_mut, clippy::drop_ref)]
+#![allow(clippy::mut_from_ref)]
 #![allow(deprecated)]
 
 #[macro_use]

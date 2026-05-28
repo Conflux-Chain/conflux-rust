@@ -7,34 +7,29 @@
 
 //! This file defines event store APIs that are related to the event accumulator
 //! and events themselves.
-#![allow(unused)]
-
-use super::PosLedgerDB;
 use crate::{
     change_set::ChangeSet,
-    errors::DiemDbError,
     schema::{event::EventSchema, event_accumulator::EventAccumulatorSchema},
 };
 use accumulator::{HashReader, MerkleAccumulator};
-use anyhow::{ensure, format_err, Result};
+use anyhow::{format_err, Result};
 use diem_crypto::{
     hash::{CryptoHash, EventAccumulatorHasher},
     HashValue,
 };
 use diem_types::{
-    account_address::AccountAddress,
-    block_metadata::new_block_event_key,
-    contract_event::ContractEvent,
-    event::EventKey,
-    proof::{position::Position, EventAccumulatorProof},
+    contract_event::ContractEvent, proof::position::Position,
     transaction::Version,
 };
-use schemadb::{schema::ValueCodec, ReadOptions, SchemaIterator, DB};
-use std::{
-    convert::{TryFrom, TryInto},
-    iter::Peekable,
-    sync::Arc,
-};
+use schemadb::{SchemaIterator, DB};
+use std::{iter::Peekable, sync::Arc};
+
+#[cfg(test)]
+use crate::errors::DiemDbError;
+#[cfg(test)]
+use diem_types::proof::EventAccumulatorProof;
+#[cfg(test)]
+use schemadb::ReadOptions;
 
 #[derive(Debug)]
 pub(crate) struct EventStore {
@@ -47,6 +42,7 @@ impl EventStore {
     /// Get all of the events given a transaction version.
     /// We don't need a proof for this because it's only used to get all events
     /// for a version which can be proved from the root hash of the event tree.
+    #[cfg(test)]
     pub fn get_events_by_version(
         &self, version: Version,
     ) -> Result<Vec<ContractEvent>> {
@@ -56,7 +52,7 @@ impl EventStore {
         // Grab the first event and then iterate until we get all events for
         // this version.
         iter.seek(&version)?;
-        while let Some(((ver, index), event)) = iter.next().transpose()? {
+        while let Some(((ver, _index), event)) = iter.next().transpose()? {
             if ver != version {
                 break;
             }
@@ -81,6 +77,7 @@ impl EventStore {
         })
     }
 
+    #[cfg(test)]
     fn get_event_by_version_and_index(
         &self, version: Version, index: u64,
     ) -> Result<ContractEvent> {
@@ -97,6 +94,7 @@ impl EventStore {
 
     /// Get the event raw data given transaction version and the index of the
     /// event queried.
+    #[cfg(test)]
     pub fn get_event_with_proof_by_version_and_index(
         &self, version: Version, index: u64,
     ) -> Result<(ContractEvent, EventAccumulatorProof)> {
@@ -107,7 +105,7 @@ impl EventStore {
         let mut iter = self.db.iter::<EventSchema>(ReadOptions::default())?;
         iter.seek_for_prev(&(version + 1))?;
         let num_events = match iter.next().transpose()? {
-            Some(((ver, index), _)) if ver == version => (index + 1),
+            Some(((ver, index), _)) if ver == version => index + 1,
             _ => unreachable!(), /* since we've already got at least one
                                   * event above */
         };
@@ -147,38 +145,26 @@ impl EventStore {
 
         Ok(root_hash)
     }
-
-    pub(crate) fn put_events_multiple_versions(
-        &self, first_version: u64, event_vecs: &[Vec<ContractEvent>],
-        cs: &mut ChangeSet,
-    ) -> Result<Vec<HashValue>> {
-        event_vecs
-            .iter()
-            .enumerate()
-            .map(|(idx, events)| {
-                let version = first_version
-                    .checked_add(idx as Version)
-                    .ok_or_else(|| format_err!("version overflow"))?;
-                self.put_events(version, events, cs)
-            })
-            .collect::<Result<Vec<_>>>()
-    }
 }
 
+#[cfg(test)]
 type Accumulator<'a> =
     MerkleAccumulator<EventHashReader<'a>, EventAccumulatorHasher>;
 
+#[cfg(test)]
 struct EventHashReader<'a> {
     store: &'a EventStore,
     version: Version,
 }
 
+#[cfg(test)]
 impl<'a> EventHashReader<'a> {
     fn new(store: &'a EventStore, version: Version) -> Self {
         Self { store, version }
     }
 }
 
+#[cfg(test)]
 impl<'a> HashReader for EventHashReader<'a> {
     fn get(&self, position: Position) -> Result<HashValue> {
         self.store

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 mod nonce_pool_map;
 mod weight;
 

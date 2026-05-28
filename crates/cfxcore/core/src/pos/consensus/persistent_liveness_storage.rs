@@ -140,16 +140,6 @@ impl RootMetadata {
     }
 
     pub fn version(&self) -> Version { max(self.num_leaves, 1) - 1 }
-
-    #[cfg(any(test, feature = "fuzzing"))]
-    pub fn new_empty() -> Self {
-        Self::new(
-            0,
-            *diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH,
-            vec![],
-            None,
-        )
-    }
 }
 
 /// The recovery data constructed from raw consensusdb data, it'll find the root
