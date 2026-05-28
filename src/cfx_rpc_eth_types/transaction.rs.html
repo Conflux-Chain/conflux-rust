@@ -42,7 +42,7 @@
 <a href=#42 id=42 data-nosnippet>42</a>    <span class="doccomment">/// Block hash
 <a href=#43 id=43 data-nosnippet>43</a>    </span><span class="kw">pub </span>block_hash: <span class="prelude-ty">Option</span>&lt;H256&gt;,
 <a href=#44 id=44 data-nosnippet>44</a>    <span class="doccomment">/// Block number
-<a href=#45 id=45 data-nosnippet>45</a>    </span><span class="kw">pub </span>block_number: <span class="prelude-ty">Option</span>&lt;U256&gt;,
+<a href=#45 id=45 data-nosnippet>45</a>    </span><span class="kw">pub </span>block_number: <span class="prelude-ty">Option</span>&lt;U64&gt;,
 <a href=#46 id=46 data-nosnippet>46</a>    <span class="doccomment">/// Transaction Index
 <a href=#47 id=47 data-nosnippet>47</a>    </span><span class="kw">pub </span>transaction_index: <span class="prelude-ty">Option</span>&lt;U256&gt;,
 <a href=#48 id=48 data-nosnippet>48</a>    <span class="doccomment">/// Sender
@@ -99,7 +99,7 @@
 <a href=#99 id=99 data-nosnippet>99</a>    <span class="doccomment">/// Convert `SignedTransaction` into RPC Transaction.
 <a href=#100 id=100 data-nosnippet>100</a>    </span><span class="kw">pub fn </span>from_signed(
 <a href=#101 id=101 data-nosnippet>101</a>        t: <span class="kw-2">&amp;</span>SignedTransaction,
-<a href=#102 id=102 data-nosnippet>102</a>        block_info: (<span class="prelude-ty">Option</span>&lt;H256&gt;, <span class="prelude-ty">Option</span>&lt;U256&gt;, <span class="prelude-ty">Option</span>&lt;U256&gt;),
+<a href=#102 id=102 data-nosnippet>102</a>        block_info: (<span class="prelude-ty">Option</span>&lt;H256&gt;, <span class="prelude-ty">Option</span>&lt;U64&gt;, <span class="prelude-ty">Option</span>&lt;U256&gt;),
 <a href=#103 id=103 data-nosnippet>103</a>        exec_info: (<span class="prelude-ty">Option</span>&lt;U64&gt;, <span class="prelude-ty">Option</span>&lt;H160&gt;),
 <a href=#104 id=104 data-nosnippet>104</a>    ) -&gt; Transaction {
 <a href=#105 id=105 data-nosnippet>105</a>        <span class="kw">let </span>signature = t.signature();

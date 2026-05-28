@@ -191,7 +191,7 @@
 <a href=#191 id=191 data-nosnippet>191</a>        <span class="kw">let </span>transaction_hash = tx.hash();
 <a href=#192 id=192 data-nosnippet>192</a>        <span class="kw">let </span>transaction_index: U256 = idx.into();
 <a href=#193 id=193 data-nosnippet>193</a>        <span class="kw">let </span>block_hash = b.pivot_header.hash();
-<a href=#194 id=194 data-nosnippet>194</a>        <span class="kw">let </span>block_height: U256 = b.pivot_header.height().into();
+<a href=#194 id=194 data-nosnippet>194</a>        <span class="kw">let </span>block_height: U64 = b.pivot_header.height().into();
 <a href=#195 id=195 data-nosnippet>195</a>
 <a href=#196 id=196 data-nosnippet>196</a>        <span class="kw">let </span>logs: Vec&lt;<span class="kw">_</span>&gt; = receipt
 <a href=#197 id=197 data-nosnippet>197</a>            .logs
@@ -346,9 +346,9 @@
 <a href=#346 id=346 data-nosnippet>346</a>    <span class="kw">pub fn </span>sync_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SyncStatus {
 <a href=#347 id=347 data-nosnippet>347</a>        <span class="kw">if </span><span class="self">self</span>.sync.catch_up_mode() {
 <a href=#348 id=348 data-nosnippet>348</a>            SyncStatus::Info(SyncInfo {
-<a href=#349 id=349 data-nosnippet>349</a>                starting_block: U256::from(<span class="self">self</span>.consensus.block_count()),
-<a href=#350 id=350 data-nosnippet>350</a>                current_block: U256::from(<span class="self">self</span>.consensus.block_count()),
-<a href=#351 id=351 data-nosnippet>351</a>                highest_block: U256::from(
+<a href=#349 id=349 data-nosnippet>349</a>                starting_block: U64::from(<span class="self">self</span>.consensus.block_count()),
+<a href=#350 id=350 data-nosnippet>350</a>                current_block: U64::from(<span class="self">self</span>.consensus.block_count()),
+<a href=#351 id=351 data-nosnippet>351</a>                highest_block: U64::from(
 <a href=#352 id=352 data-nosnippet>352</a>                    <span class="self">self</span>.sync.get_synchronization_graph().block_count(),
 <a href=#353 id=353 data-nosnippet>353</a>                ),
 <a href=#354 id=354 data-nosnippet>354</a>                warp_chunks_amount: <span class="prelude-val">None</span>,
