@@ -58,10 +58,15 @@ pub fn build_block(
                         }
                         Some(total_gas_used)
                     }
-                    None => Some(
-                        execution_result.block_receipts.receipts[tx_len - 1]
-                            .accumulated_gas_used,
-                    ),
+                    None => {
+                        let total_gas_used = if tx_len == 0 {
+                            U256::zero()
+                        } else {
+                            execution_result.block_receipts.receipts[tx_len - 1]
+                                .accumulated_gas_used
+                        };
+                        Some(total_gas_used)
+                    }
                 }
             }
             None => None,
