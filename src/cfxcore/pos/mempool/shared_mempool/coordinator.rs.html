@@ -69,7 +69,7 @@
 <a href=#69 id=69 data-nosnippet>69</a>                tasks::process_consensus_request(smp.db_with_cache.clone(), <span class="kw-2">&amp;</span>smp.mempool, msg).<span class="kw">await</span>;
 <a href=#70 id=70 data-nosnippet>70</a>            }
 <a href=#71 id=71 data-nosnippet>71</a>            msg = commit_notifications.select_next_some() =&gt; {
-<a href=#72 id=72 data-nosnippet>72</a>                handle_commit_notification(<span class="kw-2">&amp;mut </span>smp, msg);
+<a href=#72 id=72 data-nosnippet>72</a>                handle_commit_notification(<span class="kw-2">&amp;</span>smp, msg);
 <a href=#73 id=73 data-nosnippet>73</a>            }
 <a href=#74 id=74 data-nosnippet>74</a>            (peer, backoff) = scheduled_broadcasts.select_next_some() =&gt; {
 <a href=#75 id=75 data-nosnippet>75</a>                <span class="comment">// diem_debug!("scheduled_broadcasts");
@@ -119,68 +119,65 @@
 <a href=#119 id=119 data-nosnippet>119</a>        .<span class="kw">await</span>;
 <a href=#120 id=120 data-nosnippet>120</a>}
 <a href=#121 id=121 data-nosnippet>121</a>
-<a href=#122 id=122 data-nosnippet>122</a><span class="kw">fn </span>handle_commit_notification(
-<a href=#123 id=123 data-nosnippet>123</a>    smp: <span class="kw-2">&amp;mut </span>SharedMempool, msg: CommitNotification,
-<a href=#124 id=124 data-nosnippet>124</a>) {
-<a href=#125 id=125 data-nosnippet>125</a>    smp.update_pos_state();
-<a href=#126 id=126 data-nosnippet>126</a>    tokio::spawn(tasks::process_committed_transactions(
-<a href=#127 id=127 data-nosnippet>127</a>        smp.mempool.clone(),
-<a href=#128 id=128 data-nosnippet>128</a>        msg,
-<a href=#129 id=129 data-nosnippet>129</a>    ));
-<a href=#130 id=130 data-nosnippet>130</a>}
-<a href=#131 id=131 data-nosnippet>131</a>
-<a href=#132 id=132 data-nosnippet>132</a><span class="kw">async fn </span>handle_mempool_sync_msg(
-<a href=#133 id=133 data-nosnippet>133</a>    bounded_executor: <span class="kw-2">&amp;</span>BoundedExecutor, smp: <span class="kw-2">&amp;mut </span>SharedMempool, peer: NodeId,
-<a href=#134 id=134 data-nosnippet>134</a>    msg: MempoolSyncMsg,
-<a href=#135 id=135 data-nosnippet>135</a>) {
-<a href=#136 id=136 data-nosnippet>136</a>    <span class="kw">match </span>msg {
-<a href=#137 id=137 data-nosnippet>137</a>        MempoolSyncMsg::BroadcastTransactionsRequest {
-<a href=#138 id=138 data-nosnippet>138</a>            request_id,
-<a href=#139 id=139 data-nosnippet>139</a>            transactions,
-<a href=#140 id=140 data-nosnippet>140</a>        } =&gt; {
-<a href=#141 id=141 data-nosnippet>141</a>            <span class="kw">let </span>smp_clone = smp.clone();
-<a href=#142 id=142 data-nosnippet>142</a>            <span class="kw">let </span>timeline_state = TimelineState::NonQualified;
-<a href=#143 id=143 data-nosnippet>143</a>            bounded_executor
-<a href=#144 id=144 data-nosnippet>144</a>                .spawn(tasks::process_transaction_broadcast(
-<a href=#145 id=145 data-nosnippet>145</a>                    smp_clone,
-<a href=#146 id=146 data-nosnippet>146</a>                    transactions,
-<a href=#147 id=147 data-nosnippet>147</a>                    request_id,
-<a href=#148 id=148 data-nosnippet>148</a>                    timeline_state,
-<a href=#149 id=149 data-nosnippet>149</a>                    peer,
-<a href=#150 id=150 data-nosnippet>150</a>                ))
-<a href=#151 id=151 data-nosnippet>151</a>                .<span class="kw">await</span>;
-<a href=#152 id=152 data-nosnippet>152</a>        }
-<a href=#153 id=153 data-nosnippet>153</a>        MempoolSyncMsg::BroadcastTransactionsResponse {
-<a href=#154 id=154 data-nosnippet>154</a>            request_id,
-<a href=#155 id=155 data-nosnippet>155</a>            retry,
-<a href=#156 id=156 data-nosnippet>156</a>            backoff,
-<a href=#157 id=157 data-nosnippet>157</a>        } =&gt; {
-<a href=#158 id=158 data-nosnippet>158</a>            smp.peer_manager
-<a href=#159 id=159 data-nosnippet>159</a>                .process_broadcast_ack(peer, request_id, retry, backoff);
-<a href=#160 id=160 data-nosnippet>160</a>        }
-<a href=#161 id=161 data-nosnippet>161</a>    }
-<a href=#162 id=162 data-nosnippet>162</a>}
-<a href=#163 id=163 data-nosnippet>163</a>
-<a href=#164 id=164 data-nosnippet>164</a><span class="doccomment">/// Garbage collect all expired transactions by SystemTTL.
-<a href=#165 id=165 data-nosnippet>165</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>gc_coordinator(
-<a href=#166 id=166 data-nosnippet>166</a>    mempool: Arc&lt;Mutex&lt;CoreMempool&gt;&gt;, gc_interval_ms: u64,
-<a href=#167 id=167 data-nosnippet>167</a>) {
-<a href=#168 id=168 data-nosnippet>168</a>    <span class="macro">diem_info!</span>(LogSchema::event_log(LogEntry::GCRuntime, LogEvent::Start));
-<a href=#169 id=169 data-nosnippet>169</a>    <span class="kw">let </span><span class="kw-2">mut </span>interval =
-<a href=#170 id=170 data-nosnippet>170</a>        IntervalStream::new(interval(Duration::from_millis(gc_interval_ms)));
-<a href=#171 id=171 data-nosnippet>171</a>    <span class="kw">while let </span><span class="prelude-val">Some</span>(_interval) = interval.next().<span class="kw">await </span>{
-<a href=#172 id=172 data-nosnippet>172</a>        <span class="macro">diem_sample!</span>(
-<a href=#173 id=173 data-nosnippet>173</a>            SampleRate::Duration(Duration::from_secs(<span class="number">60</span>)),
-<a href=#174 id=174 data-nosnippet>174</a>            <span class="macro">diem_info!</span>(LogSchema::event_log(
-<a href=#175 id=175 data-nosnippet>175</a>                LogEntry::GCRuntime,
-<a href=#176 id=176 data-nosnippet>176</a>                LogEvent::Live
-<a href=#177 id=177 data-nosnippet>177</a>            ))
-<a href=#178 id=178 data-nosnippet>178</a>        );
-<a href=#179 id=179 data-nosnippet>179</a>        mempool.lock().gc();
-<a href=#180 id=180 data-nosnippet>180</a>    }
-<a href=#181 id=181 data-nosnippet>181</a>
-<a href=#182 id=182 data-nosnippet>182</a>    <span class="macro">diem_error!</span>(LogSchema::event_log(
-<a href=#183 id=183 data-nosnippet>183</a>        LogEntry::GCRuntime,
-<a href=#184 id=184 data-nosnippet>184</a>        LogEvent::Terminated
-<a href=#185 id=185 data-nosnippet>185</a>    ));
-<a href=#186 id=186 data-nosnippet>186</a>}</code></pre></div></section></main></body></html>
+<a href=#122 id=122 data-nosnippet>122</a><span class="kw">fn </span>handle_commit_notification(smp: <span class="kw-2">&amp;</span>SharedMempool, msg: CommitNotification) {
+<a href=#123 id=123 data-nosnippet>123</a>    tokio::spawn(tasks::process_committed_transactions(
+<a href=#124 id=124 data-nosnippet>124</a>        smp.mempool.clone(),
+<a href=#125 id=125 data-nosnippet>125</a>        msg,
+<a href=#126 id=126 data-nosnippet>126</a>    ));
+<a href=#127 id=127 data-nosnippet>127</a>}
+<a href=#128 id=128 data-nosnippet>128</a>
+<a href=#129 id=129 data-nosnippet>129</a><span class="kw">async fn </span>handle_mempool_sync_msg(
+<a href=#130 id=130 data-nosnippet>130</a>    bounded_executor: <span class="kw-2">&amp;</span>BoundedExecutor, smp: <span class="kw-2">&amp;mut </span>SharedMempool, peer: NodeId,
+<a href=#131 id=131 data-nosnippet>131</a>    msg: MempoolSyncMsg,
+<a href=#132 id=132 data-nosnippet>132</a>) {
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="kw">match </span>msg {
+<a href=#134 id=134 data-nosnippet>134</a>        MempoolSyncMsg::BroadcastTransactionsRequest {
+<a href=#135 id=135 data-nosnippet>135</a>            request_id,
+<a href=#136 id=136 data-nosnippet>136</a>            transactions,
+<a href=#137 id=137 data-nosnippet>137</a>        } =&gt; {
+<a href=#138 id=138 data-nosnippet>138</a>            <span class="kw">let </span>smp_clone = smp.clone();
+<a href=#139 id=139 data-nosnippet>139</a>            <span class="kw">let </span>timeline_state = TimelineState::NonQualified;
+<a href=#140 id=140 data-nosnippet>140</a>            bounded_executor
+<a href=#141 id=141 data-nosnippet>141</a>                .spawn(tasks::process_transaction_broadcast(
+<a href=#142 id=142 data-nosnippet>142</a>                    smp_clone,
+<a href=#143 id=143 data-nosnippet>143</a>                    transactions,
+<a href=#144 id=144 data-nosnippet>144</a>                    request_id,
+<a href=#145 id=145 data-nosnippet>145</a>                    timeline_state,
+<a href=#146 id=146 data-nosnippet>146</a>                    peer,
+<a href=#147 id=147 data-nosnippet>147</a>                ))
+<a href=#148 id=148 data-nosnippet>148</a>                .<span class="kw">await</span>;
+<a href=#149 id=149 data-nosnippet>149</a>        }
+<a href=#150 id=150 data-nosnippet>150</a>        MempoolSyncMsg::BroadcastTransactionsResponse {
+<a href=#151 id=151 data-nosnippet>151</a>            request_id,
+<a href=#152 id=152 data-nosnippet>152</a>            retry,
+<a href=#153 id=153 data-nosnippet>153</a>            backoff,
+<a href=#154 id=154 data-nosnippet>154</a>        } =&gt; {
+<a href=#155 id=155 data-nosnippet>155</a>            smp.peer_manager
+<a href=#156 id=156 data-nosnippet>156</a>                .process_broadcast_ack(peer, request_id, retry, backoff);
+<a href=#157 id=157 data-nosnippet>157</a>        }
+<a href=#158 id=158 data-nosnippet>158</a>    }
+<a href=#159 id=159 data-nosnippet>159</a>}
+<a href=#160 id=160 data-nosnippet>160</a>
+<a href=#161 id=161 data-nosnippet>161</a><span class="doccomment">/// Garbage collect all expired transactions by SystemTTL.
+<a href=#162 id=162 data-nosnippet>162</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>gc_coordinator(
+<a href=#163 id=163 data-nosnippet>163</a>    mempool: Arc&lt;Mutex&lt;CoreMempool&gt;&gt;, gc_interval_ms: u64,
+<a href=#164 id=164 data-nosnippet>164</a>) {
+<a href=#165 id=165 data-nosnippet>165</a>    <span class="macro">diem_info!</span>(LogSchema::event_log(LogEntry::GCRuntime, LogEvent::Start));
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="kw">let </span><span class="kw-2">mut </span>interval =
+<a href=#167 id=167 data-nosnippet>167</a>        IntervalStream::new(interval(Duration::from_millis(gc_interval_ms)));
+<a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">while let </span><span class="prelude-val">Some</span>(_interval) = interval.next().<span class="kw">await </span>{
+<a href=#169 id=169 data-nosnippet>169</a>        <span class="macro">diem_sample!</span>(
+<a href=#170 id=170 data-nosnippet>170</a>            SampleRate::Duration(Duration::from_secs(<span class="number">60</span>)),
+<a href=#171 id=171 data-nosnippet>171</a>            <span class="macro">diem_info!</span>(LogSchema::event_log(
+<a href=#172 id=172 data-nosnippet>172</a>                LogEntry::GCRuntime,
+<a href=#173 id=173 data-nosnippet>173</a>                LogEvent::Live
+<a href=#174 id=174 data-nosnippet>174</a>            ))
+<a href=#175 id=175 data-nosnippet>175</a>        );
+<a href=#176 id=176 data-nosnippet>176</a>        mempool.lock().gc();
+<a href=#177 id=177 data-nosnippet>177</a>    }
+<a href=#178 id=178 data-nosnippet>178</a>
+<a href=#179 id=179 data-nosnippet>179</a>    <span class="macro">diem_error!</span>(LogSchema::event_log(
+<a href=#180 id=180 data-nosnippet>180</a>        LogEntry::GCRuntime,
+<a href=#181 id=181 data-nosnippet>181</a>        LogEvent::Terminated
+<a href=#182 id=182 data-nosnippet>182</a>    ));
+<a href=#183 id=183 data-nosnippet>183</a>}</code></pre></div></section></main></body></html>
