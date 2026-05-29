@@ -229,7 +229,7 @@
 <a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">type </span>PrivateKeyMaterial = MultiBLSPrivateKey;
 <a href=#230 id=230 data-nosnippet>230</a>}
 <a href=#231 id=231 data-nosnippet>231</a>
-<a href=#232 id=232 data-nosnippet>232</a><span class="attr">#[allow(clippy::derive_hash_xor_eq)]
+<a href=#232 id=232 data-nosnippet>232</a><span class="attr">#[allow(clippy::derived_hash_with_manual_eq)]
 <a href=#233 id=233 data-nosnippet>233</a></span><span class="kw">impl </span>std::hash::Hash <span class="kw">for </span>MultiBLSPublicKey {
 <a href=#234 id=234 data-nosnippet>234</a>    <span class="kw">fn </span>hash&lt;H: std::hash::Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
 <a href=#235 id=235 data-nosnippet>235</a>        <span class="kw">let </span>encoded_pubkey = <span class="self">self</span>.to_bytes();
@@ -396,7 +396,7 @@
 <a href=#396 id=396 data-nosnippet>396</a>    }
 <a href=#397 id=397 data-nosnippet>397</a>}
 <a href=#398 id=398 data-nosnippet>398</a>
-<a href=#399 id=399 data-nosnippet>399</a><span class="attr">#[allow(clippy::derive_hash_xor_eq)]
+<a href=#399 id=399 data-nosnippet>399</a><span class="attr">#[allow(clippy::derived_hash_with_manual_eq)]
 <a href=#400 id=400 data-nosnippet>400</a></span><span class="kw">impl </span>std::hash::Hash <span class="kw">for </span>MultiBLSSignature {
 <a href=#401 id=401 data-nosnippet>401</a>    <span class="kw">fn </span>hash&lt;H: std::hash::Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
 <a href=#402 id=402 data-nosnippet>402</a>        <span class="kw">let </span>encoded_signature = <span class="self">self</span>.to_bytes();
