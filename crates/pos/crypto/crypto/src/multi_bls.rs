@@ -229,7 +229,7 @@ impl PublicKey for MultiBLSPublicKey {
     type PrivateKeyMaterial = MultiBLSPrivateKey;
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl std::hash::Hash for MultiBLSPublicKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let encoded_pubkey = self.to_bytes();
@@ -396,7 +396,7 @@ impl TryFrom<&[u8]> for MultiBLSSignature {
     }
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl std::hash::Hash for MultiBLSSignature {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let encoded_signature = self.to_bytes();
