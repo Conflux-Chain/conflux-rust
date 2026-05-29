@@ -293,7 +293,7 @@
 <a href=#293 id=293 data-nosnippet>293</a>    <span class="kw">for </span>_i <span class="kw">in </span><span class="number">0</span>..<span class="number">5 </span>{
 <a href=#294 id=294 data-nosnippet>294</a>        <span class="kw">let </span>keys: Vec&lt;Vec&lt;u8&gt;&gt; = generate_keys(TEST_NUMBER_OF_KEYS)
 <a href=#295 id=295 data-nosnippet>295</a>            .iter()
-<a href=#296 id=296 data-nosnippet>296</a>            .filter(|<span class="kw">_</span>| rng.gen_bool(<span class="number">0.1</span>))
+<a href=#296 id=296 data-nosnippet>296</a>            .filter(|<span class="kw">_</span>| rng.random_bool(<span class="number">0.1</span>))
 <a href=#297 id=297 data-nosnippet>297</a>            .cloned()
 <a href=#298 id=298 data-nosnippet>298</a>            .collect();
 <a href=#299 id=299 data-nosnippet>299</a>        <span class="kw">let </span>mpt_kv_iter = DumpedMptKvIterator {
@@ -309,7 +309,7 @@
 <a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">let </span><span class="kw-2">mut </span>rng = get_rng_for_test();
 <a href=#310 id=310 data-nosnippet>310</a>    <span class="kw">let </span>keys: Vec&lt;Vec&lt;u8&gt;&gt; = generate_keys(TEST_NUMBER_OF_KEYS)
 <a href=#311 id=311 data-nosnippet>311</a>        .iter()
-<a href=#312 id=312 data-nosnippet>312</a>        .filter(|<span class="kw">_</span>| rng.gen_bool(<span class="number">0.5</span>))
+<a href=#312 id=312 data-nosnippet>312</a>        .filter(|<span class="kw">_</span>| rng.random_bool(<span class="number">0.5</span>))
 <a href=#313 id=313 data-nosnippet>313</a>        .cloned()
 <a href=#314 id=314 data-nosnippet>314</a>        .collect();
 <a href=#315 id=315 data-nosnippet>315</a>    <span class="kw">let </span>mpt_kv_iter = DumpedMptKvIterator {

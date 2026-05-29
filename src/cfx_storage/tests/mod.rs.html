@@ -199,7 +199,7 @@
 <a href=#199 id=199 data-nosnippet>199</a>    <span class="kw">let </span><span class="kw-2">mut </span>keys_num: Vec&lt;u64&gt; = Default::default();
 <a href=#200 id=200 data-nosnippet>200</a>
 <a href=#201 id=201 data-nosnippet>201</a>    <span class="kw">for </span>_i <span class="kw">in </span><span class="number">0</span>..number_of_keys {
-<a href=#202 id=202 data-nosnippet>202</a>        keys_num.push(rng.gen());
+<a href=#202 id=202 data-nosnippet>202</a>        keys_num.push(rng.random());
 <a href=#203 id=203 data-nosnippet>203</a>    }
 <a href=#204 id=204 data-nosnippet>204</a>
 <a href=#205 id=205 data-nosnippet>205</a>    keys_num.sort();
@@ -221,7 +221,7 @@
 <a href=#221 id=221 data-nosnippet>221</a></span><span class="kw">fn </span>generate_account_keys(number_of_keys: usize) -&gt; Vec&lt;Vec&lt;u8&gt;&gt; {
 <a href=#222 id=222 data-nosnippet>222</a>    <span class="kw">let </span><span class="kw-2">mut </span>rng = get_rng_for_test();
 <a href=#223 id=223 data-nosnippet>223</a>    (<span class="number">0</span>..number_of_keys)
-<a href=#224 id=224 data-nosnippet>224</a>        .map(|<span class="kw">_</span>| rng.gen::&lt;[u8; <span class="number">20</span>]&gt;().to_vec())
+<a href=#224 id=224 data-nosnippet>224</a>        .map(|<span class="kw">_</span>| rng.random::&lt;[u8; <span class="number">20</span>]&gt;().to_vec())
 <a href=#225 id=225 data-nosnippet>225</a>        .collect()
 <a href=#226 id=226 data-nosnippet>226</a>}
 <a href=#227 id=227 data-nosnippet>227</a>

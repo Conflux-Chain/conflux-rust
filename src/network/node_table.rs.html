@@ -447,7 +447,7 @@
 <a href=#447 id=447 data-nosnippet>447</a>    ) -&gt; Vec&lt;NodeEntry&gt; {
 <a href=#448 id=448 data-nosnippet>448</a>        <span class="kw">let </span><span class="kw-2">mut </span>nodes: Vec&lt;NodeEntry&gt; = Vec::new();
 <a href=#449 id=449 data-nosnippet>449</a>        <span class="kw">for </span>_i <span class="kw">in </span><span class="number">0</span>..count {
-<a href=#450 id=450 data-nosnippet>450</a>            <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::thread_rng();
+<a href=#450 id=450 data-nosnippet>450</a>            <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
 <a href=#451 id=451 data-nosnippet>451</a>            <span class="kw">let </span>node_rep_idx = rng.random_range(<span class="number">0</span>..NODE_REPUTATION_LEVEL_COUNT);
 <a href=#452 id=452 data-nosnippet>452</a>            <span class="kw">let </span>node_rep = NodeReputation::iter().nth(node_rep_idx).unwrap();
 <a href=#453 id=453 data-nosnippet>453</a>            <span class="kw">let </span>node_rep_vec = <span class="kw-2">&amp;</span><span class="self">self</span>.node_reputation_table[node_rep];
@@ -476,7 +476,7 @@
 <a href=#476 id=476 data-nosnippet>476</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, count: u32, _filter: <span class="kw-2">&amp;</span>IpFilter,
 <a href=#477 id=477 data-nosnippet>477</a>    ) -&gt; HashSet&lt;NodeId&gt; {
 <a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">let </span><span class="kw-2">mut </span>node_id_set: HashSet&lt;NodeId&gt; = HashSet::new();
-<a href=#479 id=479 data-nosnippet>479</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::thread_rng();
+<a href=#479 id=479 data-nosnippet>479</a>        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
 <a href=#480 id=480 data-nosnippet>480</a>        <span class="kw">for </span>_i <span class="kw">in </span><span class="number">0</span>..count {
 <a href=#481 id=481 data-nosnippet>481</a>            <span class="kw">let </span>node_rep_idx = rng.random_range(<span class="number">0</span>..NODE_REPUTATION_LEVEL_COUNT);
 <a href=#482 id=482 data-nosnippet>482</a>            <span class="kw">let </span>node_rep = NodeReputation::iter().nth(node_rep_idx).unwrap();
@@ -656,7 +656,7 @@
 <a href=#656 id=656 data-nosnippet>656</a>            </span>a.time().cmp(<span class="kw-2">&amp;</span>b.time())
 <a href=#657 id=657 data-nosnippet>657</a>        });
 <a href=#658 id=658 data-nosnippet>658</a>
-<a href=#659 id=659 data-nosnippet>659</a>        unknown.shuffle(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#659 id=659 data-nosnippet>659</a>        unknown.shuffle(<span class="kw-2">&amp;mut </span>rand::rng());
 <a href=#660 id=660 data-nosnippet>660</a>
 <a href=#661 id=661 data-nosnippet>661</a>        success.append(<span class="kw-2">&amp;mut </span>unknown);
 <a href=#662 id=662 data-nosnippet>662</a>        success.append(<span class="kw-2">&amp;mut </span>failures);
