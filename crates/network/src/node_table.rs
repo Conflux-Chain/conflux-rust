@@ -447,7 +447,7 @@ impl NodeTable {
     ) -> Vec<NodeEntry> {
         let mut nodes: Vec<NodeEntry> = Vec::new();
         for _i in 0..count {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let node_rep_idx = rng.random_range(0..NODE_REPUTATION_LEVEL_COUNT);
             let node_rep = NodeReputation::iter().nth(node_rep_idx).unwrap();
             let node_rep_vec = &self.node_reputation_table[node_rep];
@@ -476,7 +476,7 @@ impl NodeTable {
         &self, count: u32, _filter: &IpFilter,
     ) -> HashSet<NodeId> {
         let mut node_id_set: HashSet<NodeId> = HashSet::new();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for _i in 0..count {
             let node_rep_idx = rng.random_range(0..NODE_REPUTATION_LEVEL_COUNT);
             let node_rep = NodeReputation::iter().nth(node_rep_idx).unwrap();
@@ -656,7 +656,7 @@ impl NodeTable {
             a.time().cmp(&b.time())
         });
 
-        unknown.shuffle(&mut rand::thread_rng());
+        unknown.shuffle(&mut rand::rng());
 
         success.append(&mut unknown);
         success.append(&mut failures);
