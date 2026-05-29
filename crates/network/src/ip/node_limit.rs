@@ -3,7 +3,6 @@ use crate::{
     node_database::NodeDatabase,
     node_table::NodeId,
 };
-use rand::thread_rng;
 use std::{
     collections::{HashMap, HashSet},
     net::IpAddr,
@@ -136,7 +135,7 @@ impl NodeIpLimit {
             return sampled;
         }
 
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
 
         for _ in 0..n {
             if let Some(bucket) = self.trusted_buckets.sample(&mut rng) {

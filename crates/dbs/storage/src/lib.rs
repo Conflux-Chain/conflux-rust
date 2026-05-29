@@ -4,7 +4,6 @@
 
 // TODO: check them again and reason about the safety of each usage.
 #![allow(clippy::mut_from_ref)]
-#![allow(deprecated)]
 
 #[macro_use]
 extern crate cfx_util_macros;

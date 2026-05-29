@@ -101,7 +101,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
     fn init_visit_counter_random_bits<RngT: Rng>(
         rng: &mut RngT,
     ) -> FrequencyType {
-        RANDOM_BITS & rng.gen::<FrequencyType>()
+        RANDOM_BITS & rng.random::<FrequencyType>()
     }
 
     fn inc_visit_counter<RngT: Rng>(&mut self, _rng: &mut RngT) {

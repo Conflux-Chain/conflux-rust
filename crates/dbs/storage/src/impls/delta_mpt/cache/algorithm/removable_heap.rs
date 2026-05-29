@@ -50,7 +50,7 @@ impl<ValueType, PosT: PrimitiveNum>
     TrivialValueWithHeapHandle<ValueType, PosT>
 {
     // Used in tests.
-    #[allow(dead_code)]
+    #[allow(dead_code, deprecated)]
     pub fn new(value: ValueType) -> Self {
         Self {
             value,
@@ -523,7 +523,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     }
 
     // Used in tests and by a currently unused class.
-    #[allow(dead_code)]
+    #[allow(dead_code, deprecated)]
     pub fn insert<ValueUtilT: HeapValueUtil<ValueType, PosT>>(
         &mut self, value: ValueType, value_util: &mut ValueUtilT,
     ) -> Result<PosT> {

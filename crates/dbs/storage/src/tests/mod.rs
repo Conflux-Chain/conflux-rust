@@ -199,7 +199,7 @@ fn generate_keys(number_of_keys: usize) -> Vec<Vec<u8>> {
     let mut keys_num: Vec<u64> = Default::default();
 
     for _i in 0..number_of_keys {
-        keys_num.push(rng.gen());
+        keys_num.push(rng.random());
     }
 
     keys_num.sort();
@@ -221,7 +221,7 @@ fn generate_keys(number_of_keys: usize) -> Vec<Vec<u8>> {
 fn generate_account_keys(number_of_keys: usize) -> Vec<Vec<u8>> {
     let mut rng = get_rng_for_test();
     (0..number_of_keys)
-        .map(|_| rng.gen::<[u8; 20]>().to_vec())
+        .map(|_| rng.random::<[u8; 20]>().to_vec())
         .collect()
 }
 
