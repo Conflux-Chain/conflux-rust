@@ -102,6 +102,7 @@ where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
         }
     }
 
+    #[allow(deprecated)]
     unsafe fn new_mut(
         util: &mut CacheStoreUtilT, index: CacheIndexT,
     ) -> CacheAlgoDataSetter<'_, CacheStoreUtilT, CacheIndexT> {
@@ -112,6 +113,7 @@ where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
         }
     }
 
+    #[allow(deprecated)]
     unsafe fn new_mut_most_recently_accessed(
         util: &mut CacheStoreUtilT, index: CacheIndexT,
     ) -> CacheAlgoDataSetterMostRecentlyAccessed<'_, CacheStoreUtilT, CacheIndexT>
