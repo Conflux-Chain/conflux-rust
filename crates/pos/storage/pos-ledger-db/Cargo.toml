@@ -14,12 +14,8 @@ anyhow = { workspace = true }
 arc-swap = "1.2.0"
 byteorder = "1.4.3"
 itertools = { workspace = true }
-once_cell = { workspace = true }
-num-derive = "0.4.2"
-num-traits = "0.2.14"
 proptest = { version = "1.0.0", optional = true }
 proptest-derive = { version = "0.5.1", optional = true }
-serde = { workspace = true }
 thiserror = { workspace = true }
 
 accumulator = { workspace = true }
@@ -35,12 +31,9 @@ tempfile = { workspace = true, optional = true }
 [dev-dependencies]
 proptest = "1.0.0"
 proptest-derive = "0.5.1"
-rand_08 = { workspace = true }
 tempfile = { workspace = true }
 
 diem-types = { workspace = true, features = ["fuzzing"] }
-move-core-types = { workspace = true }
-
 [features]
 default = []
 fuzzing = [
@@ -50,3 +43,6 @@ fuzzing = [
     "diem-crypto/fuzzing",
     "diem-types/fuzzing",
 ]
+
+[package.metadata.cargo-machete]
+ignored = ["proptest-derive"]

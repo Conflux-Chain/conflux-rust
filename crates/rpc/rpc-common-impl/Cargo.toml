@@ -11,9 +11,7 @@ repository.workspace = true
 license-file.workspace = true
 
 [dependencies]
-cfx-addr = { workspace = true }
 cfx-types = { workspace = true }
-cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 slice-group-by = { workspace = true }

@@ -42,7 +42,6 @@ metrics = { workspace = true }
 network = { workspace = true }
 num-traits = { workspace = true, default-features = false }
 parking_lot = { workspace = true }
-primal = { workspace = true }
 primitives = { workspace = true }
 priority-send-queue = { workspace = true }
 rand = { workspace = true }
@@ -61,7 +60,6 @@ serde_json = { workspace = true }
 siphasher = { workspace = true }
 slab = { workspace = true }
 solidity-abi = { workspace = true }
-static_assertions = { workspace = true }
 threadpool = { workspace = true }
 throttling = { workspace = true }
 toml = { workspace = true }
@@ -131,3 +129,6 @@ fuzzing = ["proptest", "proptest-derive"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
+
+[package.metadata.cargo-machete]
+ignored = ["proptest", "proptest-derive"]

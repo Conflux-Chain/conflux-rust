@@ -11,7 +11,6 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.38"
-bcs = "0.1.2"
 hex = "0.4.3"
 proptest = { version = "1.0.0", default-features = false, optional = true }
 proptest-derive = { version = "0.5.1", default-features = false, optional = true }

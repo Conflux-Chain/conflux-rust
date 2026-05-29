@@ -15,7 +15,6 @@ license-file.workspace = true
 [dependencies]
 jsonrpsee = { workspace = true, features = ["server", "ws-client"] }
 throttling = { workspace = true }
-futures-util = { workspace = true }
 log = { workspace = true }
 jsonrpsee-types = { workspace = true }
 cfx-rpc-utils = { workspace = true }
