@@ -301,6 +301,13 @@ impl Session {
         match packet.id {
             PACKET_HELLO => {
                 debug!("Read HELLO in session {:?}", self);
+                // A second HELLO would re-enter the ingress tie-break with this
+                // token already indexed (a remotely-triggerable panic). Reject
+                // it as a protocol violation.
+                if self.is_ready() {
+                    debug!("Duplicate HELLO on ready session {:?}", self);
+                    return Err(Error::BadProtocol);
+                }
                 self.metadata.peer_header_version = packet.header_version;
 
                 // Validate before the tie-break touches the index, so a failed
