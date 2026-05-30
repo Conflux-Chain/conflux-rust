@@ -302,11 +302,17 @@ impl Session {
             PACKET_HELLO => {
                 debug!("Read HELLO in session {:?}", self);
                 self.metadata.peer_header_version = packet.header_version;
-                // For ingress session, update the node id in `SessionManager`
+
+                // Validate before the tie-break touches the index, so a failed
+                // HELLO can't orphan a replaced session's index entry.
+                let rlp = Rlp::new(&packet.data);
+                let (peer_protocols, node_entry, pos_public_key) =
+                    self.validate_hello(&rlp, host)?;
+
                 let token_to_disconnect = self.update_ingress_node_id(host)?;
 
-                // Dropped by the tie-break: stop before `Ready` so the loser
-                // never reaches `on_peer_connected`; the caller kills it.
+                // Lost the tie-break: stop before `Ready` and commit nothing;
+                // the caller kills it.
                 if token_to_disconnect.as_ref().map(|(t, _)| *t)
                     == Some(self.token())
                 {
@@ -316,9 +322,11 @@ impl Session {
                     });
                 }
 
-                // Handle Hello packet to exchange protocols
-                let rlp = Rlp::new(&packet.data);
-                let pos_public_key = self.read_hello(&rlp, host)?;
+                self.metadata.peer_protocols = peer_protocols;
+                host.node_db
+                    .write()
+                    .insert_with_token(node_entry, self.token());
+                self.had_hello = Some(Instant::now());
                 Ok(SessionDataWithDisconnectInfo {
                     session_data: SessionData::Ready { pos_public_key },
                     token_to_disconnect,
@@ -406,16 +414,19 @@ impl Session {
         }
     }
 
-    /// Read Hello packet to exchange the supported protocols, and set the
-    /// `had_hello` flag to indicates that session is ready to send/receive
-    /// protocol packets.
-    ///
-    /// Besides, the node endpoint of remote peer will be added or updated in
-    /// node database, which is used to establish outgoing connections.
-    fn read_hello(
+    /// Validate a HELLO and return its parsed fields (protocols, endpoint, pos
+    /// keys) without committing them, so a HELLO that fails here — before the
+    /// tie-break — never half-updates the index.
+    fn validate_hello(
         &mut self, rlp: &Rlp, host: &NetworkServiceInner,
-    ) -> Result<Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>, Error>
-    {
+    ) -> Result<
+        (
+            Vec<ProtocolInfo>,
+            NodeEntry,
+            Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
+        ),
+        Error,
+    > {
         let remote_network_id: u64 = rlp.val_at(0)?;
         if remote_network_id != host.metadata.network_id {
             debug!(
@@ -450,8 +461,7 @@ impl Session {
                 .any(|hc| hc.protocol == c.protocol && hc.version <= c.version)
         });
 
-        self.metadata.peer_protocols = peer_caps;
-        if self.metadata.peer_protocols.is_empty() {
+        if peer_caps.is_empty() {
             debug!("No common capabilities with remote peer, peer_node_id = {:?}, session = {:?}", self.metadata.id, self);
             return Err(self.send_disconnect(DisconnectReason::UselessPeer));
         }
@@ -487,14 +497,11 @@ impl Session {
                 entry, self
             );
             return Err(self.send_disconnect(DisconnectReason::IpLimited));
-        } else {
-            debug!("Received valid endpoint {:?}, session = {:?}", entry, self);
-            host.node_db.write().insert_with_token(entry, self.token());
         }
+        debug!("Received valid endpoint {:?}, session = {:?}", entry, self);
 
-        self.had_hello = Some(Instant::now());
-        match rlp.item_count()? {
-            3 => Ok(None),
+        let pos_public_key = match rlp.item_count()? {
+            3 => None,
             4 => {
                 // FIXME(lpl): Verify keys.
                 let pos_public_key_bytes: Vec<u8> = rlp.val_at(3)?;
@@ -511,13 +518,17 @@ impl Session {
                 )
                 .map_err(|e| Error::Decoder(format!("{:?}", e)))?;
 
-                Ok(Some((bls_pub_key, vrf_pub_key)))
+                Some((bls_pub_key, vrf_pub_key))
             }
-            length => Err(Error::Decoder(format!(
-                "Hello has incorrect rlp length: {:?}",
-                length
-            ))),
-        }
+            length => {
+                return Err(Error::Decoder(format!(
+                    "Hello has incorrect rlp length: {:?}",
+                    length
+                )))
+            }
+        };
+
+        Ok((peer_caps, entry, pos_public_key))
     }
 
     /// Assemble a packet with specified protocol id, packet id and data.
