@@ -1,0 +1,105 @@
+# Rust & Blockchain-Specific Vulnerability Scan Guidelines
+
+## Rust-Specific Vulnerabilities to Scan For
+
+### High Priority
+- **Panic on Untrusted Input**: `unwrap()`, `expect()`, `panic!()` on network data
+- **Unsafe Block Logic Errors**: Incorrect pointer arithmetic, lifetime violations, data races
+- **Integer Overflow/Underflow**: Unchecked arithmetic in balance, nonce, gas calculations
+- **Type Confusion**: Incorrect enum variant matching, type casting errors
+- **Buffer Overflows**: Stack or heap buffer access out of bounds in unsafe code
+
+### Medium Priority
+- **Uninitialized Memory**: Use of uninitialized variables or memory
+- **Use After Free**: In unsafe blocks, accessing freed memory
+- **Double Locks**: Deadlock from acquiring same lock twice
+- **Resource Leaks**: Unclosed file handles, database connections
+
+### Low Priority
+- **Race Conditions**: Data races in concurrent code paths
+- **Memory Exhaustion**: Unbounded allocations from untrusted input
+
+## Blockchain-Specific Vulnerabilities
+
+### Consensus & State (CRITICAL)
+- **Double Spending**: Same transaction applied twice in different epochs
+- **Weight/Vote Manipulation**: Consensus weight calculations allowing attacker dominance
+- **Fork Resolution Bypass**: Invalid fork chain accepted over valid one
+- **Finality Violations**: Block that should be final gets reorganized
+
+### Cryptography (CRITICAL)
+- **Signature Verification Bypass**: ECDSA/BLS validation accepting invalid signatures
+- **Nonce Replay**: Same transaction nonce accepted multiple times
+- **Private Key Exposure**: Keys leaking through error messages, logs, memory
+- **Hash Preimage Collision**: Logic error allowing different preimages for same hash
+
+### Transaction Processing (HIGH)
+- **Invalid State Transition**: Transaction accepted that violates account invariants
+- **Gas Underpricing**: Computation allowed below gas cost
+- **Out of Order Execution**: Transaction processed before dependencies satisfied
+- **Value Transfer Logic**: Balance subtraction/addition errors
+
+### Smart Contract Execution (HIGH)
+- **EVM Opcode Misinterpretation**: Incorrect bytecode execution
+- **Memory Bounds Violation**: EVM memory access out of bounds
+- **Storage Access Errors**: Incorrect account storage modification
+- **Cross-Space Call Failure**: PoW↔PoS interaction logic broken
+
+## False Positive Rules for Triage
+
+**Exclude findings in:**
+- Test code (files with `_test.rs`, `tests/`, `benches/`)
+- Example code (files with `examples/`, `demo/`)
+- Dead code (unreachable from protocol entry points)
+- Libraries in `vendor/` or `third_party/` directories
+
+**Exclude finding types:**
+- Panics in `cfg(test)` or `#[test]` blocks
+- Integer overflow in debug builds (Rust default checked arithmetic)
+- Safe abstractions over unsafe code (e.g., Vec bounds checking)
+
+## Input Fuzzing Vectors
+
+### Transaction Fuzzing
+- Oversized transaction fields (gas limit = u64::MAX)
+- Missing required fields (empty signature, no sender)
+- Invalid account addresses (malformed, non-existent)
+- Edge case nonces (0, u64::MAX-1)
+- Edge case values (0, type::MAX)
+
+### Block Fuzzing
+- Invalid block headers (bad timestamps, invalid parent hash)
+- Consensus weight edge cases (0, overflow)
+- Epoch boundary transitions
+- Fork resolution with competing chains
+- Missing or extra transactions in block
+
+### Message Fuzzing (Network)
+- Incomplete messages (truncated mid-parse)
+- Extra data appended (junk after valid message)
+- Deeply nested structures (compression bombs)
+- Invalid UTF-8 in string fields
+- Version mismatches in protocol messages
+
+### State Fuzzing
+- Account with balance = 0, staked amount
+- Nonce at max value (u64::MAX)
+- Empty storage trie
+- Circular contract references
+- Concurrent modifications to same account
+
+## Expected Outputs
+
+Run the scan with:
+```bash
+/vuln-scan ./crates --extra ./SECURITY_SCAN_CONFIG/scan-extras.txt
+/triage ./VULN-FINDINGS.json --fp-rules ./SECURITY_SCAN_CONFIG/fp-rules.txt
+```
+
+Expected finding categories (if any):
+1. **Panic Crashes**: Functions crash on malformed input
+2. **Logic Errors**: State transitions accept invalid conditions
+3. **Integer Arithmetic**: Overflow/underflow in critical calculations
+4. **Unsafe Code**: Logic errors in unsafe blocks
+5. **Cryptographic**: Signature/hash validation bypasses
+
