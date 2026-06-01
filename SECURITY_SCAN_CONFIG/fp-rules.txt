@@ -1,0 +1,57 @@
+# False Positive Rules for Conflux-rust Triage
+
+## Automatically Exclude
+
+### Test & Example Code
+- Path contains `tests/` or `_test.rs` suffix
+- Path contains `examples/` or `benches/`
+- Functions marked with `#[test]` or `#[bench]`
+- Code inside `cfg(test)` conditionals
+
+### Third-Party & Build Artifacts
+- Path contains `vendor/` or `third_party/`
+- Path contains `target/` or `build/`
+- Generated code files (protobuf, FFI bindings)
+
+### Safe Code Patterns
+- Panics inside `Result::unwrap()` with checked precondition
+- Array access after bounds validation
+- Integer arithmetic that overflows only in test/invalid states
+- Panics in error reporting/logging (not core protocol path)
+
+## Context-Based Exclusions
+
+### Panics Allowed In
+- Initialization code (not hot path)
+- State machine invariant violations (not network-facing)
+- Internal consistency checks in debug code
+
+### Integer Overflow Allowed In
+- Gas calculation where overflow detected and handled
+- Debug/test-only counters
+- Metrics collection (non-critical)
+
+## Required to Report
+
+### MUST Report
+- Any panic reachable from network message parsing
+- Any panic on untrusted transaction data
+- Any integer arithmetic without overflow check in:
+  - Balance transfers
+  - Nonce calculations
+  - Gas accounting
+  - Weight calculations
+  - Epoch transitions
+
+### MUST Report (Cryptography)
+- Signature validation missing any step
+- Hash collision not handled
+- Nonce reuse possible
+- Private key in error messages or logs
+
+### MUST Report (Consensus)
+- Fork resolution accepting invalid chain
+- Weight calculation overflow/underflow
+- Finality rule violation
+- Double spend possible
+
