@@ -44,16 +44,25 @@ pub fn is_compatible_public(public: &Public) -> bool {
     result.is_user_account_address()
 }
 
-#[derive(Debug, Clone, PartialEq, DeriveMallocSizeOf)]
+#[derive(Clone, PartialEq, DeriveMallocSizeOf)]
 /// secp256k1 key pair
 pub struct KeyPair {
     secret: Secret,
     public: Public,
 }
 
+impl fmt::Debug for KeyPair {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("KeyPair")
+            .field("secret", &self.secret)
+            .field("public", &self.public)
+            .finish()
+    }
+}
+
 impl fmt::Display for KeyPair {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        writeln!(f, "secret:  {:x}", self.secret)?;
+        writeln!(f, "secret:  {}", self.secret)?;
         writeln!(f, "public:  {:x}", self.public)?;
         write!(f, "address: {:x}", self.address())
     }
@@ -107,7 +116,7 @@ mod tests {
     #[test]
     fn keypair_display() {
         let expected =
-"secret:  a100df7a048e50ed308ea696dc600215098141cb391e9527329df289f9383f65
+"secret:  Secret: 0xa100..3f65
 public:  8ce0db0b0359ffc5866ba61903cc2518c3675ef2cf380a7e54bde7ea20e6fa1ab45b7617346cd11b7610001ee6ae5b0155c41cad9527cbcdff44ec67848943a4
 address: 1b073e9233944b5e729e46d618f0d8edf3d9c34a".to_owned();
         let secret = Secret::from_str(

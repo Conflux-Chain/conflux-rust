@@ -196,7 +196,7 @@ fn display(result: (KeyPair, Option<String>), mode: DisplayMode) -> String {
             Some(extra_data) => format!("{}\n{}", extra_data, keypair),
             None => format!("{}", keypair),
         },
-        DisplayMode::Secret => format!("{:x}", keypair.secret()),
+        DisplayMode::Secret => keypair.secret().to_hex(),
         DisplayMode::Public => format!("{:x}", keypair.public()),
         DisplayMode::Address => format!("{:x}", keypair.address()),
     }
