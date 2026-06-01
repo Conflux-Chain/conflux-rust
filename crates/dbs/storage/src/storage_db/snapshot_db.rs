@@ -96,11 +96,10 @@ impl SnapshotInfo {
         } else if height > self.height {
             None
         } else {
-            unsafe {
-                Some(self.pivot_chain_parts.get_unchecked(
-                    (height - self.parent_snapshot_height - 1) as usize,
-                ))
-            }
+            let index =
+                usize::try_from(height - self.parent_snapshot_height - 1)
+                    .ok()?;
+            self.pivot_chain_parts.get(index)
         }
     }
 }
