@@ -29,6 +29,8 @@ pub struct PosStateConfig {
     cip156_transition_view: u64,
     cip156_dispute_locked_views: u64,
 
+    dispute_conflict_transition_view: u64,
+
     nonce_limit_transition_view: u64,
     max_nonce_per_account: u64,
 }
@@ -52,6 +54,7 @@ pub trait PosStateConfigTrait {
     // Returning None means the stake should be forfeited instead of being
     // locked.
     fn dispute_locked_views(&self, view: u64) -> Option<u64>;
+    fn enforce_dispute_conflict(&self, view: u64) -> bool;
 }
 
 impl PosStateConfig {
@@ -64,6 +67,7 @@ impl PosStateConfig {
         cip136_in_queue_locked_views: u64, cip136_out_queue_locked_views: u64,
         cip136_round_per_term: u64, cip156_transition_view: u64,
         cip156_dispute_locked_views: u64,
+        dispute_conflict_transition_view: u64,
     ) -> Self {
         Self {
             round_per_term,
@@ -80,6 +84,7 @@ impl PosStateConfig {
             cip136_round_per_term,
             cip156_transition_view,
             cip156_dispute_locked_views,
+            dispute_conflict_transition_view,
             nonce_limit_transition_view,
             max_nonce_per_account,
         }
@@ -208,6 +213,11 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
             Some(conf.cip156_dispute_locked_views)
         }
     }
+
+    fn enforce_dispute_conflict(&self, view: u64) -> bool {
+        let conf = self.get().unwrap();
+        view >= conf.dispute_conflict_transition_view
+    }
 }
 
 pub static POS_STATE_CONFIG: OnceCell<PosStateConfig> = OnceCell::new();
@@ -229,6 +239,7 @@ impl Default for PosStateConfig {
             cip136_round_per_term: ROUND_PER_TERM,
             cip156_transition_view: u64::MAX,
             cip156_dispute_locked_views: u64::MAX,
+            dispute_conflict_transition_view: u64::MAX,
             nonce_limit_transition_view: u64::MAX,
             max_nonce_per_account: u64::MAX,
         }
