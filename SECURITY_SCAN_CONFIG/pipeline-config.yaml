@@ -1,0 +1,39 @@
+# Copyright 2026 Anthropic PBC
+# SPDX-License-Identifier: Apache-2.0
+
+image_tag: vuln-pipeline-conflux-rust:latest
+github_url: https://github.com/Conflux-Chain/conflux-rust
+commit: 2dfb5f91babd5c1d1fe24e77e7dd9104e772a123
+binary_path: /work/target/release/conflux
+source_root: /work
+
+focus_areas:
+  - "Transaction validation and execution (cfxcore/src/transaction/transaction.rs) — signature verification, nonce tracking, balance updates"
+  - "Block processing and consensus (cfxcore/src/consensus) — weight calculation, fork resolution, epoch transitions"
+  - "Network message parsing (network/src) — P2P protocol message deserialization and validation"
+  - "Cryptographic operations (primitives/src) — ECDSA signature verification, Keccak hashing, address derivation"
+  - "State management and storage (cfxcore/src/state) — account balance updates, nonce increments, storage trie operations"
+  - "EVM bytecode execution (cfxcore/src/vm) — opcode interpretation, memory/storage access, gas accounting"
+  - "RPC endpoint handling (rpc/src) — request parsing, response serialization"
+  - "Cross-space call handling (cfxcore/src/vm/crossspace) — PoW↔PoS interactions"
+
+known_bugs: []
+
+attack_surface: |
+  Conflux protocol reference implementation handling untrusted network input.
+  
+  Primary attack surfaces:
+  1. Network (P2P peers): Craft malformed transaction/block messages, send invalid protocol messages
+  2. RPC (trusted clients): Craft requests designed to trigger state machine errors
+  3. Smart contracts: Deploy bytecode triggering EVM interpreter bugs
+  4. Consensus: Craft blocks/chains exploiting weight calculation or fork resolution
+  
+  Pure transaction/block processor — no wallet private keys, no persistent state in test harness.
+  Entry point: Parse transaction/block bytes → validate → execute → check for crashes.
+
+build_command: cd /work && cargo build --release --features default
+test_command: cd /work && cargo test --release --all --lib
+
+build_timeout_s: 3600
+memory_limit: 8g
+shm_size: 2g
