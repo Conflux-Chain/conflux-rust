@@ -53,7 +53,7 @@ impl fmt::Display for Secret {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(
             fmt,
-            "Secret: 0x{:02x}{:02x}..{:02x}{:02x}",
+            "0x{:02x}{:02x}..{:02x}{:02x}",
             self.inner[0], self.inner[1], self.inner[30], self.inner[31]
         )
     }
