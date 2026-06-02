@@ -341,7 +341,7 @@ impl VerificationConfig {
         &self, pow: &PowComputer, header: &mut BlockHeader,
     ) -> Result<(), Error> {
         // Check header custom data length
-        let custom_len = header.custom().iter().fold(0, |acc, x| acc + x.len());
+        let custom_len = header.custom_data_len();
         if custom_len > HEADER_CUSTOM_LENGTH_BOUND {
             return Err(From::from(BlockError::TooLongCustomInHeader(
                 OutOfBounds {
@@ -382,16 +382,17 @@ impl VerificationConfig {
         {
             for (i, expected_bytes) in expected_custom_prefix.iter().enumerate()
             {
-                let header_custum = header.custom();
-                // Header custom is too short.
-                let b =
-                    header_custum.get(i).ok_or(BlockError::InvalidCustom(
-                        header_custum.clone(),
-                        expected_custom_prefix.clone(),
-                    ))?;
-                if b != expected_bytes {
+                // `None` => header custom too short; else prefix mismatch.
+                let matches =
+                    header.custom_item(i).is_some_and(|b| &b == expected_bytes);
+                if !matches {
+                    // Bound the error to the compared prefix; the header may
+                    // carry a huge number of items.
+                    let header_prefix = (0..expected_custom_prefix.len())
+                        .filter_map(|j| header.custom_item(j))
+                        .collect();
                     return Err(BlockError::InvalidCustom(
-                        header_custum.clone(),
+                        header_prefix,
                         expected_custom_prefix.clone(),
                     )
                     .into());
