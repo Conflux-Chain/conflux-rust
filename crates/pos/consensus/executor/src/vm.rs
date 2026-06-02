@@ -160,7 +160,7 @@ impl ExecutableBuiltinTx for ElectionPayload {
                     VMStatus::Error(StatusCode::CFX_INVALID_TX)
                 })?;
         }
-        Ok(vec![self.to_event()])
+        Ok(vec![self.to_event()?])
     }
 }
 

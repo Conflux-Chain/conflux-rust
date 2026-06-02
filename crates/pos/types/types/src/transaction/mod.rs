@@ -275,17 +275,20 @@ pub struct ElectionPayload {
 }
 
 impl ElectionPayload {
-    pub fn to_event(&self) -> ContractEvent {
+    pub fn to_event(&self) -> Result<ContractEvent, VMStatus> {
+        let vrf_hash = self
+            .vrf_proof
+            .to_hash()
+            .map_err(|_| VMStatus::Error(StatusCode::CFX_INVALID_TX))?;
         let event = ElectionEvent::new(
             self.public_key.clone(),
             self.vrf_public_key.clone(),
-            self.vrf_proof.to_hash().unwrap(),
+            vrf_hash,
             self.target_term,
         );
-        ContractEvent::new(
-            ElectionEvent::event_key(),
-            bcs::to_bytes(&event).unwrap(),
-        )
+        let bytes = bcs::to_bytes(&event)
+            .map_err(|_| VMStatus::Error(StatusCode::CFX_UNEXPECTED_TX))?;
+        Ok(ContractEvent::new(ElectionEvent::event_key(), bytes))
     }
 }
 
