@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use consensus_types::{block::Block, vote::Vote};
+use diem_crypto::VRFProof;
 use diem_logger::{error as diem_error, prelude::*};
 use diem_state_view::StateView;
 use diem_types::{
@@ -160,6 +161,10 @@ impl ExecutableBuiltinTx for ElectionPayload {
                     VMStatus::Error(StatusCode::CFX_INVALID_TX)
                 })?;
         }
+        self.vrf_proof.to_hash().map_err(|e| {
+            diem_error!("election tx vrf proof to_hash error: {:?}", e);
+            VMStatus::Error(StatusCode::CFX_INVALID_TX)
+        })?;
         Ok(vec![self.to_event()])
     }
 }
