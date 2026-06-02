@@ -64,3 +64,11 @@ fn decoding_errors() {
     assert!(cfx_addr_decode("cfx:ccc7uawf5ubtnmezvhu9dhc6sghea0403y2dgpyfjp").is_err()); // version byte: 0b00010000
     assert!(cfx_addr_decode("cfx:bcc7uawf5ubtnmezvhu9dhc6sghea0403y2dgpyfjp").is_err()); // version byte: 0b00001000
 }
+
+// F-001: An 8-symbol base32 payload whose checksum is valid but body is empty
+// must return an error, not panic.
+#[test]
+fn decode_short_payload_no_panic() {
+    // 8 symbols: all checksum, zero-length body after stripping 8-symbol tail.
+    assert!(cfx_addr_decode("cfx:w3tg4akb").is_err());
+}
