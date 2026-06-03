@@ -315,7 +315,12 @@ impl LedgerInfo {
 
         // assumption: the witness header is correct
         // i.e. it does not blame blocks at or before the genesis block
-        assert!(witness > blame);
+        if witness <= blame {
+            bail!(Error::InternalError(format!(
+                "witness {} <= blame {}, which would imply blaming genesis",
+                witness, blame
+            )));
+        }
 
         // collect all header heights that were used to compute DSR of `witness`
         Ok((0..(blame + 1)).map(|ii| witness - ii).collect())
