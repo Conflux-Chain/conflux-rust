@@ -131,11 +131,6 @@ pub fn cfx_addr_decode(
     if payload_str.is_empty() {
         return Err(DecodingError::InvalidLength(0));
     }
-    let has_lowercase = payload_str.chars().any(|c| c.is_lowercase());
-    let has_uppercase = payload_str.chars().any(|c| c.is_uppercase());
-    if has_lowercase && has_uppercase {
-        return Err(DecodingError::MixedCase);
-    }
 
     // Decode payload to 5 bit array
     let payload_chars = payload_str.chars();
@@ -161,10 +156,18 @@ pub fn cfx_addr_decode(
         return Err(DecodingError::ChecksumFailed(checksum));
     }
 
-    // Convert from 5 bit array to byte array
+    // The last 8 symbols are the checksum, so we need strictly more than 8
+    // symbols to have a non-empty body after stripping the checksum.
     let len_5_bit = payload_5_bits.len();
+    if len_5_bit <= 8 {
+        return Err(DecodingError::InvalidLength(len_5_bit));
+    }
+    // Convert from 5 bit array to byte array.
     let payload =
         convert_bits(&payload_5_bits[..(len_5_bit - 8)], 5, 8, false)?;
+    if payload.is_empty() {
+        return Err(DecodingError::InvalidLength(0));
+    }
 
     // Verify the version byte
     let version = payload[0];
