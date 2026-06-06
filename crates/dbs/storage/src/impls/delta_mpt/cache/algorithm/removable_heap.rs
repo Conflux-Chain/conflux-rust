@@ -5,11 +5,7 @@
 use super::{super::super::super::errors::*, MyInto, PrimitiveNum};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use std::{
-    cmp::Ordering,
-    marker::PhantomData,
-    mem::{self, MaybeUninit},
-    ptr,
-    vec::Vec,
+    cmp::Ordering, marker::PhantomData, mem::MaybeUninit, ptr, vec::Vec,
 };
 
 // To make it easy for any value type to implement HeapValueUtil.
@@ -50,11 +46,11 @@ impl<ValueType, PosT: PrimitiveNum>
     TrivialValueWithHeapHandle<ValueType, PosT>
 {
     // Used in tests.
-    #[allow(dead_code, deprecated)]
+    #[allow(dead_code)]
     pub fn new(value: ValueType) -> Self {
         Self {
             value,
-            handle: unsafe { mem::uninitialized() },
+            handle: HeapHandle::default(),
         }
     }
 
@@ -523,7 +519,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     }
 
     // Used in tests and by a currently unused class.
-    #[allow(dead_code, deprecated)]
+    #[allow(dead_code)]
     pub fn insert<ValueUtilT: HeapValueUtil<ValueType, PosT>>(
         &mut self, value: ValueType, value_util: &mut ValueUtilT,
     ) -> Result<PosT> {
@@ -531,8 +527,11 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
             return Err(Error::OutOfCapacity.into());
         }
 
-        let mut hole: Hole<ValueType> = unsafe { mem::uninitialized() };
-        hole.value = value;
+        // `pointer_pos` stays uninit until `insert_with_hole_unchecked` writes
+        // it; `value` is moved in directly (the old `mem::uninitialized()` +
+        // assignment dropped an uninitialized `value`, UB if `ValueType:
+        // Drop`).
+        let hole = Hole::new_uninit_pointer(value);
 
         let pos = unsafe { self.insert_with_hole_unchecked(hole, value_util) };
 
