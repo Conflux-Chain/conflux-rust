@@ -1964,7 +1964,6 @@ dependencies = [
  "cfx-util-macros",
  "futures 0.3.30",
  "jsonrpsee",
- "jsonrpsee-types",
  "lazy_static",
  "log",
  "metrics",
