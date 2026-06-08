@@ -38,7 +38,7 @@
              'life0: 'async_trait</span>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.sign" class="fn">sign</a>(
         &amp;self,
-        data: <a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">RpcBytes</a>,
+        data: RpcBytes,
         address: <a class="struct" href="../cfx_rpc_cfx_types/address/struct.RpcAddress.html" title="struct cfx_rpc_cfx_types::address::RpcAddress">RpcAddress</a>,
         password: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;,
     ) -&gt; JsonRpcResult&lt;H520&gt;;
@@ -105,7 +105,7 @@
     'life0: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Lock an account</p>
 </div></details><section id="tymethod.sign" class="method"><a class="src rightside" href="../src/cfx_rpc_cfx_api/cfx/debug.rs.html#38-40">Source</a><h4 class="code-header">fn <a href="#tymethod.sign" class="fn">sign</a>(
     &amp;self,
-    data: <a class="struct" href="../cfx_rpc_primitives/bytes/struct.Bytes.html" title="struct cfx_rpc_primitives::bytes::Bytes">RpcBytes</a>,
+    data: RpcBytes,
     address: <a class="struct" href="../cfx_rpc_cfx_types/address/struct.RpcAddress.html" title="struct cfx_rpc_cfx_types::address::RpcAddress">RpcAddress</a>,
     password: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;,
 ) -&gt; JsonRpcResult&lt;H520&gt;</h4></section><section id="tymethod.sign_transaction" class="method"><a class="src rightside" href="../src/cfx_rpc_cfx_api/cfx/debug.rs.html#43-45">Source</a><h4 class="code-header">fn <a href="#tymethod.sign_transaction" class="fn">sign_transaction</a>(
