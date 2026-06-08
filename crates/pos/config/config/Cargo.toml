@@ -16,12 +16,9 @@ thiserror = "1.0.24"
 
 bcs = "0.1.2"
 diem-crypto = { workspace = true }
-diem-global-constants = { workspace = true }
 diem-logger = { workspace = true }
 diem-secure-storage = { workspace = true }
 diem-types = { workspace = true }
-cfx-types = { workspace = true }
-
 [dev-dependencies]
 diem-crypto = { workspace = true, features = ["fuzzing"] }
 
