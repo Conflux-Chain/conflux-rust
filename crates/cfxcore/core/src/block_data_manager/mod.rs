@@ -304,6 +304,8 @@ impl BlockDataManager {
                     .block_header
                     .deferred_logs_bloom_hash(),
             );
+            // Persist block number index for true genesis
+            data_man.insert_hash_by_block_number(0, &cur_era_genesis_hash);
         } else {
             // Recover ExecutionContext for cur_era_genesis from db
             data_man.insert_epoch_execution_context(
@@ -832,13 +834,10 @@ impl BlockDataManager {
         if self.config.persist_block_number_index {
             self.hash_by_block_number
                 .write()
-                .entry(block_number)
-                .and_modify(|v| {
-                    *v = block_hash.clone();
-                    self.cache_man
-                        .lock()
-                        .note_used(CacheId::HashByBlockNumber(block_number));
-                });
+                .insert(block_number, *block_hash);
+            self.cache_man
+                .lock()
+                .note_used(CacheId::HashByBlockNumber(block_number));
             self.db_manager
                 .insert_hash_by_block_number_to_db(block_number, block_hash);
         } else {
