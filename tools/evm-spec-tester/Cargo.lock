@@ -1648,6 +1648,8 @@ dependencies = [
  "serde",
  "strum 0.26.3",
  "thiserror 2.0.18",
+ "tower 0.5.2",
+ "tower-http",
  "txgen",
 ]
 
@@ -1845,14 +1847,17 @@ dependencies = [
  "cfx-rpc-utils",
  "cfx-util-macros",
  "futures 0.3.30",
+ "http 1.1.0",
  "jsonrpsee",
  "jsonrpsee-types",
  "lazy_static",
  "log",
  "metrics",
  "parking_lot 0.12.1",
+ "thiserror 2.0.18",
  "throttling",
  "tokio",
+ "tower-http",
  "tracing-subscriber 0.3.20",
 ]
 
@@ -8011,6 +8016,20 @@ dependencies = [
  "futures-util",
  "pin-project-lite",
  "sync_wrapper",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840"
+dependencies = [
+ "bitflags 2.10.0",
+ "bytes",
+ "http 1.1.0",
+ "pin-project-lite",
  "tower-layer",
  "tower-service",
 ]
