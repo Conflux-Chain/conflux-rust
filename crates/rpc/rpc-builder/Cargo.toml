@@ -33,5 +33,7 @@ network = { workspace = true }
 parking_lot = { workspace = true }
 blockgen = { workspace = true }
 txgen = { workspace = true }
+tower-http = { workspace = true }
+tower = { workspace = true }
 
 [dev-dependencies]

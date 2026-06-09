@@ -270,6 +270,10 @@ jsonrpsee = "0.26"
 jsonrpsee-core = "0.26"
 jsonrpsee-types = "0.26"
 
+http = "1.0"
+tower = "0.5"
+tower-http = "0.6"
+
 # async
 tokio = "1.48"
 tokio-stream = "0.1"
