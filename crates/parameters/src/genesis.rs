@@ -32,12 +32,14 @@ lazy_static! {
         KeyPair::from_secret(DEV_GENESIS_PRI_KEY_2.parse().unwrap()).unwrap();
 }
 
-fn genesis_contract_address_impl(idx: usize, code: &Bytes) -> AddressWithSpace {
+fn genesis_contract_address_impl(
+    nonce: usize, code: &Bytes,
+) -> AddressWithSpace {
     let genesis_account_address = GENESIS_ACCOUNT_ADDRESS;
     let (mut address, _) = cal_contract_address(
         CreateContractAddressType::FromSenderNonceAndCodeHash,
         &genesis_account_address,
-        &U256::from(idx),
+        &U256::from(nonce),
         code,
     );
     address.set_contract_type_bits();
