@@ -42,3 +42,30 @@ def test_get_epoch_number_errors(client: RpcClient):
         client.block_by_epoch,
         epoch_missing_hex_prefix_error.epoch,
     )
+
+
+def test_genesis_block_gas_used_is_not_null(client):
+    block = client.block_by_epoch(0, True)
+    assert_equal(block["gasUsed"], "0x9402a0")
+    assert_equal(len(block["transactions"]), 8)
+    tx1 = block["transactions"][1]
+    
+    assert tx1["blockHash"] is not None
+    assert tx1["contractCreated"] is not None
+    assert_equal(tx1["transactionIndex"], "0x1")
+    assert_equal(tx1["status"], "0x0")
+
+
+def test_genesis_first_tx_receipt_is_not_null(client):
+    block = client.block_by_epoch(0, True)
+    first_tx_hash = block["transactions"][0]["hash"]
+    receipt = client.get_transaction_receipt(first_tx_hash)
+    assert receipt is not None
+    
+def test_genesis_first_tx_has_status(client):
+    block = client.block_by_epoch(0, True)
+    first_tx_hash = block["transactions"][1]["hash"]
+    tx = client.get_tx(first_tx_hash)
+    assert tx["status"] is not None
+    assert tx["contractCreated"] is not None
+

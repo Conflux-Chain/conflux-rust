@@ -111,7 +111,6 @@ impl CommonRpcImpl {
         accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
     ) -> Self {
         let data_man = consensus.data_manager().clone();
-
         Self {
             exit,
             consensus,

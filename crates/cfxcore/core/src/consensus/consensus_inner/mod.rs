@@ -13,8 +13,8 @@ use pow::{PowComputer, ProofOfWorkConfig};
 
 use crate::{
     block_data_manager::{
-        BlockDataManager, BlockExecutionResultWithEpoch, DataVersionTuple,
-        EpochExecutionContext,
+        BlockDataManager, BlockExecutionResult, BlockExecutionResultWithEpoch,
+        DataVersionTuple, EpochExecutionContext,
     },
     consensus::{
         anticone_cache::AnticoneCache,
@@ -30,7 +30,7 @@ use cfx_internal_common::{
     consensus_api::StateMaintenanceTrait, EpochExecutionCommitment,
 };
 use cfx_parameters::{consensus::*, consensus_internal::*};
-use cfx_types::{H256, U256, U512};
+use cfx_types::{Bloom, H256, U256, U512};
 use dag::{
     get_future, topological_sort, Graph, RichDAG, RichTreeGraph, TreeGraph, DAG,
 };
@@ -41,7 +41,8 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{Counter, CounterUsize};
 use primitives::{
-    pos::PosBlockId, Block, BlockHeader, BlockHeaderBuilder, EpochId,
+    pos::PosBlockId, Block, BlockHeader, BlockHeaderBuilder, BlockReceipts,
+    EpochId, Receipt, TransactionStatus,
 };
 use slab::Slab;
 use std::{
@@ -533,6 +534,8 @@ pub struct ConsensusGraphInner {
     /// `true` before we enter `CacheUpSyncBlock`. We need to execute
     /// transactions and process state if it's `false`.
     header_only: bool,
+
+    pub genesis_block_receipts: Arc<BlockReceipts>,
 }
 
 impl MallocSizeOf for ConsensusGraphInner {
@@ -554,6 +557,7 @@ impl MallocSizeOf for ConsensusGraphInner {
             + self.pastset_cache.size_of(ops)
             + self.best_terminals_lca_height_cache.size_of(ops)
             + self.best_terminals_reorg_height.size_of(ops)
+            + self.genesis_block_receipts.size_of(ops)
     }
 }
 
@@ -611,6 +615,31 @@ impl ConsensusGraphInner {
             .expect("stable genesis block header should exist here");
         let cur_era_stable_height = stable_block_header.height();
         let initial_difficulty = pow_config.initial_difficulty;
+
+        let genesis_txs = &data_man.true_genesis.transactions;
+        let mut accumulated_gas = U256::zero();
+        let receipts = genesis_txs
+            .iter()
+            .map(|tx| {
+                let tx_gas = *tx.gas();
+                accumulated_gas += tx_gas;
+                let gas_fee = tx_gas * *tx.gas_price();
+                Receipt {
+                    accumulated_gas_used: accumulated_gas,
+                    gas_fee,
+                    storage_collateralized: vec![],
+                    outcome_status: TransactionStatus::Success,
+                    ..Default::default()
+                }
+            })
+            .collect();
+        let genesis_block_receipts = Arc::new(BlockReceipts {
+            receipts,
+            block_number: 0,
+            secondary_reward: U256::zero(),
+            tx_execution_error_messages: vec![String::new(); genesis_txs.len()],
+        });
+
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
             hash_to_arena_indices: FastHashMap::new(),
@@ -649,6 +678,7 @@ impl ConsensusGraphInner {
             best_terminals_reorg_height: NULLU64,
             has_timer_block_in_anticone_cache: Default::default(),
             header_only: true,
+            genesis_block_receipts,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -2284,6 +2314,18 @@ impl ConsensusGraphInner {
     pub fn block_execution_results_by_hash(
         &self, hash: &H256, update_cache: bool,
     ) -> Option<BlockExecutionResultWithEpoch> {
+        // There are no genesis block receipts in the database, so they are
+        // handled separately here.
+        if *hash == self.data_man.true_genesis.hash() {
+            return Some(DataVersionTuple(
+                *hash,
+                BlockExecutionResult {
+                    block_receipts: self.genesis_block_receipts.clone(),
+                    bloom: Bloom::zero(),
+                },
+            ));
+        }
+
         match self.get_epoch_hash_for_block(hash) {
             Some(epoch) => {
                 trace!("Block {} is in epoch {}", hash, epoch);

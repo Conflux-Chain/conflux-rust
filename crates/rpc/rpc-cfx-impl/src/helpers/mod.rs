@@ -1,6 +1,5 @@
 pub mod block_provider;
 mod epoch_queue;
-pub mod genesis_block;
 pub mod poll_filter;
 pub mod poll_manager;
 pub mod subscribers;
