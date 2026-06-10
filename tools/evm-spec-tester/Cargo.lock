@@ -1649,7 +1649,6 @@ dependencies = [
  "strum 0.26.3",
  "thiserror 2.0.18",
  "tower 0.5.2",
- "tower-http",
  "txgen",
 ]
 
