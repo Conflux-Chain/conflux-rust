@@ -41,8 +41,8 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{Counter, CounterUsize};
 use primitives::{
-    pos::PosBlockId, Block, BlockHeader, BlockHeaderBuilder, BlockReceipts,
-    EpochId, Receipt, TransactionStatus,
+    pos::PosBlockId, receipt::StorageChange, Block, BlockHeader,
+    BlockHeaderBuilder, BlockReceipts, EpochId, Receipt, TransactionStatus,
 };
 use slab::Slab;
 use std::{
@@ -621,13 +621,30 @@ impl ConsensusGraphInner {
         let receipts = genesis_txs
             .iter()
             .map(|tx| {
+                // Since receipts for genesis transactions are not stored in the
+                // database, we directly use the gas limit as
+                // the gas used, which may be higher than
+                // the actual amount of gas consumed.
                 let tx_gas = *tx.gas();
                 accumulated_gas += tx_gas;
                 let gas_fee = tx_gas * *tx.gas_price();
+                // We directly use the storage limit as the storage
+                // collateralized, which may be larger than the
+                // actual value.
+
+                let storage_collateralized =
+                    if let Some(limit) = tx.storage_limit() {
+                        vec![StorageChange {
+                            address: tx.sender().address,
+                            collaterals: limit.into(),
+                        }]
+                    } else {
+                        vec![]
+                    };
                 Receipt {
                     accumulated_gas_used: accumulated_gas,
                     gas_fee,
-                    storage_collateralized: vec![],
+                    storage_collateralized,
                     outcome_status: TransactionStatus::Success,
                     ..Default::default()
                 }
@@ -2321,6 +2338,8 @@ impl ConsensusGraphInner {
                 *hash,
                 BlockExecutionResult {
                     block_receipts: self.genesis_block_receipts.clone(),
+                    // Genesis transactions do not emit events, including
+                    // contract deployment transactions.
                     bloom: Bloom::zero(),
                 },
             ));

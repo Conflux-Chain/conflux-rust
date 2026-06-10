@@ -579,26 +579,3 @@ pub fn build_genesis_transactions(
         ),
     ]
 }
-
-// All genesis contract creation tx's sender is genesis account.
-pub fn get_genesis_contract_addresses(
-    genesis_transactions: &[Arc<SignedTransaction>],
-) -> Vec<Option<AddressWithSpace>> {
-    let genesis_account_address = GENESIS_ACCOUNT_ADDRESS.with_native_space();
-
-    genesis_transactions
-        .iter()
-        .map(|tx| match tx.action() {
-            Action::Create => {
-                let (address, _) = cal_contract_address_with_space(
-                    CreateContractAddressType::FromSenderNonceAndCodeHash,
-                    &genesis_account_address,
-                    &tx.nonce(),
-                    tx.data(),
-                );
-                Some(address)
-            }
-            _ => None,
-        })
-        .collect()
-}
