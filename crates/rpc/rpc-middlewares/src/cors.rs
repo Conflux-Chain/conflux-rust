@@ -58,6 +58,16 @@ pub fn create_cors_layer(
     Ok(cors)
 }
 
+/// Creates the [`CorsLayer`] if any, returning `None` for `"none"` input
+pub fn maybe_cors_layer(
+    cors: Option<String>,
+) -> Result<Option<CorsLayer>, CorsDomainError> {
+    if cors.as_deref() == Some("none") {
+        return Ok(None);
+    }
+    cors.as_deref().map(create_cors_layer).transpose()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

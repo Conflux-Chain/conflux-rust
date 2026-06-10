@@ -3,11 +3,8 @@ mod module;
 pub use crate::{
     error::*, id_provider::SubscriptionIdProvider, RpcServerHandle,
 };
-use cfx_rpc_middlewares::{
-    create_cors_layer, CorsDomainError, Logger, Metrics, Throttle,
-};
+use cfx_rpc_middlewares::{maybe_cors_layer, Logger, Metrics, Throttle};
 pub use module::{CfxRpcModule, RpcModuleSelection};
-use tower_http::cors::CorsLayer;
 
 use blockgen::BlockGeneratorTestApi;
 use cfx_rpc_cfx_api::{
@@ -389,17 +386,6 @@ impl RpcServerConfig {
         self
     }
 
-    /// Creates the [`CorsLayer`] if any
-    fn maybe_cors_layer(
-        cors: Option<String>,
-    ) -> Result<Option<CorsLayer>, CorsDomainError> {
-        // if cors domain is "none", we treat it as if no cors layer is needed
-        if cors.as_deref() == Some("none") {
-            return Ok(None);
-        }
-        cors.as_deref().map(create_cors_layer).transpose()
-    }
-
     pub const fn with_http_address(mut self, addr: SocketAddr) -> Self {
         self.http_addr = Some(addr);
         self
@@ -487,7 +473,7 @@ impl RpcServerConfig {
                 let server = ServerBuilder::new()
                     .set_http_middleware(
                         tower::ServiceBuilder::new()
-                            .option_layer(Self::maybe_cors_layer(cors)?),
+                            .option_layer(maybe_cors_layer(cors)?),
                     )
                     .set_rpc_middleware(rpc_middleware)
                     .set_config(config.build())
@@ -534,7 +520,7 @@ impl RpcServerConfig {
             let server = ServerBuilder::new()
                 .set_config(config.ws_only().build())
                 .set_http_middleware(tower::ServiceBuilder::new().option_layer(
-                    Self::maybe_cors_layer(self.ws_cors_domains.clone())?,
+                    maybe_cors_layer(self.ws_cors_domains.clone())?,
                 ))
                 .set_rpc_middleware(rpc_middleware.clone())
                 .build(ws_socket_addr)
@@ -560,7 +546,7 @@ impl RpcServerConfig {
             let server = ServerBuilder::new()
                 .set_config(config.http_only().build())
                 .set_http_middleware(tower::ServiceBuilder::new().option_layer(
-                    Self::maybe_cors_layer(self.http_cors_domains.clone())?,
+                    maybe_cors_layer(self.http_cors_domains.clone())?,
                 ))
                 .set_rpc_middleware(rpc_middleware)
                 .build(http_socket_addr)
