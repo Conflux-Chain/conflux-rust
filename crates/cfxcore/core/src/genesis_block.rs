@@ -597,7 +597,7 @@ pub fn build_genesis_transactions(
 // zero
 fn genesis_tx_execution_outcome() -> ExecutionOutcome {
     ExecutionOutcome::Finished(Executed {
-        base_gas: 21000, // should also set this field to 0 ?
+        base_gas: 0,
         gas_used: U256::zero(),
         fee: U256::zero(),
         burnt_fee: None,
