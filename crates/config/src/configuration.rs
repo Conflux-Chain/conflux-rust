@@ -1139,6 +1139,7 @@ impl Configuration {
             self.raw_conf.jsonrpc_local_http_port,
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
+            self.raw_conf.jsonrpc_cors.clone(),
         )
     }
 
@@ -1147,6 +1148,7 @@ impl Configuration {
             Some((127, 0, 0, 1)),
             self.raw_conf.jsonrpc_local_ws_port,
             self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            self.raw_conf.jsonrpc_cors.clone(),
         )
     }
 
@@ -1156,6 +1158,7 @@ impl Configuration {
             self.raw_conf.jsonrpc_http_port,
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
+            self.raw_conf.jsonrpc_cors.clone(),
         )
     }
 
@@ -1164,6 +1167,7 @@ impl Configuration {
             None,
             self.raw_conf.jsonrpc_ws_port,
             self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            self.raw_conf.jsonrpc_cors.clone(), // use same cors option as http
         )
     }
 
@@ -1173,6 +1177,7 @@ impl Configuration {
             self.raw_conf.jsonrpc_http_eth_port,
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
+            self.raw_conf.jsonrpc_cors.clone(),
         )
     }
 
@@ -1181,6 +1186,7 @@ impl Configuration {
             None,
             self.raw_conf.jsonrpc_ws_eth_port,
             self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            self.raw_conf.jsonrpc_cors.clone(), // use same cors option as http
         )
     }
 
