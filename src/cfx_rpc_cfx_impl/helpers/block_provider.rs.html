@@ -223,57 +223,56 @@
 <a href=#223 id=223 data-nosnippet>223</a>        transactions,
 <a href=#224 id=224 data-nosnippet>224</a>        custom: b
 <a href=#225 id=225 data-nosnippet>225</a>            .block_header
-<a href=#226 id=226 data-nosnippet>226</a>            .custom()
-<a href=#227 id=227 data-nosnippet>227</a>            .clone()
-<a href=#228 id=228 data-nosnippet>228</a>            .into_iter()
-<a href=#229 id=229 data-nosnippet>229</a>            .map(Into::into)
-<a href=#230 id=230 data-nosnippet>230</a>            .collect(),
-<a href=#231 id=231 data-nosnippet>231</a>        size: <span class="prelude-val">Some</span>(b.size().into()),
-<a href=#232 id=232 data-nosnippet>232</a>        pos_reference: b.block_header.pos_reference().clone(),
-<a href=#233 id=233 data-nosnippet>233</a>    })
-<a href=#234 id=234 data-nosnippet>234</a>}
-<a href=#235 id=235 data-nosnippet>235</a>
-<a href=#236 id=236 data-nosnippet>236</a><span class="kw">pub fn </span>build_header(
-<a href=#237 id=237 data-nosnippet>237</a>    h: <span class="kw-2">&amp;</span>PrimitiveBlockHeader, network: Network, consensus: SharedConsensusGraph,
-<a href=#238 id=238 data-nosnippet>238</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Header, String&gt; {
-<a href=#239 id=239 data-nosnippet>239</a>    <span class="kw">let </span>hash = h.hash();
-<a href=#240 id=240 data-nosnippet>240</a>
-<a href=#241 id=241 data-nosnippet>241</a>    <span class="kw">let </span>epoch_number = consensus
-<a href=#242 id=242 data-nosnippet>242</a>        .get_block_epoch_number(<span class="kw-2">&amp;</span>hash)
-<a href=#243 id=243 data-nosnippet>243</a>        .or_else(|| consensus.data_manager().block_epoch_number(<span class="kw-2">&amp;</span>hash))
-<a href=#244 id=244 data-nosnippet>244</a>        .map(Into::into);
-<a href=#245 id=245 data-nosnippet>245</a>
-<a href=#246 id=246 data-nosnippet>246</a>    <span class="kw">let </span>block_number = consensus.get_block_number(<span class="kw-2">&amp;</span>hash)<span class="question-mark">?</span>.map(Into::into);
-<a href=#247 id=247 data-nosnippet>247</a>
-<a href=#248 id=248 data-nosnippet>248</a>    <span class="kw">let </span>base_fee_per_gas: <span class="prelude-ty">Option</span>&lt;U256&gt; =
-<a href=#249 id=249 data-nosnippet>249</a>        h.base_price().map(|x| x[Space::Native]).into();
-<a href=#250 id=250 data-nosnippet>250</a>
-<a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">let </span>referee_hashes =
-<a href=#252 id=252 data-nosnippet>252</a>        h.referee_hashes().iter().map(|x| H256::from(<span class="kw-2">*</span>x)).collect();
-<a href=#253 id=253 data-nosnippet>253</a>
-<a href=#254 id=254 data-nosnippet>254</a>    <span class="prelude-val">Ok</span>(Header {
-<a href=#255 id=255 data-nosnippet>255</a>        hash: H256::from(hash),
-<a href=#256 id=256 data-nosnippet>256</a>        parent_hash: H256::from(<span class="kw-2">*</span>h.parent_hash()),
-<a href=#257 id=257 data-nosnippet>257</a>        height: h.height().into(),
-<a href=#258 id=258 data-nosnippet>258</a>        miner: RpcAddress::try_from_h160(<span class="kw-2">*</span>h.author(), network)<span class="question-mark">?</span>,
-<a href=#259 id=259 data-nosnippet>259</a>        deferred_state_root: H256::from(<span class="kw-2">*</span>h.deferred_state_root()),
-<a href=#260 id=260 data-nosnippet>260</a>        deferred_receipts_root: H256::from(<span class="kw-2">*</span>h.deferred_receipts_root()),
-<a href=#261 id=261 data-nosnippet>261</a>        deferred_logs_bloom_hash: H256::from(<span class="kw-2">*</span>h.deferred_logs_bloom_hash()),
-<a href=#262 id=262 data-nosnippet>262</a>        blame: U64::from(h.blame()),
-<a href=#263 id=263 data-nosnippet>263</a>        transactions_root: H256::from(<span class="kw-2">*</span>h.transactions_root()),
-<a href=#264 id=264 data-nosnippet>264</a>        epoch_number,
-<a href=#265 id=265 data-nosnippet>265</a>        block_number,
-<a href=#266 id=266 data-nosnippet>266</a>        gas_limit: h.gas_limit().into(),
-<a href=#267 id=267 data-nosnippet>267</a>        base_fee_per_gas,
-<a href=#268 id=268 data-nosnippet>268</a>        timestamp: h.timestamp().into(),
-<a href=#269 id=269 data-nosnippet>269</a>        difficulty: h.difficulty().into(),
-<a href=#270 id=270 data-nosnippet>270</a>        adaptive: h.adaptive(),
-<a href=#271 id=271 data-nosnippet>271</a>        referee_hashes,
-<a href=#272 id=272 data-nosnippet>272</a>        nonce: h.nonce().into(),
-<a href=#273 id=273 data-nosnippet>273</a>        pow_quality: h
-<a href=#274 id=274 data-nosnippet>274</a>            .pow_hash
-<a href=#275 id=275 data-nosnippet>275</a>            .map(|pow_hash| pow::pow_hash_to_quality(<span class="kw-2">&amp;</span>pow_hash, <span class="kw-2">&amp;</span>h.nonce())),
-<a href=#276 id=276 data-nosnippet>276</a>        pos_reference: <span class="kw-2">*</span>h.pos_reference(),
-<a href=#277 id=277 data-nosnippet>277</a>        custom: h.custom().clone().into_iter().map(Into::into).collect(),
-<a href=#278 id=278 data-nosnippet>278</a>    })
-<a href=#279 id=279 data-nosnippet>279</a>}</code></pre></div></section></main></body></html>
+<a href=#226 id=226 data-nosnippet>226</a>            .custom_items()
+<a href=#227 id=227 data-nosnippet>227</a>            .into_iter()
+<a href=#228 id=228 data-nosnippet>228</a>            .map(Into::into)
+<a href=#229 id=229 data-nosnippet>229</a>            .collect(),
+<a href=#230 id=230 data-nosnippet>230</a>        size: <span class="prelude-val">Some</span>(b.size().into()),
+<a href=#231 id=231 data-nosnippet>231</a>        pos_reference: b.block_header.pos_reference().clone(),
+<a href=#232 id=232 data-nosnippet>232</a>    })
+<a href=#233 id=233 data-nosnippet>233</a>}
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a><span class="kw">pub fn </span>build_header(
+<a href=#236 id=236 data-nosnippet>236</a>    h: <span class="kw-2">&amp;</span>PrimitiveBlockHeader, network: Network, consensus: SharedConsensusGraph,
+<a href=#237 id=237 data-nosnippet>237</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Header, String&gt; {
+<a href=#238 id=238 data-nosnippet>238</a>    <span class="kw">let </span>hash = h.hash();
+<a href=#239 id=239 data-nosnippet>239</a>
+<a href=#240 id=240 data-nosnippet>240</a>    <span class="kw">let </span>epoch_number = consensus
+<a href=#241 id=241 data-nosnippet>241</a>        .get_block_epoch_number(<span class="kw-2">&amp;</span>hash)
+<a href=#242 id=242 data-nosnippet>242</a>        .or_else(|| consensus.data_manager().block_epoch_number(<span class="kw-2">&amp;</span>hash))
+<a href=#243 id=243 data-nosnippet>243</a>        .map(Into::into);
+<a href=#244 id=244 data-nosnippet>244</a>
+<a href=#245 id=245 data-nosnippet>245</a>    <span class="kw">let </span>block_number = consensus.get_block_number(<span class="kw-2">&amp;</span>hash)<span class="question-mark">?</span>.map(Into::into);
+<a href=#246 id=246 data-nosnippet>246</a>
+<a href=#247 id=247 data-nosnippet>247</a>    <span class="kw">let </span>base_fee_per_gas: <span class="prelude-ty">Option</span>&lt;U256&gt; =
+<a href=#248 id=248 data-nosnippet>248</a>        h.base_price().map(|x| x[Space::Native]).into();
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a>    <span class="kw">let </span>referee_hashes =
+<a href=#251 id=251 data-nosnippet>251</a>        h.referee_hashes().iter().map(|x| H256::from(<span class="kw-2">*</span>x)).collect();
+<a href=#252 id=252 data-nosnippet>252</a>
+<a href=#253 id=253 data-nosnippet>253</a>    <span class="prelude-val">Ok</span>(Header {
+<a href=#254 id=254 data-nosnippet>254</a>        hash: H256::from(hash),
+<a href=#255 id=255 data-nosnippet>255</a>        parent_hash: H256::from(<span class="kw-2">*</span>h.parent_hash()),
+<a href=#256 id=256 data-nosnippet>256</a>        height: h.height().into(),
+<a href=#257 id=257 data-nosnippet>257</a>        miner: RpcAddress::try_from_h160(<span class="kw-2">*</span>h.author(), network)<span class="question-mark">?</span>,
+<a href=#258 id=258 data-nosnippet>258</a>        deferred_state_root: H256::from(<span class="kw-2">*</span>h.deferred_state_root()),
+<a href=#259 id=259 data-nosnippet>259</a>        deferred_receipts_root: H256::from(<span class="kw-2">*</span>h.deferred_receipts_root()),
+<a href=#260 id=260 data-nosnippet>260</a>        deferred_logs_bloom_hash: H256::from(<span class="kw-2">*</span>h.deferred_logs_bloom_hash()),
+<a href=#261 id=261 data-nosnippet>261</a>        blame: U64::from(h.blame()),
+<a href=#262 id=262 data-nosnippet>262</a>        transactions_root: H256::from(<span class="kw-2">*</span>h.transactions_root()),
+<a href=#263 id=263 data-nosnippet>263</a>        epoch_number,
+<a href=#264 id=264 data-nosnippet>264</a>        block_number,
+<a href=#265 id=265 data-nosnippet>265</a>        gas_limit: h.gas_limit().into(),
+<a href=#266 id=266 data-nosnippet>266</a>        base_fee_per_gas,
+<a href=#267 id=267 data-nosnippet>267</a>        timestamp: h.timestamp().into(),
+<a href=#268 id=268 data-nosnippet>268</a>        difficulty: h.difficulty().into(),
+<a href=#269 id=269 data-nosnippet>269</a>        adaptive: h.adaptive(),
+<a href=#270 id=270 data-nosnippet>270</a>        referee_hashes,
+<a href=#271 id=271 data-nosnippet>271</a>        nonce: h.nonce().into(),
+<a href=#272 id=272 data-nosnippet>272</a>        pow_quality: h
+<a href=#273 id=273 data-nosnippet>273</a>            .pow_hash
+<a href=#274 id=274 data-nosnippet>274</a>            .map(|pow_hash| pow::pow_hash_to_quality(<span class="kw-2">&amp;</span>pow_hash, <span class="kw-2">&amp;</span>h.nonce())),
+<a href=#275 id=275 data-nosnippet>275</a>        pos_reference: <span class="kw-2">*</span>h.pos_reference(),
+<a href=#276 id=276 data-nosnippet>276</a>        custom: h.custom_items().into_iter().map(Into::into).collect(),
+<a href=#277 id=277 data-nosnippet>277</a>    })
+<a href=#278 id=278 data-nosnippet>278</a>}</code></pre></div></section></main></body></html>
