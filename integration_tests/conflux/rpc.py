@@ -368,6 +368,13 @@ class RpcClient:
         block = self.node.cfx_getBlockByEpochNumber(epoch, include_txs)
         convert_b32_address_field_to_hex(block, "miner")
         return block
+    
+    def epoch_receipts(self, epoch: Union[str, int]) -> list[list[dict]]:
+        if type(epoch) is int:
+            epoch = hex(epoch)
+
+        receipts = self.node.cfx_getEpochReceipts(epoch)
+        return receipts
 
     def block_by_block_number(self, block_number: Union[str, int], include_txs: bool = False) -> dict:
         if type(block_number) is int:

@@ -71,3 +71,11 @@ def test_genesis_tx_has_status(client):
     assert tx["status"] is not None
     assert tx["contractCreated"] is not None
 
+def test_genesis_block_by_block_number_is_not_null(client):
+    block = client.block_by_block_number(0, True)
+    assert block is not None
+    
+def test_genesis_block_epoch_receipts(client):
+    receipts = client.epoch_receipts(0)
+    assert_equal(len(receipts), 1)
+    assert_equal(len(receipts[0]), 8)
