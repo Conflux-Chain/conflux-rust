@@ -13,8 +13,8 @@ use pow::{PowComputer, ProofOfWorkConfig};
 
 use crate::{
     block_data_manager::{
-        BlockDataManager, BlockExecutionResult, BlockExecutionResultWithEpoch,
-        DataVersionTuple, EpochExecutionContext,
+        BlockDataManager, BlockExecutionResultWithEpoch, DataVersionTuple,
+        EpochExecutionContext,
     },
     consensus::{
         anticone_cache::AnticoneCache,
@@ -30,7 +30,7 @@ use cfx_internal_common::{
     consensus_api::StateMaintenanceTrait, EpochExecutionCommitment,
 };
 use cfx_parameters::{consensus::*, consensus_internal::*};
-use cfx_types::{Bloom, H256, U256, U512};
+use cfx_types::{H256, U256, U512};
 use dag::{
     get_future, topological_sort, Graph, RichDAG, RichTreeGraph, TreeGraph, DAG,
 };
@@ -41,8 +41,7 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{Counter, CounterUsize};
 use primitives::{
-    pos::PosBlockId, receipt::StorageChange, Block, BlockHeader,
-    BlockHeaderBuilder, BlockReceipts, EpochId, Receipt, TransactionStatus,
+    pos::PosBlockId, Block, BlockHeader, BlockHeaderBuilder, EpochId,
 };
 use slab::Slab;
 use std::{
@@ -534,8 +533,6 @@ pub struct ConsensusGraphInner {
     /// `true` before we enter `CacheUpSyncBlock`. We need to execute
     /// transactions and process state if it's `false`.
     header_only: bool,
-
-    pub genesis_block_receipts: Arc<BlockReceipts>,
 }
 
 impl MallocSizeOf for ConsensusGraphInner {
@@ -557,7 +554,6 @@ impl MallocSizeOf for ConsensusGraphInner {
             + self.pastset_cache.size_of(ops)
             + self.best_terminals_lca_height_cache.size_of(ops)
             + self.best_terminals_reorg_height.size_of(ops)
-            + self.genesis_block_receipts.size_of(ops)
     }
 }
 
@@ -616,47 +612,6 @@ impl ConsensusGraphInner {
         let cur_era_stable_height = stable_block_header.height();
         let initial_difficulty = pow_config.initial_difficulty;
 
-        let genesis_txs = &data_man.true_genesis.transactions;
-        let mut accumulated_gas = U256::zero();
-        let receipts = genesis_txs
-            .iter()
-            .map(|tx| {
-                // Since receipts for genesis transactions are not stored in the
-                // database, we directly use the gas limit as
-                // the gas used, which may be higher than
-                // the actual amount of gas consumed.
-                let tx_gas = *tx.gas();
-                accumulated_gas += tx_gas;
-                let gas_fee = tx_gas * *tx.gas_price();
-                // We directly use the storage limit as the storage
-                // collateralized, which may be larger than the
-                // actual value.
-
-                let storage_collateralized =
-                    if let Some(limit) = tx.storage_limit() {
-                        vec![StorageChange {
-                            address: tx.sender().address,
-                            collaterals: limit.into(),
-                        }]
-                    } else {
-                        vec![]
-                    };
-                Receipt {
-                    accumulated_gas_used: accumulated_gas,
-                    gas_fee,
-                    storage_collateralized,
-                    outcome_status: TransactionStatus::Success,
-                    ..Default::default()
-                }
-            })
-            .collect();
-        let genesis_block_receipts = Arc::new(BlockReceipts {
-            receipts,
-            block_number: 0,
-            secondary_reward: U256::zero(),
-            tx_execution_error_messages: vec![String::new(); genesis_txs.len()],
-        });
-
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
             hash_to_arena_indices: FastHashMap::new(),
@@ -695,7 +650,6 @@ impl ConsensusGraphInner {
             best_terminals_reorg_height: NULLU64,
             has_timer_block_in_anticone_cache: Default::default(),
             header_only: true,
-            genesis_block_receipts,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -2334,15 +2288,11 @@ impl ConsensusGraphInner {
         // There are no genesis block receipts in the database, so they are
         // handled separately here.
         if *hash == self.data_man.true_genesis.hash() {
-            return Some(DataVersionTuple(
-                *hash,
-                BlockExecutionResult {
-                    block_receipts: self.genesis_block_receipts.clone(),
-                    // Genesis transactions do not emit events, including
-                    // contract deployment transactions.
-                    bloom: Bloom::zero(),
-                },
-            ));
+            return self
+                .data_man
+                .genesis_block_execution_result
+                .as_ref()
+                .map(|r| DataVersionTuple(*hash, (**r).clone()));
         }
 
         match self.get_epoch_hash_for_block(hash) {

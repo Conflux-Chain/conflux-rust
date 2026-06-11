@@ -147,7 +147,7 @@ pub fn initialize_data_manager(
 
     let machine = Arc::new(Machine::new_with_builtin(Default::default(), vm));
 
-    let genesis_block = Arc::new(genesis_block(
+    let (raw_genesis_block, block_execution_result) = genesis_block(
         &storage_manager,
         genesis_accounts,
         Address::from_str("1000000000000000000000000000000000000008").unwrap(),
@@ -160,11 +160,13 @@ pub fn initialize_data_manager(
             initial_committee: vec![],
             initial_seed: Default::default(),
         }),
-    ));
+    );
+    let genesis_block = Arc::new(raw_genesis_block);
 
     let data_man = Arc::new(BlockDataManager::new(
         CacheConfig::default(),
         genesis_block.clone(),
+        block_execution_result.map(Arc::new),
         ledger_db.clone(),
         storage_manager,
         worker_thread_pool,

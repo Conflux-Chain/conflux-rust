@@ -320,7 +320,7 @@ pub fn initialize_common_modules(
     let vm = VmFactory::new(1024 * 32);
     let machine = Arc::new(Machine::new_with_builtin(conf.common_params(), vm));
 
-    let genesis_block = genesis_block(
+    let (genesis_block, block_execution_result) = genesis_block(
         &storage_manager,
         genesis_accounts.clone(),
         GENESIS_ACCOUNT_ADDRESS,
@@ -348,6 +348,7 @@ pub fn initialize_common_modules(
     let data_man = Arc::new(BlockDataManager::new(
         cache_config,
         Arc::new(genesis_block),
+        block_execution_result.map(Arc::new),
         ledger_db.clone(),
         storage_manager,
         worker_thread_pool,

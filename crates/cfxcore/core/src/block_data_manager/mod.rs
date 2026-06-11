@@ -140,6 +140,7 @@ pub struct BlockDataManager {
 
     /// This is the original genesis block.
     pub true_genesis: Arc<Block>,
+    pub genesis_block_execution_result: Option<Arc<BlockExecutionResult>>,
     pub storage_manager: Arc<StorageManager>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
     pub target_difficulty_manager: TargetDifficultyManager,
@@ -170,8 +171,9 @@ pub struct BlockDataManager {
 
 impl BlockDataManager {
     pub fn new(
-        cache_conf: CacheConfig, true_genesis: Arc<Block>, db: Arc<SystemDB>,
-        storage_manager: Arc<StorageManager>,
+        cache_conf: CacheConfig, true_genesis: Arc<Block>,
+        genesis_block_execution_result: Option<Arc<BlockExecutionResult>>,
+        db: Arc<SystemDB>, storage_manager: Arc<StorageManager>,
         worker_pool: Arc<Mutex<ThreadPool>>, config: DataManagerConfiguration,
         pow: Arc<PowComputer>,
     ) -> Self {
@@ -214,6 +216,7 @@ impl BlockDataManager {
                 cache_conf.invalid_block_hashes_cache_size_in_count,
             )),
             true_genesis: true_genesis.clone(),
+            genesis_block_execution_result,
             storage_manager,
             cache_man,
             instance_id: Mutex::new(0),

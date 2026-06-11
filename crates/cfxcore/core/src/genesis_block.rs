@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use toml::Value;
 
 use crate::keylib::KeyPair;
+use cfx_bytes::Bytes;
 use cfx_executor::internal_contract::initialize_internal_contract_accounts;
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
@@ -28,8 +29,8 @@ use cfx_statedb::StateDb;
 use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{
     address_util::AddressUtil, cal_contract_address_with_space, Address,
-    AddressSpaceUtil, AddressWithSpace, CreateContractAddressType, Space, H256,
-    U256,
+    AddressSpaceUtil, AddressWithSpace, Bloom, CreateContractAddressType,
+    Space, H256, U256,
 };
 use diem_crypto::{
     bls::BLSPrivateKey, ec_vrf::EcVrfPublicKey, PrivateKey, ValidCryptoMaterial,
@@ -42,11 +43,15 @@ use secret_store::SecretStore;
 
 use crate::verification::{compute_receipts_root, compute_transaction_root};
 use cfx_executor::{
-    executive::{ExecutionOutcome, ExecutiveContext, TransactOptions},
+    executive::{
+        executed::ExecutedExt, Executed, ExecutionOutcome, ExecutiveContext,
+        TransactOptions,
+    },
     machine::Machine,
     state::State,
 };
-use cfx_vm_types::Env;
+use cfx_vm_types::{Env, Spec};
+use cfxcore_types::block_data_manager::block_data_types::BlockExecutionResult;
 use diem_types::account_address::AccountAddress;
 use primitives::transaction::native_transaction::NativeTransaction;
 
@@ -122,7 +127,7 @@ pub fn genesis_block(
     test_net_version: Address, initial_difficulty: U256, machine: Arc<Machine>,
     need_to_execute: bool, genesis_chain_id: Option<u32>,
     initial_nodes: &Option<GenesisPosState>,
-) -> Block {
+) -> (Block, Option<BlockExecutionResult>) {
     let mut state =
         State::new(StateDb::new(storage_manager.get_state_for_genesis_write()))
             .expect("Failed to initialize state");
@@ -161,7 +166,10 @@ pub fn genesis_block(
     let genesis_chain_id = genesis_chain_id.unwrap_or(0);
     let genesis_transactions = build_genesis_transactions(genesis_chain_id);
 
+    let mut maybe_genesis_exec_result: Option<BlockExecutionResult> = None;
+
     if need_to_execute {
+        let mut genesis_executed = vec![genesis_tx_execution_outcome()];
         const CREATE2FACTORY_TX_INDEX: usize = 1;
         /*
         const TWO_YEAR_UNLOCK_TX_INDEX: usize = 2;
@@ -182,11 +190,12 @@ pub fn genesis_block(
         ];
 
         for i in CREATE2FACTORY_TX_INDEX..=contract_name_list.len() {
-            execute_genesis_transaction(
+            let executed = execute_genesis_transaction(
                 genesis_transactions[i].as_ref(),
                 &mut state,
                 machine.clone(),
             );
+            genesis_executed.push(executed);
 
             let (contract_address, _) = cal_contract_address_with_space(
                 CreateContractAddressType::FromSenderNonceAndCodeHash,
@@ -205,6 +214,9 @@ pub fn genesis_block(
             );
             state.commit_cache(false);
         }
+
+        maybe_genesis_exec_result =
+            Some(build_genesis_block_execution_result(genesis_executed));
     }
 
     if let Some(initial_nodes) = initial_nodes {
@@ -226,7 +238,7 @@ pub fn genesis_block(
                 .register_tx
                 .clone()
                 .fake_sign(node.address.with_native_space());
-            execute_genesis_transaction(
+            let _ = execute_genesis_transaction(
                 &signed_tx,
                 &mut state,
                 machine.clone(),
@@ -281,7 +293,7 @@ pub fn genesis_block(
         "genesis debug_record {}",
         serde_json::to_string(&debug_record).unwrap()
     );
-    genesis
+    (genesis, maybe_genesis_exec_result)
 }
 
 pub fn register_transaction(
@@ -347,7 +359,7 @@ pub fn register_transaction(
 
 fn execute_genesis_transaction(
     transaction: &SignedTransaction, state: &mut State, machine: Arc<Machine>,
-) {
+) -> ExecutionOutcome {
     let mut env = Env::default();
     env.transaction_hash = transaction.hash();
 
@@ -365,7 +377,7 @@ fn execute_genesis_transaction(
     state.update_state_post_tx_execution(false);
 
     match &r {
-        ExecutionOutcome::Finished(_executed) => {}
+        ExecutionOutcome::Finished(_executed) => r,
         _ => {
             panic!("genesis transaction should not fail! err={:?}", r);
         }
@@ -578,4 +590,55 @@ pub fn build_genesis_transactions(
                 .fake_sign(genesis_account_address),
         ),
     ]
+}
+
+// The very first tx's ExecutionOutcome
+// Because the tx's gas and storage_limit is 0, so the gas_used, fee is also
+// zero
+fn genesis_tx_execution_outcome() -> ExecutionOutcome {
+    ExecutionOutcome::Finished(Executed {
+        base_gas: 21000, // should also set this field to 0 ?
+        gas_used: U256::zero(),
+        fee: U256::zero(),
+        burnt_fee: None,
+        gas_charged: U256::zero(),
+        gas_sponsor_paid: false,
+        logs: vec![],
+        storage_sponsor_paid: false,
+        storage_collateralized: vec![],
+        storage_released: vec![],
+        contracts_created: vec![],
+        output: Bytes::new(),
+        ext_result: ExecutedExt::custom(),
+    })
+}
+
+fn build_genesis_block_execution_result(
+    outcomes: Vec<ExecutionOutcome>,
+) -> BlockExecutionResult {
+    let spec = Spec::genesis_spec();
+    let mut accumulated_gas_used = U256::zero();
+    let mut bloom = Bloom::zero();
+    let mut error_messages = Vec::new();
+
+    let receipts = outcomes
+        .into_iter()
+        .map(|outcome| {
+            error_messages.push(outcome.error_message());
+            let receipt =
+                outcome.make_receipt(&mut accumulated_gas_used, &spec);
+            bloom.accrue_bloom(&receipt.log_bloom);
+            receipt
+        })
+        .collect();
+
+    BlockExecutionResult {
+        block_receipts: Arc::new(BlockReceipts {
+            receipts,
+            block_number: 0,
+            secondary_reward: U256::zero(),
+            tx_execution_error_messages: error_messages,
+        }),
+        bloom,
+    }
 }
