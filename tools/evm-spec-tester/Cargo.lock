@@ -1848,7 +1848,6 @@ dependencies = [
  "futures 0.3.30",
  "http 1.1.0",
  "jsonrpsee",
- "jsonrpsee-types",
  "lazy_static",
  "log",
  "metrics",
