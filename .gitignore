@@ -19,6 +19,7 @@ build_clippy/
 **/*.log
 **/stderr.txt
 **/testnet.toml
+crates/dbs/storage/conflux_unit_test_data_dir*/
 *~
 .DS_Store
 tests/artifacts/**/*.dbg.json

@@ -6,6 +6,8 @@ mod snapshot;
 pub use snapshot::FakeSnapshotMptDb;
 
 #[cfg(test)]
+mod minimal_mpt_oracle_compare;
+#[cfg(test)]
 mod proofs;
 #[cfg(test)]
 mod sharded_iter_merger;
