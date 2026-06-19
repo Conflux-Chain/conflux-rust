@@ -6,6 +6,7 @@ use anyhow::{anyhow, ensure, Context, Result};
 use cfx_types::{Address, H256, U256};
 use primitives::{Action, SignedTransaction, Transaction};
 use rlp::RlpStream;
+use serde::{Deserialize, Serialize};
 use snap::raw::Encoder as SnapEncoder;
 use std::collections::HashMap;
 
@@ -48,7 +49,7 @@ pub struct SenderBaseNonce {
     pub base_nonce: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockInput {
     pub epoch: u64,
     pub index: usize,

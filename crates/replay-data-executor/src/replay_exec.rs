@@ -671,6 +671,49 @@ impl ReplayExecutor {
         }
         Ok(())
     }
+
+    /// Committed height so far (`== last pivot height`, 0 before any epoch).
+    /// Lets the driver know where a resumed run picks up.
+    #[cfg(feature = "backend-minimal-mpt")]
+    pub fn committed_height(&self) -> u64 {
+        self.minimal_backend.height()
+    }
+
+    /// Capture a resumable checkpoint at the current (boundary) height. The
+    /// trie half reuses minimal-mpt's `PersistedState`; the executor windows
+    /// (`commitments_by_height`, `executed_epochs_by_height`) and the
+    /// `previous_*` cursor are carried alongside. See [`crate::checkpoint`].
+    #[cfg(feature = "backend-minimal-mpt")]
+    pub fn export_checkpoint(&self) -> crate::checkpoint::ReplayCheckpoint {
+        crate::checkpoint::ReplayCheckpoint::build(
+            self.minimal_backend.export_persisted(),
+            self.previous_epoch_hash,
+            &self.previous_state_root,
+            &self.commitments_by_height,
+            &self.executed_epochs_by_height,
+        )
+    }
+
+    /// Rebuild an executor positioned exactly at a checkpoint. Genesis and the
+    /// machine are reconstructed by `new`, then the minimal-mpt state and the
+    /// executor windows are overwritten from the checkpoint, so execution
+    /// continues from the checkpoint height as if it had never stopped.
+    #[cfg(feature = "backend-minimal-mpt")]
+    pub fn restore(
+        config: ReplayExecConfig,
+        checkpoint: crate::checkpoint::ReplayCheckpoint,
+    ) -> Result<Self> {
+        let mut executor = Self::new(config)?;
+        let (mmpt, prev_hash, prev_root, commitments, executed) =
+            checkpoint.into_parts()?;
+        executor.minimal_backend =
+            crate::minimal_backend::MinimalBackend::from_persisted(mmpt);
+        executor.previous_epoch_hash = prev_hash;
+        executor.previous_state_root = prev_root;
+        executor.commitments_by_height = commitments;
+        executor.executed_epochs_by_height = executed;
+        Ok(executor)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -685,17 +728,17 @@ struct TxExecutionInfo {
     packing_blocks: BTreeSet<H256>,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct EpochCommitment {
-    state_root: H256,
-    receipts_root: H256,
-    logs_bloom_hash: H256,
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EpochCommitment {
+    pub(crate) state_root: H256,
+    pub(crate) receipts_root: H256,
+    pub(crate) logs_bloom_hash: H256,
 }
 
 #[derive(Debug, Clone)]
-struct ExecutedEpochData {
-    blocks: Vec<BlockInput>,
-    receipts: Vec<Arc<BlockReceipts>>,
+pub(crate) struct ExecutedEpochData {
+    pub(crate) blocks: Vec<BlockInput>,
+    pub(crate) receipts: Vec<Arc<BlockReceipts>>,
 }
 
 fn prefix4(hash: H256) -> [u8; 4] {

@@ -1779,6 +1779,7 @@ name = "cfx-replay-data-executor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bincode",
  "cfx-config",
  "cfx-execute-helper",
  "cfx-executor",
@@ -1794,6 +1795,7 @@ dependencies = [
  "pprof 0.14.1",
  "primitives",
  "rlp 0.6.1",
+ "serde",
  "snap",
  "tempfile",
 ]

@@ -1,4 +1,6 @@
 use anyhow::{Context, Result};
+#[cfg(feature = "backend-minimal-mpt")]
+use cfx_replay_data_executor::checkpoint::ReplayCheckpoint;
 use cfx_replay_data_executor::replay_exec::{
     EpochExecReport, ReplayExecConfig, ReplayExecReport, ReplayExecutor,
 };
@@ -26,6 +28,15 @@ struct Cli {
     /// disagrees with it for a short stretch before the chain self-corrects.
     #[arg(long, default_value_t = 20)]
     anomaly_streak: usize,
+    /// Checkpoint file for resumable replay (minimal-mpt backend only). When
+    /// set: if the file exists the run resumes from it instead of genesis, and
+    /// it is (re)written every `--checkpoint-every-groups` 2000-epoch groups.
+    /// A crash then resumes from the middle, not from the start.
+    #[arg(long)]
+    checkpoint: Option<PathBuf>,
+    /// Number of 2000-epoch groups between checkpoint writes (default: 1).
+    #[arg(long, default_value_t = 1)]
+    checkpoint_every_groups: u64,
 }
 
 fn main() -> Result<()> {
@@ -80,10 +91,10 @@ fn run_replay() -> Result<()> {
     let config = ReplayExecConfig {
         config_path: cli.config.clone(),
     };
-    let mut executor = ReplayExecutor::new(config)?;
+    let (mut executor, resume_height) = build_executor(config, &cli)?;
 
     if cli.input.is_dir() {
-        run_packed_dir(&mut executor, &cli)
+        run_packed_dir(&mut executor, &cli, resume_height)
     } else {
         let packet = std::fs::read(&cli.input)
             .with_context(|| format!("read packet {}", cli.input.display()))?;
@@ -94,9 +105,68 @@ fn run_replay() -> Result<()> {
         for epoch in &report.epochs {
             streak.observe(epoch.pivot_height, epoch_matched(epoch));
         }
+        save_checkpoint(&executor, &cli);
         finish_verdict(&streak, cli.anomaly_streak)
     }
 }
+
+/// Build the executor, resuming from a checkpoint when one is configured and
+/// present. Returns the executor and the committed height it starts at (0 for
+/// a fresh genesis run).
+#[cfg(feature = "backend-minimal-mpt")]
+fn build_executor(
+    config: ReplayExecConfig, cli: &Cli,
+) -> Result<(ReplayExecutor, u64)> {
+    if let Some(path) = &cli.checkpoint {
+        if let Some(ckpt) = ReplayCheckpoint::load(path)? {
+            let height = ckpt.height();
+            eprintln!(
+                "resuming from checkpoint {} at height {}",
+                path.display(),
+                height,
+            );
+            let executor = ReplayExecutor::restore(config, ckpt)?;
+            return Ok((executor, height));
+        }
+        eprintln!(
+            "no checkpoint at {} yet; starting from genesis",
+            path.display(),
+        );
+    }
+    Ok((ReplayExecutor::new(config)?, 0))
+}
+
+/// Without the minimal-mpt backend there is no latest-only state to snapshot,
+/// so checkpointing is unsupported; reject it rather than silently ignore.
+#[cfg(not(feature = "backend-minimal-mpt"))]
+fn build_executor(
+    config: ReplayExecConfig, cli: &Cli,
+) -> Result<(ReplayExecutor, u64)> {
+    anyhow::ensure!(
+        cli.checkpoint.is_none(),
+        "--checkpoint requires the backend-minimal-mpt build",
+    );
+    Ok((ReplayExecutor::new(config)?, 0))
+}
+
+/// Write a checkpoint if one is configured. No-op without the minimal-mpt
+/// backend (the only build where checkpointing exists).
+#[cfg(feature = "backend-minimal-mpt")]
+fn save_checkpoint(executor: &ReplayExecutor, cli: &Cli) {
+    if let Some(path) = &cli.checkpoint {
+        match executor.export_checkpoint().save(path) {
+            Ok(()) => eprintln!(
+                "wrote checkpoint {} at height {}",
+                path.display(),
+                executor.committed_height(),
+            ),
+            Err(e) => eprintln!("warning: failed to write checkpoint: {e:#}"),
+        }
+    }
+}
+
+#[cfg(not(feature = "backend-minimal-mpt"))]
+fn save_checkpoint(_executor: &ReplayExecutor, _cli: &Cli) {}
 
 /// Tracks the longest run of consecutive epochs whose replayed result disagrees
 /// with the on-chain commitment. A short run is expected around a block that was
@@ -174,7 +244,9 @@ struct Totals {
     state_root_prefix_matches: usize,
 }
 
-fn run_packed_dir(executor: &mut ReplayExecutor, cli: &Cli) -> Result<()> {
+fn run_packed_dir(
+    executor: &mut ReplayExecutor, cli: &Cli, resume_height: u64,
+) -> Result<()> {
     let mut files = std::fs::read_dir(&cli.input)
         .with_context(|| format!("read dir {}", cli.input.display()))?
         .filter_map(|entry| entry.ok().map(|e| e.path()))
@@ -188,17 +260,49 @@ fn run_packed_dir(executor: &mut ReplayExecutor, cli: &Cli) -> Result<()> {
     let mut totals = Totals::default();
     let mut printed_mismatches = 0usize;
     let mut groups_done = 0usize;
+    // Groups actually executed this run (drives the checkpoint cadence).
+    let mut groups_executed = 0u64;
+    // Contiguity cursor: the start epoch the next executed group must have.
+    let mut next_expected_epoch: Option<u64> = None;
     let mut streak = StreakTracker::default();
     // Report progress on a wall-clock cadence (once a minute) rather than per
     // a fixed group count, so progress is visible regardless of throughput.
     let started = Instant::now();
     let mut last_log = Instant::now();
     for path in &files {
+        // File-level skip: when resuming, a whole container that ends at or
+        // before the checkpoint height is already replayed — don't even read
+        // it (these files are large).
+        if let Some(end) = container_end_epoch(path) {
+            if end <= resume_height {
+                continue;
+            }
+        }
         let data = std::fs::read(path)
             .with_context(|| format!("read container {}", path.display()))?;
         let entries = parse_container_directory(&data)
             .with_context(|| format!("parse container {}", path.display()))?;
-        for (start_epoch, _epoch_count, offset, length) in entries {
+        for (start_epoch, epoch_count, offset, length) in entries {
+            let end_epoch = start_epoch + epoch_count.saturating_sub(1);
+            // Group-level skip: already covered by the checkpoint.
+            if end_epoch <= resume_height {
+                continue;
+            }
+            // Guard against resuming onto the wrong data: the first executed
+            // group must pick up exactly where the checkpoint left off, and
+            // every subsequent group must be contiguous.
+            match next_expected_epoch {
+                Some(expected) => anyhow::ensure!(
+                    start_epoch == expected,
+                    "non-contiguous groups: expected start epoch {expected}, got {start_epoch}",
+                ),
+                None => anyhow::ensure!(
+                    resume_height == 0 || start_epoch == resume_height + 1,
+                    "resume gap: checkpoint height {resume_height}, first pending group starts at epoch {start_epoch}",
+                ),
+            }
+            next_expected_epoch = Some(end_epoch + 1);
+
             let payload = &data[offset..offset + length];
             let report = executor.execute_packet(payload).with_context(|| {
                 format!("execute group starting at epoch {start_epoch}")
@@ -209,10 +313,18 @@ fn run_packed_dir(executor: &mut ReplayExecutor, cli: &Cli) -> Result<()> {
                 streak.observe(epoch.pivot_height, epoch_matched(epoch));
             }
             groups_done += 1;
+            groups_executed += 1;
+            // Periodic checkpoint at a 2000-epoch group boundary.
+            if cli.checkpoint_every_groups > 0
+                && groups_executed % cli.checkpoint_every_groups == 0
+            {
+                save_checkpoint(executor, cli);
+            }
             if last_log.elapsed() >= Duration::from_secs(60) {
                 eprintln!(
-                    "replay progress t={}s groups={} epochs={} blocks={} txs={} state_match={}/{} longest_mismatch_run={}",
+                    "replay progress t={}s height={} groups={} epochs={} blocks={} txs={} state_match={}/{} longest_mismatch_run={}",
                     started.elapsed().as_secs(),
+                    end_epoch,
                     groups_done,
                     totals.epoch_count,
                     totals.block_count,
@@ -225,6 +337,10 @@ fn run_packed_dir(executor: &mut ReplayExecutor, cli: &Cli) -> Result<()> {
             }
         }
     }
+
+    // Final checkpoint so a clean stop can be continued without re-running the
+    // last partial cadence window.
+    save_checkpoint(executor, cli);
 
     println!(
         "executed packed dir: files={}, epochs={}, blocks={}, txs={}, receipt_matches={}, log_matches={}, state_matches={}",
@@ -328,4 +444,10 @@ fn container_start_epoch(path: &Path) -> Option<u64> {
     let mut parts = stem.rsplit('_');
     let _end = parts.next()?;
     parts.next()?.parse().ok()
+}
+
+fn container_end_epoch(path: &Path) -> Option<u64> {
+    let stem = path.file_stem()?.to_str()?;
+    // `<prefix>_<start>_<end>` -> last underscore field
+    stem.rsplit('_').next()?.parse().ok()
 }

@@ -11,6 +11,8 @@ compile_error!(
      or `backend-minimal-mpt`"
 );
 
+#[cfg(feature = "backend-minimal-mpt")]
+pub mod checkpoint;
 pub mod codec;
 pub mod decode;
 #[cfg(feature = "backend-minimal-mpt")]
