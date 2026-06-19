@@ -75,13 +75,23 @@ pub struct EpochExecReport {
 pub struct ReplayExecutor {
     conf: Configuration,
     _temp_dir: Option<TempDir>,
+    // Still used to build genesis under both backends; under the minimal-mpt
+    // backend it is not consulted again after construction.
+    #[cfg_attr(feature = "backend-minimal-mpt", allow(dead_code))]
     storage_manager: Arc<StorageManager>,
     machine: Arc<Machine>,
+    #[cfg_attr(feature = "backend-minimal-mpt", allow(dead_code))]
     snapshot_epoch_count: u32,
     previous_epoch_hash: H256,
     previous_state_root: StateRootWithAuxInfo,
     commitments_by_height: BTreeMap<u64, EpochCommitment>,
     executed_epochs_by_height: BTreeMap<u64, ExecutedEpochData>,
+    // Under the minimal-mpt backend, the single latest state shared across
+    // epochs, seeded from the genesis dump. The cfx-storage `storage_manager`
+    // above is still used to build genesis; only the per-epoch execution state
+    // comes from here instead.
+    #[cfg(feature = "backend-minimal-mpt")]
+    minimal_backend: crate::minimal_backend::MinimalBackend,
 }
 
 impl ReplayExecutor {
@@ -125,7 +135,7 @@ impl ReplayExecutor {
             receipts_root: *genesis.block_header.deferred_receipts_root(),
             logs_bloom_hash: *genesis.block_header.deferred_logs_bloom_hash(),
         };
-        let previous_state_root = storage_manager
+        let mut genesis_state = storage_manager
             .get_state_no_commit(
                 StateIndex::new_for_readonly(
                     &previous_epoch_hash,
@@ -135,9 +145,30 @@ impl ReplayExecutor {
                 None,
             )
             .context("open genesis state")?
-            .ok_or_else(|| anyhow!("genesis state missing"))?
+            .ok_or_else(|| anyhow!("genesis state missing"))?;
+        let previous_state_root = genesis_state
             .get_state_root()
             .context("read genesis state root")?;
+        // Seed the minimal-mpt backend with the genesis state. The whole
+        // genesis lives in the delta trie at this point, so reading with an
+        // empty address prefix dumps every genesis key/value (both spaces) in
+        // canonical form. They are loaded into the delta uncommitted (height
+        // stays 0), matching where the real backend keeps genesis until the
+        // first snapshot boundary.
+        #[cfg(feature = "backend-minimal-mpt")]
+        let minimal_backend = {
+            let genesis_kvs = genesis_state
+                .read_all(
+                    primitives::StorageKey::AddressPrefixKey(b"")
+                        .with_native_space(),
+                )
+                .map_err(|e| anyhow!("dump genesis state: {e}"))?
+                .unwrap_or_default();
+            crate::minimal_backend::MinimalBackend::from_genesis_kvs(
+                genesis_kvs,
+            )
+            .map_err(|e| anyhow!("seed minimal backend genesis: {e}"))?
+        };
         let snapshot_epoch_count = conf
             .storage_config(&NodeType::Archive)
             .consensus_param
@@ -153,6 +184,8 @@ impl ReplayExecutor {
             previous_state_root,
             commitments_by_height: BTreeMap::from([(0, genesis_commitment)]),
             executed_epochs_by_height: BTreeMap::new(),
+            #[cfg(feature = "backend-minimal-mpt")]
+            minimal_backend,
         })
     }
 
@@ -289,8 +322,11 @@ impl ReplayExecutor {
             .get(&deferred_height)
             .ok_or_else(|| {
                 anyhow!(
-                    "missing deferred execution commitment for height {}",
-                    deferred_height
+                    "missing deferred execution commitment for height {} \
+                     (pivot.height={}, pivot.epoch={})",
+                    deferred_height,
+                    pivot.height,
+                    pivot.epoch,
                 )
             })?;
         let expected_state_root_prefix = prefix4(pivot.deferred_state_root);
@@ -349,19 +385,33 @@ impl ReplayExecutor {
     }
 
     fn open_next_state(&self, pivot: &BlockInput) -> Result<State> {
-        let state_index = StateIndex::new_for_next_epoch(
-            &self.previous_epoch_hash,
-            &self.previous_state_root,
-            pivot.epoch.saturating_sub(1),
-            self.snapshot_epoch_count,
-        );
-        let storage = self
-            .storage_manager
-            .get_state_for_next_epoch(state_index, false)
-            .context("open replay state for next epoch")?
-            .ok_or_else(|| anyhow!("replay state for next epoch missing"))?;
-        State::new(StateDb::new(storage))
-            .context("create replay execution state")
+        // The minimal-mpt backend keeps only the latest state and is advanced
+        // in place each epoch, so there is no `StateIndex` history to consult —
+        // every epoch just wraps a fresh adapter over the same shared state.
+        #[cfg(feature = "backend-minimal-mpt")]
+        {
+            let _ = pivot;
+            return State::new(StateDb::new(Box::new(
+                self.minimal_backend.open(),
+            )))
+            .context("create replay execution state (minimal-mpt)");
+        }
+        #[cfg(not(feature = "backend-minimal-mpt"))]
+        {
+            let state_index = StateIndex::new_for_next_epoch(
+                &self.previous_epoch_hash,
+                &self.previous_state_root,
+                pivot.epoch.saturating_sub(1),
+                self.snapshot_epoch_count,
+            );
+            let storage = self
+                .storage_manager
+                .get_state_for_next_epoch(state_index, false)
+                .context("open replay state for next epoch")?
+                .ok_or_else(|| anyhow!("replay state for next epoch missing"))?;
+            State::new(StateDb::new(storage))
+                .context("create replay execution state")
+        }
     }
 
     fn execute_block(

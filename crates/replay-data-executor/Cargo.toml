@@ -17,10 +17,27 @@ cfx-storage = { workspace = true }
 cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfxcore = { workspace = true }
+# Minimal MPT backend (from the cfx-minimal-execution workspace). Optional:
+# only pulled in when the `backend-minimal-mpt` feature selects it as the
+# state-trie backend in place of cfx-storage.
+cfx-minimal-mpt = { path = "../../../../crates/minimal-mpt", optional = true }
+# Signal-sampling profiler (SIGPROF/setitimer, no perf_event — works where
+# perf_event_paranoid is locked down). Enabled by the `profile` feature.
+pprof = { version = "0.14", features = ["flamegraph"], optional = true }
 primitives = { workspace = true }
 rlp = { workspace = true }
 snap = "1.1"
 tempfile = { workspace = true }
+
+[features]
+# Exactly one state-trie backend must be active. The default is the proven
+# cfx-storage backend; select the minimal one with
+#   --no-default-features --features backend-minimal-mpt
+default = ["backend-cfx-storage"]
+backend-cfx-storage = []
+backend-minimal-mpt = ["dep:cfx-minimal-mpt"]
+# Sample the run with pprof-rs and write flamegraph.svg on exit.
+profile = ["dep:pprof"]
 
 [[bin]]
 name = "cfx-replay-exec"

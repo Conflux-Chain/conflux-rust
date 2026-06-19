@@ -29,6 +29,53 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
+    // pprof-rs samples via SIGPROF/setitimer (no perf_event), so it works even
+    // where perf_event_paranoid is locked down. Writes flamegraph.svg on exit.
+    #[cfg(feature = "profile")]
+    let profiler = pprof::ProfilerGuardBuilder::default()
+        .frequency(997)
+        .blocklist(&["libc", "libgcc", "pthread", "vdso"])
+        .build()
+        .ok();
+
+    let result = run_replay();
+
+    #[cfg(feature = "profile")]
+    if let Some(guard) = profiler {
+        match guard.report().build() {
+            Ok(report) => {
+                if let Ok(file) = std::fs::File::create("flamegraph.svg") {
+                    let _ = report.flamegraph(file);
+                    eprintln!("profile: wrote flamegraph.svg");
+                }
+                // Folded stacks (`root;...;leaf count`) for textual self/total
+                // analysis with awk.
+                let mut folded = String::new();
+                for (frames, count) in report.data.iter() {
+                    let mut stack: Vec<String> = Vec::new();
+                    for frame in frames.frames.iter().rev() {
+                        for sym in frame.iter() {
+                            stack.push(sym.to_string());
+                        }
+                    }
+                    folded.push_str(&stack.join(";"));
+                    folded.push_str(&format!(" {count}\n"));
+                }
+                if std::fs::write("profile.folded", &folded).is_ok() {
+                    eprintln!(
+                        "profile: wrote profile.folded ({} unique stacks)",
+                        report.data.len()
+                    );
+                }
+            }
+            Err(e) => eprintln!("profile: building report failed: {e}"),
+        }
+    }
+
+    result
+}
+
+fn run_replay() -> Result<()> {
     let cli = Cli::parse();
     let config = ReplayExecConfig {
         config_path: cli.config.clone(),
