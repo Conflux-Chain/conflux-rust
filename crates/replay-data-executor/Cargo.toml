@@ -1,0 +1,27 @@
+[package]
+name = "cfx-replay-data-executor"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+cfx-config = { workspace = true }
+cfx-execute-helper = { workspace = true }
+cfx-executor = { workspace = true }
+cfx-internal-common = { workspace = true }
+cfx-parameters = { workspace = true }
+cfx-statedb = { workspace = true }
+cfx-storage = { workspace = true }
+cfx-types = { workspace = true }
+cfx-vm-types = { workspace = true }
+cfxcore = { workspace = true }
+primitives = { workspace = true }
+rlp = { workspace = true }
+snap = "1.1"
+tempfile = { workspace = true }
+
+[[bin]]
+name = "cfx-replay-exec"
+path = "src/main.rs"

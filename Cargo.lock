@@ -1745,6 +1745,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-replay-data-executor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cfx-config",
+ "cfx-execute-helper",
+ "cfx-executor",
+ "cfx-internal-common",
+ "cfx-parameters",
+ "cfx-statedb",
+ "cfx-storage",
+ "cfx-types",
+ "cfx-vm-types",
+ "cfxcore",
+ "clap",
+ "primitives",
+ "rlp 0.6.1",
+ "snap",
+ "tempfile",
+]
+
+[[package]]
 name = "cfx-rpc-builder"
 version = "3.0.0"
 dependencies = [
@@ -8440,6 +8462,12 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
+
+[[package]]
+name = "snap"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b6b67fb9a61334225b5b790716f609cd58395f895b3fe8b328786812a40bc3b"
 
 [[package]]
 name = "snappy-sys"

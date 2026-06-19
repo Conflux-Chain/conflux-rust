@@ -93,6 +93,7 @@ members = [
     "crates/tasks",
     "crates/eest_types",
     "crates/config",
+    "crates/replay-data-executor",
     "crates/cfxcore/types",
     "crates/cfxcore/pow",
     "crates/cfxcore/errors", 
