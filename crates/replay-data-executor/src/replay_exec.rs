@@ -1,6 +1,9 @@
 use crate::{
     decode::decode_packet,
-    packet::{BlockInput, PacketInput, FLAG_PIVOT, FLAG_SKIPPED_EXECUTION},
+    packet::{
+        BlockInput, PacketInput, FLAG_PIVOT, FLAG_SKIPPED_EXECUTION,
+        FLAG_ZERO_TOTAL_REWARD,
+    },
 };
 use anyhow::{anyhow, ensure, Context, Result};
 use cfx_config::Configuration;
@@ -601,14 +604,13 @@ impl ReplayExecutor {
                 if !fee.is_zero() && info.fee.is_zero() {
                     info.fee = fee;
                 }
-                // Consensus only lets a block share an epoch's transaction fees
-                // when it is reward-eligible (`no_reward == false`). The packet
-                // records each block's post-penalty `base_reward`, so a zero
-                // base reward marks a penalized / no-reward block (e.g. a stale
-                // block pulled in long after its height, whose anticone penalty
-                // wipes out the reward). Such blocks must not be added to a
-                // transaction's packing set, otherwise fees are mis-distributed.
-                if !block.base_reward.is_zero() {
+                // A block shares this tx's fee iff its full settlement reward
+                // (total_reward) is non-zero. `base_reward == 0` is NOT the
+                // right signal: a valid (non-penalized) weak block can have
+                // base_reward == 0 yet still participate in fee distribution.
+                // blame is orthogonal (a deferred-root verification concern)
+                // and plays no role here.
+                if block.flags & FLAG_ZERO_TOTAL_REWARD == 0 {
                     info.packing_blocks.insert(block.hash);
                 }
             }

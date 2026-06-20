@@ -34,12 +34,29 @@ struct Cli {
     /// A crash then resumes from the middle, not from the start.
     #[arg(long)]
     checkpoint: Option<PathBuf>,
-    /// Number of 2000-epoch groups between checkpoint writes (default: 1).
-    #[arg(long, default_value_t = 1)]
+    /// Number of 2000-epoch groups between checkpoint writes (default: 100,
+    /// i.e. every 200,000 epochs).
+    #[arg(long, default_value_t = 100)]
     checkpoint_every_groups: u64,
+    /// Exit cleanly right after writing the FIRST checkpoint. With
+    /// `--checkpoint-every-groups N` (resuming from height R), the first write
+    /// lands at `R + N*2000` (a snapshot boundary), so this builds a debug
+    /// "jump-off point" at a chosen height and stops — instead of running the
+    /// whole input. Resume from that checkpoint to reach a target epoch fast.
+    #[arg(long, default_value_t = false)]
+    stop_after_checkpoint: bool,
 }
 
 fn main() -> Result<()> {
+    let cli = Cli::parse();
+    let config = ReplayExecConfig {
+        config_path: cli.config.clone(),
+    };
+    // Recover from the checkpoint BEFORE arming the profiler, so the one-off
+    // resume cost (checkpoint deserialize + full root recompute) is excluded
+    // from the steady-state sample.
+    let (mut executor, resume_height) = build_executor(config, &cli)?;
+
     // pprof-rs samples via SIGPROF/setitimer (no perf_event), so it works even
     // where perf_event_paranoid is locked down. Writes flamegraph.svg on exit.
     #[cfg(feature = "profile")]
@@ -49,7 +66,7 @@ fn main() -> Result<()> {
         .build()
         .ok();
 
-    let result = run_replay();
+    let result = run_replay(&mut executor, &cli, resume_height);
 
     #[cfg(feature = "profile")]
     if let Some(guard) = profiler {
@@ -86,26 +103,22 @@ fn main() -> Result<()> {
     result
 }
 
-fn run_replay() -> Result<()> {
-    let cli = Cli::parse();
-    let config = ReplayExecConfig {
-        config_path: cli.config.clone(),
-    };
-    let (mut executor, resume_height) = build_executor(config, &cli)?;
-
+fn run_replay(
+    executor: &mut ReplayExecutor, cli: &Cli, resume_height: u64,
+) -> Result<()> {
     if cli.input.is_dir() {
-        run_packed_dir(&mut executor, &cli, resume_height)
+        run_packed_dir(executor, cli, resume_height)
     } else {
         let packet = std::fs::read(&cli.input)
             .with_context(|| format!("read packet {}", cli.input.display()))?;
         let report = executor.execute_packet(&packet)?;
         print_single_report(&report);
-        report_mismatches(&report.epochs, &cli, &mut 0);
+        report_mismatches(&report.epochs, cli, &mut 0);
         let mut streak = StreakTracker::default();
         for epoch in &report.epochs {
             streak.observe(epoch.pivot_height, epoch_matched(epoch));
         }
-        save_checkpoint(&executor, &cli);
+        save_checkpoint(executor, cli);
         finish_verdict(&streak, cli.anomaly_streak)
     }
 }
@@ -319,6 +332,12 @@ fn run_packed_dir(
                 && groups_executed % cli.checkpoint_every_groups == 0
             {
                 save_checkpoint(executor, cli);
+                if cli.stop_after_checkpoint && cli.checkpoint.is_some() {
+                    println!(
+                        "stop-after-checkpoint: wrote checkpoint at height {end_epoch}, exiting"
+                    );
+                    return Ok(());
+                }
             }
             if last_log.elapsed() >= Duration::from_secs(60) {
                 eprintln!(

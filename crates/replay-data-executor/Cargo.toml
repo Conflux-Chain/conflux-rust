@@ -43,6 +43,9 @@ backend-cfx-storage = []
 backend-minimal-mpt = ["dep:cfx-minimal-mpt"]
 # Sample the run with pprof-rs and write flamegraph.svg on exit.
 profile = ["dep:pprof"]
+# Cross-check the incremental delta-trie root against the stateless oracle on
+# every commit (panics on divergence). Build together with backend-minimal-mpt.
+verify-incremental = ["cfx-minimal-mpt/verify-incremental"]
 
 [[bin]]
 name = "cfx-replay-exec"
