@@ -62,6 +62,7 @@ pub struct EpochExecReport {
     pub pivot_height: u64,
     pub deferred_height: u64,
     pub pivot_hash: H256,
+    pub pivot_timestamp: u64,
     pub block_count: usize,
     pub transaction_count: usize,
     pub computed_state_root: H256,
@@ -370,6 +371,7 @@ impl ReplayExecutor {
             pivot_height: pivot.height,
             deferred_height,
             pivot_hash,
+            pivot_timestamp: pivot.timestamp,
             block_count: blocks.len(),
             transaction_count: blocks
                 .iter()

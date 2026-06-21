@@ -1798,6 +1798,7 @@ dependencies = [
  "serde",
  "snap",
  "tempfile",
+ "time",
 ]
 
 [[package]]

@@ -7,6 +7,7 @@ use cfx_replay_data_executor::replay_exec::{
 use clap::Parser;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use time::OffsetDateTime;
 
 #[derive(Debug, Parser)]
 #[command(name = "cfx-replay-exec")]
@@ -38,6 +39,13 @@ struct Cli {
     /// i.e. every 200,000 epochs).
     #[arg(long, default_value_t = 100)]
     checkpoint_every_groups: u64,
+    /// Also write a checkpoint when this many wall-clock seconds have elapsed
+    /// since the last write (still only on a 2000-epoch group boundary).
+    /// Combined with `--checkpoint-every-groups`, whichever limit is reached
+    /// first triggers the write and both counters reset. Unset (default)
+    /// disables the time trigger.
+    #[arg(long)]
+    checkpoint_every_seconds: Option<u64>,
     /// Exit cleanly right after writing the FIRST checkpoint. With
     /// `--checkpoint-every-groups N` (resuming from height R), the first write
     /// lands at `R + N*2000` (a snapshot boundary), so this builds a debug
@@ -257,35 +265,138 @@ struct Totals {
     state_root_prefix_matches: usize,
 }
 
+fn format_block_date(timestamp: u64) -> String {
+    if timestamp == 0 {
+        return "?".to_string();
+    }
+    let dt = OffsetDateTime::from_unix_timestamp(timestamp as i64)
+        .unwrap_or(OffsetDateTime::UNIX_EPOCH);
+    format!("{}-{:02}-{:02}", dt.year(), dt.month() as u8, dt.day())
+}
+
+struct CheckpointCadence {
+    groups_since: u64,
+    last_time: Instant,
+}
+
+impl CheckpointCadence {
+    fn new() -> Self {
+        Self { groups_since: 0, last_time: Instant::now() }
+    }
+
+    fn tick(&mut self) { self.groups_since += 1; }
+
+    fn should_write(&self, cli: &Cli) -> bool {
+        let by_groups = cli.checkpoint_every_groups > 0
+            && self.groups_since >= cli.checkpoint_every_groups;
+        let by_time = cli
+            .checkpoint_every_seconds
+            .is_some_and(|t| self.last_time.elapsed().as_secs() >= t);
+        by_groups || by_time
+    }
+
+    fn write_and_reset(
+        &mut self, executor: &ReplayExecutor, cli: &Cli, end_epoch: u64,
+    ) {
+        let by_groups = cli.checkpoint_every_groups > 0
+            && self.groups_since >= cli.checkpoint_every_groups;
+        let by_time = cli
+            .checkpoint_every_seconds
+            .is_some_and(|t| self.last_time.elapsed().as_secs() >= t);
+        let elapsed = self.last_time.elapsed().as_secs();
+        save_checkpoint(executor, cli);
+        if cli.checkpoint.is_some() {
+            eprintln!(
+                "[ckpt] height={end_epoch} trigger={} groups_since={} elapsed={elapsed}s",
+                match (by_groups, by_time) {
+                    (true, true) => "groups+time",
+                    (true, false) => "groups",
+                    _ => "time",
+                },
+                self.groups_since,
+            );
+        }
+        self.groups_since = 0;
+        self.last_time = Instant::now();
+    }
+}
+
+struct ProgressLogger {
+    started: Instant,
+    last_log: Instant,
+}
+
+impl ProgressLogger {
+    fn new() -> Self {
+        let now = Instant::now();
+        Self { started: now, last_log: now }
+    }
+
+    fn maybe_log(
+        &mut self, end_epoch: u64, last_block_ts: u64, groups_done: usize,
+        totals: &Totals, streak: &StreakTracker,
+    ) {
+        if self.last_log.elapsed() < Duration::from_secs(60) {
+            return;
+        }
+        eprintln!(
+            "replay progress t={}s height={} block_date={} groups={} epochs={} blocks={} txs={} state_match={}/{} longest_mismatch_run={}",
+            self.started.elapsed().as_secs(),
+            end_epoch,
+            format_block_date(last_block_ts),
+            groups_done,
+            totals.epoch_count,
+            totals.block_count,
+            totals.transaction_count,
+            totals.state_root_prefix_matches,
+            totals.epoch_count,
+            streak.longest,
+        );
+        self.last_log = Instant::now();
+    }
+}
+
+fn collect_pack_files(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
+        .with_context(|| format!("read dir {}", dir.display()))?
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|path| path.extension().map(|ext| ext == "cfxpack").unwrap_or(false))
+        .collect();
+    files.sort_by_key(|path| container_start_epoch(path).unwrap_or(u64::MAX));
+    anyhow::ensure!(!files.is_empty(), "no .cfxpack files in {}", dir.display());
+    Ok(files)
+}
+
+fn validate_contiguity(
+    start_epoch: u64, next_expected: &mut Option<u64>, resume_height: u64,
+) -> Result<()> {
+    match *next_expected {
+        Some(expected) => anyhow::ensure!(
+            start_epoch == expected,
+            "non-contiguous groups: expected start epoch {expected}, got {start_epoch}",
+        ),
+        None => anyhow::ensure!(
+            resume_height == 0 || start_epoch == resume_height + 1,
+            "resume gap: checkpoint height {resume_height}, first pending group starts at epoch {start_epoch}",
+        ),
+    }
+    Ok(())
+}
+
 fn run_packed_dir(
     executor: &mut ReplayExecutor, cli: &Cli, resume_height: u64,
 ) -> Result<()> {
-    let mut files = std::fs::read_dir(&cli.input)
-        .with_context(|| format!("read dir {}", cli.input.display()))?
-        .filter_map(|entry| entry.ok().map(|e| e.path()))
-        .filter(|path| path.extension().map(|ext| ext == "cfxpack").unwrap_or(false))
-        .collect::<Vec<_>>();
-    // Files are named `<prefix>_<start_epoch>_<end_epoch>.cfxpack`; epoch order
-    // is required so the cumulative executor sees a contiguous chain.
-    files.sort_by_key(|path| container_start_epoch(path).unwrap_or(u64::MAX));
-    anyhow::ensure!(!files.is_empty(), "no .cfxpack files in {}", cli.input.display());
+    let files = collect_pack_files(&cli.input)?;
 
     let mut totals = Totals::default();
     let mut printed_mismatches = 0usize;
     let mut groups_done = 0usize;
-    // Groups actually executed this run (drives the checkpoint cadence).
-    let mut groups_executed = 0u64;
-    // Contiguity cursor: the start epoch the next executed group must have.
+    let mut ckpt = CheckpointCadence::new();
     let mut next_expected_epoch: Option<u64> = None;
     let mut streak = StreakTracker::default();
-    // Report progress on a wall-clock cadence (once a minute) rather than per
-    // a fixed group count, so progress is visible regardless of throughput.
-    let started = Instant::now();
-    let mut last_log = Instant::now();
+    let mut progress = ProgressLogger::new();
+
     for path in &files {
-        // File-level skip: when resuming, a whole container that ends at or
-        // before the checkpoint height is already replayed — don't even read
-        // it (these files are large).
         if let Some(end) = container_end_epoch(path) {
             if end <= resume_height {
                 continue;
@@ -297,23 +408,10 @@ fn run_packed_dir(
             .with_context(|| format!("parse container {}", path.display()))?;
         for (start_epoch, epoch_count, offset, length) in entries {
             let end_epoch = start_epoch + epoch_count.saturating_sub(1);
-            // Group-level skip: already covered by the checkpoint.
             if end_epoch <= resume_height {
                 continue;
             }
-            // Guard against resuming onto the wrong data: the first executed
-            // group must pick up exactly where the checkpoint left off, and
-            // every subsequent group must be contiguous.
-            match next_expected_epoch {
-                Some(expected) => anyhow::ensure!(
-                    start_epoch == expected,
-                    "non-contiguous groups: expected start epoch {expected}, got {start_epoch}",
-                ),
-                None => anyhow::ensure!(
-                    resume_height == 0 || start_epoch == resume_height + 1,
-                    "resume gap: checkpoint height {resume_height}, first pending group starts at epoch {start_epoch}",
-                ),
-            }
+            validate_contiguity(start_epoch, &mut next_expected_epoch, resume_height)?;
             next_expected_epoch = Some(end_epoch + 1);
 
             let payload = &data[offset..offset + length];
@@ -322,16 +420,15 @@ fn run_packed_dir(
             })?;
             accumulate(&mut totals, &report);
             report_mismatches(&report.epochs, cli, &mut printed_mismatches);
+            let mut last_block_ts = 0u64;
             for epoch in &report.epochs {
                 streak.observe(epoch.pivot_height, epoch_matched(epoch));
+                last_block_ts = epoch.pivot_timestamp;
             }
             groups_done += 1;
-            groups_executed += 1;
-            // Periodic checkpoint at a 2000-epoch group boundary.
-            if cli.checkpoint_every_groups > 0
-                && groups_executed % cli.checkpoint_every_groups == 0
-            {
-                save_checkpoint(executor, cli);
+            ckpt.tick();
+            if ckpt.should_write(cli) {
+                ckpt.write_and_reset(executor, cli, end_epoch);
                 if cli.stop_after_checkpoint && cli.checkpoint.is_some() {
                     println!(
                         "stop-after-checkpoint: wrote checkpoint at height {end_epoch}, exiting"
@@ -339,26 +436,10 @@ fn run_packed_dir(
                     return Ok(());
                 }
             }
-            if last_log.elapsed() >= Duration::from_secs(60) {
-                eprintln!(
-                    "replay progress t={}s height={} groups={} epochs={} blocks={} txs={} state_match={}/{} longest_mismatch_run={}",
-                    started.elapsed().as_secs(),
-                    end_epoch,
-                    groups_done,
-                    totals.epoch_count,
-                    totals.block_count,
-                    totals.transaction_count,
-                    totals.state_root_prefix_matches,
-                    totals.epoch_count,
-                    streak.longest,
-                );
-                last_log = Instant::now();
-            }
+            progress.maybe_log(end_epoch, last_block_ts, groups_done, &totals, &streak);
         }
     }
 
-    // Final checkpoint so a clean stop can be continued without re-running the
-    // last partial cadence window.
     save_checkpoint(executor, cli);
 
     println!(

@@ -33,6 +33,7 @@ serde = { workspace = true, features = ["derive"] }
 bincode = "1.3"
 snap = "1.1"
 tempfile = { workspace = true }
+time = { workspace = true }
 
 [features]
 # Exactly one state-trie backend must be active. The default is the proven
