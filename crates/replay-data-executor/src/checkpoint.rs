@@ -31,7 +31,7 @@
 //! the RLP bytes. The executor exposes only `export_checkpoint` / `restore`;
 //! the execution main loop and the packet codec are untouched.
 
-use crate::replay_exec::{EpochCommitment, ExecutedEpochData};
+use crate::consensus::{EpochCommitment, ExecutedEpoch};
 use anyhow::{Context, Result};
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_minimal_mpt::PersistedState;
@@ -52,12 +52,12 @@ const CHECKPOINT_VERSION: u32 = 1;
 /// RLP-encoded (they have no serde, only RLP) — one byte string per block.
 #[derive(Serialize, Deserialize)]
 struct ExecutedEpochDisk {
-    blocks: Vec<crate::packet::BlockInput>,
+    blocks: Vec<cfxpack::packet::Block>,
     receipts_rlp: Vec<Vec<u8>>,
 }
 
 impl ExecutedEpochDisk {
-    fn from_live(data: &ExecutedEpochData) -> Self {
+    fn from_live(data: &ExecutedEpoch) -> Self {
         Self {
             blocks: data.blocks.clone(),
             receipts_rlp: data
@@ -68,7 +68,7 @@ impl ExecutedEpochDisk {
         }
     }
 
-    fn into_live(self) -> Result<ExecutedEpochData> {
+    fn into_live(self) -> Result<ExecutedEpoch> {
         let receipts = self
             .receipts_rlp
             .iter()
@@ -78,7 +78,7 @@ impl ExecutedEpochDisk {
                     .context("decode checkpoint receipts (RLP)")
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(ExecutedEpochData {
+        Ok(ExecutedEpoch {
             blocks: self.blocks,
             receipts,
         })
@@ -87,7 +87,7 @@ impl ExecutedEpochDisk {
 
 /// A self-contained, resumable snapshot of the replay executor.
 #[derive(Serialize, Deserialize)]
-pub struct ReplayCheckpoint {
+pub struct Checkpoint {
     version: u32,
     /// Committed height (== last pivot height) this checkpoint sits at.
     height: u64,
@@ -99,7 +99,7 @@ pub struct ReplayCheckpoint {
     executed_epochs: Vec<(u64, ExecutedEpochDisk)>,
 }
 
-impl ReplayCheckpoint {
+impl Checkpoint {
     /// Assemble a checkpoint from the executor's live pieces. `mmpt` comes from
     /// `MinimalBackend::export_persisted()` (so its `height` is authoritative).
     pub(crate) fn build(
@@ -107,7 +107,7 @@ impl ReplayCheckpoint {
         previous_epoch_hash: H256,
         previous_state_root: &StateRootWithAuxInfo,
         commitments: &BTreeMap<u64, EpochCommitment>,
-        executed_epochs: &BTreeMap<u64, ExecutedEpochData>,
+        executed_epochs: &BTreeMap<u64, ExecutedEpoch>,
     ) -> Self {
         Self {
             version: CHECKPOINT_VERSION,
@@ -137,7 +137,7 @@ impl ReplayCheckpoint {
         H256,
         StateRootWithAuxInfo,
         BTreeMap<u64, EpochCommitment>,
-        BTreeMap<u64, ExecutedEpochData>,
+        BTreeMap<u64, ExecutedEpoch>,
     )> {
         let commitments = self.commitments.into_iter().collect();
         let mut executed_epochs = BTreeMap::new();
@@ -232,14 +232,14 @@ mod tests {
         let mut executed = BTreeMap::new();
         executed.insert(
             4000u64,
-            ExecutedEpochData {
+            ExecutedEpoch {
                 blocks: vec![],
                 receipts,
             },
         );
 
         let prev_root = StateRootWithAuxInfo::genesis(&h(9));
-        let ckpt = ReplayCheckpoint::build(
+        let ckpt = Checkpoint::build(
             mmpt,
             h(7),
             &prev_root,
@@ -251,7 +251,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("ckpt.bin");
         ckpt.save(&path).unwrap();
-        let loaded = ReplayCheckpoint::load(&path).unwrap().unwrap();
+        let loaded = Checkpoint::load(&path).unwrap().unwrap();
         let (mmpt2, hash2, root2, commitments2, executed2) =
             loaded.into_parts().unwrap();
 
@@ -272,6 +272,6 @@ mod tests {
     fn load_absent_checkpoint_is_none() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nope.bin");
-        assert!(ReplayCheckpoint::load(&path).unwrap().is_none());
+        assert!(Checkpoint::load(&path).unwrap().is_none());
     }
 }

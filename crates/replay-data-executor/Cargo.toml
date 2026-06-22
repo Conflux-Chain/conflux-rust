@@ -21,6 +21,10 @@ cfxcore = { workspace = true }
 # only pulled in when the `backend-minimal-mpt` feature selects it as the
 # state-trie backend in place of cfx-storage.
 cfx-minimal-mpt = { path = "../../../../crates/minimal-mpt", optional = true }
+# Shared `.cfxpack` wire-format layer. It pins conflux types to a git rev; the
+# workspace `[patch]` (root Cargo.toml) redirects that onto our own crates so
+# the `primitives` types it embeds unify with this crate's.
+cfxpack = { path = "../../../../crates/cfxpack" }
 # Signal-sampling profiler (SIGPROF/setitimer, no perf_event — works where
 # perf_event_paranoid is locked down). Enabled by the `profile` feature.
 pprof = { version = "0.14", features = ["flamegraph"], optional = true }
@@ -28,7 +32,7 @@ primitives = { workspace = true }
 rlp = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 # Checkpoint (de)serialization for resume. Used only by the minimal-mpt
-# backend, but kept as a plain dependency so `BlockInput`'s serde derive
+# backend, but kept as a plain dependency so `Block`'s serde derive
 # needs no feature gating.
 bincode = "1.3"
 snap = "1.1"
@@ -48,6 +52,9 @@ profile = ["dep:pprof"]
 # every commit (panics on divergence). Build together with backend-minimal-mpt.
 verify-incremental = ["cfx-minimal-mpt/verify-incremental"]
 
+# Bins are auto-discovered from src/bin/ (cfx-replay-exec, dump-blame). ckpt-stats
+# reads a minimal-mpt checkpoint, so it only builds under that backend.
 [[bin]]
-name = "cfx-replay-exec"
-path = "src/main.rs"
+name = "ckpt-stats"
+path = "src/bin/ckpt-stats.rs"
+required-features = ["backend-minimal-mpt"]

@@ -448,3 +448,12 @@ rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "67
 # use a forked version to fix a vulnerability(introduced by failure) in vrf-rs, can be removed after the upstream is fixed
 vrf = { git = "https://github.com/andrcmdr/vrf-rs.git", rev = "f7bdb21f7f5d1858a3bb0183f194440f9a4199b3" }
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }
+
+# `cfx-cfxpack` (cfx-minimal-execution workspace) pins these conflux crates to a
+# git rev so it unifies with the extractor's deps. In this workspace, redirect
+# that git source onto our own path crates so the format types unify with the
+# executor instead. The two consumers build independently, so each unifies on
+# its own side.
+[patch."https://github.com/Conflux-Chain/conflux-rust.git"]
+cfx-types = { path = "crates/cfx_types" }
+primitives = { path = "crates/primitives" }

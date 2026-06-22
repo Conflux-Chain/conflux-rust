@@ -11,12 +11,14 @@ compile_error!(
      or `backend-minimal-mpt`"
 );
 
+// The `.cfxpack` wire format (packet/codec/decode/verify) lives in the shared
+// `cfxpack` crate, used directly at each call site. The oracle workspace
+// `[patch]`es cfxpack's conflux deps onto its own crates so the `primitives`
+// types it embeds unify with this crate's.
 #[cfg(feature = "backend-minimal-mpt")]
 pub mod checkpoint;
-pub mod codec;
-pub mod decode;
 #[cfg(feature = "backend-minimal-mpt")]
 pub mod minimal_backend;
-pub mod packet;
-pub mod replay_exec;
-pub mod verify;
+pub mod consensus;
+pub mod driver;
+mod report;

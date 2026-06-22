@@ -1,13 +1,10 @@
 //! Throwaway inspector: dump per-block `blame` / pivot / deferred roots for a
 //! height range, to confirm whether replay mismatches sit in a blame context.
 //! Usage: dump_blame <container.cfxpack> <lo_height> <hi_height>
-use cfx_replay_data_executor::decode::decode_packet;
-use cfx_replay_data_executor::packet::{FLAG_PIVOT, FLAG_ZERO_TOTAL_REWARD};
+use cfxpack::container;
+use cfxpack::decode::decode_packet;
+use cfxpack::packet::{FLAG_PIVOT, FLAG_ZERO_TOTAL_REWARD};
 use std::{env, fs};
-
-const MAGIC: &[u8; 8] = b"CFXPACK1";
-const HDR: usize = 24;
-const ENTRY: usize = 32;
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -15,16 +12,10 @@ fn main() -> anyhow::Result<()> {
     let lo: u64 = args[2].parse()?;
     let hi: u64 = args[3].parse()?;
     let data = fs::read(file)?;
-    anyhow::ensure!(&data[0..8] == MAGIC, "not a cfxpack container");
-    let groups = u32::from_le_bytes(data[12..16].try_into()?) as usize;
-    let mut pos = HDR;
     let mut total_blocks = 0u64;
     let mut ztr_blocks = 0u64;
     let mut ztr_examples: Vec<(u64, u64, u8)> = Vec::new();
-    for _ in 0..groups {
-        let off = u64::from_le_bytes(data[pos + 16..pos + 24].try_into()?) as usize;
-        let len = u64::from_le_bytes(data[pos + 24..pos + 32].try_into()?) as usize;
-        pos += ENTRY;
+    for (_start, _count, off, len) in container::parse_directory(&data)? {
         let input = decode_packet(&data[off..off + len])?;
         for b in &input.blocks {
             total_blocks += 1;

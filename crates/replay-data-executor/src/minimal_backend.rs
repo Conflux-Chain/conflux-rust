@@ -31,7 +31,7 @@
 //! ## Root comparison
 //!
 //! The executor compares `StateRootWithAuxInfo.aux_info.state_root_hash`
-//! (`replay_exec.rs`), which for the real backend is
+//! (`consensus.rs`), which for the real backend is
 //! `keccak(snapshot_root ‖ intermediate_delta_root ‖ delta_root)`.
 //! `cfx-minimal-mpt`'s `CommitRoot.state_root_hash` is computed exactly the
 //! same way, so the adapter forwards it verbatim.
