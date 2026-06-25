@@ -2,7 +2,7 @@
 //! transactions, apply the pre-execution chain hooks, recompute the epoch's
 //! roots, and compare them against the chain.
 
-use super::commitment::{compare_commitment, deferred_commitment_height, finalized_epoch};
+use super::commitment::{compare_commitment, deferred_commitment_height};
 use super::{EpochCommitment, EpochReport, ExecutedEpoch, Replayer};
 use anyhow::{anyhow, Context, Result};
 use cfxpack::packet::Block;
@@ -32,56 +32,32 @@ impl Replayer {
         // numbered, and contributes to the deferred receipts root.
         let pivot = *blocks.last().expect("non-empty epoch");
         let pivot_hash = pivot.hash;
-        let debug_epoch = (30361150..=30361170).contains(&pivot.height);
         let mut state = self.open_next_state(pivot)?;
         self.before_epoch_execution(&mut state, pivot)?;
 
         let mut receipts = Vec::with_capacity(blocks.len());
         let mut block_number = start_block_number;
         let mut last_hash = self.previous_epoch_hash;
+        let mut last_pos_view = self.previous_epoch_pos_view;
+        let mut last_finalized_epoch = self.previous_epoch_finalized_epoch;
         for &block in blocks {
-            if debug_epoch {
-                eprintln!(
-                    "[DBG] h={} blk_num={} blk_hash={:?} author={:?} txs={} base_reward={} flags=0x{:x} gas_limit={} blame={} finalized_epoch={} blk_height={} blk_epoch={}",
-                    pivot.height, block_number, block.hash, block.author,
-                    block.transactions.len(), block.base_reward, block.flags, block.gas_limit,
-                    block.blame, block.finalized_epoch, block.height, block.epoch,
-                );
-                for (i, tx) in block.transactions.iter().enumerate() {
-                    let action = match tx.action() {
-                        primitives::Action::Create => "CREATE".to_string(),
-                        primitives::Action::Call(addr) => format!("CALL({:?})", addr),
-                    };
-                    eprintln!(
-                        "[DBG]   tx[{}] hash={:?} nonce={} gas_price={} gas={} value={} action={}",
-                        i, tx.hash(), tx.nonce(), tx.gas_price(), tx.gas(), tx.value(), action,
-                    );
-                }
-            }
             let block_receipts = self.execute_block(
                 block,
                 pivot,
                 block_number,
                 last_hash,
+                last_pos_view,
+                last_finalized_epoch,
                 &mut state,
             )?;
-            if debug_epoch {
-                for (i, r) in block_receipts.receipts.iter().enumerate() {
-                    eprintln!(
-                        "[DBG]   receipt[{}] outcome={:?} gas_fee={} burnt_gas_fee={:?} gas_sponsored={} storage_sponsored={} storage_collateralized={} storage_released={} logs={}",
-                        i, r.outcome_status, r.gas_fee, r.burnt_gas_fee,
-                        r.gas_sponsor_paid, r.storage_sponsor_paid,
-                        r.storage_collateralized.len(), r.storage_released.len(),
-                        r.logs.len(),
-                    );
-                }
-                eprintln!(
-                    "[DBG]   block_receipts secondary_reward={} block_number={}",
-                    block_receipts.secondary_reward, block_receipts.block_number,
-                );
-            }
             receipts.push(Arc::new(block_receipts));
             last_hash = block.hash;
+            last_pos_view = block.pos_view;
+            last_finalized_epoch = if block.finalized_epoch > 0 {
+                Some(block.epoch.saturating_sub(block.finalized_epoch))
+            } else {
+                None
+            };
             block_number += 1;
         }
 
@@ -89,31 +65,32 @@ impl Replayer {
         let computed_logs_bloom_hash =
             BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         let end_block_number = block_number.saturating_sub(1);
-        if debug_epoch {
-            eprintln!(
-                "[DBG] h={} computed_receipts={:?} computed_logs={:?} end_block_number={} reward_for={}",
-                pivot.height, computed_receipts_root, computed_logs_bloom_hash,
-                end_block_number,
-                if pivot.height > 12 { pivot.height - 12 } else { 0 },
-            );
-        }
         self.apply_due_rewards(&mut state, end_block_number, pivot)?;
+
+        // PoS interest distribution (DESIGN §8.8): mirror production
+        // `process_pos_interest` -> `distribute_pos_interest`, applied here after
+        // PoW reward settlement and before commit, matching production order
+        // (consensus_executor::compute_epoch). The packet carries the already
+        // computed per-account amounts (production `PosRewardInfo.account_rewards`),
+        // so we apply them directly instead of recomputing from PoS reward points.
+        for entry in &pivot.pos_rewards {
+            debug_assert_eq!(entry.execution_epoch_hash, pivot_hash);
+            for account in &entry.account_rewards {
+                state
+                    .add_pos_interest(&account.address, &account.reward)
+                    .context("apply pos interest")?;
+            }
+            state.reset_pos_distribute_info(end_block_number);
+        }
 
         let state_root = state
             .commit(pivot_hash, None)
             .context("commit replay epoch state")?
             .state_root;
         let computed_state_root = state_root.aux_info.state_root_hash;
-        if debug_epoch {
-            eprintln!(
-                "[DBG] h={} state_root_hash={:?} snapshot={:?} intermediate_delta={:?} delta={:?}",
-                pivot.height, computed_state_root,
-                state_root.state_root.snapshot_root,
-                state_root.state_root.intermediate_delta_root,
-                state_root.state_root.delta_root,
-            );
-        }
         self.previous_epoch_hash = pivot_hash;
+        self.previous_epoch_pos_view = last_pos_view;
+        self.previous_epoch_finalized_epoch = last_finalized_epoch;
         self.previous_state_root = state_root;
 
         let current_commitment = EpochCommitment {
@@ -201,12 +178,13 @@ impl Replayer {
 
     fn execute_block(
         &self, block: &Block, pivot: &Block, block_number: u64,
-        last_hash: H256, state: &mut State,
+        last_hash: H256, last_pos_view: Option<u64>,
+        last_finalized_epoch: Option<u64>, state: &mut State,
     ) -> Result<BlockReceipts> {
         let secondary_reward =
             self.before_block_execution(state, block_number, block)?;
         let mut env =
-            self.make_env(block, pivot, block_number, last_hash, state);
+            self.make_env(block, pivot, block_number, last_hash, last_pos_view, last_finalized_epoch, state);
         let mut accumulated_gas_used = U256::zero();
         let mut block_receipts = Vec::with_capacity(block.transactions.len());
         let mut errors = Vec::with_capacity(block.transactions.len());
@@ -246,7 +224,8 @@ impl Replayer {
 
     fn make_env(
         &self, block: &Block, pivot: &Block, block_number: u64,
-        last_hash: H256, state: &mut State,
+        last_hash: H256, last_pos_view: Option<u64>,
+        last_finalized_epoch: Option<u64>, state: &mut State,
     ) -> Env {
         let base_gas_price =
             SpaceMap::new(block.base_price_core, block.base_price_espace);
@@ -262,11 +241,8 @@ impl Replayer {
             last_hash,
             gas_limit: block.gas_limit,
             epoch_height: pivot.epoch,
-            pos_view: None,
-            finalized_epoch: finalized_epoch(
-                pivot.epoch,
-                block.finalized_epoch,
-            ),
+            pos_view: last_pos_view,
+            finalized_epoch: last_finalized_epoch,
             transaction_epoch_bound: self.conf.raw_conf.transaction_epoch_bound,
             base_gas_price,
             burnt_gas_price,

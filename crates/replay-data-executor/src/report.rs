@@ -35,6 +35,14 @@ impl StreakTracker {
             self.longest_end = height;
         }
     }
+
+    /// True while an unresolved run of consecutive mismatches is in flight (the
+    /// last observed epoch did not match). Lets the driver defer checkpointing
+    /// so trie state is only ever persisted at a fully-clean boundary, never in
+    /// the middle of a blame run or an incipient real divergence.
+    pub(crate) fn in_mismatch_run(&self) -> bool {
+        self.current > 0
+    }
 }
 
 pub(crate) fn epoch_matched(epoch: &EpochReport) -> bool {

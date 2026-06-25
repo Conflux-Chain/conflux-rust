@@ -127,7 +127,12 @@ fn process_group(
 
     tracker.groups_done += 1;
     tracker.ckpt.tick();
-    if tracker.ckpt.should_write(cfg) {
+    // Only ever persist at a fully-clean boundary: if a mismatch run is in
+    // flight (blame window, or the start of a real divergence), defer the
+    // checkpoint until epochs match again. The cadence stays "due" (we do not
+    // reset it), so it fires on the first clean group after the run clears; a
+    // real divergence never clears, so ckpt.bin stays at the last good height.
+    if tracker.ckpt.should_write(cfg) && !tracker.streak.in_mismatch_run() {
         tracker.ckpt.write_and_reset(replayer, cfg, end_epoch);
         if cfg.stop_after_checkpoint && cfg.checkpoint.is_some() {
             println!(

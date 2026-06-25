@@ -68,15 +68,6 @@ pub(super) fn deferred_commitment_height(height: u64) -> u64 {
     height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT)
 }
 
-/// The PoS-finalized epoch carried in a block's env, or `None` if unset.
-pub(super) fn finalized_epoch(epoch: u64, offset: u64) -> Option<u64> {
-    if offset == 0 {
-        None
-    } else {
-        Some(epoch.saturating_sub(offset))
-    }
-}
-
 impl Replayer {
     /// Bound memory: a commitment is only re-read DEFERRED_STATE_EPOCH_COUNT
     /// epochs later and an executed epoch only REWARD_EPOCH_COUNT epochs later,

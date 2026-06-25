@@ -12,7 +12,7 @@
 
 use anyhow::{ensure, Result};
 use cfxpack::{
-    decode::decode_packet,
+    decode::decode_packet_ext,
     packet::{Block, Packet, FLAG_PIVOT, FLAG_SKIPPED_EXECUTION},
 };
 use cfx_config::Configuration;
@@ -76,6 +76,8 @@ pub struct Replayer {
     #[cfg_attr(feature = "backend-minimal-mpt", allow(dead_code))]
     snapshot_epoch_count: u32,
     previous_epoch_hash: H256,
+    previous_epoch_pos_view: Option<u64>,
+    previous_epoch_finalized_epoch: Option<u64>,
     previous_state_root: StateRootWithAuxInfo,
     commitments_by_height: BTreeMap<u64, EpochCommitment>,
     executed_epochs_by_height: BTreeMap<u64, ExecutedEpoch>,
@@ -89,7 +91,8 @@ pub struct Replayer {
 
 impl Replayer {
     pub fn execute_packet(&mut self, packet: &[u8]) -> Result<RunReport> {
-        let input = decode_packet(packet)?;
+        let pos_h = self.conf.raw_conf.pos_reference_enable_height;
+        let input = decode_packet_ext(packet, pos_h)?;
         self.execute_input(&input)
     }
 
@@ -147,4 +150,5 @@ impl Replayer {
             epochs,
         })
     }
+
 }

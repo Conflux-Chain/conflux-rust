@@ -46,7 +46,7 @@ use std::{
 };
 
 /// Bumped if the on-disk layout changes incompatibly.
-const CHECKPOINT_VERSION: u32 = 1;
+const CHECKPOINT_VERSION: u32 = 2;
 
 /// One executed epoch as stored on disk. Blocks serde directly; receipts are
 /// RLP-encoded (they have no serde, only RLP) — one byte string per block.
@@ -85,6 +85,33 @@ impl ExecutedEpochDisk {
     }
 }
 
+#[derive(Deserialize)]
+struct CheckpointV1 {
+    version: u32,
+    height: u64,
+    mmpt: PersistedState,
+    previous_epoch_hash: H256,
+    previous_state_root: StateRootWithAuxInfo,
+    commitments: Vec<(u64, EpochCommitment)>,
+    executed_epochs: Vec<(u64, ExecutedEpochDisk)>,
+}
+
+impl CheckpointV1 {
+    fn upgrade(self) -> Checkpoint {
+        Checkpoint {
+            version: CHECKPOINT_VERSION,
+            height: self.height,
+            mmpt: self.mmpt,
+            previous_epoch_hash: self.previous_epoch_hash,
+            previous_state_root: self.previous_state_root,
+            previous_epoch_pos_view: None,
+            previous_epoch_finalized_epoch: None,
+            commitments: self.commitments,
+            executed_epochs: self.executed_epochs,
+        }
+    }
+}
+
 /// A self-contained, resumable snapshot of the replay executor.
 #[derive(Serialize, Deserialize)]
 pub struct Checkpoint {
@@ -95,6 +122,8 @@ pub struct Checkpoint {
     mmpt: PersistedState,
     previous_epoch_hash: H256,
     previous_state_root: StateRootWithAuxInfo,
+    previous_epoch_pos_view: Option<u64>,
+    previous_epoch_finalized_epoch: Option<u64>,
     commitments: Vec<(u64, EpochCommitment)>,
     executed_epochs: Vec<(u64, ExecutedEpochDisk)>,
 }
@@ -106,6 +135,8 @@ impl Checkpoint {
         mmpt: PersistedState,
         previous_epoch_hash: H256,
         previous_state_root: &StateRootWithAuxInfo,
+        previous_epoch_pos_view: Option<u64>,
+        previous_epoch_finalized_epoch: Option<u64>,
         commitments: &BTreeMap<u64, EpochCommitment>,
         executed_epochs: &BTreeMap<u64, ExecutedEpoch>,
     ) -> Self {
@@ -115,6 +146,8 @@ impl Checkpoint {
             mmpt,
             previous_epoch_hash,
             previous_state_root: previous_state_root.clone(),
+            previous_epoch_pos_view,
+            previous_epoch_finalized_epoch,
             commitments: commitments.iter().map(|(h, c)| (*h, *c)).collect(),
             executed_epochs: executed_epochs
                 .iter()
@@ -136,6 +169,8 @@ impl Checkpoint {
         PersistedState,
         H256,
         StateRootWithAuxInfo,
+        Option<u64>,
+        Option<u64>,
         BTreeMap<u64, EpochCommitment>,
         BTreeMap<u64, ExecutedEpoch>,
     )> {
@@ -148,6 +183,8 @@ impl Checkpoint {
             self.mmpt,
             self.previous_epoch_hash,
             self.previous_state_root,
+            self.previous_epoch_pos_view,
+            self.previous_epoch_finalized_epoch,
             commitments,
             executed_epochs,
         ))
@@ -171,20 +208,29 @@ impl Checkpoint {
     }
 
     /// Load a checkpoint if one exists at `path`; `Ok(None)` when absent.
+    /// Transparently upgrades v1 checkpoints (pre-PoS fields missing).
     pub fn load(path: &Path) -> Result<Option<Self>> {
         if !path.exists() {
             return Ok(None);
         }
         let bytes = fs::read(path)
             .with_context(|| format!("read checkpoint {}", path.display()))?;
-        let ckpt: Self = bincode::deserialize(&bytes)
-            .with_context(|| format!("deserialize checkpoint {}", path.display()))?;
-        anyhow::ensure!(
-            ckpt.version == CHECKPOINT_VERSION,
-            "checkpoint version mismatch: file v{}, expected v{}",
-            ckpt.version,
-            CHECKPOINT_VERSION,
-        );
+        let version: u32 = bincode::deserialize(&bytes[..4])
+            .context("read checkpoint version")?;
+        let ckpt = match version {
+            1 => {
+                let v1: CheckpointV1 = bincode::deserialize(&bytes)
+                    .with_context(|| format!("deserialize v1 checkpoint {}", path.display()))?;
+                v1.upgrade()
+            }
+            CHECKPOINT_VERSION => {
+                bincode::deserialize(&bytes)
+                    .with_context(|| format!("deserialize checkpoint {}", path.display()))?
+            }
+            _ => anyhow::bail!(
+                "checkpoint version mismatch: file v{version}, expected v{CHECKPOINT_VERSION}",
+            ),
+        };
         Ok(Some(ckpt))
     }
 }

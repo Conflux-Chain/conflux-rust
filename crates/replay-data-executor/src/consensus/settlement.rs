@@ -56,7 +56,6 @@ impl Replayer {
         receipts: &[Arc<BlockReceipts>], end_block_number: u64,
         pivot: &Block,
     ) -> Result<()> {
-        let debug_reward = (30361150..=30361170).contains(&pivot.height);
         let spec = self.machine.spec(end_block_number, pivot.height);
         let mut total_base_reward = U256::zero();
         let mut block_base_rewards = Vec::with_capacity(blocks.len());
@@ -66,21 +65,6 @@ impl Replayer {
                 total_base_reward += reward;
             }
             block_base_rewards.push(reward);
-        }
-        if debug_reward {
-            let reward_height = if pivot.height > 12 { pivot.height - 12 } else { 0 };
-            eprintln!(
-                "[DBG-REWARD] pivot_h={} settling_h={} blocks={} total_base_reward={} receipts={}",
-                pivot.height, reward_height, blocks.len(), total_base_reward, receipts.len(),
-            );
-            for (i, block) in blocks.iter().enumerate() {
-                let zero_total = block.flags & FLAG_ZERO_TOTAL_REWARD != 0;
-                eprintln!(
-                    "[DBG-REWARD]   blk[{}] hash={:?} base_reward={} zero_total_reward={} author={:?} txs={} tx_refs={:?}",
-                    i, block.hash, block.base_reward, zero_total, block.author,
-                    block.transactions.len(), block.transaction_refs,
-                );
-            }
         }
 
         let mut tx_fee = HashMap::<TxIdentity, TxExecutionInfo>::new();
@@ -156,10 +140,10 @@ impl Replayer {
                 total_reward;
         }
 
-        for (address, reward) in merged_rewards {
-            if spec.is_valid_address(&address) {
+        for (address, reward) in &merged_rewards {
+            if spec.is_valid_address(address) {
                 state
-                    .add_balance(&address.with_native_space(), &reward)
+                    .add_balance(&address.with_native_space(), reward)
                     .context("apply block reward")?;
             }
         }

@@ -107,6 +107,8 @@ impl Replayer {
             machine,
             snapshot_epoch_count,
             previous_epoch_hash,
+            previous_epoch_pos_view: None,
+            previous_epoch_finalized_epoch: None,
             previous_state_root,
             commitments_by_height: BTreeMap::from([(0, genesis_commitment)]),
             executed_epochs_by_height: BTreeMap::new(),
@@ -132,6 +134,8 @@ impl Replayer {
             self.minimal_backend.export_persisted(),
             self.previous_epoch_hash,
             &self.previous_state_root,
+            self.previous_epoch_pos_view,
+            self.previous_epoch_finalized_epoch,
             &self.commitments_by_height,
             &self.executed_epochs_by_height,
         )
@@ -147,12 +151,14 @@ impl Replayer {
         checkpoint: crate::checkpoint::Checkpoint,
     ) -> Result<Self> {
         let mut executor = Self::new(config)?;
-        let (mmpt, prev_hash, prev_root, commitments, executed) =
+        let (mmpt, prev_hash, prev_root, prev_pos_view, prev_fe, commitments, executed) =
             checkpoint.into_parts()?;
         executor.minimal_backend =
             crate::minimal_backend::MinimalBackend::from_persisted(mmpt);
         executor.previous_epoch_hash = prev_hash;
         executor.previous_state_root = prev_root;
+        executor.previous_epoch_pos_view = prev_pos_view;
+        executor.previous_epoch_finalized_epoch = prev_fe;
         executor.commitments_by_height = commitments;
         executor.executed_epochs_by_height = executed;
         Ok(executor)
