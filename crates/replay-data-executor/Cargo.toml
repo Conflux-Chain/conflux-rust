@@ -46,6 +46,7 @@ time = { workspace = true }
 default = ["backend-cfx-storage"]
 backend-cfx-storage = []
 backend-minimal-mpt = ["dep:cfx-minimal-mpt"]
+backend-minimal-mpt-lmdb = ["backend-minimal-mpt", "cfx-minimal-mpt/snapshot-lmdb"]
 # Sample the run with pprof-rs and write flamegraph.svg on exit.
 profile = ["dep:pprof"]
 # Cross-check the incremental delta-trie root against the stateless oracle on
@@ -57,4 +58,9 @@ verify-incremental = ["cfx-minimal-mpt/verify-incremental"]
 [[bin]]
 name = "ckpt-stats"
 path = "src/bin/ckpt-stats.rs"
+required-features = ["backend-minimal-mpt"]
+
+[[bin]]
+name = "ckpt-restore-rss"
+path = "src/bin/ckpt-restore-rss.rs"
 required-features = ["backend-minimal-mpt"]

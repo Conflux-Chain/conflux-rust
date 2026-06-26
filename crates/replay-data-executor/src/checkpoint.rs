@@ -289,6 +289,8 @@ mod tests {
             mmpt,
             h(7),
             &prev_root,
+            Some(111),
+            Some(222),
             &commitments,
             &executed,
         );
@@ -298,12 +300,21 @@ mod tests {
         let path = dir.path().join("ckpt.bin");
         ckpt.save(&path).unwrap();
         let loaded = Checkpoint::load(&path).unwrap().unwrap();
-        let (mmpt2, hash2, root2, commitments2, executed2) =
-            loaded.into_parts().unwrap();
+        let (
+            mmpt2,
+            hash2,
+            root2,
+            pos_view2,
+            finalized_epoch2,
+            commitments2,
+            executed2,
+        ) = loaded.into_parts().unwrap();
 
         assert_eq!(mmpt2.height, 4000);
         assert_eq!(hash2, h(7));
         assert_eq!(root2, prev_root);
+        assert_eq!(pos_view2, Some(111));
+        assert_eq!(finalized_epoch2, Some(222));
         assert_eq!(commitments2.len(), 2);
         assert_eq!(commitments2[&4000].state_root, h(4));
         assert_eq!(commitments2[&3998].logs_bloom_hash, h(3));
