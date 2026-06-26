@@ -18,6 +18,7 @@ BACKENDS=${REPLAY_SMOKE_BACKENDS:-all}
 CKPT_GROUPS=${REPLAY_SMOKE_GROUPS:-1}
 FILES_PER_SUBSET=${REPLAY_SMOKE_FILES_PER_SUBSET:-1}
 BACKUP_LIMIT=${REPLAY_SMOKE_BACKUP_LIMIT:-1}
+PHASES=${REPLAY_SMOKE_PHASES:-initial,resume}
 TIMEOUT=${REPLAY_SMOKE_TIMEOUT:-1200}
 NICE=${REPLAY_SMOKE_NICE:-10}
 MAX_MISMATCHES=${REPLAY_SMOKE_MAX_MISMATCHES:-1000000}
@@ -41,7 +42,8 @@ die() {
 }
 
 [[ $CKPT_GROUPS =~ ^[0-9]+$ ]] || die "REPLAY_SMOKE_GROUPS must be numeric, got '$CKPT_GROUPS'"
-log "settings: backends=$BACKENDS checkpoint_groups=$CKPT_GROUPS files_per_subset=$FILES_PER_SUBSET backup_limit=$BACKUP_LIMIT timeout=${TIMEOUT}s out=$OUT_ROOT"
+[[ $BACKUP_LIMIT =~ ^[0-9]+$ ]] || die "REPLAY_SMOKE_BACKUP_LIMIT must be numeric, got '$BACKUP_LIMIT'"
+log "settings: backends=$BACKENDS phases=$PHASES checkpoint_groups=$CKPT_GROUPS files_per_subset=$FILES_PER_SUBSET backup_limit=$BACKUP_LIMIT timeout=${TIMEOUT}s out=$OUT_ROOT"
 
 split_csv_or_words() {
   printf '%s\n' "$1" | tr ',' ' '
@@ -128,6 +130,16 @@ expand_backends() {
     return
   fi
   split_csv_or_words "$raw" | tr ' ' '\n' | sed '/^$/d'
+}
+
+phase_enabled() {
+  local wanted=$1
+  for phase in $(split_csv_or_words "$PHASES"); do
+    if [[ $phase == "$wanted" ]]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 build_backend() {
@@ -228,7 +240,7 @@ else
   skip "no packed cfxpack directory found for genesis"
 fi
 
-if [[ -d $BACKUP_DIR ]]; then
+if [[ -d $BACKUP_DIR && $BACKUP_LIMIT -gt 0 ]]; then
   added=0
   while IFS= read -r ckpt; do
     height=$(checkpoint_height_from_name "$ckpt" || true)
@@ -245,6 +257,8 @@ if [[ -d $BACKUP_DIR ]]; then
     fi
   done < <(find "$BACKUP_DIR" -maxdepth 1 -type f \( -name 'ckpt_*.bin' -o -name 'ckpt_*.bin.zst' \) -print | sort -V)
   (( added > 0 )) || skip "no usable backup checkpoints in $BACKUP_DIR"
+elif (( BACKUP_LIMIT == 0 )); then
+  skip "backup checkpoint cases disabled by REPLAY_SMOKE_BACKUP_LIMIT=0"
 else
   skip "backup checkpoint directory missing: $BACKUP_DIR"
 fi
@@ -271,21 +285,28 @@ while IFS=$'\t' read -r case_id seed_height pack_dir seed_ckpt; do
       continue
     fi
 
-    if ! height1=$(run_replay_phase "$bin" "$backend" "$case_id" initial "$input1" "$ckpt"); then
-      failures=$((failures + 1))
-      continue
+    if phase_enabled initial; then
+      if ! height1=$(run_replay_phase "$bin" "$backend" "$case_id" initial "$input1" "$ckpt"); then
+        failures=$((failures + 1))
+        continue
+      fi
+    else
+      height1=$seed_height
+      record "$backend" "$case_id" initial skipped "$height1" ""
     fi
 
-    input2="$case_dir/input_resume"
-    if ! make_subset_dir "$pack_dir" "$height1" "$input2" "$FILES_PER_SUBSET"; then
-      skip "case=$case_id backend=$backend: cannot build resume input subset from $pack_dir after $height1"
-      record "$backend" "$case_id" resume skipped "$height1" ""
-      continue
-    fi
+    if phase_enabled resume; then
+      input2="$case_dir/input_resume"
+      if ! make_subset_dir "$pack_dir" "$height1" "$input2" "$FILES_PER_SUBSET"; then
+        skip "case=$case_id backend=$backend: cannot build resume input subset from $pack_dir after $height1"
+        record "$backend" "$case_id" resume skipped "$height1" ""
+        continue
+      fi
 
-    if ! run_replay_phase "$bin" "$backend" "$case_id" resume "$input2" "$ckpt" >/dev/null; then
-      failures=$((failures + 1))
-      continue
+      if ! run_replay_phase "$bin" "$backend" "$case_id" resume "$input2" "$ckpt" >/dev/null; then
+        failures=$((failures + 1))
+        continue
+      fi
     fi
   done
 done < "$OUT_ROOT/cases.tsv"
