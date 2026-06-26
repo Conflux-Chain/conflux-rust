@@ -12,7 +12,7 @@ use cfx_executor::{
     internal_contract::{
         block_hash_slot, epoch_hash_slot, initialize_internal_contract_accounts,
     },
-    state::{initialize_cip107, initialize_cip137, State},
+    state::{initialize_cip107, initialize_cip137, update_pos_status, State},
 };
 use cfx_statedb::StateDb;
 #[cfg(not(feature = "backend-minimal-mpt"))]
@@ -67,12 +67,14 @@ impl Replayer {
         let end_block_number = block_number.saturating_sub(1);
         self.apply_due_rewards(&mut state, end_block_number, pivot)?;
 
-        // PoS interest distribution (DESIGN §8.8): mirror production
-        // `process_pos_interest` -> `distribute_pos_interest`, applied here after
-        // PoW reward settlement and before commit, matching production order
-        // (consensus_executor::compute_epoch). The packet carries the already
-        // computed per-account amounts (production `PosRewardInfo.account_rewards`),
-        // so we apply them directly instead of recomputing from PoS reward points.
+        // PoS unlock + interest distribution (DESIGN §8.8): mirror production
+        // `process_pos_interest` which first processes unlock events (adjusting
+        // TotalPosStaking), then distributes interest. Order matters because
+        // inc_distributable_pos_interest (called per-block) reads TotalPosStaking.
+        for entry in &pivot.unlock_events {
+            update_pos_status(&mut state, entry.identifier, entry.unlocked)
+                .context("apply pos unlock")?;
+        }
         for entry in &pivot.pos_rewards {
             debug_assert_eq!(entry.execution_epoch_hash, pivot_hash);
             for account in &entry.account_rewards {

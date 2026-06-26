@@ -43,6 +43,10 @@ impl StreakTracker {
     pub(crate) fn in_mismatch_run(&self) -> bool {
         self.current > 0
     }
+
+    pub(crate) fn longest_run(&self) -> usize {
+        self.longest
+    }
 }
 
 pub(crate) fn epoch_matched(epoch: &EpochReport) -> bool {

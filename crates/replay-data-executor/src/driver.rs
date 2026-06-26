@@ -105,7 +105,7 @@ struct RunTracker {
 }
 
 /// Execute one epoch-group and accumulate into the tracker.
-/// Returns `true` when stop-after-checkpoint fires.
+/// Returns `true` when the caller should stop processing further groups.
 fn process_group(
     tracker: &mut RunTracker, replayer: &mut Replayer, cfg: &DriverConfig,
     payload: &[u8], start_epoch: u64, end_epoch: u64,
@@ -144,6 +144,9 @@ fn process_group(
     tracker.progress.maybe_log(
         end_epoch, last_block_ts, tracker.groups_done, &tracker.totals, &tracker.streak,
     );
+    if tracker.streak.longest_run() >= cfg.anomaly_streak {
+        return Ok(true);
+    }
     Ok(false)
 }
 
@@ -180,7 +183,9 @@ fn run_packed_dir(replayer: &mut Replayer, cfg: &DriverConfig, resume_height: u6
         }
     }
 
-    save_checkpoint(replayer, cfg);
+    if !tracker.streak.in_mismatch_run() {
+        save_checkpoint(replayer, cfg);
+    }
 
     println!(
         "executed packed dir: files={}, epochs={}, blocks={}, txs={}, receipt_matches={}, log_matches={}, state_matches={}",
