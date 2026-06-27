@@ -15,7 +15,7 @@ use crate::report::{
 };
 use anyhow::{Context, Result};
 use cfxpack::container;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 /// Everything the driver needs, mapped from whatever front-end (CLI, test) is
@@ -81,9 +81,23 @@ pub fn run(replayer: &mut Replayer, cfg: &DriverConfig, resume_height: u64) -> R
     }
 }
 
+fn read_container(path: &Path) -> Result<Vec<u8>> {
+    let raw = std::fs::read(path)
+        .with_context(|| format!("read container {}", path.display()))?;
+    if container::is_compressed(path) {
+        let mut decoder = ruzstd::StreamingDecoder::new(raw.as_slice())
+            .map_err(|e| anyhow::anyhow!("zstd init: {e}"))?;
+        let mut out = Vec::with_capacity(raw.len() * 3);
+        std::io::Read::read_to_end(&mut decoder, &mut out)
+            .with_context(|| format!("zstd decompress {}", path.display()))?;
+        Ok(out)
+    } else {
+        Ok(raw)
+    }
+}
+
 fn run_single(replayer: &mut Replayer, cfg: &DriverConfig) -> Result<()> {
-    let packet = std::fs::read(&cfg.input)
-        .with_context(|| format!("read packet {}", cfg.input.display()))?;
+    let packet = read_container(&cfg.input)?;
     let report = replayer.execute_packet(&packet)?;
     print_single_report(&report);
     report_mismatches(&report.epochs, cfg.verbose_epochs, cfg.max_mismatches, &mut 0);
@@ -166,8 +180,7 @@ fn run_packed_dir(replayer: &mut Replayer, cfg: &DriverConfig, resume_height: u6
         if container::end_epoch(path).is_some_and(|end| end <= resume_height) {
             continue;
         }
-        let data = std::fs::read(path)
-            .with_context(|| format!("read container {}", path.display()))?;
+        let data = read_container(path)?;
         let entries = container::parse_directory(&data)
             .with_context(|| format!("parse container {}", path.display()))?;
         for (start_epoch, epoch_count, offset, length) in entries {

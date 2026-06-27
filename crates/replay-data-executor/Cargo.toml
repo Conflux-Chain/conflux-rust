@@ -36,6 +36,7 @@ serde = { workspace = true, features = ["derive"] }
 # needs no feature gating.
 bincode = "1.3"
 snap = "1.1"
+ruzstd = "0.7"
 tempfile = { workspace = true }
 time = { workspace = true }
 
