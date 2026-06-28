@@ -75,6 +75,14 @@ impl Replayer {
             update_pos_status(&mut state, entry.identifier, entry.unlocked)
                 .context("apply pos unlock")?;
         }
+        if !pivot.pos_rewards.is_empty() {
+            let total_reward: U256 = pivot.pos_rewards.iter()
+                .flat_map(|e| e.account_rewards.iter())
+                .fold(U256::zero(), |acc, a| acc + a.reward);
+            eprintln!("[POS-DBG] epoch={} distributable_pos_interest={} injected_reward_total={} accounts={}",
+                pivot.epoch, state.distributable_pos_interest(), total_reward,
+                pivot.pos_rewards.iter().map(|e| e.account_rewards.len()).sum::<usize>());
+        }
         for entry in &pivot.pos_rewards {
             debug_assert_eq!(entry.execution_epoch_hash, pivot_hash);
             for account in &entry.account_rewards {
