@@ -75,19 +75,28 @@ impl Replayer {
             update_pos_status(&mut state, entry.identifier, entry.unlocked)
                 .context("apply pos unlock")?;
         }
-        if !pivot.pos_rewards.is_empty() {
-            let total_reward: U256 = pivot.pos_rewards.iter()
-                .flat_map(|e| e.account_rewards.iter())
-                .fold(U256::zero(), |acc, a| acc + a.reward);
-            eprintln!("[POS-DBG] epoch={} distributable_pos_interest={} injected_reward_total={} accounts={}",
-                pivot.epoch, state.distributable_pos_interest(), total_reward,
-                pivot.pos_rewards.iter().map(|e| e.account_rewards.len()).sum::<usize>());
-        }
         for entry in &pivot.pos_rewards {
             debug_assert_eq!(entry.execution_epoch_hash, pivot_hash);
+            let distributable = state.distributable_pos_interest();
+            let packed_total: U256 = entry
+                .account_rewards
+                .iter()
+                .fold(U256::zero(), |acc, a| acc + a.reward);
             for account in &entry.account_rewards {
+                // The packed reward was computed from a (possibly stale)
+                // distributable_pos_interest snapshot. Re-derive each
+                // validator's share from the live state value using the same
+                // proportional formula the production code uses:
+                //   interest = distributable * points / MAX_TERM_POINTS
+                // Since points/MAX_TERM_POINTS == packed_reward/packed_total,
+                // we get: interest = distributable * packed_reward / packed_total
+                let interest = if packed_total.is_zero() {
+                    U256::zero()
+                } else {
+                    distributable * account.reward / packed_total
+                };
                 state
-                    .add_pos_interest(&account.address, &account.reward)
+                    .add_pos_interest(&account.address, &interest)
                     .context("apply pos interest")?;
             }
             state.reset_pos_distribute_info(end_block_number);
