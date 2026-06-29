@@ -1211,7 +1211,12 @@ mod canonical_rlp_tests {
     fn malleate(p: &TransactionWithSignatureSerializePart) -> Vec<u8> {
         let mut s = rlp::encode(p).to_vec();
         if is_list_form(p) {
-            assert!((0xc0..=0xf7).contains(&s[0]));
+            // Only short-form list headers (payload <= 55 bytes) — the
+            // single-byte length can be bumped. Keep test variants small.
+            assert!(
+                (0xc0..=0xf7).contains(&s[0]),
+                "malleate: long-form list header not supported"
+            );
             s[0] += 1;
             s.push(0xb8);
             s
