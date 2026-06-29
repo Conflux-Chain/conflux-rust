@@ -76,6 +76,7 @@ unsafe impl Sync for CompressedPathRaw {}
 #[cfg(test)]
 mod tests {
     use super::{super::maybe_in_place_byte_array::*, *};
+    use rlp::{Decodable, Rlp, RlpStream};
 
     #[test]
     fn test_compressed_path_raw_memory_manager_size() {
@@ -89,6 +90,71 @@ mod tests {
                 >,
             >(),
             0
+        );
+    }
+
+    /// RLP-encode a raw `(mask, slice)` pair, bypassing the constructors so
+    /// tests can craft over-long / malformed inputs they can't produce.
+    fn encode_path(path_mask: u8, path_slice: &[u8]) -> Vec<u8> {
+        let mut s = RlpStream::new_list(2);
+        s.append(&path_mask);
+        s.append(&path_slice);
+        s.out().to_vec()
+    }
+
+    fn decode_path(bytes: &[u8]) -> Result<CompressedPathRaw, DecoderError> {
+        CompressedPathRaw::decode(&Rlp::new(bytes))
+    }
+
+    #[test]
+    fn test_decode_normal_path_roundtrips() {
+        let slice = vec![0xabu8; 32];
+        let bytes = encode_path(CompressedPathRaw::NO_MISSING_NIBBLE, &slice);
+        let decoded = decode_path(&bytes).expect("valid path decodes");
+        assert_eq!(decoded.path_slice(), slice.as_slice());
+    }
+
+    #[test]
+    fn test_decode_path_at_cap_is_accepted_without_truncation() {
+        let slice = vec![0u8; CompressedPathRaw::MAX_PATH_BYTES];
+        let bytes = encode_path(CompressedPathRaw::NO_MISSING_NIBBLE, &slice);
+        let decoded = decode_path(&bytes).expect("path at cap decodes");
+        assert_eq!(
+            decoded.path_slice().len(),
+            CompressedPathRaw::MAX_PATH_BYTES
+        );
+    }
+
+    #[test]
+    fn test_decode_over_cap_path_is_rejected() {
+        let slice = vec![0u8; CompressedPathRaw::MAX_PATH_BYTES + 1];
+        let bytes = encode_path(CompressedPathRaw::NO_MISSING_NIBBLE, &slice);
+        assert!(decode_path(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_decode_mask_handling() {
+        // Empty slice + non-zero mask underflows path_steps()/walk(); reject.
+        let bytes = encode_path(CompressedPathRaw::second_nibble_mask(), &[]);
+        assert!(decode_path(&bytes).is_err());
+
+        let bytes = encode_path(CompressedPathRaw::NO_MISSING_NIBBLE, &[]);
+        assert!(decode_path(&bytes).is_ok());
+
+        // The empty-only restriction must not reject a non-empty masked path.
+        let bytes = encode_path(0xff, &[1u8]);
+        assert!(decode_path(&bytes).is_ok());
+    }
+
+    #[test]
+    fn test_path_steps_at_cap_does_not_overflow() {
+        let path = CompressedPathRaw::new_zeroed(
+            CompressedPathRaw::MAX_PATH_BYTES as u16,
+            CompressedPathRaw::NO_MISSING_NIBBLE,
+        );
+        assert_eq!(
+            path.path_steps(),
+            (CompressedPathRaw::MAX_PATH_BYTES as u16) * 2
         );
     }
 }
@@ -105,7 +171,36 @@ make_parallel_field_maybe_in_place_byte_array_memory_manager!(
 impl CompressedPathRaw {
     const BITS_0_3_MASK: u8 = 0x0f;
     const BITS_4_7_MASK: u8 = 0xf0;
+    /// Maximum bytes in a compressed path / MPT key.
+    ///
+    /// `path_steps()` (nibble count, ~`2 * path_size`) is a `u16`, so a longer
+    /// path overflows `path_size * 2` in [`Self::calculate_path_steps`], and
+    /// one over 65535 bytes also truncates the `u16` `path_size` so `Drop`
+    /// frees a `Layout` it never allocated (UB). Such a path can't exist in a
+    /// validly-built snapshot anyway — its merkle would overflow `path_steps`
+    /// on the honest builder — so capping the receive path rejects only
+    /// malformed input, not the tens-of-bytes keys real state uses.
+    pub const MAX_PATH_BYTES: usize = Self::MAX_PATH_STEPS / 2;
+    /// `path_steps()` is a `u16`; a byte is two nibbles.
+    const MAX_PATH_STEPS: usize = u16::MAX as usize;
     pub const NO_MISSING_NIBBLE: u8 = 0;
+
+    /// Validate an untrusted `(path_size, path_mask)` before it reaches the
+    /// path machinery. Used by both [`CompressedPathRaw`] decoders (RLP,
+    /// serde).
+    fn check_path_encoding(
+        path_size: usize, path_mask: u8,
+    ) -> Result<(), &'static str> {
+        if path_size > Self::MAX_PATH_BYTES {
+            return Err("CompressedPathRaw path too long");
+        }
+        // An empty path has no nibble, so a non-zero begin/end mask makes
+        // `calculate_path_steps`/`walk` compute `0 - 1` and panic.
+        if path_size == 0 && path_mask != Self::NO_MISSING_NIBBLE {
+            return Err("CompressedPathRaw empty path with non-zero mask");
+        }
+        Ok(())
+    }
 }
 
 impl<'a> CompressedPathTrait for CompressedPathRef<'a> {
@@ -355,10 +450,11 @@ impl Encodable for CompressedPathRaw {
 
 impl Decodable for CompressedPathRaw {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(CompressedPathRaw::new(
-            rlp.val_at::<Vec<u8>>(1)?.as_slice(),
-            rlp.val_at(0)?,
-        ))
+        let path_mask = rlp.val_at::<u8>(0)?;
+        let path_slice = rlp.val_at::<Vec<u8>>(1)?;
+        Self::check_path_encoding(path_slice.len(), path_mask)
+            .map_err(DecoderError::Custom)?;
+        Ok(CompressedPathRaw::new(path_slice.as_slice(), path_mask))
     }
 }
 
@@ -388,6 +484,8 @@ impl<'a> Deserialize<'a> for CompressedPathRaw {
             CompressedPathRawVisitor,
         )?;
 
+        Self::check_path_encoding(path_slice.len(), path_mask)
+            .map_err(de::Error::custom)?;
         Ok(CompressedPathRaw::new(&path_slice[..], path_mask))
     }
 }
