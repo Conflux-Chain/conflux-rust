@@ -657,6 +657,13 @@ impl TransactionPool {
         &self, inner: &mut TransactionPoolInner, state: &StateProvider,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), TransactionPoolError> {
+        // Never pool a non-canonical tx: packing one builds a
+        // `transactions_root` the canonical re-encoded body won't match.
+        if !transaction.is_canonical_rlp() {
+            return Err(TransactionPoolError::RlpDecodeError(
+                "non-canonical transaction RLP encoding".into(),
+            ));
+        }
         inner.insert_transaction_with_readiness_check(
             state,
             transaction,
