@@ -22,17 +22,11 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
     Clone, Hash, Ord, PartialOrd, PartialEq, Eq, Debug, DeriveMallocSizeOf,
 )]
 pub enum SnapshotSyncCandidate {
-    OneStepSync {
-        height: u64,
-        snapshot_epoch_id: EpochId,
-    },
+    // Wire type_id 0 (OneStepSync) and 2 (IncSync) were never implemented and
+    // have been deprecated and removed; `Decodable` rejects those ids. Do not
+    // reuse them for a new variant.
     FullSync {
         height: u64,
-        snapshot_epoch_id: EpochId,
-    },
-    IncSync {
-        height: u64,
-        base_snapshot_epoch_id: EpochId,
         snapshot_epoch_id: EpochId,
     },
 }
@@ -40,21 +34,13 @@ pub enum SnapshotSyncCandidate {
 impl SnapshotSyncCandidate {
     fn to_type_id(&self) -> u8 {
         match self {
-            SnapshotSyncCandidate::OneStepSync { .. } => 0,
             SnapshotSyncCandidate::FullSync { .. } => 1,
-            SnapshotSyncCandidate::IncSync { .. } => 2,
         }
     }
 
     pub fn get_snapshot_epoch_id(&self) -> &EpochId {
         match self {
-            SnapshotSyncCandidate::OneStepSync {
-                snapshot_epoch_id, ..
-            } => snapshot_epoch_id,
             SnapshotSyncCandidate::FullSync {
-                snapshot_epoch_id, ..
-            } => snapshot_epoch_id,
-            SnapshotSyncCandidate::IncSync {
                 snapshot_epoch_id, ..
             } => snapshot_epoch_id,
         }
@@ -64,15 +50,6 @@ impl SnapshotSyncCandidate {
 impl Encodable for SnapshotSyncCandidate {
     fn rlp_append(&self, s: &mut RlpStream) {
         match &self {
-            SnapshotSyncCandidate::OneStepSync {
-                height,
-                snapshot_epoch_id,
-            } => {
-                s.begin_list(3)
-                    .append(&self.to_type_id())
-                    .append(height)
-                    .append(snapshot_epoch_id);
-            }
             SnapshotSyncCandidate::FullSync {
                 height,
                 snapshot_epoch_id,
@@ -82,17 +59,6 @@ impl Encodable for SnapshotSyncCandidate {
                     .append(height)
                     .append(snapshot_epoch_id);
             }
-            SnapshotSyncCandidate::IncSync {
-                height,
-                base_snapshot_epoch_id,
-                snapshot_epoch_id,
-            } => {
-                s.begin_list(4)
-                    .append(&self.to_type_id())
-                    .append(height)
-                    .append(base_snapshot_epoch_id)
-                    .append(snapshot_epoch_id);
-            }
         }
     }
 }
@@ -100,28 +66,20 @@ impl Encodable for SnapshotSyncCandidate {
 impl Decodable for SnapshotSyncCandidate {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let type_id: u8 = rlp.val_at(0)?;
-        let parsed = match type_id {
-            0 => SnapshotSyncCandidate::OneStepSync {
+        match type_id {
+            1 => Ok(SnapshotSyncCandidate::FullSync {
                 height: rlp.val_at(1)?,
                 snapshot_epoch_id: rlp.val_at(2)?,
-            },
-            1 => SnapshotSyncCandidate::FullSync {
-                height: rlp.val_at(1)?,
-                snapshot_epoch_id: rlp.val_at(2)?,
-            },
-            2 => SnapshotSyncCandidate::IncSync {
-                height: rlp.val_at(1)?,
-                base_snapshot_epoch_id: rlp.val_at(2)?,
-                snapshot_epoch_id: rlp.val_at(3)?,
-            },
-            _ => {
-                return Err(DecoderError::Custom(
-                    "Unknown SnapshotSyncCandidate type id",
-                ))
-            }
-        };
-        debug_assert_eq!(parsed.to_type_id(), type_id);
-        Ok(parsed)
+            }),
+            // type_id 0 (OneStepSync) and 2 (IncSync) were never implemented
+            // and are deprecated: reject them so they can never
+            // reach a handler. A peer that sends one is treated
+            // like any unknown/malformed type. Do not reuse these
+            // ids.
+            _ => Err(DecoderError::Custom(
+                "Unsupported SnapshotSyncCandidate type id",
+            )),
+        }
     }
 }
 
@@ -236,12 +194,6 @@ impl RangedManifest {
             SnapshotSyncCandidate::FullSync {
                 snapshot_epoch_id, ..
             } => snapshot_epoch_id,
-            SnapshotSyncCandidate::IncSync { .. } => {
-                unimplemented!();
-            }
-            SnapshotSyncCandidate::OneStepSync { .. } => {
-                unimplemented!();
-            }
         };
         debug!(
             "begin to load manifest, snapshot_epoch_id = {:?}, start_key = {:?}",
