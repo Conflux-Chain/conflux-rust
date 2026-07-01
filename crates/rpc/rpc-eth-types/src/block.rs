@@ -21,7 +21,7 @@
 use crate::{Bytes, Transaction};
 use cfx_rpc_cfx_types::PhantomBlock;
 use cfx_types::{
-    hexstr_to_h256, Address, Bloom as H2048, Space, H160, H256, H64, U256,
+    hexstr_to_h256, Address, Bloom as H2048, Space, H160, H256, H64, U256, U64,
 };
 use primitives::receipt::EVM_SPACE_SUCCESS;
 use serde::{Deserialize, Serialize, Serializer};
@@ -90,7 +90,7 @@ pub struct Header {
     /// Transactions receipts root hash
     pub receipts_root: H256,
     /// Block number
-    pub number: U256,
+    pub number: U64,
     /// Gas Used
     pub gas_used: U256,
     /// Gas Limit
@@ -271,7 +271,7 @@ pub struct BlockOverrides {
         skip_serializing_if = "Option::is_none",
         alias = "blockNumber"
     )]
-    pub number: Option<U256>,
+    pub number: Option<U64>,
     /// Overrides the difficulty of the block.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub difficulty: Option<U256>,
@@ -323,7 +323,7 @@ pub struct BlockOverrides {
 mod tests {
     use super::{Block, BlockTransactions, Header};
     use crate::Bytes;
-    use cfx_types::{Bloom as H2048, H160, H256, H64, U256};
+    use cfx_types::{Bloom as H2048, H160, H256, H64, U256, U64};
 
     #[test]
     fn test_serialize_block() {
@@ -337,7 +337,7 @@ mod tests {
                 state_root: H256::default(),
                 transactions_root: H256::default(),
                 receipts_root: H256::default(),
-                number: U256::default(),
+                number: U64::default(),
                 gas_used: U256::default(),
                 gas_limit: U256::default(),
                 espace_gas_limit: U256::default(),

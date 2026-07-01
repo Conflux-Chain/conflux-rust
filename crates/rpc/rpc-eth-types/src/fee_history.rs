@@ -6,14 +6,14 @@ use cfx_parameters::block::{
     espace_block_gas_limit_of_enabled_block,
 };
 use cfx_rpc_cfx_types::{CfxFeeHistory, FeeHistoryCacheEntry};
-use cfx_types::{Space, SpaceMap, U256};
+use cfx_types::{Space, SpaceMap, U256, U64};
 use primitives::{transaction::SignedTransaction, BlockHeader};
 
 #[derive(Serialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct FeeHistory {
     /// Oldest Block
-    oldest_block: U256,
+    oldest_block: U64,
     /// An array of block base fees per gas. This includes one block earlier
     /// than the oldest block. Zeroes are returned for pre-EIP-1559 blocks.
     base_fee_per_gas: VecDeque<U256>,

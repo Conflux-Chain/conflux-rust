@@ -580,9 +580,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.98"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
+checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "app_dirs"
@@ -995,7 +995,7 @@ dependencies = [
  "bytes",
  "form_urlencoded",
  "futures-util",
- "http 1.1.0",
+ "http 1.4.1",
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.8.1",
@@ -1027,7 +1027,7 @@ checksum = "68464cd0412f486726fb3373129ef5d2993f90c34bc2bc1c1e9943b2f4fc7ca6"
 dependencies = [
  "bytes",
  "futures-core",
- "http 1.1.0",
+ "http 1.4.1",
  "http-body 1.0.1",
  "http-body-util",
  "mime",
@@ -1557,7 +1557,6 @@ dependencies = [
  "ctr",
  "digest 0.10.7",
  "hmac 0.12.1",
- "lazy_static",
  "pbkdf2 0.12.2",
  "ripemd",
  "scrypt 0.11.0",
@@ -1624,7 +1623,6 @@ dependencies = [
  "cfx-vm-interpreter",
  "cfx-vm-types",
  "cfxkey",
- "derive_more",
  "diem-types",
  "hex-literal",
  "impl-tools",
@@ -1633,7 +1631,6 @@ dependencies = [
  "lazy_static",
  "log",
  "num",
- "once_cell",
  "parking_lot 0.12.1",
  "pow-types",
  "primitives",
@@ -1677,7 +1674,6 @@ dependencies = [
  "cfg-if 1.0.0",
  "chrono",
  "jemalloc_pprof",
- "libc",
  "log",
  "pprof",
  "snmalloc-rs",
@@ -1754,7 +1750,6 @@ version = "3.0.0"
 dependencies = [
  "alloy-primitives",
  "blockgen",
- "cfx-addr",
  "cfx-rpc-cfx-api",
  "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
@@ -1765,17 +1760,13 @@ dependencies = [
  "cfxcore",
  "cfxcore-accounts",
  "jsonrpsee",
- "jsonrpsee-core",
- "jsonrpsee-types",
- "log",
  "network",
  "parking_lot 0.12.1",
- "primitives",
  "rand 0.9.3",
  "serde",
  "strum 0.26.3",
  "thiserror 2.0.18",
- "tokio",
+ "tower",
  "txgen",
 ]
 
@@ -1882,9 +1873,7 @@ dependencies = [
 name = "cfx-rpc-common-impl"
 version = "3.0.0"
 dependencies = [
- "cfx-addr",
  "cfx-parity-trace-types",
- "cfx-rpc-cfx-types",
  "cfx-rpc-eth-types",
  "cfx-types",
  "slice-group-by",
@@ -1936,10 +1925,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "primitives",
  "rustc-hex",
- "serde",
- "serde_json",
  "solidity-abi",
- "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
  "transient-hashmap",
@@ -1978,15 +1964,16 @@ dependencies = [
  "cfx-rpc-utils",
  "cfx-util-macros",
  "futures 0.3.30",
- "futures-util",
+ "http 1.4.1",
  "jsonrpsee",
- "jsonrpsee-types",
  "lazy_static",
  "log",
  "metrics",
  "parking_lot 0.12.1",
+ "thiserror 2.0.18",
  "throttling",
  "tokio",
+ "tower-http",
  "tracing-subscriber 0.3.20",
 ]
 
@@ -2011,11 +1998,8 @@ dependencies = [
  "cfx-types",
  "futures 0.3.30",
  "jsonrpsee",
- "jsonrpsee-core",
  "revm-context-interface",
- "revm-primitives",
  "serde",
- "serde_json",
  "thiserror 2.0.18",
  "tokio",
 ]
@@ -2233,7 +2217,6 @@ dependencies = [
  "parking_lot 0.12.1",
  "pos-ledger-db",
  "pow-types",
- "primal",
  "primitives",
  "priority-send-queue",
  "proptest",
@@ -2256,7 +2239,6 @@ dependencies = [
  "slab",
  "smart-default",
  "solidity-abi",
- "static_assertions",
  "storage-interface",
  "strum 0.26.3",
  "strum_macros 0.26.4",
@@ -2350,8 +2332,6 @@ dependencies = [
  "secp256k1 0.30.0",
  "serde",
  "sha2 0.10.9",
- "thiserror 2.0.18",
- "tiny-keccak",
  "zeroize",
 ]
 
@@ -2531,27 +2511,19 @@ checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 name = "client"
 version = "3.0.0"
 dependencies = [
- "alloy-rpc-types-trace",
  "app_dirs",
- "bigdecimal",
  "blockgen",
- "cfx-addr",
  "cfx-bytes",
  "cfx-config",
- "cfx-execute-helper",
  "cfx-executor",
  "cfx-mallocator-utils",
  "cfx-parameters",
- "cfx-parity-trace-types",
  "cfx-rpc-builder",
  "cfx-rpc-cfx-api",
  "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
- "cfx-rpc-common-impl",
- "cfx-rpc-eth-impl",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
- "cfx-rpc-utils",
  "cfx-statedb",
  "cfx-storage",
  "cfx-tasks",
@@ -2560,48 +2532,30 @@ dependencies = [
  "cfx-vm-types",
  "cfxcore",
  "cfxcore-accounts",
- "cfxcore-types",
  "cfxkey",
  "cfxstore",
  "chrono",
- "consensus-types",
  "criterion",
  "ctrlc",
  "db",
- "delegate 0.4.2",
  "diem-config",
  "diem-crypto",
  "diem-types",
  "dir",
- "fallible-iterator",
- "futures 0.3.30",
- "itertools 0.14.0",
  "jsonrpsee",
  "keccak-hash",
- "lazy_static",
  "log",
  "malloc_size_of",
  "metrics",
  "network",
- "num-bigint 0.2.6",
- "order-stat",
- "parity-version",
  "parking_lot 0.12.1",
  "primitives",
  "rand 0.8.6",
- "rand 0.9.3",
- "random-crash",
  "rlp 0.6.1",
  "rpassword",
- "rustc-hex",
  "secret-store",
- "serde",
- "serde_derive",
  "serde_json",
- "storage-interface",
- "tempfile",
  "threadpool",
- "throttling",
  "tokio",
  "txgen",
 ]
@@ -2655,7 +2609,6 @@ dependencies = [
 name = "conflux"
 version = "3.0.0"
 dependencies = [
- "bcs",
  "bls-signatures",
  "cfx-execute-helper",
  "cfx-executor",
@@ -2680,15 +2633,12 @@ dependencies = [
  "network",
  "parity-version",
  "parking_lot 0.12.1",
- "pos-ledger-db",
  "primitives",
  "rand 0.8.6",
  "rlp 0.6.1",
  "rpassword",
  "rustc-hex",
  "serde_json",
- "storage-interface",
- "tempfile",
  "tokio",
 ]
 
@@ -3301,9 +3251,7 @@ name = "diem-config"
 version = "0.1.0"
 dependencies = [
  "bcs",
- "cfx-types",
  "diem-crypto",
- "diem-global-constants",
  "diem-logger",
  "diem-secure-storage",
  "diem-types",
@@ -3391,7 +3339,6 @@ dependencies = [
  "bcs",
  "chrono",
  "diem-crypto",
- "diem-logger",
  "diem-types",
  "rand 0.8.6",
  "serde",
@@ -3811,8 +3758,6 @@ dependencies = [
  "executor-types",
  "fail",
  "itertools 0.14.0",
- "move-core-types",
- "once_cell",
  "pow-types",
  "serde",
  "storage-interface",
@@ -4247,7 +4192,7 @@ dependencies = [
  "fnv",
  "futures-core",
  "futures-sink",
- "http 1.1.0",
+ "http 1.4.1",
  "indexmap 2.8.0",
  "slab",
  "tokio",
@@ -4437,12 +4382,11 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "1.1.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21b9ddb458710bc376481b842f5da65cdf31522de232c1ca8146abce2a358258"
+checksum = "8be7462df143984c4598a256ef469b251d7d7f9e271135073e78fc535414f3d0"
 dependencies = [
  "bytes",
- "fnv",
  "itoa",
 ]
 
@@ -4464,7 +4408,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1efedce1fb8e6913f23e0c92de8e62cd5b772a67e7b3946df930a62566c93184"
 dependencies = [
  "bytes",
- "http 1.1.0",
+ "http 1.4.1",
 ]
 
 [[package]]
@@ -4475,7 +4419,7 @@ checksum = "793429d76616a256bcb62c2a2ec2bed781c8307e797e2598c50010f2bee2544f"
 dependencies = [
  "bytes",
  "futures-util",
- "http 1.1.0",
+ "http 1.4.1",
  "http-body 1.0.1",
  "pin-project-lite",
 ]
@@ -4542,7 +4486,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "h2 0.4.6",
- "http 1.1.0",
+ "http 1.4.1",
  "http-body 1.0.1",
  "httparse",
  "httpdate",
@@ -4561,7 +4505,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d191583f3da1305256f22463b9bb0471acad48a4e534a5218b9963e9c1f59b2"
 dependencies = [
  "futures-util",
- "http 1.1.0",
+ "http 1.4.1",
  "hyper 1.8.1",
  "hyper-util",
  "log",
@@ -4612,7 +4556,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
- "http 1.1.0",
+ "http 1.4.1",
  "http-body 1.0.1",
  "hyper 1.8.1",
  "ipnet",
@@ -4981,7 +4925,6 @@ dependencies = [
  "crossbeam-channel",
  "crossbeam-deque",
  "lazy_static",
- "lazycell",
  "log",
  "metrics",
  "mio",
@@ -5191,7 +5134,7 @@ checksum = "cf36eb27f8e13fa93dcb50ccb44c417e25b818cfa1a481b5470cd07b19c60b98"
 dependencies = [
  "base64 0.22.1",
  "futures-util",
- "http 1.1.0",
+ "http 1.4.1",
  "jsonrpsee-core",
  "pin-project",
  "rustls",
@@ -5216,7 +5159,7 @@ dependencies = [
  "bytes",
  "futures-timer",
  "futures-util",
- "http 1.1.0",
+ "http 1.4.1",
  "http-body 1.0.1",
  "http-body-util",
  "jsonrpsee-types",
@@ -5276,7 +5219,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c51b7c290bb68ce3af2d029648148403863b982f138484a73f02a9dd52dbd7f"
 dependencies = [
  "futures-util",
- "http 1.1.0",
+ "http 1.4.1",
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.8.1",
@@ -5302,7 +5245,7 @@ version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc88ff4688e43cc3fa9883a8a95c6fa27aa2e76c96e610b737b6554d650d7fd5"
 dependencies = [
- "http 1.1.0",
+ "http 1.4.1",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -5314,7 +5257,7 @@ version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b6fceceeb05301cc4c065ab3bd2fa990d41ff4eb44e4ca1b30fa99c057c3e79"
 dependencies = [
- "http 1.1.0",
+ "http 1.4.1",
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
  "jsonrpsee-types",
@@ -5896,7 +5839,7 @@ dependencies = [
  "bytes",
  "colored",
  "futures-util",
- "http 1.1.0",
+ "http 1.4.1",
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.8.1",
@@ -5915,7 +5858,6 @@ name = "move-core-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bcs",
  "hex",
  "proptest",
  "proptest-derive",
@@ -6278,12 +6220,6 @@ name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
-
-[[package]]
-name = "order-stat"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efa535d5117d3661134dbf1719b6f0ffe06f2375843b13935db186cd094105eb"
 
 [[package]]
 name = "ordered-float"
@@ -6704,15 +6640,9 @@ dependencies = [
  "diem-logger",
  "diem-types",
  "itertools 0.14.0",
- "move-core-types",
- "num-derive",
- "num-traits",
- "once_cell",
  "proptest",
  "proptest-derive",
- "rand 0.8.6",
  "schemadb",
- "serde",
  "storage-interface",
  "tempfile",
  "thiserror 2.0.18",
@@ -7338,7 +7268,7 @@ dependencies = [
  "encoding_rs",
  "futures-core",
  "h2 0.4.6",
- "http 1.1.0",
+ "http 1.4.1",
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.8.1",
@@ -7928,7 +7858,6 @@ dependencies = [
  "diem-secure-storage",
  "diem-types",
  "log",
- "once_cell",
  "proptest",
  "rand 0.8.6",
  "serde",
@@ -8570,7 +8499,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "futures 0.3.30",
- "http 1.1.0",
+ "http 1.4.1",
  "httparse",
  "log",
  "rand 0.8.6",
@@ -8683,8 +8612,6 @@ dependencies = [
  "diem-crypto",
  "diem-state-view",
  "diem-types",
- "itertools 0.14.0",
- "parking_lot 0.12.1",
  "serde",
  "thiserror 1.0.63",
 ]
@@ -9252,7 +9179,7 @@ dependencies = [
  "bitflags 2.10.0",
  "bytes",
  "futures-util",
- "http 1.1.0",
+ "http 1.4.1",
  "http-body 1.0.1",
  "iri-string",
  "pin-project-lite",
@@ -9398,7 +9325,6 @@ version = "0.1.0"
 dependencies = [
  "cfx-bytes",
  "cfx-types",
- "cfx-vm-types",
  "cfxcore",
  "cfxkey",
  "lazy_static",

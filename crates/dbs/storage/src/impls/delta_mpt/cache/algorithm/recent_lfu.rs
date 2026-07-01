@@ -101,7 +101,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
     fn init_visit_counter_random_bits<RngT: Rng>(
         rng: &mut RngT,
     ) -> FrequencyType {
-        RANDOM_BITS & rng.gen::<FrequencyType>()
+        RANDOM_BITS & rng.random::<FrequencyType>()
     }
 
     fn inc_visit_counter<RngT: Rng>(&mut self, _rng: &mut RngT) {
@@ -173,15 +173,10 @@ impl<
     fn set_removed(
         &mut self, value: &mut RecentLFUMetadata<PosT, CacheIndexT>,
     ) {
-        unsafe {
-            // There is no need to update lru cache_index because heap removal
-            // always happens after frequency_lru removal.
-            CacheAlgoDataAdapter::new_mut(
-                self.cache_store_util,
-                value.cache_index,
-            )
+        // There is no need to update lru cache_index because heap removal
+        // always happens after frequency_lru removal.
+        CacheAlgoDataAdapter::new_mut(self.cache_store_util, value.cache_index)
             .placement_new_evicted();
-        }
     }
 
     fn get_key_for_comparison<'x>(

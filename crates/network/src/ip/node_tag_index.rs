@@ -10,7 +10,6 @@ use crate::{
     node_table::{NodeId, NodeTable},
     Node,
 };
-use rand::thread_rng;
 use std::collections::{HashMap, HashSet};
 
 /// Tag based node index, so as to filter nodes by tag in node database.
@@ -84,7 +83,7 @@ impl NodeTagIndex {
     ) -> Option<HashSet<NodeId>> {
         let buckets = self.items.get(key)?.get(value)?;
 
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         let mut sampled = HashSet::new();
 
         for _ in 0..count {

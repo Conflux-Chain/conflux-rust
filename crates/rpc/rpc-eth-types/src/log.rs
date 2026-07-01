@@ -37,7 +37,7 @@ pub struct Log {
     /// Block Hash
     pub block_hash: H256,
     /// Block Number
-    pub block_number: U256,
+    pub block_number: U64,
     /// Transaction Hash
     pub transaction_hash: H256,
     /// Transaction Index

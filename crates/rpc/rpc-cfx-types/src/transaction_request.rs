@@ -135,6 +135,7 @@ impl TransactionRequest {
         self, epoch_height: u64, chain_id: u32, password: Option<String>,
         accounts: Arc<AccountProvider>,
     ) -> Result<TransactionWithSignature, String> {
+        let from = self.from.clone().ok_or("should have from")?;
         let gas = self.gas.ok_or("should have gas")?;
         let nonce = self.nonce.ok_or("should have nonce")?;
         let transaction_type = self.transaction_type();
@@ -213,11 +214,7 @@ impl TransactionRequest {
         let tx = Transaction::Native(typed_native_tx);
         let password = password.map(Password::from);
         let sig = accounts
-            .sign(
-                self.from.unwrap().into(),
-                password,
-                tx.hash_for_compute_signature(),
-            )
+            .sign(from.into(), password, tx.hash_for_compute_signature())
             // TODO: sign error into secret store error codes.
             .map_err(|e| format!("failed to sign transaction: {:?}", e))?;
 

@@ -22,7 +22,14 @@ impl Encodable for SnapshotKeptToProvideSyncStatus {
 
 impl Decodable for SnapshotKeptToProvideSyncStatus {
     fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
-        Ok(unsafe { std::mem::transmute(rlp.as_val::<u8>()?) })
+        match rlp.as_val::<u8>()? {
+            0 => Ok(Self::No),
+            1 => Ok(Self::InfoOnly),
+            2 => Ok(Self::InfoAndSnapshot),
+            _ => Err(DecoderError::Custom(
+                "invalid SnapshotKeptToProvideSyncStatus",
+            )),
+        }
     }
 }
 
@@ -96,11 +103,10 @@ impl SnapshotInfo {
         } else if height > self.height {
             None
         } else {
-            unsafe {
-                Some(self.pivot_chain_parts.get_unchecked(
-                    (height - self.parent_snapshot_height - 1) as usize,
-                ))
-            }
+            let index =
+                usize::try_from(height - self.parent_snapshot_height - 1)
+                    .ok()?;
+            self.pivot_chain_parts.get(index)
         }
     }
 }

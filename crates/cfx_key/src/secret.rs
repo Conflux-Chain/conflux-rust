@@ -35,13 +35,17 @@ impl Drop for Secret {
 
 impl fmt::LowerHex for Secret {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        self.inner.fmt(fmt)
+        write!(
+            fmt,
+            "{:02x}{:02x}..{:02x}{:02x}",
+            self.inner[0], self.inner[1], self.inner[30], self.inner[31]
+        )
     }
 }
 
 impl fmt::Debug for Secret {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        self.inner.fmt(fmt)
+        write!(fmt, "Secret(***)")
     }
 }
 
@@ -49,7 +53,7 @@ impl fmt::Display for Secret {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(
             fmt,
-            "Secret: 0x{:x}{:x}..{:x}{:x}",
+            "0x{:02x}{:02x}..{:02x}{:02x}",
             self.inner[0], self.inner[1], self.inner[30], self.inner[31]
         )
     }

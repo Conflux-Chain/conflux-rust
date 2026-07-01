@@ -1461,7 +1461,6 @@ dependencies = [
  "ctr",
  "digest 0.10.7",
  "hmac 0.12.1",
- "lazy_static",
  "pbkdf2 0.12.2",
  "ripemd",
  "scrypt 0.11.0",
@@ -1527,16 +1526,14 @@ dependencies = [
  "cfx-vm-interpreter",
  "cfx-vm-types",
  "cfxkey",
- "derive_more",
  "diem-types",
- "hex-literal 1.0.0",
+ "hex-literal",
  "impl-tools",
  "impl-trait-for-tuples",
  "keccak-hash",
  "lazy_static",
  "log",
  "num",
- "once_cell",
  "parking_lot 0.12.1",
  "pow-types",
  "primitives",
@@ -1606,7 +1603,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-types",
  "cfxkey",
- "hex-literal 1.0.0",
+ "hex-literal",
  "lazy_static",
  "rustc-hex",
 ]
@@ -1635,7 +1632,6 @@ version = "3.0.0"
 dependencies = [
  "alloy-primitives",
  "blockgen",
- "cfx-addr",
  "cfx-rpc-cfx-api",
  "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
@@ -1646,17 +1642,13 @@ dependencies = [
  "cfxcore",
  "cfxcore-accounts",
  "jsonrpsee",
- "jsonrpsee-core",
- "jsonrpsee-types",
- "log",
  "network",
  "parking_lot 0.12.1",
- "primitives",
  "rand 0.9.3",
  "serde",
  "strum 0.26.3",
  "thiserror 2.0.18",
- "tokio",
+ "tower 0.5.2",
  "txgen",
 ]
 
@@ -1763,9 +1755,7 @@ dependencies = [
 name = "cfx-rpc-common-impl"
 version = "3.0.0"
 dependencies = [
- "cfx-addr",
  "cfx-parity-trace-types",
- "cfx-rpc-cfx-types",
  "cfx-rpc-eth-types",
  "cfx-types",
  "slice-group-by",
@@ -1817,10 +1807,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "primitives",
  "rustc-hex",
- "serde",
- "serde_json",
  "solidity-abi",
- "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
  "transient-hashmap",
@@ -1859,15 +1846,16 @@ dependencies = [
  "cfx-rpc-utils",
  "cfx-util-macros",
  "futures 0.3.30",
- "futures-util",
+ "http 1.1.0",
  "jsonrpsee",
- "jsonrpsee-types",
  "lazy_static",
  "log",
  "metrics",
  "parking_lot 0.12.1",
+ "thiserror 2.0.18",
  "throttling",
  "tokio",
+ "tower-http",
  "tracing-subscriber 0.3.20",
 ]
 
@@ -1892,11 +1880,8 @@ dependencies = [
  "cfx-types",
  "futures 0.3.30",
  "jsonrpsee",
- "jsonrpsee-core",
  "revm-context-interface",
- "revm-primitives",
  "serde",
- "serde_json",
  "thiserror 2.0.18",
  "tokio",
 ]
@@ -2110,7 +2095,6 @@ dependencies = [
  "parking_lot 0.12.1",
  "pos-ledger-db",
  "pow-types",
- "primal",
  "primitives",
  "priority-send-queue",
  "rand 0.8.6",
@@ -2131,7 +2115,6 @@ dependencies = [
  "slab",
  "smart-default",
  "solidity-abi",
- "static_assertions",
  "storage-interface",
  "strum 0.26.3",
  "strum_macros 0.26.4",
@@ -2222,8 +2205,6 @@ dependencies = [
  "secp256k1 0.30.0",
  "serde",
  "sha2 0.10.9",
- "thiserror 2.0.18",
- "tiny-keccak",
  "zeroize",
 ]
 
@@ -2905,9 +2886,7 @@ name = "diem-config"
 version = "0.1.0"
 dependencies = [
  "bcs",
- "cfx-types",
  "diem-crypto",
- "diem-global-constants",
  "diem-logger",
  "diem-secure-storage",
  "diem-types",
@@ -2991,7 +2970,6 @@ dependencies = [
  "bcs",
  "chrono",
  "diem-crypto",
- "diem-logger",
  "diem-types",
  "rand 0.8.6",
  "serde",
@@ -3353,7 +3331,6 @@ dependencies = [
  "env_logger",
  "geth-tracer",
  "hex",
- "hex-literal 0.4.1",
  "itertools 0.14.0",
  "log",
  "primitives",
@@ -3379,8 +3356,6 @@ dependencies = [
  "executor-types",
  "fail",
  "itertools 0.14.0",
- "move-core-types",
- "once_cell",
  "pow-types",
  "serde",
  "storage-interface",
@@ -3885,12 +3860,6 @@ checksum = "fda06d18ac606267c40c04e41b9947729bf8b9efe74bd4e82b61a5f26a510b9f"
 dependencies = [
  "arrayvec",
 ]
-
-[[package]]
-name = "hex-literal"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
 
 [[package]]
 name = "hex-literal"
@@ -4438,7 +4407,6 @@ dependencies = [
  "crossbeam-channel",
  "crossbeam-deque",
  "lazy_static",
- "lazycell",
  "log",
  "metrics",
  "mio",
@@ -5207,7 +5175,6 @@ name = "move-core-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bcs",
  "hex",
  "rand 0.8.6",
  "serde",
@@ -5905,11 +5872,7 @@ dependencies = [
  "diem-logger",
  "diem-types",
  "itertools 0.14.0",
- "num-derive",
- "num-traits",
- "once_cell",
  "schemadb",
- "serde",
  "storage-interface",
  "thiserror 2.0.18",
 ]
@@ -6866,7 +6829,6 @@ dependencies = [
  "diem-secure-storage",
  "diem-types",
  "log",
- "once_cell",
  "rand 0.8.6",
  "serde",
  "thiserror 2.0.18",
@@ -7570,8 +7532,6 @@ dependencies = [
  "diem-crypto",
  "diem-state-view",
  "diem-types",
- "itertools 0.14.0",
- "parking_lot 0.12.1",
  "serde",
  "thiserror 1.0.63",
 ]
@@ -8059,6 +8019,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tower-http"
+version = "0.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840"
+dependencies = [
+ "bitflags 2.10.0",
+ "bytes",
+ "http 1.1.0",
+ "pin-project-lite",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
 name = "tower-layer"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8168,7 +8142,6 @@ version = "0.1.0"
 dependencies = [
  "cfx-bytes",
  "cfx-types",
- "cfx-vm-types",
  "cfxcore",
  "cfxkey",
  "lazy_static",

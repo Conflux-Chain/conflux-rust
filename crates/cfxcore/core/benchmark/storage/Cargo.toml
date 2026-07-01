@@ -62,6 +62,9 @@ sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = 
 # The line below register an independent "eth-secp256k1" which directs to crates-io.
 eth-secp256k1 = "0.5.7"
 
+[package.metadata.cargo-machete]
+ignored = ["base64ct", "cfxcore", "db", "kvdb"]
+
 
 [profile.release]
 debug = true

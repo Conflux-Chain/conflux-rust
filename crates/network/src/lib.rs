@@ -2,7 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#![allow(deprecated)]
 use cfxkey as keylib;
 use io as iolib;
 use keccak_hash as hash;

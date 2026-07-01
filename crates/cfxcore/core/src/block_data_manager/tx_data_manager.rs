@@ -73,21 +73,18 @@ impl TransactionDataManager {
 
     /// Recover public keys for the transactions in `block`.
     ///
-    /// The public keys already in input transactions will be used directly
-    /// without verification. `block` will not be updated if any error is
-    /// thrown.
+    /// The sender and public key are always re-derived from each
+    /// transaction's signature. Any `sender`/`public` metadata in the input
+    /// (e.g. from a `GetBlocksWithPublicResponse`) is untrusted and ignored:
+    /// `sender` is an independent RLP field the signature does not bind, so
+    /// trusting it would let a peer attribute a validly-signed transaction to
+    /// an attacker-chosen sender. `block` is left unchanged on error.
     pub fn recover_block(&self, block: &mut Block) -> Result<(), DecoderError> {
         let (uncached_trans, mut recovered_trans) = {
             let tx_time_window = self.tx_time_window.read();
             let mut uncached_trans = Vec::new();
             let mut recovered_trans = Vec::new();
             for (idx, transaction) in block.transactions.iter().enumerate() {
-                if transaction.public.is_some() {
-                    // This may only happen for `GetBlocksWithPublicResponse`
-                    // for now.
-                    recovered_trans.push(Some(transaction.clone()));
-                    continue;
-                }
                 let tx_hash = transaction.hash();
                 // Sample 1/128 transactions
                 if tx_hash[0] & 254 == 0 {
@@ -285,5 +282,86 @@ impl TransactionDataManager {
             last = index + 1;
         }
         missing_encoded
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TransactionDataManager;
+    use crate::{
+        keylib::{Generator, Random},
+        sync::message::GetBlocksWithPublicResponse,
+    };
+    use cfx_types::{AddressSpaceUtil, U256};
+    use parking_lot::Mutex;
+    use primitives::{
+        transaction::native_transaction::NativeTransaction, Action, Block,
+        BlockHeaderBuilder, Transaction,
+    };
+    use std::{sync::Arc, time::Duration};
+    use threadpool::ThreadPool;
+
+    /// `recover_block` must re-derive each sender from the signature, not
+    /// trust the `sender`/`public` a `GetBlocksWithPublicResponse` peer
+    /// supplies.
+    #[test]
+    fn recover_block_ignores_forged_with_public_sender() {
+        let attacker = Random.generate().unwrap();
+        let victim = Random.generate().unwrap();
+        let recipient = Random.generate().unwrap().address();
+
+        let mut forged = Transaction::from(NativeTransaction {
+            nonce: U256::zero(),
+            gas_price: U256::one(),
+            gas: U256::from(21_000),
+            action: Action::Call(recipient),
+            value: U256::from(7),
+            storage_limit: 0,
+            epoch_height: 0,
+            chain_id: 1,
+            data: Vec::new(),
+        })
+        .sign(attacker.secret());
+
+        // Forge only `sender`; the attacker's public key still matches the
+        // signature, so `verify_public` cannot catch it.
+        forged.sender = victim.address();
+        assert!(forged.verify_public(false).unwrap());
+
+        // Round-trip through the real with-public wire encoding.
+        let response = GetBlocksWithPublicResponse {
+            request_id: 1,
+            blocks: vec![Block::new(
+                BlockHeaderBuilder::new().build(),
+                vec![Arc::new(forged)],
+            )],
+        };
+        let decoded: GetBlocksWithPublicResponse =
+            rlp::decode(&rlp::encode(&response))
+                .expect("with-public response decodes");
+        let mut block = decoded.blocks.into_iter().next().unwrap();
+
+        // The forgery must survive decoding, or the test proves nothing.
+        assert!(block.transactions[0].public.is_some());
+        assert_eq!(
+            block.transactions[0].sender(),
+            victim.address().with_native_space()
+        );
+
+        let tx_manager = TransactionDataManager::new(
+            Duration::from_secs(600),
+            Arc::new(Mutex::new(ThreadPool::new(1))),
+        );
+        tx_manager
+            .recover_block(&mut block)
+            .expect("block transactions recover from their signatures");
+
+        let recovered = block.transactions[0].clone();
+        assert_eq!(
+            recovered.sender(),
+            attacker.address().with_native_space(),
+            "sender must be re-derived from the signature, not the forged \
+             peer-supplied metadata"
+        );
     }
 }
