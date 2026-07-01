@@ -536,8 +536,9 @@ impl ConsensusNewBlockHandler {
         {
             candidate = blockset.clone();
             let mut p = parent;
-            while p != NULL && inner.arena[p].data.partial_invalid
-                || inner.arena[p].data.pending
+            while p != NULL
+                && (inner.arena[p].data.partial_invalid
+                    || inner.arena[p].data.pending)
             {
                 let blockset_p = inner
                     .exchange_or_compute_blockset_in_own_view_of_epoch(p, None);

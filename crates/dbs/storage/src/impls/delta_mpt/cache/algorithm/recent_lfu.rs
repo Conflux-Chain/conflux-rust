@@ -173,15 +173,10 @@ impl<
     fn set_removed(
         &mut self, value: &mut RecentLFUMetadata<PosT, CacheIndexT>,
     ) {
-        unsafe {
-            // There is no need to update lru cache_index because heap removal
-            // always happens after frequency_lru removal.
-            CacheAlgoDataAdapter::new_mut(
-                self.cache_store_util,
-                value.cache_index,
-            )
+        // There is no need to update lru cache_index because heap removal
+        // always happens after frequency_lru removal.
+        CacheAlgoDataAdapter::new_mut(self.cache_store_util, value.cache_index)
             .placement_new_evicted();
-        }
     }
 
     fn get_key_for_comparison<'x>(

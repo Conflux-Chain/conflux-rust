@@ -1398,7 +1398,6 @@ dependencies = [
  "ctr",
  "digest 0.10.7",
  "hmac 0.12.1",
- "lazy_static",
  "pbkdf2 0.12.2",
  "ripemd",
  "scrypt 0.11.0",
@@ -1464,7 +1463,6 @@ dependencies = [
  "cfx-vm-interpreter",
  "cfx-vm-types",
  "cfxkey",
- "derive_more",
  "diem-types",
  "hex-literal",
  "impl-tools",
@@ -1473,7 +1471,6 @@ dependencies = [
  "lazy_static",
  "log",
  "num",
- "once_cell",
  "parking_lot 0.12.3",
  "pow-types",
  "primitives",
@@ -1643,11 +1640,8 @@ dependencies = [
  "cfx-types",
  "futures 0.3.30",
  "jsonrpsee",
- "jsonrpsee-core",
  "revm-context-interface",
- "revm-primitives",
  "serde",
- "serde_json",
  "thiserror 2.0.18",
  "tokio",
 ]
@@ -1849,7 +1843,6 @@ dependencies = [
  "parking_lot 0.12.3",
  "pos-ledger-db",
  "pow-types",
- "primal",
  "primitives",
  "priority-send-queue",
  "rand 0.8.6",
@@ -1870,7 +1863,6 @@ dependencies = [
  "slab",
  "smart-default",
  "solidity-abi",
- "static_assertions",
  "storage-interface",
  "strum 0.26.3",
  "strum_macros 0.26.4",
@@ -1961,8 +1953,6 @@ dependencies = [
  "secp256k1 0.30.0",
  "serde",
  "sha2 0.10.9",
- "thiserror 2.0.18",
- "tiny-keccak",
  "zeroize",
 ]
 
@@ -2116,12 +2106,8 @@ version = "0.1.0"
 dependencies = [
  "cfx-types",
  "cfxcore",
- "db",
  "log",
  "log4rs",
- "parking_lot 0.12.3",
- "primitives",
- "threadpool",
 ]
 
 [[package]]
@@ -2615,9 +2601,7 @@ name = "diem-config"
 version = "0.1.0"
 dependencies = [
  "bcs",
- "cfx-types",
  "diem-crypto",
- "diem-global-constants",
  "diem-logger",
  "diem-secure-storage",
  "diem-types",
@@ -2701,7 +2685,6 @@ dependencies = [
  "bcs",
  "chrono",
  "diem-crypto",
- "diem-logger",
  "diem-types",
  "rand 0.8.6",
  "serde",
@@ -3012,8 +2995,6 @@ dependencies = [
  "executor-types",
  "fail",
  "itertools 0.14.0",
- "move-core-types",
- "once_cell",
  "pow-types",
  "serde",
  "storage-interface",
@@ -4013,7 +3994,6 @@ dependencies = [
  "crossbeam-channel",
  "crossbeam-deque",
  "lazy_static",
- "lazycell",
  "log",
  "metrics",
  "mio",
@@ -4110,20 +4090,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f3f48dc3e6b8bd21e15436c1ddd0bc22a6a54e8ec46fedd6adf3425f396ec6a"
 dependencies = [
  "jsonrpsee-types",
-]
-
-[[package]]
-name = "jsonrpsee-core"
-version = "0.26.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "316c96719901f05d1137f19ba598b5fe9c9bc39f4335f67f6be8613921946480"
-dependencies = [
- "async-trait",
- "jsonrpsee-types",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tracing",
 ]
 
 [[package]]
@@ -4609,7 +4575,6 @@ name = "move-core-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bcs",
  "hex",
  "rand 0.8.6",
  "serde",
@@ -5287,11 +5252,7 @@ dependencies = [
  "diem-logger",
  "diem-types",
  "itertools 0.14.0",
- "num-derive",
- "num-traits",
- "once_cell",
  "schemadb",
- "serde",
  "storage-interface",
  "thiserror 2.0.18",
 ]
@@ -6148,7 +6109,6 @@ dependencies = [
  "diem-secure-storage",
  "diem-types",
  "log",
- "once_cell",
  "rand 0.8.6",
  "serde",
  "thiserror 2.0.18",
@@ -6788,8 +6748,6 @@ dependencies = [
  "diem-crypto",
  "diem-state-view",
  "diem-types",
- "itertools 0.14.0",
- "parking_lot 0.12.3",
  "serde",
  "thiserror 1.0.63",
 ]

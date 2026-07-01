@@ -27,6 +27,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 use crate::eth::EthRpcModule;
+use cfx_rpc_middlewares::CorsDomainError;
 use std::{
     collections::HashSet,
     io::{self, ErrorKind},
@@ -89,8 +90,8 @@ pub enum RpcError<T = EthRpcModule> {
         error: io::Error,
     },
     /// Cors parsing error.
-    // #[error(transparent)]
-    // Cors(#[from] CorsDomainError),
+    #[error(transparent)]
+    Cors(#[from] CorsDomainError),
     /// Http and WS server configured on the same port but with conflicting
     /// settings.
     #[error(transparent)]

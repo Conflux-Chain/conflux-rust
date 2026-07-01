@@ -5,8 +5,8 @@ use jsonrpsee::{
         middleware::rpc::{Batch, Notification, RpcServiceT},
         MethodResponse,
     },
+    types::Request,
 };
-use jsonrpsee_types::Request;
 use lazy_static::lazy_static;
 use log::debug;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};

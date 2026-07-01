@@ -223,8 +223,7 @@ pub fn build_block(
         transactions,
         custom: b
             .block_header
-            .custom()
-            .clone()
+            .custom_items()
             .into_iter()
             .map(Into::into)
             .collect(),
@@ -274,6 +273,6 @@ pub fn build_header(
             .pow_hash
             .map(|pow_hash| pow::pow_hash_to_quality(&pow_hash, &h.nonce())),
         pos_reference: *h.pos_reference(),
-        custom: h.custom().clone().into_iter().map(Into::into).collect(),
+        custom: h.custom_items().into_iter().map(Into::into).collect(),
     })
 }
