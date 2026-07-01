@@ -260,7 +260,7 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
         }
 
         Ok(VanillaTrieNode::new(
-            MerkleHash::from_slice(rlp.val_at::<Vec<u8>>(0)?.as_slice()),
+            rlp.val_at::<MerkleHash>(0)?,
             rlp.val_at::<VanillaChildrenTable<NodeRefT>>(1)?,
             rlp.val_at::<Option<Vec<u8>>>(2)?
                 .map(|v| v.into_boxed_slice()),

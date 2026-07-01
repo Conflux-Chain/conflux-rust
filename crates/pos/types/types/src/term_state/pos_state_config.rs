@@ -28,6 +28,9 @@ pub struct PosStateConfig {
 
     cip156_transition_view: u64,
     cip156_dispute_locked_views: u64,
+    // After this view, a dispute also relocks a fully-retired node's
+    // out_queue.
+    fix_cip156_transition_view: u64,
 
     dispute_conflict_transition_view: u64,
 
@@ -55,6 +58,7 @@ pub trait PosStateConfigTrait {
     // locked.
     fn dispute_locked_views(&self, view: u64) -> Option<u64>;
     fn enforce_dispute_conflict(&self, view: u64) -> bool;
+    fn dispute_lock_includes_out_queue(&self, view: u64) -> bool;
 }
 
 impl PosStateConfig {
@@ -66,7 +70,7 @@ impl PosStateConfig {
         max_nonce_per_account: u64, cip136_transition_view: u64,
         cip136_in_queue_locked_views: u64, cip136_out_queue_locked_views: u64,
         cip136_round_per_term: u64, cip156_transition_view: u64,
-        cip156_dispute_locked_views: u64,
+        cip156_dispute_locked_views: u64, fix_cip156_transition_view: u64,
         dispute_conflict_transition_view: u64,
     ) -> Self {
         Self {
@@ -84,6 +88,7 @@ impl PosStateConfig {
             cip136_round_per_term,
             cip156_transition_view,
             cip156_dispute_locked_views,
+            fix_cip156_transition_view,
             dispute_conflict_transition_view,
             nonce_limit_transition_view,
             max_nonce_per_account,
@@ -218,6 +223,10 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
         let conf = self.get().unwrap();
         view >= conf.dispute_conflict_transition_view
     }
+
+    fn dispute_lock_includes_out_queue(&self, view: u64) -> bool {
+        view >= self.get().unwrap().fix_cip156_transition_view
+    }
 }
 
 pub static POS_STATE_CONFIG: OnceCell<PosStateConfig> = OnceCell::new();
@@ -239,6 +248,7 @@ impl Default for PosStateConfig {
             cip136_round_per_term: ROUND_PER_TERM,
             cip156_transition_view: u64::MAX,
             cip156_dispute_locked_views: u64::MAX,
+            fix_cip156_transition_view: u64::MAX,
             dispute_conflict_transition_view: u64::MAX,
             nonce_limit_transition_view: u64::MAX,
             max_nonce_per_account: u64::MAX,

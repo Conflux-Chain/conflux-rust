@@ -33,6 +33,124 @@ pub static CIP112_TRANSITION_HEIGHT: OnceCell<u64> = OnceCell::new();
 
 pub const BASE_PRICE_CHANGE_DENOMINATOR: usize = 8;
 
+/// Block-header `custom` fields as one raw-RLP blob instead of a `Vec<Bytes>`,
+/// so a peer header packed with tiny RLP items can't amplify into a per-item
+/// allocation (remote OOM). `raw` is re-emitted verbatim via
+/// `append_raw(&raw, count)`, byte-identical to the old encoding — block hashes
+/// unchanged, no hardfork.
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
+pub struct CustomData {
+    raw: Bytes,
+    count: usize,
+    /// Old per-item length sum (raw len pre-CIP112, content len post-CIP112).
+    data_len: usize,
+}
+
+impl MallocSizeOf for CustomData {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.raw.size_of(ops)
+    }
+}
+
+impl CustomData {
+    fn from_items(items: &[Bytes], height: u64) -> Self {
+        if items.is_empty() {
+            return Self::default();
+        }
+        let value_encoded =
+            height >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized");
+        let mut raw = Vec::new();
+        let mut data_len = 0;
+        for item in items {
+            data_len += item.len();
+            if value_encoded {
+                raw.extend_from_slice(rlp::encode(item).as_ref());
+            } else {
+                raw.extend_from_slice(item);
+            }
+        }
+        Self {
+            raw,
+            count: items.len(),
+            data_len,
+        }
+    }
+
+    /// Byte-for-byte reproduces the old decode: post-CIP112 decode then
+    /// canonically re-encode; pre-CIP112 keep raw RLP verbatim.
+    fn from_rlp(
+        r: &Rlp, custom_start: usize, height: u64,
+    ) -> Result<Self, DecoderError> {
+        let item_count = r.item_count()?;
+        let count = item_count.saturating_sub(custom_start);
+        if count == 0 {
+            return Ok(Self::default());
+        }
+        let value_encoded =
+            height >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized");
+        let mut raw = Vec::new();
+        let mut data_len = 0;
+        if value_encoded {
+            // Re-encode each item canonically, reusing one stream (its buffer
+            // survives `clear`) so a header with many items can't force a fresh
+            // allocation per item.
+            let mut scratch = RlpStream::new();
+            for i in custom_start..item_count {
+                let content: Bytes = r.val_at(i)?;
+                data_len += content.len();
+                scratch.clear();
+                scratch.append(&content);
+                raw.extend_from_slice(scratch.as_raw());
+            }
+        } else {
+            for i in custom_start..item_count {
+                let item_raw = r.at(i)?.as_raw();
+                data_len += item_raw.len();
+                raw.extend_from_slice(item_raw);
+            }
+        }
+        Ok(Self {
+            raw,
+            count,
+            data_len,
+        })
+    }
+
+    fn raw_items(&self) -> RawItemIter<'_> {
+        RawItemIter {
+            raw: &self.raw,
+            offset: 0,
+        }
+    }
+}
+
+struct RawItemIter<'a> {
+    raw: &'a [u8],
+    offset: usize,
+}
+
+impl<'a> Iterator for RawItemIter<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<&'a [u8]> {
+        if self.offset >= self.raw.len() {
+            return None;
+        }
+        // `raw` is always a concatenation of valid RLP items, so this never
+        // fails; assert it to catch a construction bug in tests.
+        let pi = Rlp::new(&self.raw[self.offset..]).payload_info();
+        debug_assert!(
+            pi.is_ok(),
+            "corrupt CustomData::raw at offset {}",
+            self.offset
+        );
+        let total = pi.ok()?.total();
+        let item = &self.raw[self.offset..self.offset + total];
+        self.offset += total;
+        Some(item)
+    }
+}
+
 #[derive(Clone, Debug, Eq)]
 pub struct BlockHeaderRlpPart {
     /// Parent hash.
@@ -65,7 +183,7 @@ pub struct BlockHeaderRlpPart {
     /// Referee hashes
     referee_hashes: Vec<H256>,
     /// Customized information
-    custom: Vec<Bytes>,
+    custom: CustomData,
     /// Nonce of the block
     nonce: U256,
     /// Referred PoS block ID.
@@ -185,8 +303,41 @@ impl BlockHeader {
     /// Get the referee hashes field of the header.
     pub fn referee_hashes(&self) -> &Vec<H256> { &self.referee_hashes }
 
-    /// Get the custom data field of the header.
-    pub fn custom(&self) -> &Vec<Bytes> { &self.custom }
+    pub fn custom_count(&self) -> usize { self.custom.count }
+
+    pub fn custom_data_len(&self) -> usize { self.custom.data_len }
+
+    /// O(idx) — walks from the start of the blob; for multi-item access prefer
+    /// `custom_items()`. Bounded, so it can't be forced to materialise a huge
+    /// header.
+    pub fn custom_item(&self, idx: usize) -> Option<Bytes> {
+        let raw_item = self.custom.raw_items().nth(idx)?;
+        Some(self.decode_custom_item(raw_item))
+    }
+
+    /// For already-validated headers only (e.g. RPC).
+    pub fn custom_items(&self) -> Vec<Bytes> {
+        self.custom
+            .raw_items()
+            .map(|raw_item| self.decode_custom_item(raw_item))
+            .collect()
+    }
+
+    fn custom_value_encoded(&self) -> bool {
+        self.height >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
+    }
+
+    fn decode_custom_item(&self, raw_item: &[u8]) -> Bytes {
+        if self.custom_value_encoded() {
+            // `raw_item` is canonical RLP we produced, so `data()` can't fail.
+            Rlp::new(raw_item)
+                .data()
+                .map(|d| d.to_vec())
+                .unwrap_or_default()
+        } else {
+            raw_item.to_vec()
+        }
+    }
 
     /// Get the nonce field of the header.
     pub fn nonce(&self) -> U256 { self.nonce }
@@ -220,7 +371,10 @@ impl BlockHeader {
     }
 
     /// Set the custom filed of the header.
-    pub fn set_custom(&mut self, custom: Vec<Bytes>) { self.custom = custom; }
+    pub fn set_custom(&mut self, custom: Vec<Bytes>) {
+        let height = self.height;
+        self.rlp_part.custom = CustomData::from_items(&custom, height);
+    }
 
     /// Compute the hash of the block.
     pub fn compute_hash(&mut self) -> H256 {
@@ -257,7 +411,7 @@ impl BlockHeader {
         let list_len = HEADER_LIST_MIN_LEN
             + self.pos_reference.is_some() as usize
             + self.base_price.is_some() as usize
-            + self.custom.len();
+            + self.custom.count;
         stream
             .begin_list(list_len)
             .append(&self.parent_hash)
@@ -280,14 +434,12 @@ impl BlockHeader {
             stream.append(&self.base_price);
         }
 
-        for b in &self.custom {
-            if self.height
-                >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
-            {
-                stream.append(b);
-            } else {
-                stream.append_raw(b, 1);
-            }
+        // Skip when empty: appending `append_raw(&[], 0)` after the header
+        // list has already finished would clear the stream's `finished_list`
+        // flag, double-counting the header when it is nested in a parent list
+        // (e.g. CompactBlock/Block) and truncating that list on decode.
+        if self.custom.count > 0 {
+            stream.append_raw(&self.custom.raw, self.custom.count);
         }
     }
 
@@ -298,7 +450,7 @@ impl BlockHeader {
             + 1
             + self.pos_reference.is_some() as usize
             + self.base_price.is_some() as usize
-            + self.custom.len();
+            + self.custom.count;
         stream
             .begin_list(list_len)
             .append(&self.parent_hash)
@@ -321,14 +473,9 @@ impl BlockHeader {
         if self.base_price.is_some() {
             stream.append(&self.base_price);
         }
-        for b in &self.custom {
-            if self.height
-                >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
-            {
-                stream.append(b);
-            } else {
-                stream.append_raw(b, 1);
-            }
+        // Guard empty custom; see `stream_rlp_without_nonce`.
+        if self.custom.count > 0 {
+            stream.append_raw(&self.custom.raw, self.custom.count);
         }
     }
 
@@ -339,7 +486,7 @@ impl BlockHeader {
             + 2
             + self.pos_reference.is_some() as usize
             + self.base_price.is_some() as usize
-            + self.custom.len();
+            + self.custom.count;
         stream
             .begin_list(list_len)
             .append(&self.parent_hash)
@@ -366,14 +513,9 @@ impl BlockHeader {
             stream.append(&self.base_price);
         }
 
-        for b in &self.custom {
-            if self.height
-                >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
-            {
-                stream.append(b);
-            } else {
-                stream.append_raw(b, 1);
-            }
+        // Guard empty custom; see `stream_rlp_without_nonce`.
+        if self.custom.count > 0 {
+            stream.append_raw(&self.custom.raw, self.custom.count);
         }
     }
 
@@ -393,26 +535,18 @@ impl BlockHeader {
             adaptive: r.val_at::<u8>(10)? == 1,
             gas_limit: r.val_at(11)?,
             referee_hashes: r.list_at(12)?,
-            custom: vec![],
+            custom: CustomData::default(),
             nonce: r.val_at(13)?,
             pos_reference: r.val_at(15).unwrap_or(None),
             base_price: r.val_at(16).unwrap_or(None),
         };
         let pow_hash = r.val_at(14)?;
 
-        for i in (15
+        let custom_start = 15
             + rlp_part.pos_reference.is_some() as usize
-            + rlp_part.base_price.is_some() as usize)
-            ..r.item_count()?
-        {
-            if rlp_part.height
-                >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
-            {
-                rlp_part.custom.push(r.val_at(i)?);
-            } else {
-                rlp_part.custom.push(r.at(i)?.as_raw().to_vec());
-            }
-        }
+            + rlp_part.base_price.is_some() as usize;
+        rlp_part.custom =
+            CustomData::from_rlp(&r, custom_start, rlp_part.height)?;
 
         let mut header = BlockHeader {
             rlp_part,
@@ -596,7 +730,7 @@ impl BlockHeaderBuilder {
                 adaptive: self.adaptive,
                 gas_limit: self.gas_limit,
                 referee_hashes: self.referee_hashes.clone(),
-                custom: self.custom.clone(),
+                custom: CustomData::from_items(&self.custom, self.height),
                 nonce: self.nonce,
                 pos_reference: self.pos_reference,
                 base_price: self.base_price,
@@ -679,24 +813,16 @@ impl Decodable for BlockHeader {
             adaptive: r.val_at::<u8>(10)? == 1,
             gas_limit: r.val_at(11)?,
             referee_hashes: r.list_at(12)?,
-            custom: vec![],
+            custom: CustomData::default(),
             nonce: r.val_at(13)?,
             pos_reference: r.val_at(14).unwrap_or(None),
             base_price: r.val_at(15).unwrap_or(None),
         };
-        for i in (14
+        let custom_start = 14
             + rlp_part.pos_reference.is_some() as usize
-            + rlp_part.base_price.is_some() as usize)
-            ..r.item_count()?
-        {
-            if rlp_part.height
-                >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
-            {
-                rlp_part.custom.push(r.val_at(i)?);
-            } else {
-                rlp_part.custom.push(r.at(i)?.as_raw().to_vec());
-            }
-        }
+            + rlp_part.base_price.is_some() as usize;
+        rlp_part.custom =
+            CustomData::from_rlp(r, custom_start, rlp_part.height)?;
 
         let mut header = BlockHeader {
             rlp_part,
@@ -906,5 +1032,137 @@ mod tests {
         let receipts = vec![Arc::new(block1), Arc::new(block2)];
         let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         assert_eq!(hash, expected);
+    }
+
+    use super::{BlockHeader, CIP112_TRANSITION_HEIGHT};
+    use crate::bytes::Bytes;
+    use rlp::{Decodable, Rlp};
+
+    // CIP112_TRANSITION_HEIGHT is a process-global OnceCell, shared by all
+    // tests.
+    const CIP112: u64 = 1000;
+
+    fn init_cip112() { CIP112_TRANSITION_HEIGHT.get_or_init(|| CIP112); }
+
+    fn header_with_custom(height: u64, custom: Vec<Bytes>) -> BlockHeader {
+        init_cip112();
+        BlockHeaderBuilder::new()
+            .with_height(height)
+            .with_custom(custom)
+            .build()
+    }
+
+    /// Decode→re-encode is byte-identical (hash preserved) and items
+    /// round-trip.
+    fn assert_roundtrip(height: u64, custom: Vec<Bytes>) {
+        let header = header_with_custom(height, custom.clone());
+        let encoded = header.rlp();
+
+        let decoded = BlockHeader::decode(&Rlp::new(&encoded)).unwrap();
+        assert_eq!(decoded.rlp(), encoded, "re-encoding must be identical");
+        assert_eq!(decoded.hash(), header.hash(), "hash must be preserved");
+
+        assert_eq!(decoded.custom_count(), custom.len());
+        assert_eq!(decoded.custom_items(), custom);
+        assert_eq!(
+            decoded.custom_data_len(),
+            custom.iter().map(|x| x.len()).sum::<usize>()
+        );
+        for (i, item) in custom.iter().enumerate() {
+            assert_eq!(decoded.custom_item(i).as_ref(), Some(item));
+        }
+        assert_eq!(decoded.custom_item(custom.len()), None);
+    }
+
+    #[test]
+    fn custom_roundtrip_post_cip112() {
+        assert_roundtrip(
+            CIP112 + 5,
+            vec![vec![1u8, 2, 3], vec![], vec![0xab; 40], vec![0x42]],
+        );
+    }
+
+    #[test]
+    fn custom_roundtrip_empty_post_cip112() {
+        assert_roundtrip(CIP112 + 5, vec![]);
+    }
+
+    #[test]
+    fn custom_roundtrip_pre_cip112() {
+        // Pre-CIP112 items are raw RLP verbatim, so feed encoded byte strings.
+        let items = vec![
+            rlp::encode(&vec![1u8, 2, 3]).to_vec(),
+            rlp::encode(&Vec::<u8>::new()).to_vec(),
+            rlp::encode(&vec![0xcd_u8; 30]).to_vec(),
+        ];
+        assert_roundtrip(CIP112 - 5, items);
+    }
+
+    #[test]
+    fn custom_many_empty_items_no_amplification() {
+        let n = 5000usize;
+        let header = header_with_custom(CIP112 + 5, vec![Vec::new(); n]);
+        let encoded = header.rlp();
+
+        let decoded = BlockHeader::decode(&Rlp::new(&encoded)).unwrap();
+        assert_eq!(decoded.custom_count(), n);
+        assert_eq!(decoded.custom_data_len(), 0);
+        // One byte (0x80) per empty item — no per-item Vec overhead.
+        assert_eq!(decoded.custom.raw.len(), n);
+        assert_eq!(decoded.rlp(), encoded);
+        assert_eq!(decoded.hash(), header.hash());
+    }
+
+    #[test]
+    fn custom_roundtrip_with_pow_hash() {
+        init_cip112();
+        let custom = vec![vec![9u8, 8, 7], vec![], vec![0x11; 33]];
+        let mut header = BlockHeaderBuilder::new()
+            .with_height(CIP112 + 5)
+            .with_custom(custom.clone())
+            .build();
+        header.pow_hash = Some(crate::hash::keccak(b"pow"));
+
+        let mut stream = rlp::RlpStream::new();
+        header.stream_rlp_with_pow_hash(&mut stream);
+        let encoded = stream.out().to_vec();
+
+        let decoded = BlockHeader::decode_with_pow_hash(&encoded).unwrap();
+        assert_eq!(decoded.custom_items(), custom);
+        assert_eq!(decoded.pow_hash, header.pow_hash);
+
+        let mut stream2 = rlp::RlpStream::new();
+        decoded.stream_rlp_with_pow_hash(&mut stream2);
+        assert_eq!(stream2.out().to_vec(), encoded);
+    }
+
+    /// A header nested in a `CompactBlock`/`Block` must round-trip even with
+    /// empty custom: a trailing `append_raw(&[], 0)` used to clobber the RLP
+    /// stream's `finished_list` flag, double-counting the header in the parent
+    /// list and truncating it (`RlpIsTooShort` on decode). Standalone
+    /// `header.rlp()` hides this (no enclosing list), so it needs the nested
+    /// case.
+    #[test]
+    fn custom_empty_header_nested_in_compact_block() {
+        use crate::block::CompactBlock;
+        use cfx_types::H256;
+        init_cip112();
+        for (height, custom) in [(1u64, vec![vec![1u8]]), (2u64, vec![])] {
+            let header = BlockHeaderBuilder::new()
+                .with_height(height)
+                .with_custom(custom)
+                .with_pos_reference(Some(H256::zero()))
+                .build();
+            let cb = CompactBlock {
+                block_header: header,
+                nonce: 0,
+                tx_short_ids: vec![],
+                reconstructed_txns: vec![],
+            };
+            let enc = rlp::encode(&cb);
+            CompactBlock::decode(&Rlp::new(&enc)).unwrap_or_else(|e| {
+                panic!("CompactBlock decode (height={height}): {e:?}")
+            });
+        }
     }
 }

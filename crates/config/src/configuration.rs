@@ -401,6 +401,7 @@ build_config! {
         (pos_cip156_transition_view, (u64), u64::MAX)
         // 6 months with 30s rounds
         (pos_cip156_dispute_locked_views, (u64), 6 * 30 * 24 * 60 * 2)
+        (pos_fix_cip156_transition_view, (u64), u64::MAX)
         (pos_dispute_conflict_transition_view, (u64), u64::MAX)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
         (pos_started_as_voter, (bool), true)
@@ -1140,6 +1141,7 @@ impl Configuration {
             self.raw_conf.jsonrpc_local_http_port,
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
+            self.raw_conf.jsonrpc_cors.clone(),
         )
     }
 
@@ -1148,6 +1150,7 @@ impl Configuration {
             Some((127, 0, 0, 1)),
             self.raw_conf.jsonrpc_local_ws_port,
             self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            self.raw_conf.jsonrpc_cors.clone(),
         )
     }
 
@@ -1157,6 +1160,7 @@ impl Configuration {
             self.raw_conf.jsonrpc_http_port,
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
+            self.raw_conf.jsonrpc_cors.clone(),
         )
     }
 
@@ -1165,6 +1169,7 @@ impl Configuration {
             None,
             self.raw_conf.jsonrpc_ws_port,
             self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            self.raw_conf.jsonrpc_cors.clone(), // use same cors option as http
         )
     }
 
@@ -1174,6 +1179,7 @@ impl Configuration {
             self.raw_conf.jsonrpc_http_eth_port,
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
+            self.raw_conf.jsonrpc_cors.clone(),
         )
     }
 
@@ -1182,6 +1188,7 @@ impl Configuration {
             None,
             self.raw_conf.jsonrpc_ws_eth_port,
             self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            self.raw_conf.jsonrpc_cors.clone(), // use same cors option as http
         )
     }
 
@@ -1337,6 +1344,7 @@ impl Configuration {
             self.raw_conf.pos_cip136_round_per_term,
             self.raw_conf.pos_cip156_transition_view,
             self.raw_conf.pos_cip156_dispute_locked_views,
+            self.raw_conf.pos_fix_cip156_transition_view,
             self.raw_conf.pos_dispute_conflict_transition_view,
         )
     }

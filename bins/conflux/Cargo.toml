@@ -28,20 +28,16 @@ cfx-types = { workspace = true }
 cfxkey = { workspace = true }
 rustc-hex = { workspace = true }
 env_logger = { workspace = true }
-malloc_size_of = { workspace = true }
 diem-crypto = { workspace = true }
 diem-types = { workspace = true }
-pos-ledger-db = { workspace = true }
 executor = { workspace = true }                                           # used by pos-genesis-tool
-storage-interface = { workspace = true }
-bcs = { workspace = true }
-tempfile = { workspace = true }
 parity-version = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
-bls-signatures = { workspace = true }
 cfx-executor = { workspace = true }
 cfx-execute-helper = { workspace = true }
 cfx-mallocator-utils = { workspace = true }
+malloc_size_of = { workspace = true }
+bls-signatures = { workspace = true }
 libc = { workspace = true }
 
 # [target.'cfg(not(target_env = "msvc"))'.dependencies]
@@ -69,3 +65,6 @@ snmalloc-native = ["cfx-mallocator-utils/snmalloc-native"]
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
 mockito = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["cfx-executor", "cfx-execute-helper", "malloc_size_of", "bls-signatures", "executor"]

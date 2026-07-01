@@ -2,7 +2,7 @@
 #    uv pip compile pyproject.toml -o ./dev-support/requirements.txt
 aiohappyeyeballs==2.6.1
     # via aiohttp
-aiohttp==3.13.4
+aiohttp==3.14.1
     # via web3
 aiosignal==1.3.2
     # via aiohttp
@@ -207,7 +207,7 @@ pygments==2.20.0
     # via
     #   pytest
     #   rich
-pyjwt==2.12.0
+pyjwt==2.13.0
     # via ethereum-execution-spec-tests
 pytest==9.0.3
     # via

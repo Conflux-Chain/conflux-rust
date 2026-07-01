@@ -9,10 +9,6 @@ edition = "2021"
 [dependencies]
 cfxcore = { path = "../../crates/cfxcore/core", features = ["consensus_bench"]}
 cfx-types = { path = "../../crates/cfx_types" }
-primitives = { path = "../../crates/primitives" }
-db = { path = "../../crates/dbs/db" }
-threadpool = "1.7"
-parking_lot = "0.12"
 log4rs = { version = "1.4.0", features = ["background_rotation", "gzip"] }
 log = "0.4"
 
