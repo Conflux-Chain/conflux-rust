@@ -162,6 +162,9 @@ pub struct TransitionsEpochHeight {
     pub cip166: BlockHeight,
     /// EIP-7212 / RIP-7212: precompile secp256r1 activation height
     pub cip167: BlockHeight,
+    /// Height at/after which a block with a non-canonically-encoded tx is
+    /// invalid. Far-future until a CIP/height is scheduled.
+    pub canonical_tx_rlp: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -183,7 +186,13 @@ impl Default for CommonParams {
             params_dao_vote_period: DAO_PARAMETER_VOTE_PERIOD,
             early_set_internal_contracts_states: false,
             transition_numbers: Default::default(),
-            transition_heights: Default::default(),
+            // `canonical_tx_rlp` is a far-future hardfork; the derived `0`
+            // default would activate it at genesis for bare-default callers
+            // (e.g. test harnesses). `Configuration` overrides it per network.
+            transition_heights: TransitionsEpochHeight {
+                canonical_tx_rlp: u64::MAX,
+                ..Default::default()
+            },
             min_base_price: SpaceMap::default(),
         }
     }

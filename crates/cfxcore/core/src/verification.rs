@@ -755,6 +755,14 @@ impl VerificationConfig {
             bail!(TransactionError::ZeroGasPrice);
         }
 
+        // Non-canonical txs are accepted in blocks today, so rejecting them
+        // unconditionally would fork; gate it to a hardfork height.
+        if height >= transitions.canonical_tx_rlp && !tx.is_canonical_rlp() {
+            bail!(TransactionError::InvalidRlp(
+                "non-canonical transaction RLP encoding".into()
+            ));
+        }
+
         if matches!(mode, VerifyTxMode::Local(..))
             && tx.space() == Space::Native
         {
