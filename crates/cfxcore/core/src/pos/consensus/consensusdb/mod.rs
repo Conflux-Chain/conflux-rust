@@ -230,7 +230,10 @@ impl ConsensusDB {
         self.commit(batch, true)
     }
 
-    /// Save staking events between two pivot decisions.
+    /// Read the cached staking events for the range `(parent_decision,
+    /// me_decision]`. Rows are written only by canonical (local-pivot)
+    /// execution, so saved rows are trusted; only the endpoints are checked
+    /// against the requested decisions.
     pub fn get_staking_events(
         &self, parent_decision: PivotBlockDecision,
         me_decision: PivotBlockDecision,
