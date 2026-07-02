@@ -94,6 +94,21 @@ ignore = [
     { id = "RUSTSEC-2026-0097", reason = "rand 0.9 patched; 0.7/0.8 forced by transitive deps and upstream pins; vulnerable code path not reachable here." },
     # proc-macro-error2 is unmaintained; pulled by alloy-sol-macro 1.6.0
     "RUSTSEC-2026-0173",
+    # quick-xml DoS advisories (quadratic duplicate-attribute check;
+    # unbounded NsReader namespace allocation), patched only in
+    # quick-xml >= 0.41.0. Pulled transitively for the heap-flamegraph
+    # SVG endpoint: jemalloc_pprof -> pprof_util -> inferno 0.12
+    # (quick-xml 0.37); pprof's unused "flamegraph" feature is disabled
+    # in Cargo.toml so the CPU-profiling path pulls no quick-xml. No
+    # inferno release depends on quick-xml 0.41 yet (latest 0.12.6 pins
+    # ^0.39), so no upgrade path exists. The vulnerable paths parse
+    # untrusted XML; the inferno APIs used here only *write* flamegraph
+    # SVG (its from_reader inputs are folded stack text; inferno's sole
+    # XML reader, collapse/xctrace, is never called), so they are
+    # unreachable. Drop these once inferno updates to quick-xml >= 0.41
+    # and jemalloc_pprof picks it up.
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml used write-only via inferno flamegraph output; no patched upstream chain yet." },
+    { id = "RUSTSEC-2026-0195", reason = "NsReader not used by inferno; quick-xml write-only here; no patched upstream chain yet." },
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
