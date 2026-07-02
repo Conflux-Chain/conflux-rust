@@ -3593,7 +3593,9 @@ impl ConsensusGraphInner {
                     .blame();
                 // `0..=blame` avoids overflowing the u32 counter at the
                 // attacker-controlled `blame == u32::MAX` (equivalent to the
-                // former `0..blame + 1`).
+                // former `0..blame + 1`). The loop breaks at `cur == NULL`, so
+                // the walk is bounded by the parent chain and a large `blame`
+                // never iterates past genesis.
                 for i in 0..=blame {
                     self.arena[cur].data.state_valid = Some(i == 0);
                     trace!(
