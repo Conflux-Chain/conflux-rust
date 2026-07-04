@@ -2860,16 +2860,12 @@ impl ConsensusGraphInner {
                                     cur_height -= 1;
                                     cur = self.arena[cur].parent;
                                 }
-                                if vote_valid
-                                    && !self.arena[cur].data.state_valid.expect(
+                                vote_valid
+                                    && self.arena[cur].data.state_valid.expect(
                                         "state_valid for me has been computed in \
                                     wait_and_compute_state_valid_locked by the caller, \
                                     so the precedents should have state_valid",
                                     )
-                                {
-                                    vote_valid = false;
-                                }
-                                vote_valid
                             }
                             None => false,
                         };
