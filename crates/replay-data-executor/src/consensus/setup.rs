@@ -124,23 +124,6 @@ impl Replayer {
         self.minimal_backend.height()
     }
 
-    /// Capture a resumable checkpoint at the current (boundary) height. The
-    /// trie half reuses minimal-mpt's `PersistedState`; the executor windows
-    /// (`commitments_by_height`, `executed_epochs_by_height`) and the
-    /// `previous_*` cursor are carried alongside. See [`crate::checkpoint`].
-    #[cfg(feature = "backend-minimal-mpt")]
-    pub fn export_checkpoint(&self) -> crate::checkpoint::Checkpoint {
-        crate::checkpoint::Checkpoint::build(
-            self.minimal_backend.export_persisted(),
-            self.previous_epoch_hash,
-            &self.previous_state_root,
-            self.previous_epoch_pos_view,
-            self.previous_epoch_finalized_epoch,
-            &self.commitments_by_height,
-            &self.executed_epochs_by_height,
-        )
-    }
-
     /// Atomically write a checkpoint by streaming the snapshot trie directly
     /// to disk, avoiding the ~60-80 GB deep copy that `export_persisted()`
     /// would allocate via `to_canonical_map()`.
@@ -162,30 +145,7 @@ impl Replayer {
         })
     }
 
-    /// Rebuild an executor positioned exactly at a checkpoint. Genesis and the
-    /// machine are reconstructed by `new`, then the minimal-mpt state and the
-    /// executor windows are overwritten from the checkpoint, so execution
-    /// continues from the checkpoint height as if it had never stopped.
-    #[cfg(feature = "backend-minimal-mpt")]
-    pub fn restore(
-        config: Config,
-        checkpoint: crate::checkpoint::Checkpoint,
-    ) -> Result<Self> {
-        let mut executor = Self::new(config)?;
-        let (mmpt, prev_hash, prev_root, prev_pos_view, prev_fe, commitments, executed) =
-            checkpoint.into_parts()?;
-        executor.minimal_backend =
-            crate::minimal_backend::MinimalBackend::from_persisted(mmpt);
-        executor.previous_epoch_hash = prev_hash;
-        executor.previous_state_root = prev_root;
-        executor.previous_epoch_pos_view = prev_pos_view;
-        executor.previous_epoch_finalized_epoch = prev_fe;
-        executor.commitments_by_height = commitments;
-        executor.executed_epochs_by_height = executed;
-        Ok(executor)
-    }
-
-    /// Like `restore`, but from a [`RestoredCheckpoint`] whose trie half was
+    /// Rebuild an executor from a [`RestoredCheckpoint`] whose trie half was
     /// streamed into a live `State` (see `Checkpoint::load_streaming`), so the
     /// snapshot is never materialized as a byte-keyed `BTreeMap`.
     #[cfg(feature = "backend-minimal-mpt")]

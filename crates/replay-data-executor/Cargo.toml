@@ -65,3 +65,13 @@ required-features = ["backend-minimal-mpt"]
 name = "ckpt-restore-rss"
 path = "src/bin/ckpt-restore-rss.rs"
 required-features = ["backend-minimal-mpt"]
+
+[[bin]]
+name = "ckpt-verify"
+path = "src/bin/ckpt-verify.rs"
+required-features = ["backend-minimal-mpt"]
+
+[[bin]]
+name = "ckpt-roundtrip"
+path = "src/bin/ckpt-roundtrip.rs"
+required-features = ["backend-minimal-mpt"]

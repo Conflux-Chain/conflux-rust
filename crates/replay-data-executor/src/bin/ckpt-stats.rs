@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use cfx_minimal_mpt::{MptValueDisk, PersistedState};
+use cfx_minimal_mpt::{MptValue, PersistedState};
 use std::path::PathBuf;
 
 #[derive(serde::Deserialize)]
@@ -31,16 +31,16 @@ fn main() -> Result<()> {
     let snap_val_bytes: usize = mmpt.snapshot.values().map(|v| v.len()).sum();
     let inter_key_bytes: usize = mmpt.intermediate.keys().map(|k| k.len()).sum();
     let inter_val_bytes: usize = mmpt.intermediate.values().map(|v| match v {
-        MptValueDisk::Some(b) => b.len(),
-        MptValueDisk::Tombstone => 0,
+        MptValue::Some(b) => b.len(),
+        MptValue::Tombstone => 0,
     }).sum();
-    let inter_tombstones = mmpt.intermediate.values().filter(|v| matches!(v, MptValueDisk::Tombstone)).count();
+    let inter_tombstones = mmpt.intermediate.values().filter(|v| matches!(v, MptValue::Tombstone)).count();
     let delta_key_bytes: usize = mmpt.delta.keys().map(|k| k.len()).sum();
     let delta_val_bytes: usize = mmpt.delta.values().map(|v| match v {
-        MptValueDisk::Some(b) => b.len(),
-        MptValueDisk::Tombstone => 0,
+        MptValue::Some(b) => b.len(),
+        MptValue::Tombstone => 0,
     }).sum();
-    let delta_tombstones = mmpt.delta.values().filter(|v| matches!(v, MptValueDisk::Tombstone)).count();
+    let delta_tombstones = mmpt.delta.values().filter(|v| matches!(v, MptValue::Tombstone)).count();
 
     println!("height: {}", mmpt.height);
     println!("snapshot_epoch_count: {}", mmpt.snapshot_epoch_count);

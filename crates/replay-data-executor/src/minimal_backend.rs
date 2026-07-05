@@ -40,7 +40,7 @@ use std::sync::{Arc, Mutex};
 
 use cfx_internal_common::{StateRootAuxInfo, StateRootWithAuxInfo};
 use cfx_minimal_mpt::{
-    CommitRoot, PersistedState, State as MmptState,
+    CommitRoot, State as MmptState,
     StateTrait as MmptStateTrait, StorageKeyWithSpace as MmptKey,
 };
 use cfx_storage::{
@@ -122,16 +122,6 @@ impl MinimalBackend {
         })
     }
 
-    /// Rebuild a backend from a previously exported minimal-mpt snapshot
-    /// (`PersistedState`). Used by checkpoint resume: the same `latest-only`
-    /// state the live backend holds is reconstructed verbatim, so the next
-    /// epoch continues exactly as if the process had never stopped.
-    pub fn from_persisted(state: PersistedState) -> Self {
-        Self {
-            state: Arc::new(Mutex::new(MmptState::from_persisted(state))),
-        }
-    }
-
     /// Wrap an already-constructed minimal-mpt `State` (e.g. one streamed from
     /// a checkpoint via `State::from_reader`, which avoids materializing the
     /// full byte-keyed snapshot `BTreeMap`).
@@ -139,16 +129,6 @@ impl MinimalBackend {
         Self {
             state: Arc::new(Mutex::new(state)),
         }
-    }
-
-    /// Snapshot the shared minimal-mpt state for checkpointing. Reuses
-    /// minimal-mpt's own `PersistedState` (which is `Serialize`), so the
-    /// checkpoint layer never reaches into the trie's internals.
-    pub fn export_persisted(&self) -> PersistedState {
-        self.state
-            .lock()
-            .expect("minimal-mpt state poisoned")
-            .persisted()
     }
 
     /// Run `f` while holding the state lock. Used for streaming checkpoint
