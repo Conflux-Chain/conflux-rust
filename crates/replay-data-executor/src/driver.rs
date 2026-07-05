@@ -218,7 +218,7 @@ fn run_packed_dir(replayer: &mut Replayer, cfg: &DriverConfig, resume_height: u6
 #[cfg(feature = "backend-minimal-mpt")]
 fn save_checkpoint(replayer: &Replayer, cfg: &DriverConfig) {
     if let Some(path) = &cfg.checkpoint {
-        match replayer.export_checkpoint().save(path) {
+        match replayer.save_checkpoint_streaming(path) {
             Ok(()) => eprintln!(
                 "wrote checkpoint {} at height {}",
                 path.display(),

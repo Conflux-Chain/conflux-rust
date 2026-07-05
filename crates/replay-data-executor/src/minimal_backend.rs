@@ -142,6 +142,13 @@ impl MinimalBackend {
             .persisted()
     }
 
+    /// Run `f` while holding the state lock. Used for streaming checkpoint
+    /// writes that need to iterate the snapshot trie without copying it.
+    pub fn with_state<R>(&self, f: impl FnOnce(&MmptState) -> R) -> R {
+        let state = self.state.lock().expect("minimal-mpt state poisoned");
+        f(&state)
+    }
+
     /// The committed height of the shared state (`== last pivot height`).
     /// Cheap (just reads the counter); used to know where a resumed run is.
     pub fn height(&self) -> u64 {

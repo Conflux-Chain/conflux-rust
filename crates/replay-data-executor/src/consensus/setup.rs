@@ -141,6 +141,27 @@ impl Replayer {
         )
     }
 
+    /// Atomically write a checkpoint by streaming the snapshot trie directly
+    /// to disk, avoiding the ~60-80 GB deep copy that `export_persisted()`
+    /// would allocate via `to_canonical_map()`.
+    #[cfg(feature = "backend-minimal-mpt")]
+    pub fn save_checkpoint_streaming(&self, path: &std::path::Path) -> anyhow::Result<()> {
+        self.minimal_backend.with_state(|state| {
+            let persisted = state.persisted_without_snapshot();
+            let snapshot_count = state.snapshot_live_count();
+            let ckpt = crate::checkpoint::Checkpoint::build(
+                persisted,
+                self.previous_epoch_hash,
+                &self.previous_state_root,
+                self.previous_epoch_pos_view,
+                self.previous_epoch_finalized_epoch,
+                &self.commitments_by_height,
+                &self.executed_epochs_by_height,
+            );
+            ckpt.save_streaming(path, snapshot_count, |cb| state.snapshot_for_each_canonical(cb))
+        })
+    }
+
     /// Rebuild an executor positioned exactly at a checkpoint. Genesis and the
     /// machine are reconstructed by `new`, then the minimal-mpt state and the
     /// executor windows are overwritten from the checkpoint, so execution
