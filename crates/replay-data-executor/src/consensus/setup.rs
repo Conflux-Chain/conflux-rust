@@ -2,7 +2,7 @@
 //! the minimal-mpt backend from the genesis dump, and export/restore the
 //! resumable checkpoint.
 
-use super::{EpochCommitment, Config, Replayer};
+use super::{Config, EpochCommitment, Replayer};
 use anyhow::{anyhow, Context, Result};
 use cfx_config::Configuration;
 use cfx_executor::machine::{Machine, VmFactory};
@@ -128,20 +128,21 @@ impl Replayer {
     /// to disk, avoiding the ~60-80 GB deep copy that `export_persisted()`
     /// would allocate via `to_canonical_map()`.
     #[cfg(feature = "backend-minimal-mpt")]
-    pub fn save_checkpoint_streaming(&self, path: &std::path::Path) -> anyhow::Result<()> {
+    pub fn save_checkpoint_streaming(
+        &self, path: &std::path::Path,
+    ) -> anyhow::Result<()> {
         self.minimal_backend.with_state(|state| {
-            let persisted = state.persisted_without_snapshot();
-            let snapshot_count = state.snapshot_live_count();
-            let ckpt = crate::checkpoint::Checkpoint::build(
-                persisted,
-                self.previous_epoch_hash,
-                &self.previous_state_root,
-                self.previous_epoch_pos_view,
-                self.previous_epoch_finalized_epoch,
-                &self.commitments_by_height,
-                &self.executed_epochs_by_height,
-            );
-            ckpt.save_streaming(path, snapshot_count, |cb| state.snapshot_for_each_canonical(cb))
+            crate::checkpoint::CheckpointParts {
+                state,
+                previous_epoch_hash: self.previous_epoch_hash,
+                previous_state_root: &self.previous_state_root,
+                previous_epoch_pos_view: self.previous_epoch_pos_view,
+                previous_epoch_finalized_epoch: self
+                    .previous_epoch_finalized_epoch,
+                commitments: &self.commitments_by_height,
+                executed_epochs: &self.executed_epochs_by_height,
+            }
+            .save_streaming(path)
         })
     }
 
@@ -150,8 +151,7 @@ impl Replayer {
     /// snapshot is never materialized as a byte-keyed `BTreeMap`.
     #[cfg(feature = "backend-minimal-mpt")]
     pub fn restore_streaming(
-        config: Config,
-        restored: crate::checkpoint::RestoredCheckpoint,
+        config: Config, restored: crate::checkpoint::RestoredCheckpoint,
     ) -> Result<Self> {
         let mut executor = Self::new(config)?;
         executor.minimal_backend =
@@ -159,7 +159,8 @@ impl Replayer {
         executor.previous_epoch_hash = restored.previous_epoch_hash;
         executor.previous_state_root = restored.previous_state_root;
         executor.previous_epoch_pos_view = restored.previous_epoch_pos_view;
-        executor.previous_epoch_finalized_epoch = restored.previous_epoch_finalized_epoch;
+        executor.previous_epoch_finalized_epoch =
+            restored.previous_epoch_finalized_epoch;
         executor.commitments_by_height = restored.commitments;
         executor.executed_epochs_by_height = restored.executed_epochs;
         Ok(executor)

@@ -1,4 +1,7 @@
-use super::{Checkpoint, CheckpointV1, ExecutedEpochDisk, RestoredCheckpoint, CHECKPOINT_VERSION};
+use super::{
+    Checkpoint, CheckpointV1, ExecutedEpochDisk, RestoredCheckpoint,
+    CHECKPOINT_VERSION,
+};
 use crate::consensus::EpochCommitment;
 use anyhow::{Context, Result};
 use cfx_internal_common::StateRootWithAuxInfo;
@@ -27,8 +30,8 @@ impl Checkpoint {
             .with_context(|| format!("open checkpoint {}", path.display()))?;
         let mut r = BufReader::new(file);
 
-        let version: u32 =
-            bincode::deserialize_from(&mut r).context("read checkpoint version")?;
+        let version: u32 = bincode::deserialize_from(&mut r)
+            .context("read checkpoint version")?;
         match version {
             1 => {
                 // V1 files are old and small; the streaming path is unnecessary.
@@ -98,6 +101,9 @@ impl Checkpoint {
         }
         let bytes = fs::read(path)
             .with_context(|| format!("read checkpoint {}", path.display()))?;
+        if bytes.len() < 4 {
+            anyhow::bail!("checkpoint file too short");
+        }
         let version: u32 = bincode::deserialize(&bytes[..4])
             .context("read checkpoint version")?;
         let ckpt = match version {

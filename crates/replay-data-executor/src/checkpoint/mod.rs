@@ -47,6 +47,8 @@ use primitives::receipt::BlockReceipts;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 
+pub(crate) use save::CheckpointParts;
+
 /// The executor state reconstructed from a checkpoint, with the trie half
 /// already built into a live `State` (never routed through a fully-materialized
 /// `PersistedState`). This is what `load_streaming` yields — the streaming
@@ -63,11 +65,11 @@ pub struct RestoredCheckpoint {
 }
 
 /// Bumped if the on-disk layout changes incompatibly.
-const CHECKPOINT_VERSION: u32 = 2;
+pub(crate) const CHECKPOINT_VERSION: u32 = 2;
 
 /// One executed epoch as stored on disk. Blocks serde directly; receipts are
 /// RLP-encoded (they have no serde, only RLP) — one byte string per block.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct ExecutedEpochDisk {
     blocks: Vec<cfxpack::packet::Block>,
     receipts_rlp: Vec<Vec<u8>>,
@@ -150,8 +152,7 @@ impl Checkpoint {
     /// Assemble a checkpoint from the executor's live pieces. `mmpt` comes from
     /// `MinimalBackend::export_persisted()` (so its `height` is authoritative).
     pub fn build(
-        mmpt: PersistedState,
-        previous_epoch_hash: H256,
+        mmpt: PersistedState, previous_epoch_hash: H256,
         previous_state_root: &StateRootWithAuxInfo,
         previous_epoch_pos_view: Option<u64>,
         previous_epoch_finalized_epoch: Option<u64>,
