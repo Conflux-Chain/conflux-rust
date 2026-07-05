@@ -229,8 +229,15 @@ impl Replayer {
         last_hash: H256, last_pos_view: Option<u64>,
         last_finalized_epoch: Option<u64>, state: &mut State,
     ) -> Env {
+        // Base fee is an epoch-level value: consensus takes it once from the
+        // PIVOT block (`EpochProcessContext` in `epoch_execution.rs`:
+        // `pivot_block.block_header.base_price()`) and applies it to every block
+        // in the epoch. Using the containing block's own base_price diverges when
+        // a tx rides a non-pivot block whose base_price differs from the pivot's
+        // — e.g. an eSpace tx carried by a non-pivot height%5==0 block executed
+        // in an epoch whose pivot is not an eSpace (height%5==0) block.
         let base_gas_price =
-            SpaceMap::new(block.base_price_core, block.base_price_espace);
+            SpaceMap::new(pivot.base_price_core, pivot.base_price_espace);
         let burnt_gas_price =
             base_gas_price.map_all(|x| state.burnt_gas_price(x));
         Env {
