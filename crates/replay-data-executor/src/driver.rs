@@ -42,14 +42,14 @@ pub fn build(cfg: &DriverConfig) -> Result<(Replayer, u64)> {
         config_path: cfg.config_path.clone(),
     };
     if let Some(path) = &cfg.checkpoint {
-        if let Some(ckpt) = Checkpoint::load(path)? {
-            let height = ckpt.height();
+        if let Some(restored) = Checkpoint::load_streaming(path)? {
+            let height = restored.height;
             eprintln!(
                 "resuming from checkpoint {} at height {}",
                 path.display(),
                 height,
             );
-            let replayer = Replayer::restore(config, ckpt)?;
+            let replayer = Replayer::restore_streaming(config, restored)?;
             return Ok((replayer, height));
         }
         eprintln!("no checkpoint at {} yet; starting from genesis", path.display());

@@ -184,6 +184,26 @@ impl Replayer {
         executor.executed_epochs_by_height = executed;
         Ok(executor)
     }
+
+    /// Like `restore`, but from a [`RestoredCheckpoint`] whose trie half was
+    /// streamed into a live `State` (see `Checkpoint::load_streaming`), so the
+    /// snapshot is never materialized as a byte-keyed `BTreeMap`.
+    #[cfg(feature = "backend-minimal-mpt")]
+    pub fn restore_streaming(
+        config: Config,
+        restored: crate::checkpoint::RestoredCheckpoint,
+    ) -> Result<Self> {
+        let mut executor = Self::new(config)?;
+        executor.minimal_backend =
+            crate::minimal_backend::MinimalBackend::from_state(restored.state);
+        executor.previous_epoch_hash = restored.previous_epoch_hash;
+        executor.previous_state_root = restored.previous_state_root;
+        executor.previous_epoch_pos_view = restored.previous_epoch_pos_view;
+        executor.previous_epoch_finalized_epoch = restored.previous_epoch_finalized_epoch;
+        executor.commitments_by_height = restored.commitments;
+        executor.executed_epochs_by_height = restored.executed_epochs;
+        Ok(executor)
+    }
 }
 
 fn parse_configuration(config_path: &str) -> Result<Configuration, String> {

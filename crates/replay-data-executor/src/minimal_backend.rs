@@ -132,6 +132,15 @@ impl MinimalBackend {
         }
     }
 
+    /// Wrap an already-constructed minimal-mpt `State` (e.g. one streamed from
+    /// a checkpoint via `State::from_reader`, which avoids materializing the
+    /// full byte-keyed snapshot `BTreeMap`).
+    pub fn from_state(state: MmptState) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(state)),
+        }
+    }
+
     /// Snapshot the shared minimal-mpt state for checkpointing. Reuses
     /// minimal-mpt's own `PersistedState` (which is `Serialize`), so the
     /// checkpoint layer never reaches into the trie's internals.

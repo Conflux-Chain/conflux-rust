@@ -34,17 +34,32 @@
 use crate::consensus::{EpochCommitment, ExecutedEpoch};
 use anyhow::{Context, Result};
 use cfx_internal_common::StateRootWithAuxInfo;
-use cfx_minimal_mpt::PersistedState;
+use cfx_minimal_mpt::{PersistedState, State as MmptState};
 use cfx_types::H256;
 use primitives::receipt::BlockReceipts;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fs,
-    io::{BufWriter, Write},
+    io::{BufReader, BufWriter, Write},
     path::Path,
     sync::Arc,
 };
+
+/// The executor state reconstructed from a checkpoint, with the trie half
+/// already built into a live `State` (never routed through a fully-materialized
+/// `PersistedState`). This is what `load_streaming` yields — the streaming
+/// counterpart to `into_parts`.
+pub struct RestoredCheckpoint {
+    pub state: MmptState,
+    pub height: u64,
+    pub previous_epoch_hash: H256,
+    pub previous_state_root: StateRootWithAuxInfo,
+    pub previous_epoch_pos_view: Option<u64>,
+    pub previous_epoch_finalized_epoch: Option<u64>,
+    pub commitments: BTreeMap<u64, EpochCommitment>,
+    pub executed_epochs: BTreeMap<u64, ExecutedEpoch>,
+}
 
 /// Bumped if the on-disk layout changes incompatibly.
 const CHECKPOINT_VERSION: u32 = 2;
@@ -306,6 +321,189 @@ impl Checkpoint {
         let state = cfx_minimal_mpt::State::from_persisted(self.mmpt.clone());
         let count = state.snapshot_live_count();
         self.save_streaming(path, count, |cb| state.snapshot_for_each_canonical(cb))
+    }
+
+    /// Streaming load: the memory-frugal counterpart to `load` + `into_parts`.
+    ///
+    /// `load` reads the whole file into a `Vec<u8>` and `bincode::deserialize`s
+    /// it, materializing the snapshot as a byte-keyed `BTreeMap` (tens of GB at
+    /// full-chain scale) before `State::from_persisted` converts it again. This
+    /// reads field-by-field from a `BufReader`, streaming the snapshot straight
+    /// into the trie's backing store — the byte-keyed map never exists.
+    ///
+    /// The field order mirrors the `Checkpoint` / `PersistedState` derive order
+    /// exactly (the same order `save_streaming` writes), so the on-disk format
+    /// is unchanged. V1 checkpoints predate the size problem and fall back to
+    /// the full `load` path.
+    pub fn load_streaming(path: &Path) -> Result<Option<RestoredCheckpoint>> {
+        if !path.exists() {
+            return Ok(None);
+        }
+        let file = fs::File::open(path)
+            .with_context(|| format!("open checkpoint {}", path.display()))?;
+        let mut r = BufReader::new(file);
+
+        let version: u32 =
+            bincode::deserialize_from(&mut r).context("read checkpoint version")?;
+        match version {
+            1 => {
+                // V1 files are old and small; the streaming path is unnecessary.
+                let ckpt = Self::load(path)?.expect("path exists");
+                let height = ckpt.height();
+                let (mmpt, prev_hash, prev_root, pos_view, fe, commitments, executed) =
+                    ckpt.into_parts()?;
+                Ok(Some(RestoredCheckpoint {
+                    state: MmptState::from_persisted(mmpt),
+                    height,
+                    previous_epoch_hash: prev_hash,
+                    previous_state_root: prev_root,
+                    previous_epoch_pos_view: pos_view,
+                    previous_epoch_finalized_epoch: fe,
+                    commitments,
+                    executed_epochs: executed,
+                }))
+            }
+            CHECKPOINT_VERSION => {
+                let height: u64 =
+                    bincode::deserialize_from(&mut r).context("ckpt: height")?;
+                // PersistedState (mmpt) — streamed into the live State.
+                let state =
+                    MmptState::from_reader(&mut r).context("ckpt: stream mmpt state")?;
+                // Remaining Checkpoint fields.
+                let previous_epoch_hash: H256 =
+                    bincode::deserialize_from(&mut r).context("ckpt: prev_hash")?;
+                let previous_state_root: StateRootWithAuxInfo =
+                    bincode::deserialize_from(&mut r).context("ckpt: prev_root")?;
+                let previous_epoch_pos_view: Option<u64> =
+                    bincode::deserialize_from(&mut r).context("ckpt: pos_view")?;
+                let previous_epoch_finalized_epoch: Option<u64> =
+                    bincode::deserialize_from(&mut r).context("ckpt: finalized")?;
+                let commitments_vec: Vec<(u64, EpochCommitment)> =
+                    bincode::deserialize_from(&mut r).context("ckpt: commitments")?;
+                let executed_vec: Vec<(u64, ExecutedEpochDisk)> =
+                    bincode::deserialize_from(&mut r).context("ckpt: exec_epochs")?;
+
+                let commitments = commitments_vec.into_iter().collect();
+                let mut executed_epochs = BTreeMap::new();
+                for (h, disk) in executed_vec {
+                    executed_epochs.insert(h, disk.into_live()?);
+                }
+
+                Ok(Some(RestoredCheckpoint {
+                    state,
+                    height,
+                    previous_epoch_hash,
+                    previous_state_root,
+                    previous_epoch_pos_view,
+                    previous_epoch_finalized_epoch,
+                    commitments,
+                    executed_epochs,
+                }))
+            }
+            _ => anyhow::bail!(
+                "checkpoint version mismatch: file v{version}, expected v{CHECKPOINT_VERSION}",
+            ),
+        }
+    }
+
+    /// Test helper: assert `load_streaming` reconstructs exactly what the full
+    /// `load` + `into_parts` path does. Lives in-crate so it can touch the
+    /// crate-private commitment/executed window types. Returns `true` on match.
+    /// Reference path materializes the full byte-keyed snapshot, so use a small
+    /// early checkpoint.
+    pub fn verify_streaming_load_matches(path: &Path) -> Result<bool> {
+        let full = Self::load(path)?.context("no checkpoint at path")?;
+        let ref_height = full.height();
+        let (ref_mmpt, ref_ph, ref_pr, ref_pv, ref_fe, ref_comm, ref_exec) =
+            full.into_parts()?;
+
+        let restored = Self::load_streaming(path)?.context("load_streaming None")?;
+        let stream_mmpt = restored.state.persisted();
+
+        let mut ok = true;
+        if ref_mmpt != stream_mmpt {
+            ok = false;
+            eprintln!("FAIL: mmpt differs");
+            if ref_mmpt.snapshot != stream_mmpt.snapshot {
+                eprintln!(
+                    "  snapshot: ref={} stream={}",
+                    ref_mmpt.snapshot.len(),
+                    stream_mmpt.snapshot.len()
+                );
+                for (k, v) in ref_mmpt.snapshot.iter() {
+                    match stream_mmpt.snapshot.get(k) {
+                        None => {
+                            eprintln!("  key missing in stream: {:02x?}", &k[..k.len().min(8)]);
+                            break;
+                        }
+                        Some(sv) if sv != v => {
+                            eprintln!("  value differs at {:02x?}", &k[..k.len().min(8)]);
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            if ref_mmpt.intermediate != stream_mmpt.intermediate {
+                eprintln!("  intermediate differs");
+            }
+            if ref_mmpt.delta != stream_mmpt.delta {
+                eprintln!("  delta differs");
+            }
+            if ref_mmpt.height != stream_mmpt.height {
+                eprintln!("  height {} vs {}", ref_mmpt.height, stream_mmpt.height);
+            }
+            if ref_mmpt.last_root != stream_mmpt.last_root {
+                eprintln!("  last_root differs");
+            }
+            if ref_mmpt.intermediate_mpt_key_padding != stream_mmpt.intermediate_mpt_key_padding
+                || ref_mmpt.delta_mpt_key_padding != stream_mmpt.delta_mpt_key_padding
+            {
+                eprintln!("  padding differs");
+            }
+            if ref_mmpt.snapshot_epoch_count != stream_mmpt.snapshot_epoch_count {
+                eprintln!("  epoch_count differs");
+            }
+        }
+        if ref_height != restored.height {
+            ok = false;
+            eprintln!("FAIL: height {ref_height} vs {}", restored.height);
+        }
+        if ref_ph != restored.previous_epoch_hash {
+            ok = false;
+            eprintln!("FAIL: previous_epoch_hash differs");
+        }
+        if ref_pr != restored.previous_state_root {
+            ok = false;
+            eprintln!("FAIL: previous_state_root differs");
+        }
+        if ref_pv != restored.previous_epoch_pos_view {
+            ok = false;
+            eprintln!("FAIL: previous_epoch_pos_view differs");
+        }
+        if ref_fe != restored.previous_epoch_finalized_epoch {
+            ok = false;
+            eprintln!("FAIL: previous_epoch_finalized_epoch differs");
+        }
+        // window contents decode identically (same bincode calls); check counts.
+        if ref_comm.len() != restored.commitments.len() {
+            ok = false;
+            eprintln!("FAIL: commitments count differs");
+        }
+        if ref_exec.len() != restored.executed_epochs.len() {
+            ok = false;
+            eprintln!("FAIL: executed_epochs count differs");
+        }
+
+        eprintln!(
+            "height={ref_height} snapshot={} intermediate={} delta={} commitments={} executed={}",
+            stream_mmpt.snapshot.len(),
+            stream_mmpt.intermediate.len(),
+            stream_mmpt.delta.len(),
+            restored.commitments.len(),
+            restored.executed_epochs.len(),
+        );
+        Ok(ok)
     }
 
     /// Load a checkpoint if one exists at `path`; `Ok(None)` when absent.
