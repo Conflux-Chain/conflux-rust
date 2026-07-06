@@ -28,11 +28,9 @@ pub struct PosStateConfig {
 
     cip156_transition_view: u64,
     cip156_dispute_locked_views: u64,
-    // After this view, a dispute also relocks a fully-retired node's
-    // out_queue.
-    fix_cip156_transition_view: u64,
-
-    dispute_conflict_transition_view: u64,
+    // CIP-173 gates two dispute fixes at one view: evidence must genuinely
+    // conflict, and a dispute also relocks a fully-retired node's out_queue.
+    cip173_transition_view: u64,
 
     nonce_limit_transition_view: u64,
     max_nonce_per_account: u64,
@@ -57,6 +55,7 @@ pub trait PosStateConfigTrait {
     // Returning None means the stake should be forfeited instead of being
     // locked.
     fn dispute_locked_views(&self, view: u64) -> Option<u64>;
+    // Both gates below activate at the shared CIP-173 transition view.
     fn enforce_dispute_conflict(&self, view: u64) -> bool;
     fn dispute_lock_includes_out_queue(&self, view: u64) -> bool;
 }
@@ -70,8 +69,7 @@ impl PosStateConfig {
         max_nonce_per_account: u64, cip136_transition_view: u64,
         cip136_in_queue_locked_views: u64, cip136_out_queue_locked_views: u64,
         cip136_round_per_term: u64, cip156_transition_view: u64,
-        cip156_dispute_locked_views: u64, fix_cip156_transition_view: u64,
-        dispute_conflict_transition_view: u64,
+        cip156_dispute_locked_views: u64, cip173_transition_view: u64,
     ) -> Self {
         Self {
             round_per_term,
@@ -88,8 +86,7 @@ impl PosStateConfig {
             cip136_round_per_term,
             cip156_transition_view,
             cip156_dispute_locked_views,
-            fix_cip156_transition_view,
-            dispute_conflict_transition_view,
+            cip173_transition_view,
             nonce_limit_transition_view,
             max_nonce_per_account,
         }
@@ -220,12 +217,11 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
     }
 
     fn enforce_dispute_conflict(&self, view: u64) -> bool {
-        let conf = self.get().unwrap();
-        view >= conf.dispute_conflict_transition_view
+        view >= self.get().unwrap().cip173_transition_view
     }
 
     fn dispute_lock_includes_out_queue(&self, view: u64) -> bool {
-        view >= self.get().unwrap().fix_cip156_transition_view
+        view >= self.get().unwrap().cip173_transition_view
     }
 }
 
@@ -248,8 +244,7 @@ impl Default for PosStateConfig {
             cip136_round_per_term: ROUND_PER_TERM,
             cip156_transition_view: u64::MAX,
             cip156_dispute_locked_views: u64::MAX,
-            fix_cip156_transition_view: u64::MAX,
-            dispute_conflict_transition_view: u64::MAX,
+            cip173_transition_view: u64::MAX,
             nonce_limit_transition_view: u64::MAX,
             max_nonce_per_account: u64::MAX,
         }

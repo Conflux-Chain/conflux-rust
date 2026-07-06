@@ -406,7 +406,6 @@ mod tests {
                 60,
                 u64::MAX,
                 u64::MAX,
-                u64::MAX,
                 TRANSITION,
             ))
             .expect("POS_STATE_CONFIG already set");
