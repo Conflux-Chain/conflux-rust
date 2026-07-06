@@ -829,12 +829,7 @@ impl VerificationConfig {
 
         Self::check_gas_limit(tx, cip76, eip7623, &mode)?;
         Self::check_gas_limit_with_calldata(tx, cip130)?;
-
-        if !Self::check_canonical_rlp(tx, canonical_tx_rlp, &mode) {
-            bail!(TransactionError::InvalidRlp(
-                "non-canonical transaction RLP encoding".into()
-            ));
-        }
+        Self::check_canonical_rlp(tx, canonical_tx_rlp, &mode)?;
 
         Ok(())
     }
@@ -846,14 +841,20 @@ impl VerificationConfig {
     fn check_canonical_rlp(
         tx: &TransactionWithSignature, canonical_tx_rlp: bool,
         mode: &VerifyTxMode,
-    ) -> bool {
+    ) -> Result<(), TransactionError> {
         if tx.is_canonical_rlp() {
-            return true;
+            return Ok(());
         }
-        match mode {
-            VerifyTxMode::Local(..) => false,
-            VerifyTxMode::Remote(_) => !canonical_tx_rlp,
+        let rejected = match mode {
+            VerifyTxMode::Local(..) => true,
+            VerifyTxMode::Remote(_) => canonical_tx_rlp,
+        };
+        if rejected {
+            bail!(TransactionError::InvalidRlp(
+                "non-canonical transaction RLP encoding".into()
+            ));
         }
+        Ok(())
     }
 
     fn check_eip155_transaction(
