@@ -16,7 +16,7 @@ compile_error!(
 // `[patch]`es cfxpack's conflux deps onto its own crates so the `primitives`
 // types it embeds unify with this crate's.
 #[cfg(feature = "backend-minimal-mpt")]
-pub mod checkpoint;
+pub use cfx_replay_checkpoint as checkpoint;
 #[cfg(feature = "backend-minimal-mpt")]
 pub mod minimal_backend;
 pub mod consensus;

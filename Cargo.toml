@@ -456,4 +456,5 @@ sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = 
 # its own side.
 [patch."https://github.com/Conflux-Chain/conflux-rust.git"]
 cfx-types = { path = "crates/cfx_types" }
+cfx-internal-common = { path = "crates/cfxcore/internal_common" }
 primitives = { path = "crates/primitives" }

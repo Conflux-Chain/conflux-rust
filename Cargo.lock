@@ -1721,6 +1721,7 @@ dependencies = [
 name = "cfx-minimal-mpt"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arbitrary",
  "bincode",
  "heed",
@@ -1780,6 +1781,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-replay-checkpoint"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "cfx-internal-common",
+ "cfx-minimal-mpt",
+ "cfx-types",
+ "cfxpack",
+ "primitives",
+ "rlp 0.6.1",
+ "serde",
+ "tempfile",
+]
+
+[[package]]
 name = "cfx-replay-data-executor"
 version = "0.1.0"
 dependencies = [
@@ -1791,6 +1808,7 @@ dependencies = [
  "cfx-internal-common",
  "cfx-minimal-mpt",
  "cfx-parameters",
+ "cfx-replay-checkpoint",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
@@ -2418,7 +2436,9 @@ dependencies = [
  "anyhow",
  "cfx-types",
  "primitives",
+ "rayon",
  "rlp 0.6.1",
+ "rustc-hash 2.1.1",
  "serde",
  "snap",
 ]

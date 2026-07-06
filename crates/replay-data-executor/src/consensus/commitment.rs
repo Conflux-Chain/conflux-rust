@@ -7,11 +7,17 @@ use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT, consensus_internal::REWARD_EPOCH_COUNT,
 };
 use cfx_types::H256;
+#[cfg(not(feature = "backend-minimal-mpt"))]
 use primitives::receipt::BlockReceipts;
+#[cfg(not(feature = "backend-minimal-mpt"))]
 use std::sync::Arc;
+
+#[cfg(feature = "backend-minimal-mpt")]
+pub(crate) use cfx_replay_checkpoint::{EpochCommitment, ExecutedEpoch};
 
 /// The commitment an epoch produces: the three roots we recompute and later
 /// compare (DEFERRED_STATE_EPOCH_COUNT epochs on) against the chain's pivot.
+#[cfg(not(feature = "backend-minimal-mpt"))]
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EpochCommitment {
     pub(crate) state_root: H256,
@@ -21,6 +27,7 @@ pub(crate) struct EpochCommitment {
 
 /// One executed epoch retained until its reward settles REWARD_EPOCH_COUNT
 /// epochs later.
+#[cfg(not(feature = "backend-minimal-mpt"))]
 #[derive(Debug, Clone)]
 pub(crate) struct ExecutedEpoch {
     pub(crate) blocks: Vec<Block>,

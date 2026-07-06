@@ -25,6 +25,7 @@ cfx-minimal-mpt = { path = "../../../../crates/minimal-mpt", optional = true }
 # workspace `[patch]` (root Cargo.toml) redirects that onto our own crates so
 # the `primitives` types it embeds unify with this crate's.
 cfxpack = { path = "../../../../crates/cfxpack" }
+cfx-replay-checkpoint = { path = "../../../../crates/replay-checkpoint", optional = true }
 # Signal-sampling profiler (SIGPROF/setitimer, no perf_event — works where
 # perf_event_paranoid is locked down). Enabled by the `profile` feature.
 pprof = { version = "0.14", features = ["flamegraph"], optional = true }
@@ -46,7 +47,7 @@ time = { workspace = true }
 #   --no-default-features --features backend-minimal-mpt
 default = ["backend-cfx-storage"]
 backend-cfx-storage = []
-backend-minimal-mpt = ["dep:cfx-minimal-mpt"]
+backend-minimal-mpt = ["dep:cfx-minimal-mpt", "dep:cfx-replay-checkpoint"]
 backend-minimal-mpt-lmdb = ["backend-minimal-mpt", "cfx-minimal-mpt/snapshot-lmdb"]
 # Sample the run with pprof-rs and write flamegraph.svg on exit.
 profile = ["dep:pprof"]
@@ -54,24 +55,3 @@ profile = ["dep:pprof"]
 # every commit (panics on divergence). Build together with backend-minimal-mpt.
 verify-incremental = ["cfx-minimal-mpt/verify-incremental"]
 
-# Bins are auto-discovered from src/bin/ (cfx-replay-exec, dump-blame). ckpt-stats
-# reads a minimal-mpt checkpoint, so it only builds under that backend.
-[[bin]]
-name = "ckpt-stats"
-path = "src/bin/ckpt-stats.rs"
-required-features = ["backend-minimal-mpt"]
-
-[[bin]]
-name = "ckpt-restore-rss"
-path = "src/bin/ckpt-restore-rss.rs"
-required-features = ["backend-minimal-mpt"]
-
-[[bin]]
-name = "ckpt-verify"
-path = "src/bin/ckpt-verify.rs"
-required-features = ["backend-minimal-mpt"]
-
-[[bin]]
-name = "ckpt-roundtrip"
-path = "src/bin/ckpt-roundtrip.rs"
-required-features = ["backend-minimal-mpt"]

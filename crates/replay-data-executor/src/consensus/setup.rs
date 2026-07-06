@@ -124,15 +124,26 @@ impl Replayer {
         self.minimal_backend.height()
     }
 
-    /// Atomically write a checkpoint by streaming the snapshot trie directly
-    /// to disk, avoiding the ~60-80 GB deep copy that `export_persisted()`
-    /// would allocate via `to_canonical_map()`.
+    /// Atomically write a checkpoint (tmp + rename) by streaming the snapshot
+    /// trie directly to disk, avoiding the ~60-80 GB deep copy that
+    /// `export_persisted()` would allocate via `to_canonical_map()`.
     #[cfg(feature = "backend-minimal-mpt")]
     pub fn save_checkpoint_streaming(
         &self, path: &std::path::Path,
     ) -> anyhow::Result<()> {
+        use anyhow::Context;
+        use std::io::{BufWriter, Write};
+
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let tmp = path.with_extension("tmp");
+        let file = std::fs::File::create(&tmp)
+            .with_context(|| format!("create checkpoint tmp {}", tmp.display()))?;
+        let mut w = BufWriter::new(file);
+
         self.minimal_backend.with_state(|state| {
-            crate::checkpoint::CheckpointParts {
+            crate::checkpoint::CheckpointRef {
                 state,
                 previous_epoch_hash: self.previous_epoch_hash,
                 previous_state_root: &self.previous_state_root,
@@ -142,8 +153,14 @@ impl Replayer {
                 commitments: &self.commitments_by_height,
                 executed_epochs: &self.executed_epochs_by_height,
             }
-            .save_streaming(path)
-        })
+            .stream_write(&mut w)
+        })?;
+
+        w.flush().context("flush checkpoint")?;
+        drop(w);
+        std::fs::rename(&tmp, path)
+            .with_context(|| format!("rename checkpoint into {}", path.display()))?;
+        Ok(())
     }
 
     /// Rebuild an executor from a [`RestoredCheckpoint`] whose trie half was
@@ -151,7 +168,7 @@ impl Replayer {
     /// snapshot is never materialized as a byte-keyed `BTreeMap`.
     #[cfg(feature = "backend-minimal-mpt")]
     pub fn restore_streaming(
-        config: Config, restored: crate::checkpoint::RestoredCheckpoint,
+        config: Config, restored: crate::checkpoint::CheckpointData,
     ) -> Result<Self> {
         let mut executor = Self::new(config)?;
         executor.minimal_backend =

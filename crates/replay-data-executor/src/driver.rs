@@ -7,7 +7,7 @@
 //! plain [`DriverConfig`], so it can be driven from a test or another tool.
 
 #[cfg(feature = "backend-minimal-mpt")]
-use crate::checkpoint::Checkpoint;
+use crate::checkpoint::CheckpointData;
 use crate::consensus::{Config, Replayer};
 use crate::report::{
     accumulate, epoch_matched, finish_verdict, print_single_report, report_mismatches,
@@ -42,7 +42,7 @@ pub fn build(cfg: &DriverConfig) -> Result<(Replayer, u64)> {
         config_path: cfg.config_path.clone(),
     };
     if let Some(path) = &cfg.checkpoint {
-        if let Some(restored) = Checkpoint::load_streaming(path)? {
+        if let Some(restored) = CheckpointData::load(path)? {
             let height = restored.height;
             eprintln!(
                 "resuming from checkpoint {} at height {}",
