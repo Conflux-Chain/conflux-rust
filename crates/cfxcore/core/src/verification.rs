@@ -755,14 +755,6 @@ impl VerificationConfig {
             bail!(TransactionError::ZeroGasPrice);
         }
 
-        // Non-canonical txs are accepted in blocks today, so rejecting them
-        // unconditionally would fork; gate it to a hardfork height.
-        if height >= transitions.canonical_tx_rlp && !tx.is_canonical_rlp() {
-            bail!(TransactionError::InvalidRlp(
-                "non-canonical transaction RLP encoding".into()
-            ));
-        }
-
         if matches!(mode, VerifyTxMode::Local(..))
             && tx.space() == Space::Native
         {
@@ -793,6 +785,7 @@ impl VerificationConfig {
         let cip7702 = height >= transitions.cip7702;
         let cip645 = height >= transitions.cip645;
         let eip7623 = height >= transitions.eip7623;
+        let canonical_tx_rlp = height >= transitions.canonical_tx_rlp;
 
         if let Transaction::Native(ref tx) = tx.unsigned {
             Self::verify_transaction_epoch_height(
@@ -837,7 +830,30 @@ impl VerificationConfig {
         Self::check_gas_limit(tx, cip76, eip7623, &mode)?;
         Self::check_gas_limit_with_calldata(tx, cip130)?;
 
+        if !Self::check_canonical_rlp(tx, canonical_tx_rlp, &mode) {
+            bail!(TransactionError::InvalidRlp(
+                "non-canonical transaction RLP encoding".into()
+            ));
+        }
+
         Ok(())
+    }
+
+    /// A non-canonical encoding hashes to a value the canonical re-encoding
+    /// won't reproduce, so packing one orphans the block. Local (mempool /
+    /// packing / RPC) rejects it outright; as a block-validity rule this is a
+    /// consensus change, so Remote only rejects at/after the gate height.
+    fn check_canonical_rlp(
+        tx: &TransactionWithSignature, canonical_tx_rlp: bool,
+        mode: &VerifyTxMode,
+    ) -> bool {
+        if tx.is_canonical_rlp() {
+            return true;
+        }
+        match mode {
+            VerifyTxMode::Local(..) => false,
+            VerifyTxMode::Remote(_) => !canonical_tx_rlp,
+        }
     }
 
     fn check_eip155_transaction(
