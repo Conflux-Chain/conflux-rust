@@ -126,7 +126,7 @@ make_subset_dir() {
 expand_backends() {
   local raw=$1
   if [[ $raw == "all" ]]; then
-    printf '%s\n' minimal minimal-verify lmdb lmdb-verify
+    printf '%s\n' minimal minimal-verify
     return
   fi
   split_csv_or_words "$raw" | tr ' ' '\n' | sed '/^$/d'
@@ -154,9 +154,7 @@ build_backend() {
   case "$backend" in
     minimal) features=backend-minimal-mpt ;;
     minimal-verify) features=backend-minimal-mpt,verify-incremental ;;
-    lmdb) features=backend-minimal-mpt-lmdb ;;
-    lmdb-verify) features=backend-minimal-mpt-lmdb,verify-incremental ;;
-    *) die "unknown backend '$backend' (use minimal, minimal-verify, lmdb, lmdb-verify, or all)" ;;
+    *) die "unknown backend '$backend' (use minimal, minimal-verify, or all)" ;;
   esac
   log "building release backend=$backend features=$features"
   (cd "$ORACLE_ROOT" && nice -n "$NICE" cargo build --release -p cfx-replay-data-executor \

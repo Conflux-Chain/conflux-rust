@@ -48,7 +48,6 @@ time = { workspace = true }
 default = ["backend-cfx-storage"]
 backend-cfx-storage = []
 backend-minimal-mpt = ["dep:cfx-minimal-mpt", "dep:cfx-replay-checkpoint"]
-backend-minimal-mpt-lmdb = ["backend-minimal-mpt", "cfx-minimal-mpt/snapshot-lmdb"]
 # Sample the run with pprof-rs and write flamegraph.svg on exit.
 profile = ["dep:pprof"]
 # Cross-check the incremental delta-trie root against the stateless oracle on
