@@ -40,15 +40,16 @@ use std::sync::{Arc, Mutex};
 
 use cfx_internal_common::{StateRootAuxInfo, StateRootWithAuxInfo};
 use cfx_minimal_mpt::{
-    CommitRoot, State as MmptState,
-    StateTrait as MmptStateTrait, StorageKeyWithSpace as MmptKey,
+    CommitRoot, Space as MmptSpace, State as MmptState,
+    StateTrait as MmptStateTrait, StorageKey as MmptStorageKey,
+    StorageKeyWithSpace as MmptKey,
 };
 use cfx_storage::{
     state::StateTrait as StorageStateTrait, Error as StorageError, MptKeyValue,
     Result as StorageResult,
 };
-use cfx_types::H256;
-use primitives::{EpochId, StateRoot, StorageKeyWithSpace};
+use cfx_types::{Space, H256};
+use primitives::{EpochId, StateRoot, StorageKey, StorageKeyWithSpace};
 
 /// Snapshot period; must match `SNAPSHOT_EPOCHS_CAPACITY` / the value the real
 /// backend rotates snapshots at, so the delta/intermediate/snapshot layering
@@ -61,12 +62,57 @@ fn storage_err(e: cfx_minimal_mpt::Error) -> StorageError {
     StorageError::Msg(format!("minimal-mpt backend: {e}"))
 }
 
-/// Bridge a `primitives` storage key to a `cfx-minimal-mpt` one through the
-/// canonical key-byte encoding. Both crates share that encoding, so the
-/// round-trip is exact and reconstructs the variant and space.
-fn to_mmpt_key(key: StorageKeyWithSpace) -> StorageResult<MmptKey> {
-    let bytes = key.to_key_bytes();
-    MmptKey::from_key_bytes(&bytes).map_err(|e| storage_err(e).into())
+/// Bridge a `primitives` storage key to a `cfx-minimal-mpt` one.
+///
+/// The two crates' `StorageKey` enums are variant-for-variant mirrors, differing
+/// only in ownership (`primitives` borrows `&[u8]`, `cfx-minimal-mpt` owns
+/// `Vec<u8>`) and variant names. Every variant field carries the same raw bytes
+/// on both sides — the canonical key-byte encoding is applied inside each crate's
+/// own `to_key_bytes`, not stored in the fields — so the mapping is a direct,
+/// infallible field copy. No round-trip through the byte encoding is needed.
+fn to_mmpt_key(key: StorageKeyWithSpace) -> MmptKey {
+    let mmpt_key = match key.key {
+        StorageKey::AccountKey(address) => {
+            MmptStorageKey::Account(address.to_vec())
+        }
+        StorageKey::StorageRootKey(address) => {
+            MmptStorageKey::StorageRoot(address.to_vec())
+        }
+        StorageKey::StorageKey {
+            address_bytes,
+            storage_key,
+        } => MmptStorageKey::Storage {
+            address: address_bytes.to_vec(),
+            storage_key: storage_key.to_vec(),
+        },
+        StorageKey::CodeRootKey(address) => {
+            MmptStorageKey::CodeRoot(address.to_vec())
+        }
+        StorageKey::CodeKey {
+            address_bytes,
+            code_hash_bytes,
+        } => MmptStorageKey::Code {
+            address: address_bytes.to_vec(),
+            code_hash: code_hash_bytes.to_vec(),
+        },
+        StorageKey::DepositListKey(address) => {
+            MmptStorageKey::DepositList(address.to_vec())
+        }
+        StorageKey::VoteListKey(address) => {
+            MmptStorageKey::VoteList(address.to_vec())
+        }
+        StorageKey::EmptyKey => MmptStorageKey::Empty,
+        StorageKey::AddressPrefixKey(prefix) => {
+            MmptStorageKey::AddressPrefix(prefix.to_vec())
+        }
+    };
+    MmptKey {
+        key: mmpt_key,
+        space: match key.space {
+            Space::Native => MmptSpace::Native,
+            Space::Ethereum => MmptSpace::Ethereum,
+        },
+    }
 }
 
 fn to_cfx_h256(h: cfx_minimal_mpt::H256) -> H256 { H256(h.0) }
@@ -170,7 +216,7 @@ impl StorageStateTrait for MinimalMptStorage {
     fn get(
         &self, access_key: StorageKeyWithSpace,
     ) -> StorageResult<Option<Box<[u8]>>> {
-        let key = to_mmpt_key(access_key)?;
+        let key = to_mmpt_key(access_key);
         self.state
             .lock()
             .expect("minimal-mpt state poisoned")
@@ -181,7 +227,7 @@ impl StorageStateTrait for MinimalMptStorage {
     fn set(
         &mut self, access_key: StorageKeyWithSpace, value: Box<[u8]>,
     ) -> StorageResult<()> {
-        let key = to_mmpt_key(access_key)?;
+        let key = to_mmpt_key(access_key);
         self.state
             .lock()
             .expect("minimal-mpt state poisoned")
@@ -207,7 +253,7 @@ impl StorageStateTrait for MinimalMptStorage {
     fn delete_all(
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> StorageResult<Option<Vec<MptKeyValue>>> {
-        let prefix = to_mmpt_key(access_key_prefix)?;
+        let prefix = to_mmpt_key(access_key_prefix);
         self.state
             .lock()
             .expect("minimal-mpt state poisoned")
@@ -218,7 +264,7 @@ impl StorageStateTrait for MinimalMptStorage {
     fn read_all(
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> StorageResult<Option<Vec<MptKeyValue>>> {
-        let prefix = to_mmpt_key(access_key_prefix)?;
+        let prefix = to_mmpt_key(access_key_prefix);
         self.state
             .lock()
             .expect("minimal-mpt state poisoned")
