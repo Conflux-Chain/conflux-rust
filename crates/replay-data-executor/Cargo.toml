@@ -45,7 +45,7 @@ time = { workspace = true }
 # Exactly one state-trie backend must be active. The default is the proven
 # cfx-storage backend; select the minimal one with
 #   --no-default-features --features backend-minimal-mpt
-default = ["backend-cfx-storage"]
+default = ["backend-minimal-mpt"]
 backend-cfx-storage = []
 backend-minimal-mpt = ["dep:cfx-minimal-mpt", "dep:cfx-replay-checkpoint"]
 # Sample the run with pprof-rs and write flamegraph.svg on exit.
