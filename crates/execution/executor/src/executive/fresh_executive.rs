@@ -17,7 +17,7 @@ use primitives::{
 };
 
 macro_rules! early_return_on_err {
-    ($e:expr) => {
+    ($e:expr_2021) => {
         match $e {
             Ok(x) => x,
             Err(exec_outcom) => {

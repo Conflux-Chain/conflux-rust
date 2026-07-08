@@ -168,22 +168,24 @@ impl RequestHandler {
         let mut timeout_requests = Vec::new();
         let mut peers_to_disconnect = HashSet::new();
         for sync_req in self.get_timeout_sync_requests() {
-            if let Ok(req) =
-                self.match_request(io, &sync_req.peer_id, sync_req.request_id)
+            match self.match_request(io, &sync_req.peer_id, sync_req.request_id)
             {
-                let peer_id = &sync_req.peer_id;
-                if let Some(request_container) =
-                    self.peers.lock().get_mut(peer_id)
-                {
-                    if request_container
-                        .on_timeout_should_disconnect(&self.protocol_config)
+                Ok(req) => {
+                    let peer_id = &sync_req.peer_id;
+                    if let Some(request_container) =
+                        self.peers.lock().get_mut(peer_id)
                     {
-                        peers_to_disconnect.insert(*peer_id);
+                        if request_container
+                            .on_timeout_should_disconnect(&self.protocol_config)
+                        {
+                            peers_to_disconnect.insert(*peer_id);
+                        }
                     }
+                    timeout_requests.push(req);
                 }
-                timeout_requests.push(req);
-            } else {
-                debug!("Timeout a removed request {:?}", sync_req);
+                _ => {
+                    debug!("Timeout a removed request {:?}", sync_req);
+                }
             }
         }
         let op = if self.protocol_config.demote_peer_for_timeout {
@@ -294,14 +296,15 @@ impl RequestContainer {
     pub fn remove_inflight_request(
         &mut self, request_id: u64,
     ) -> Option<SynchronizationPeerRequest> {
-        if let Some(save_req) = self.inflight_requests.remove(&request_id) {
-            Some(save_req)
-        } else {
-            debug!(
-                "Remove out of bound request peer={} request_id={} next={}",
-                self.peer_id, request_id, self.next_request_id
-            );
-            None
+        match self.inflight_requests.remove(&request_id) {
+            Some(save_req) => Some(save_req),
+            _ => {
+                debug!(
+                    "Remove out of bound request peer={} request_id={} next={}",
+                    self.peer_id, request_id, self.next_request_id
+                );
+                None
+            }
         }
     }
 

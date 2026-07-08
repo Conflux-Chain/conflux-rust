@@ -287,7 +287,9 @@ impl fmt::Display for Error {
 fn main() {
     panic_hook::set_abort();
     if env::var("RUST_LOG").is_err() {
-        env::set_var("RUST_LOG", "warn")
+        // FIXME: Audit that the environment access only happens in
+        // single-threaded code.
+        unsafe { env::set_var("RUST_LOG", "warn") }
     }
     env_logger::try_init().expect("Logger initialized only once.");
     let cli = Cli::parse();

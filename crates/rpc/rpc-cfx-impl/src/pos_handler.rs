@@ -391,34 +391,44 @@ impl PosHandler {
                 // pivot decision would be missing.
                 // If this consensus block is not on a fork, its CommittedBlock
                 // should be accessible in this case.
-                if let Ok(executed_block) =
-                    self.pos_handler.cached_db().get_block(&b.id())
-                {
-                    let executed = executed_block.lock();
-                    if let Some(version) = executed.output().version() {
-                        rpc_block.last_tx_number = U64::from(version);
-                    }
-                    rpc_block.pivot_decision = executed
-                        .output()
-                        .pivot_block()
-                        .as_ref()
-                        .map(|p| Decision::from(p));
-                    rpc_block.height = U64::from(
-                        executed
+                match self.pos_handler.cached_db().get_block(&b.id()) {
+                    Ok(executed_block) => {
+                        let executed = executed_block.lock();
+                        if let Some(version) = executed.output().version() {
+                            rpc_block.last_tx_number = U64::from(version);
+                        }
+                        rpc_block.pivot_decision = executed
                             .output()
-                            .executed_trees()
-                            .pos_state()
-                            .current_view(),
-                    );
-                } else if let Ok(committed_block) = self
-                    .pos_handler
-                    .pos_ledger_db()
-                    .get_committed_block_by_hash(&b.id())
-                {
-                    rpc_block.last_tx_number = committed_block.version.into();
-                    rpc_block.pivot_decision =
-                        Some(Decision::from(&committed_block.pivot_decision));
-                    rpc_block.height = U64::from(committed_block.view);
+                            .pivot_block()
+                            .as_ref()
+                            .map(|p| Decision::from(p));
+                        rpc_block.height = U64::from(
+                            executed
+                                .output()
+                                .executed_trees()
+                                .pos_state()
+                                .current_view(),
+                        );
+                    }
+                    _ => {
+                        match self
+                            .pos_handler
+                            .pos_ledger_db()
+                            .get_committed_block_by_hash(&b.id())
+                        {
+                            Ok(committed_block) => {
+                                rpc_block.last_tx_number =
+                                    committed_block.version.into();
+                                rpc_block.pivot_decision =
+                                    Some(Decision::from(
+                                        &committed_block.pivot_decision,
+                                    ));
+                                rpc_block.height =
+                                    U64::from(committed_block.view);
+                            }
+                            _ => {}
+                        }
+                    }
                 }
                 if let Some(qc) = qcs.get(&b.id()) {
                     let signatures = qc

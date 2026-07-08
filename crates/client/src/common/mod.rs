@@ -85,13 +85,17 @@ impl<BlockGenT, Rest: MallocSizeOf> MallocSizeOf
     for ClientComponents<BlockGenT, Rest>
 {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        if let Some(data_man) = self.data_manager_weak_ptr.upgrade() {
-            let data_manager_size = data_man.size_of(ops);
-            data_manager_size + self.other_components.size_of(ops)
-        } else {
-            // If data_man is `None`, we will be just shutting down (dropping
-            // components) so we don't care about the size
-            0
+        match self.data_manager_weak_ptr.upgrade() {
+            Some(data_man) => {
+                let data_manager_size = data_man.size_of(ops);
+                data_manager_size + self.other_components.size_of(ops)
+            }
+            _ => {
+                // If data_man is `None`, we will be just shutting down
+                // (dropping components) so we don't care about
+                // the size
+                0
+            }
         }
     }
 }

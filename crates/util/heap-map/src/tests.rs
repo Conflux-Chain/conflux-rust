@@ -15,10 +15,11 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: Eq + Ord + Clone> HeapMap<K, V> {
     #[allow(dead_code)]
     fn check_mono(&self) -> bool {
         let mut me = self.clone();
-        let mut last_value = if let Some((_k, v)) = me.pop() {
-            v
-        } else {
-            return true;
+        let mut last_value = match me.pop() {
+            Some((_k, v)) => v,
+            _ => {
+                return true;
+            }
         };
 
         while let Some((_k, v)) = me.pop() {

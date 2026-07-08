@@ -1050,10 +1050,11 @@ impl NetworkServiceInner {
         let mut kill = false;
         let mut token_to_disconnect = None;
 
-        let session = if let Some(session) = self.sessions.get(stream) {
-            session
-        } else {
-            return;
+        let session = match self.sessions.get(stream) {
+            Some(session) => session,
+            _ => {
+                return;
+            }
         };
 
         // We check dropped_nodes first to make sure we stop processing
@@ -1709,9 +1710,9 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 callback.send(()).expect("protocol register error");
             }
             NetworkIoMessage::AddTimer {
-                ref protocol,
-                ref delay,
-                ref token,
+                protocol,
+                delay,
+                token,
             } => {
                 let handler_token = {
                     let mut timer_counter = self.timer_counter.write();
@@ -1733,40 +1734,40 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     });
             }
             NetworkIoMessage::DispatchWork {
-                ref protocol,
-                ref work_type,
-            } => {
-                if let Some(handler) =
-                    self.handlers.read().get(protocol).cloned()
-                {
+                protocol,
+                work_type,
+            } => match self.handlers.read().get(protocol).cloned() {
+                Some(handler) => {
                     let network_context =
                         NetworkContext::new(io, handler, *protocol, self);
                     network_context
                         .protocol_handler()
                         .on_work_dispatch(&network_context, *work_type);
-                } else {
+                }
+                _ => {
                     warn!("Work is dispatched to unknown handler");
                 }
-            }
+            },
             NetworkIoMessage::HandleProtocolMessage {
-                ref protocol,
+                protocol,
                 peer: _,
-                ref node_id,
-                ref data,
+                node_id,
+                data,
             } => {
                 debug!("Receive ProtocolMsg {:?}", protocol);
-                if let Some(handler) =
-                    self.handlers.read().get(protocol).cloned()
-                {
-                    let network_context =
-                        NetworkContext::new(io, handler, *protocol, self);
-                    network_context.protocol_handler().on_message(
-                        &network_context,
-                        node_id,
-                        data,
-                    );
-                } else {
-                    warn!("Work is handled by unknown handler");
+                match self.handlers.read().get(protocol).cloned() {
+                    Some(handler) => {
+                        let network_context =
+                            NetworkContext::new(io, handler, *protocol, self);
+                        network_context.protocol_handler().on_message(
+                            &network_context,
+                            node_id,
+                            data,
+                        );
+                    }
+                    _ => {
+                        warn!("Work is handled by unknown handler");
+                    }
                 }
             }
         }

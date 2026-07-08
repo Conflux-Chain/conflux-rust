@@ -201,12 +201,11 @@ impl State {
         &self, address: &AddressWithSpace, transaction_hash: H256,
     ) -> DbResult<bool> {
         Ok(
-            if let Some(acc) =
-                self.read_account_ext_lock(&address, RequireFields::None)?
-            {
-                acc.create_transaction_hash() == Some(transaction_hash)
-            } else {
-                false
+            match self.read_account_ext_lock(&address, RequireFields::None)? {
+                Some(acc) => {
+                    acc.create_transaction_hash() == Some(transaction_hash)
+                }
+                _ => false,
             },
         )
     }

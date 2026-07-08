@@ -183,18 +183,24 @@ impl<K: Eq + Hash + Clone, M> Stream for Receiver<K, M> {
         self: Pin<&mut Self>, cx: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         let mut shared_state = self.shared_state.lock();
-        if let Some((val, status_ch)) = shared_state.internal_queue.pop() {
-            if let Some(status_ch) = status_ch {
-                let _err = status_ch.send(ElementStatus::Dequeued);
+        match shared_state.internal_queue.pop() {
+            Some((val, status_ch)) => {
+                if let Some(status_ch) = status_ch {
+                    let _err = status_ch.send(ElementStatus::Dequeued);
+                }
+                Poll::Ready(Some(val))
+                // all senders have been dropped (and so the stream is
+                // terminated)
             }
-            Poll::Ready(Some(val))
-        // all senders have been dropped (and so the stream is terminated)
-        } else if shared_state.num_senders == 0 {
-            shared_state.stream_terminated = true;
-            Poll::Ready(None)
-        } else {
-            shared_state.waker = Some(cx.waker().clone());
-            Poll::Pending
+            _ => {
+                if shared_state.num_senders == 0 {
+                    shared_state.stream_terminated = true;
+                    Poll::Ready(None)
+                } else {
+                    shared_state.waker = Some(cx.waker().clone());
+                    Poll::Pending
+                }
+            }
         }
     }
 }

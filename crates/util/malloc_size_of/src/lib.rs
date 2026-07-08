@@ -71,10 +71,12 @@ impl MallocSizeOfOps {
     /// Call `size_of_op` on `ptr`, first checking that the allocation isn't
     /// empty, because some types (such as `Vec`) utilize empty allocations.
     pub unsafe fn malloc_size_of<T: ?Sized>(&self, ptr: *const T) -> usize {
-        if MallocSizeOfOps::is_empty(ptr) {
-            0
-        } else {
-            (self.size_of_op)(ptr as *const c_void)
+        unsafe {
+            if MallocSizeOfOps::is_empty(ptr) {
+                0
+            } else {
+                (self.size_of_op)(ptr as *const c_void)
+            }
         }
     }
 
@@ -86,8 +88,10 @@ impl MallocSizeOfOps {
     /// Call `enclosing_size_of_op`, which must be available, on `ptr`, which
     /// must not be empty.
     pub unsafe fn malloc_enclosing_size_of<T>(&self, ptr: *const T) -> usize {
-        assert!(!MallocSizeOfOps::is_empty(ptr));
-        (self.enclosing_size_of_op.unwrap())(ptr as *const c_void)
+        unsafe {
+            assert!(!MallocSizeOfOps::is_empty(ptr));
+            (self.enclosing_size_of_op.unwrap())(ptr as *const c_void)
+        }
     }
 }
 
@@ -433,7 +437,7 @@ impl<T: MallocSizeOf> MallocSizeOf for Reverse<T> {
 }
 
 macro_rules! impl_smallvec {
-    ($size:expr) => {
+    ($size:expr_2021) => {
         impl<T> MallocSizeOf for smallvec::SmallVec<[T; $size]>
         where T: MallocSizeOf
         {
@@ -536,7 +540,7 @@ mod usable_size {
 
             /// Get the size of a heap block.
             /// Call windows allocator through `winapi` crate
-            pub unsafe extern "C" fn malloc_usable_size(mut ptr: *const c_void) -> usize {
+            pub unsafe extern "C" fn malloc_usable_size(mut ptr: *const c_void) -> usize { unsafe {
 
                 let heap = GetProcessHeap();
 
@@ -545,26 +549,26 @@ mod usable_size {
                 }
 
                 HeapSize(heap, 0, ptr) as usize
-            }
+            }}
 
         } else if #[cfg(feature = "jemalloc")] {
 
             /// Use of jemalloc usable size C function through jemallocator crate call.
-            pub unsafe extern "C" fn malloc_usable_size(ptr: *const c_void) -> usize {
+            pub unsafe extern "C" fn malloc_usable_size(ptr: *const c_void) -> usize { unsafe {
                 tikv_jemallocator::usable_size(ptr)
-            }
+            }}
 
         } else if #[cfg(target_os = "linux")] {
 
             // Linux call system allocator (currently malloc).
-            extern "C" {
+            unsafe extern "C" {
                 pub fn malloc_usable_size(ptr: *const c_void) -> usize;
             }
 
         } else if #[cfg(target_os = "macos")] {
 
             // Linux call system allocator (currently malloc).
-            extern "C" {
+            unsafe extern "C" {
                 #[link_name = "malloc_size"]
                 pub fn malloc_usable_size(ptr: *const c_void) -> usize;
             }
