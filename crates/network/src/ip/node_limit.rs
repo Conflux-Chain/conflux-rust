@@ -152,6 +152,9 @@ impl NodeIpLimit {
     /// The returned result indicates whether insertion is allowed,
     /// and possible evictee before insertion.
     ///
+    /// One-node-per-IP takes priority over quota: if `ip` is already held by
+    /// another node, that node is evicted (OccupyIp) regardless of quota.
+    ///
     /// When subnet quota is not enough before insertion:
     ///   1. If node IP changed and still in the same subnet, just evict the
     ///      node itself.

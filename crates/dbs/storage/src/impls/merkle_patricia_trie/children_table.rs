@@ -384,8 +384,10 @@ impl<NodeRefT: NodeRefTrait> Drop for CompactedChildrenTable<NodeRefT> {
         if self.children_count != 0 {
             drop(unsafe { self.into_managed_slice() });
         } else {
-            // When children_count is 0, the table_ptr must be null.
-            // If the table_ptr is an "empty array" there could be memory leak.
+            // This branch frees nothing, so an empty table must never own an
+            // allocation: table_ptr is either null or the dangling aligned
+            // pointer that a zero-length Box<[T]> yields (empty boxed slices
+            // don't allocate). A real allocation left here would leak.
             //
             // The assertion is commented out here because it's checked in unit
             // test.

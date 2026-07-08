@@ -121,19 +121,15 @@ impl OverlayAccount {
         )
     }
 
-    /// This function replicates the behavior of the auto-derived `Clone`
-    /// implementation, but is manually implemented to explicitly invoke the
-    /// `clone` method.
+    /// Copies the account fields and shares the storage-cache `Arc`s with
+    /// `self`, but installs a fresh, empty per-account checkpoint layer keyed
+    /// to `checkpoint_id`, so writes made after this checkpoint are tracked
+    /// (and revertible) against the new checkpoint rather than the source's.
     ///
-    /// This approach is necessary because a casual clone could lead to
-    /// unintended panic: The `OverlayAccount`s in different checkpoint
-    /// layers for the same address shares an `Arc` pointer to the same storage
-    /// cache object. During commit, it's asserted that each storage cache
-    /// object has only one pointer, meaning each address can only have one
-    /// copy.
-    ///
-    /// Thus, this manual implementation ensures that the cloning of an account
-    /// is traceable and controlled。
+    /// Manual clone (not derived `Clone`) so account copies stay traceable.
+    /// Checkpoint layers for one address share `Arc`s to the storage caches;
+    /// commit asserts `storage_write_cache` has a unique `Arc` (commit.rs),
+    /// so a stray uncontrolled copy surviving into commit would panic.
     pub fn clone_account_for_checkpoint(&self, checkpoint_id: usize) -> Self {
         OverlayAccount {
             address: self.address,

@@ -11,21 +11,19 @@
 //! Mempool is used to hold transactions that have been submitted but not yet
 //! agreed upon and executed.
 //!
-//! **Flow**: AC sends transactions into mempool which holds them for a period
-//! of time before sending them into consensus.  When a new transaction is
+//! **Flow**: Local transactions are submitted by the consensus layer itself
+//! (round_manager signs and submits its own Election/PivotDecision/Dispute
+//! transactions through the client-submission channel); there is no external
+//! client/AC submission path.  When a new transaction is
 //! added, Mempool shares this transaction with other nodes in the system.  This
 //! is a form of “shared mempool” in that transactions between mempools are
 //! shared with other validators.  This helps maintain a pseudo global ordering
 //! since when a validator receives a transaction from another mempool, it will
-//! be ordered when added in the ordered queue of the recipient validator. To
-//! reduce network consumption, in “shared mempool” each validator is
-//! responsible for delivery of its own transactions (we don't rebroadcast
-//! transactions originated on a different peer). Also we only broadcast
-//! transactions that have some chance to be included in next block: their
-//! sequence number equals to the next sequence number of account or sequential
-//! to it. For example, if the current sequence number for an account is 2 and
-//! local mempool contains transactions with sequence numbers 2,3,4,7,8, then
-//! only transactions 2, 3 and 4 will be broadcast.
+//! be ordered when added in the ordered queue of the recipient validator. Every
+//! newly inserted transaction — locally submitted or peer-received — is
+//! appended to the broadcast timeline, so nodes rebroadcast peer-received
+//! transactions. Duplicate suppression is receive-side: already-known
+//! transaction hashes are filtered before validation/insertion.
 //!
 //! Consensus pulls transactions from mempool rather than mempool pushing into
 //! consensus. Mempool doesn't track which transactions have already been sent
@@ -35,23 +33,24 @@
 //! transaction is fully executed and written to storage, Consensus notifies
 //! Mempool and the transaction is dropped.
 //!
-//! **Internals**: Mempool is modeled as
-//! `HashMap<AccountAddress, AccountTransactions>` plus a TTL index used only
-//! for expiration/GC. There is no priority ordering — the PoS mempool carries
-//! only PoS-specific transactions (Election, PivotDecision, BLS signatures),
-//! not user traffic, so gas-price ranking does not apply. `get_block` iterates
-//! accounts, returning sequence-number-ordered transactions per account while
-//! skipping those that Consensus has already seen.
+//! **Internals**: Mempool stores normal and pivot-decision transactions in
+//! hash-keyed maps. It also maintains a `PivotBlockDecision::hash()` ->
+//! `(sender, tx_hash)` index for pivot-decision vote aggregation, per-sender
+//! counters for the capacity cap, a TTL index for expiration/GC, and a
+//! timeline index for broadcast; there is no account/sequence ordering or
+//! gas-price priority. `get_block` iterates all stored transactions in
+//! arbitrary order, skipping those Consensus has already seen and
+//! revalidating Election/Dispute payloads against the parent block's
+//! PosState; pivot decisions are handled separately — votes for the same
+//! pivot hash are grouped and the highest decision backed by a quorum of
+//! voting power is emitted as a single aggregated BLS-multisig transaction.
 //!
-//! Mempool caps both total transaction count and per-account count to bound
-//! memory use.
+//! Mempool has no global transaction-count cap; it enforces per-sender
+//! capacity and evicts old transactions by system TTL.
 //!
-//! Transactions in Mempool have two types of expirations: systemTTL and
-//! client-specified expiration. Once we hit either of those, the transaction is
-//! removed from Mempool. SystemTTL is checked periodically in the background,
-//! while the client-specified expiration is checked on every Consensus commit
-//! request. We use a separate system TTL to ensure that a transaction won't
-//! remain stuck in Mempool forever, even if Consensus doesn't make progress
+//! Transactions expire only by systemTTL, GC'd periodically in the background,
+//! so a transaction can't stay stuck in Mempool forever even if Consensus
+//! stalls. (Client-specified expiration was removed; see the validator.)
 
 pub use shared_mempool::{
     bootstrap, network,

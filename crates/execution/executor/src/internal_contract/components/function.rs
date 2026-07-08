@@ -38,10 +38,12 @@ impl<T> SolidityFunctionConfigTrait for T where T: InterfaceTrait + PreExecCheck
 /// The `InterfaceTrait` is implemented when constructing a new struct with
 /// macro `make_solidity_function`.
 ///
-/// The `PreExecCheckTrait` and `UpfrontPaymentTrait` trait can be implemented
-/// by macro `set_default_config`. By default, the contract with be set non
-/// payable and forbid static. Sometimes we need to implement
-/// `UpfrontPaymentTrait` manually if the gas required is not a constant value.
+/// `PreExecCheckTrait` is implemented by macro `impl_function_type!`, which
+/// selects the payable/write configuration from "non_payable_write",
+/// "payable_write", "query", or "query_with_default_gas". The macro also
+/// implements `UpfrontPaymentTrait` when given `gas: ...`, and for
+/// "query_with_default_gas"; otherwise implement `UpfrontPaymentTrait`
+/// manually.
 ///
 /// You always needs to implement `ExecutionTrait`, which is the core of the
 /// function execution.

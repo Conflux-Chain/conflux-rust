@@ -79,7 +79,7 @@ def test_message(network: MessageTestClass):
 
     network.send_msg(NewBlockHashes([new_block.block_header.hash]))
     network.send_msg(NewBlock(block=new_block))
-    network.log.info("Send GetTerminalBLockHashes message")
+    network.log.info("Send GetTerminalBlockHashes message")
     network.send_msg(GetTerminalBlockHashes())
     handler = WaitHandler(default_node, GET_TERMINAL_BLOCK_HASHES_RESPONSE)
     handler.wait()

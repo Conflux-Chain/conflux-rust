@@ -5,16 +5,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-//! This module defines physical storage schema for LedgerInfoWithSignatures
-//! structure.
+//! This module defines physical storage schema for the view-to-block-id index
+//! of committed blocks.
 //!
-//! Serialized LedgerInfoWithSignatures identified by `epoch`.
+//! Serialized block id identified by `view`.
 //! ```text
-//! |<---key--->|<---------------value------------->|
-//! | epoch | ledger_info_with_signatures bytes |
+//! |<--key-->|<---value--->|
+//! |  view   | block id    |
 //! ```
 //!
-//! `epoch` is serialized in big endian so that records in RocksDB will be in
+//! `view` is serialized in big endian so that records in RocksDB will be in
 //! order of their numeric value.
 
 use crate::schema::{ensure_slice_len_eq, COMMITTED_BLOCK_BY_VIEW_CF_NAME};

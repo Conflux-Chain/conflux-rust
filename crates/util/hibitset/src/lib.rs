@@ -252,9 +252,12 @@ impl BitSet {
 /// Every `BitSetLike` is hierarchical, meaning that there
 /// are multiple levels that branch out in a tree like structure.
 ///
-/// Layer0 each bit represents one Index of the set
-/// Layer1 each bit represents one `usize` of Layer0, and will be
-/// set only if the word below it is not zero.
+/// This hierarchy is exact for storage-backed sets (`BitSet`,
+/// `AtomicBitSet`). Virtual/composed sets may over-approximate upper
+/// layers; iterators use those layers as skip masks and re-check Layer0.
+///
+/// Layer0 each bit represents one Index of the set.
+/// Layer1 each bit represents one `usize` of Layer0.
 /// Layer2 has the same arrangement but with Layer1, and Layer3 with Layer2.
 ///
 /// This arrangement allows for rapid jumps across the key-space.

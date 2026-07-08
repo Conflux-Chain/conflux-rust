@@ -1208,12 +1208,12 @@ impl EthApiServer for EthApi {
     /// transaction, except for the sender account and the chain's
     /// precompiles.
     ///
-    /// It returns list of addresses and storage keys used by the transaction,
-    /// plus the gas consumed when the access list is added. That is, it
-    /// gives you the list of addresses and storage keys that will be used
-    /// by that transaction, plus the gas consumed if the access
-    /// list is included. Like eth_estimateGas, this is an estimation; the list
-    /// could change when the transaction is actually mined. Adding an
+    /// It returns the list of addresses and storage keys that will be used
+    /// by that transaction, plus a gas estimate. Note the returned gas_used
+    /// is currently the transaction's plain gas estimate, not yet
+    /// recomputed with the collected access list applied (see the TODO on
+    /// `gas_used` below). Like eth_estimateGas, this is an estimation; the
+    /// list could change when the transaction is actually mined. Adding an
     /// accessList to your transaction does not necessary result in lower
     /// gas usage compared to a transaction without an access list.
     async fn create_access_list(

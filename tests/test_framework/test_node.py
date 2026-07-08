@@ -216,7 +216,7 @@ class TestNode:
             except JSONRPCException as e:  # Initialization phase
                 if e.error['code'] != -28:  # RPC in warmup?
                     raise  # unknown JSON RPC exception
-            except ValueError as e:  # cookie file not found and no rpcuser or rpcassword. bitcoind still starting
+            except ValueError as e:  # cookie file not found and no rpcuser or rpcpassword; node still starting
                 if "No RPC credentials" not in str(e):
                     raise
             except ReceivedErrorResponseError as e:
@@ -323,11 +323,11 @@ class TestNode:
                                        **kwargs):
         """Attempt to start the node and expect it to raise an error.
 
-        extra_args: extra arguments to pass through to bitcoind
-        expected_msg: regex that stderr should match when bitcoind fails
+        extra_args: extra arguments to pass through to the conflux node
+        expected_msg: regex that stderr should match when the conflux node fails
 
-        Will throw if bitcoind starts without an error.
-        Will throw if an expected_msg is provided and it does not match bitcoind's stdout."""
+        Will throw if the conflux node starts without an error.
+        Will throw if an expected_msg is provided and it does not match the node's stdout."""
         with tempfile.NamedTemporaryFile(dir=self.stderr_dir, delete=False) as log_stderr, \
                 tempfile.NamedTemporaryFile(dir=self.stdout_dir, delete=False) as log_stdout:
             try:

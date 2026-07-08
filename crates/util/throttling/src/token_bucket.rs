@@ -231,7 +231,7 @@ impl FromStr for TokenBucket {
 
         if fields.len() != 5 {
             return Err(format!(
-                "invalid number of fields, expected = 9, actual = {}",
+                "invalid number of fields, expected = 5, actual = {}",
                 fields.len()
             ));
         }

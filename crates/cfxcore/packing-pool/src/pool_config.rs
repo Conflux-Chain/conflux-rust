@@ -44,10 +44,9 @@ impl PackingPoolConfig {
     ///
     /// # Parameters
     /// - `txs`: A reference to a vector of transactions to be evaluated.
-    /// - `replaced`: An optional parameter that, if provided, indicates a
-    ///   specific transaction and its position in `txs` that should be
-    ///   considered as replaced for the purpose of this calculation. This is
-    ///   used to simulate the effect of replacing a transaction within `txs`.
+    /// - `replaced`: An optional `(replacement_tx, index)` pair; the gas limit
+    ///   of `replacement_tx` is used in place of `txs[index]`, to evaluate the
+    ///   batch as if that transaction had been replaced.
     ///
     /// # Returns
     /// Returns a tuple containing:
@@ -83,9 +82,10 @@ impl PackingPoolConfig {
 
     /// Calculates the loss ratio for the random packing algorithm.
     ///
-    /// The loss ratio is defined as the reciprocal of `gas_price` raised to the
-    /// power of the `degree` (a configuration parameter). Since this value
-    /// is less than 1, the function represents 1 as 2^128, thereby
+    /// The loss ratio is defined as the reciprocal of the `degree`-th root of
+    /// `gas_price`, i.e. `gas_price^(-1/degree)`, where `degree` is a
+    /// configuration parameter. Since this value is less than 1, the
+    /// function represents 1 as 2^128, thereby
     /// preserving 128 binary digits of precision in the result.
     ///
     /// Note that the precision of the returned value is limited:

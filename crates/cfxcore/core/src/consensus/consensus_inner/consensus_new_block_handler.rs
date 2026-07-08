@@ -1504,10 +1504,9 @@ impl ConsensusNewBlockHandler {
                     //             .read()
                     //             .lower_bound
                     // );
-                    // If new_era_genesis should have available state,
-                    // make sure state execution is finished before setting
-                    // lower_bound
-                    // to the new_checkpoint_era_genesis.
+                    // `should_form_checkpoint_at` below unwraps the stable
+                    // block's state_valid/blame_info, so wait for its
+                    // execution result and compute them first.
                     self.executor
                         .wait_for_result(inner.arena[stable_arena_index].hash)
                         .expect(

@@ -278,9 +278,13 @@ impl NoncePool {
     ///   1. all nonce in `[nonce, tx.nonce()]` exists
     ///   2. tx.packed is false and tx.nonce() is minimum
     /// Then, find a sequential of transactions started at the first transaction
-    /// such that   
+    /// such that
     ///   1. the nonce is continous and all transactions are not packed
     ///   2. the balance is enough.
+    /// Cost is accumulated from `nonce`, not from the first unpacked tx:
+    /// packed txs in `[nonce, tx.nonce())` are not yet executed, so their
+    /// cost still counts against `balance`; if the cost of `[nonce,
+    /// tx.nonce()]` alone exceeds `balance`, returns `None`.
     ///
     /// The first return value is the transaction in the first step.
     /// i.e., the first unpacked transaction from a sequential of transactions
