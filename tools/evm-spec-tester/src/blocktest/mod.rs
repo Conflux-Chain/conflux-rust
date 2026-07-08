@@ -3,8 +3,8 @@ use cfx_config::Configuration;
 use clap::Args;
 use std::{path::PathBuf, sync::Arc};
 
-/// ethereum blockchain test format (execution-spec-tests):
-/// https://github.com/ethereum/execution-spec-tests
+/// ethereum blockchain test format (execution-spec-tests, welded into
+/// execution-specs): https://steel.ethereum.foundation/docs/execution-specs/running_tests/test_formats/blockchain_test/
 #[derive(Args, Debug)]
 pub struct BlockchainTestCmd {
     /// Paths to blockchain test files or directories
