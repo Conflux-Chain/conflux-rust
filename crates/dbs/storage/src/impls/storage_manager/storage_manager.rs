@@ -899,13 +899,19 @@ impl StorageManager {
         )
     }
 
-    /// The algorithm figure out which snapshot to remove by simply going
-    /// through all SnapshotInfo in one pass in the reverse order such that
-    /// the parent snapshot is processed after the children snapshot.
+    /// Snapshots to remove are decided in two passes over current_snapshots
+    /// (sorted by ascending height): a descending pass traces the pivot
+    /// chain down from the confirmed snapshot, and an ascending pass
+    /// filters snapshots above the confirmed height, propagating
+    /// non-pivot removal to deep descendants via
+    /// parent_snapshot_epoch_id. In-progress snapshotting tasks are
+    /// scanned separately.
     ///
-    /// In the scan, pivot chain is traced from the confirmed snapshot. Whatever
-    /// can't be traced shall be removed as non-pivot snapshot. Traced
-    /// old pivot snapshot shall be deleted as well.
+    /// In the scan, pivot chain is traced from the confirmed snapshot.
+    /// Whatever can't be traced shall be removed as non-pivot snapshot.
+    /// Traced old pivot snapshots are deleted too, except those retained
+    /// to serve snapshot sync to peers (see extra_snapshots_to_keep /
+    /// SnapshotKeptToProvideSyncStatus).
     ///
     /// Another maintenance of snapshots shall happen at Conflux start-up and
     /// after pivot chain is recognized.

@@ -75,8 +75,8 @@ Web3NotSetupError = ValueError("w3 is not initialized, please call self.setup_w3
 
 @dataclass
 class FrameworkOptions:
-    nocleanup: bool  # leave bitcoinds and test.* datadir on exit or error
-    noshutdown: bool  # don't stop bitcoinds after the test execution
+    nocleanup: bool  # leave conflux nodes and the test datadir on exit or error
+    noshutdown: bool  # don't stop conflux nodes after the test execution
     cachedir: str  # directory for caching pregenerated datadirs
     tmpdir: str  # root directory for datadirs
     loglevel: str  # log events at this level and higher to the console
@@ -201,7 +201,7 @@ class ConfluxTestFramework:
             for node in self.nodes:
                 node.cleanup_on_exit = False
             self.log.info(
-                "Note: bitcoinds were not stopped and may still be running")
+                "Note: conflux nodes were not stopped and may still be running")
 
         if not self.options.nocleanup and not self.options.noshutdown and success != TestStatus.FAILED:
             self.log.info("Cleaning up {} on exit".format(self.options.tmpdir))
@@ -448,7 +448,7 @@ class ConfluxTestFramework:
                 ))
 
     def start_node(self, i:int, extra_args=None, phase_to_wait=["NormalSyncPhase"], wait_time=30, *args, **kwargs):
-        """Start a bitcoind"""
+        """Start a conflux node"""
 
         node = self.nodes[i]
 
@@ -466,7 +466,7 @@ class ConfluxTestFramework:
             coverage.write_all_rpc_commands(self.options.coveragedir, node.rpc)
 
     def start_nodes(self, extra_args=None, *args, **kwargs):
-        """Start multiple bitcoinds"""
+        """Start multiple conflux nodes"""
 
         try:
             for i, node in enumerate(self.nodes):
@@ -486,13 +486,13 @@ class ConfluxTestFramework:
                                                 node.rpc)
 
     def stop_node(self, i, expected_stderr='', kill=False, wait=True, clean=False):
-        """Stop a bitcoind test node"""
+        """Stop a conflux test node"""
         self.nodes[i].stop_node(expected_stderr, kill, wait)
         if clean:
             self.nodes[i].clean_data()
 
     def stop_nodes(self):
-        """Stop multiple bitcoind test nodes"""
+        """Stop multiple conflux test nodes"""
         for node in self.nodes:
             # Issue RPC to stop nodes
             node.stop_node()

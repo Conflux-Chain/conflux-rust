@@ -26,7 +26,7 @@ def test_estimate_gas_insufficient_funds(ew3):
     recipient = ew3.eth.account.create()
     
     # Try to estimate gas for a transaction from account with no balance
-    # This should return "insufficient funds" error (code -32000)
+    # This should return "insufficient funds" error (code -32003)
     call_request = {
         "from": new_account.address,
         "to": recipient.address,

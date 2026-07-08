@@ -92,7 +92,10 @@ build_config! {
         //
         // For both `test` and `dev` modes, we will
         //     * Set initial difficulty to 4
-        //     * Allow calling test and debug rpc from public port
+        //
+        // The local debug RPC server binds to 127.0.0.1 with ApiSet::All.
+        // The public RPC server follows `public_rpc_apis` (default `safe`);
+        // test/dev mode does not expand the public API set.
         //
         // `test` mode is for Conflux testing and debugging, we will
         //     * Add latency to peer connections

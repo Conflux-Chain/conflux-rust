@@ -21,7 +21,7 @@ NUM_CALLS = 20
 class LogFilteringTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
-        # Disable 1559 because it has hardcore execution result not compatible with 1559
+        # Disable 1559 because the test asserts hardcoded execution results incompatible with 1559
         self.conf_parameters["cip1559_transition_height"] = str(99999999)
 
     def setup_network(self):

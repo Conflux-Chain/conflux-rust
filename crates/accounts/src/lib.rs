@@ -238,12 +238,12 @@ impl AccountProvider {
         self.address_book.read().get()
     }
 
-    /// Returns each address along with metadata.
+    /// Sets new name for the given address.
     pub fn set_address_name(&self, account: Address, name: String) {
         self.address_book.write().set_name(account, name)
     }
 
-    /// Returns each address along with metadata.
+    /// Sets new meta for the given address.
     pub fn set_address_meta(&self, account: Address, meta: String) {
         self.address_book.write().set_meta(account, meta)
     }
@@ -290,7 +290,7 @@ impl AccountProvider {
             .public(&self.sstore.account_ref(&address)?, password)
     }
 
-    /// Returns each account along with name and meta.
+    /// Sets new name for the given account.
     pub fn set_account_name(
         &self, address: Address, name: String,
     ) -> Result<(), Error> {
@@ -299,7 +299,7 @@ impl AccountProvider {
         Ok(())
     }
 
-    /// Returns each account along with name and meta.
+    /// Sets new meta for the given account.
     pub fn set_account_meta(
         &self, address: Address, meta: String,
     ) -> Result<(), Error> {

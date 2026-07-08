@@ -407,7 +407,7 @@ fn test_voting(safety_rules: &Callback) {
     // a3 (ok), potential commit is None
     // b3 (ok), potential commit is None
     // a4 (ok), potential commit is None
-    // a4 (old proposal)
+    // a3 (old proposal)
     // b4 (round lower then round of pb. PB: a2, parent(b4)=b2)
     let (_dir, mut safety_rules, signer, key) = safety_rules();
 

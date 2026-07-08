@@ -77,7 +77,9 @@
 //! parent. Thus for disk write order, it is more convenient to use the
 //! post-order position as an index. And with that we can map a Merkle
 //! Accumulator into a key-value storage: key is the post-order position of a
-//! node, and the value is hash value it carries.
+//! node, and the value is hash value it carries. (The transaction accumulator
+//! persists this way; the per-version event accumulator keys nodes by
+//! (version, in-order position) instead.)
 //!
 //! We store only Frozen nodes, and generate non-Frozen nodes on the fly when
 //! accessing the tree. This way, the physical representation of the tree is

@@ -75,8 +75,10 @@ impl Drop for SnapshotKvDbSqlite {
 
 impl SnapshotKvDbSqlite {
     pub const DB_SHARDS: u16 = 32;
-    /// These two tables are temporary table for the merging process, but they
-    /// remain to help other nodes to do 1-step syncing.
+    /// These two tables are temporary tables for the merging process. They
+    /// remain in finished snapshots only for the opt-in debug snapshot
+    /// checkers; the once-planned 1-step syncing they were kept for was never
+    /// implemented and has been removed.
     pub const DELTA_KV_DELETE_TABLE_NAME: &'static str =
         "delta_mpt_key_value_delete";
     pub const DELTA_KV_SET_TABLE_NAME: &'static str = "delta_mpt_key_value_set";
@@ -581,8 +583,9 @@ impl SnapshotKvDbSqlite {
         Ok(())
     }
 
-    /// Dropping is optional, because these tables are necessary to provide
-    /// 1-step syncing.
+    /// Dropping is optional: finished snapshots keep these tables (read only
+    /// by the opt-in debug snapshot checkers); callers drop them just to clear
+    /// a stale dump before re-dumping.
     pub fn drop_delta_mpt_dump(&mut self) -> Result<()> {
         // Safe to unwrap since we are not on a NULL snapshot.
         let connections = self.maybe_db_connections.as_mut().unwrap();

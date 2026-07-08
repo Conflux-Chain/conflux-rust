@@ -160,18 +160,9 @@ impl<H: Handler> EventLoop<H> {
     /// buffer size. The size can be changed by modifying
     /// [EventLoopConfig.notify_capacity](struct.EventLoopConfig.html#method.
     /// notify_capacity). When a message is sent to the EventLoop, it is
-    /// first pushed on to the queue. Then, if the EventLoop is currently
-    /// running, an atomic flag is set to indicate that the next loop
-    /// iteration should be started without waiting.
-    ///
-    /// If the loop is blocked waiting for IO events, then it is woken up. The
-    /// strategy for waking up the event loop is platform dependent. For
-    /// example, on a modern Linux OS, eventfd is used. On older OSes, a pipe
-    /// is used.
-    ///
-    /// The strategy of setting an atomic flag if the event loop is not already
-    /// sleeping allows avoiding an expensive wakeup operation if at all
-    /// possible.
+    /// pushed onto the queue and the poll's waker is woken so the next loop
+    /// iteration processes it. The wakeup strategy is platform dependent;
+    /// e.g. on modern Linux eventfd is used, on older OSes a pipe.
     pub fn channel(&self) -> Sender<H::Message> {
         Sender::new(self.notify_tx.clone())
     }
@@ -253,9 +244,9 @@ impl<H: Handler> EventLoop<H> {
     ) -> io::Result<()> {
         trace!("event loop tick");
 
-        // Check the registered IO handles for any new events. Each poll
-        // is for one second, so a shutdown request can last as long as
-        // one second before it takes effect.
+        // A `None` timeout blocks indefinitely; that does not delay shutdown,
+        // because shutdown arrives via the notify channel whose waker wakes
+        // the poll immediately.
         if let Err(err) = self.io_poll(timeout) {
             if err.kind() == io::ErrorKind::Interrupted {
                 handler.interrupted(self);

@@ -159,14 +159,6 @@ pub fn builtin_factory(name: &str) -> Box<dyn Precompile> {
     }
 }
 
-// Builtins:
-//
-// - The identity function
-// - ec recovery
-// - sha256
-// - ripemd160
-// - modexp (EIP198)
-
 #[derive(Debug)]
 #[allow(dead_code)]
 struct Identity;

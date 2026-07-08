@@ -57,9 +57,10 @@
 //! ```
 //!
 //! It is generally a good idea to specify the desired capacity of a slab at
-//! creation time. Note that `Slab` will grow the internal capacity when
-//! attempting to insert a new value once the existing capacity has been
-//! reached. To avoid this, add a check.
+//! creation time. Note that this modified `Slab` never grows on `insert`:
+//! once capacity is reached, `insert` returns `Err(Error::OutOfMem)`. Grow
+//! explicitly with `reserve`/`reserve_exact` (requires `&mut`), or check
+//! before inserting:
 //!
 //! ```
 //! use cfx_storage::Slab;
@@ -80,16 +81,14 @@
 //! values that will be inserted in the slab. This is not to be confused with
 //! the *length* of the slab, which specifies the number of actual values
 //! currently being inserted. If a slab's length is equal to its capacity, the
-//! next value inserted into the slab will require growing the slab by
-//! reallocating.
+//! next `insert` fails with `Error::OutOfMem` — reallocation happens only in
+//! `reserve`/`reserve_exact` (`&mut`). For this reason use
+//! [`Slab::with_capacity`] to size the slab for the values it is expected to
+//! store.
 //!
 //! For example, a slab with capacity 10 and length 0 would be an empty slab
 //! with space for 10 more stored values. Storing 10 or fewer elements into the
-//! slab will not change its capacity or cause reallocation to occur. However,
-//! if the slab length is increased to 11 (due to another `insert`), it will
-//! have to reallocate, which can be slow. For this reason, it is recommended to
-//! use [`Slab::with_capacity`] whenever possible to specify how many values the
-//! slab is expected to store.
+//! slab will not change its capacity or cause reallocation to occur.
 //!
 //! # Implementation
 //!
@@ -98,8 +97,10 @@
 //! find a vacant slot, the stack is popped. When a slot is released, it is
 //! pushed onto the stack.
 //!
-//! If there are no more available slots in the stack, then `Vec::reserve(1)` is
-//! called and a new slot is created.
+//! If there are no more available slots in the stack, the next never-used
+//! slot below capacity is taken (tracked by `size_initialized`); once that
+//! reaches capacity, allocation fails with `Error::OutOfMem`. `entries` is
+//! kept filled to capacity so allocation never mutates the `Vec` itself.
 //!
 //! [`Slab::with_capacity`]: struct.Slab.html#with_capacity
 
@@ -743,13 +744,15 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// Insert a value in the slab, returning key assigned to the value.
     ///
     /// The returned key can later be used to retrieve or remove the value using
-    /// indexed lookup and `remove`. Additional capacity is allocated if
-    /// needed. See [Capacity and
-    /// reallocation](index.html#capacity-and-reallocation).
+    /// indexed lookup and `remove`. Unlike the upstream `slab` crate, `insert`
+    /// never grows the slab: it takes `&self` and reallocating `entries`
+    /// would invalidate outstanding slot references. When full it returns
+    /// `Err(Error::OutOfMem)`; grow explicitly via `reserve`/`reserve_exact`
+    /// (requires `&mut`).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the number of elements in the vector overflows a `usize`.
+    /// Returns `Error::OutOfMem` when the slab is full.
     ///
     /// # Examples
     /// ```

@@ -114,7 +114,9 @@ impl<Ext: Update + DeltaAndPreferredChild + Clone + Default> LinkCutTree<Ext> {
     ///   T2 T3                  T3 T4
     ///
     /// Assumption:
-    ///   apply_delta() must be invoked for parent of `o` before.
+    ///   apply_delta() must be invoked for both `o` and its parent before
+    ///   (o.delta must also be 0, since this moves o's inner child subtree
+    ///   to the parent and o's pending delta would otherwise be lost).
     fn rotate(&mut self, o: usize) {
         if o == NULL || self.is_root(o) {
             return;

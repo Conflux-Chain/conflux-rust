@@ -502,8 +502,8 @@ fn to_bytes<T: ValidCryptoMaterial>(keys: &[T]) -> Vec<u8> {
 
 fn bitmap_set_bit(input: &mut [u8; BITMAP_NUM_OF_BYTES], index: usize) {
     let bucket = index / 8;
-    // It's always invoked with index < 32, thus there is no need to check
-    // range.
+    // No range check: callers must guarantee index < BITMAP_NUM_OF_BYTES * 8
+    // (= 320, >= MAX_NUM_OF_KEYS); out-of-range indexes panic.
     let bucket_pos = index - (bucket * 8);
     input[bucket] |= 128 >> bucket_pos as u8;
 }
@@ -511,8 +511,8 @@ fn bitmap_set_bit(input: &mut [u8; BITMAP_NUM_OF_BYTES], index: usize) {
 // Helper method to get the input's bit at index.
 fn bitmap_get_bit(input: [u8; BITMAP_NUM_OF_BYTES], index: usize) -> bool {
     let bucket = index / 8;
-    // It's always invoked with index < 32, thus there is no need to check
-    // range.
+    // No range check: callers must guarantee index < BITMAP_NUM_OF_BYTES * 8
+    // (= 320, >= MAX_NUM_OF_KEYS); out-of-range indexes panic.
     let bucket_pos = index - (bucket * 8);
     (input[bucket] & (128 >> bucket_pos as u8)) != 0
 }

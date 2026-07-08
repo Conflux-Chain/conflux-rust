@@ -44,7 +44,12 @@ use std::sync::{atomic::AtomicBool, Arc};
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
 /// collect all blocks that the client has received so far, but a block can only
 /// be delivered to the ConsensusGraph if 1) the whole block content is
-/// available and 2) all of its past blocks are also in the ConsensusGraph.
+/// available and 2) all current-era, non-reclaimed past blocks are also in
+/// the ConsensusGraph, and 3) since PoS finality, its PoS reference (if any)
+/// has been committed by the PoS chain and the referenced pivot decision is
+/// itself graph-ready. Past blocks before the era genesis, or already
+/// processed/reclaimed in this run, can count as ready from persisted
+/// non-invalid `LocalBlockInfo` instead of being resident in the graph.
 ///
 /// ConsensusGraph maintains the TreeGraph structure of the client and
 /// implements *Timer Chain GHAST*/*Conflux* algorithm to determine the block

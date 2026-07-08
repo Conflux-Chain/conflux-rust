@@ -119,9 +119,11 @@ impl TaskSpawner for TokioTaskExecutor {
 ///
 /// The main purpose of this type is to be able to monitor if a critical task
 /// panicked, for diagnostic purposes, since tokio task essentially fail
-/// silently. Therefore, this type is a Stream that yields the name of panicked
-/// task, See [`TaskExecutor::spawn_critical`]. In order to execute Tasks use
-/// the [`TaskExecutor`] type [`TaskManager::executor`].
+/// silently. Therefore, this type is a Future that resolves to a
+/// [`PanickedTaskError`] (the panicked task's name plus its panic message, if
+/// recoverable) the first time a critical task panics. See
+/// [`TaskExecutor::spawn_critical`]. In order to execute Tasks use the
+/// [`TaskExecutor`] type [`TaskManager::executor`].
 #[derive(Debug)]
 #[must_use = "TaskManager must be polled to monitor critical tasks"]
 pub struct TaskManager {

@@ -143,7 +143,7 @@ impl TracingInspector {
         }
     }
 
-    /// Convenience function for [ParityTraceBuilder::set_transaction_gas_used]
+    /// Convenience function for [Self::set_transaction_gas_used]
     /// that consumes the type.
     #[inline]
     pub fn with_transaction_gas_used(mut self, gas_used: u64) -> Self {

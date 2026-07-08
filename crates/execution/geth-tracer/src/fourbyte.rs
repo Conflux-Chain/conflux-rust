@@ -14,12 +14,13 @@
 //! ```json
 //! {
 //!   "0x27dc297e-128": 1,
-//!   "0x38cc4831-0": 2,
 //!   "0x524f3889-96": 1,
-//!   "0xadf59f99-288": 1,
-//!   "0xc281d19e-0": 1
+//!   "0xadf59f99-288": 1
 //! }
 //! ```
+//!
+//! Calls with exactly four bytes of calldata (a bare selector) are ignored
+//! by this implementation.
 
 use alloy_primitives::{hex, Selector};
 use alloy_rpc_types_trace::geth::{FourByteFrame, GethTrace};

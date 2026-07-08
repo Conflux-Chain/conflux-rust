@@ -20,9 +20,9 @@ pub struct RowNumber {
 }
 
 impl RowNumber {
-    /// It's an error for row number to go higher than max u32 4_294_967_296. It
-    /// shouldn't happen because for 2h lifetime it requires 596523 nodes /
-    /// sec.
+    /// Exceeding this limit is an error. It shouldn't happen in practice:
+    /// reaching even the smaller u32 limit (2^30) within a delta MPT's 2h
+    /// lifetime would require ~149k new nodes per second.
     pub const ROW_NUMBER_LIMIT: RowNumberUnderlyingType =
         1 << (RowNumberUnderlyingType::BITS - 1) - 1;
 

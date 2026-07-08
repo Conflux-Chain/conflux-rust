@@ -46,9 +46,9 @@
 //!   `PublicKeyUnion` for BLS must also be `PublicKeyUnion::BLS`,
 //! - that you specify the associated types `PrivateKeyType`, `SignatureType`
 //!   and `PublicKeyType` for each of the three unions. `PrivateKeyType`
-//!   provides the value for the `VerifyingKeyMaterial` and `PublicKeyMaterial`
-//!   associated types, `PublicKeyType` provides the valid for the
-//!   `SigningKeyMaterial` and `PrivateKeyMaterial` associated types and
+//!   provides the value for the `PrivateKeyMaterial` and `SigningKeyMaterial`
+//!   associated types, `PublicKeyType` provides the value for the
+//!   `PublicKeyMaterial` and `VerifyingKeyMaterial` associated types and
 //!   `SignatureType` provides the value for the `SignatureMaterial` associated
 //!   type.
 //!

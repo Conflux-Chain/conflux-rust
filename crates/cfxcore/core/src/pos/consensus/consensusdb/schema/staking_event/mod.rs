@@ -31,7 +31,7 @@ use std::mem::size_of;
 
 define_schema!(
     StakingEventsSchema,
-    u64, /* block id */
+    u64, /* pow epoch number */
     (Vec<StakingEvent>, H256),
     STAKING_EVENTS_CF_NAME
 );

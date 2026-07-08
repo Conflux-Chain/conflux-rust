@@ -10,8 +10,10 @@ pub enum TrieCacheSlotOrCacheAlgoData<CacheAlgoDataT: CacheAlgoDataTrait> {
 
 // TODO(yz): Rename class and explain how this class interact with the lifecycle
 // of trie node.
-/// CacheableNodeRef maintains the information of cached node and possibly
-/// non-cached children of cached node.
+/// CacheableNodeRef holds a cached node's cache-slot, or (for a node evicted
+/// from the cache slab but still tracked by the cache algorithm) the retained
+/// CacheAlgoData so a reload restores its hotness. The "non-cached child" role
+/// below is a design note for the not-yet-implemented persistent MPT.
 ///
 /// Only CacheableNodeRef for Delta MPT is currently implemented.
 ///
