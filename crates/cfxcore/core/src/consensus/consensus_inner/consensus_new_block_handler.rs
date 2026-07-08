@@ -1504,9 +1504,10 @@ impl ConsensusNewBlockHandler {
                     //             .read()
                     //             .lower_bound
                     // );
-                    // `should_form_checkpoint_at` below unwraps the stable
-                    // block's state_valid/blame_info, so wait for its
-                    // execution result and compute them first.
+                    // Wait for the stable block's execution result: the
+                    // `compute_state_valid_and_blame_info` call below needs it
+                    // to populate `state_valid`/`blame_info` (which
+                    // `should_form_checkpoint_at` later unwraps).
                     self.executor
                         .wait_for_result(inner.arena[stable_arena_index].hash)
                         .expect(

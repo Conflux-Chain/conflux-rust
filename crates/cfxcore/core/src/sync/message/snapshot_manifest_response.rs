@@ -21,14 +21,16 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 pub struct SnapshotManifestResponse {
     pub request_id: u64,
     pub manifest: RangedManifest,
-    // FIXME: changing this encoding needs protocol versioning before release.
+    // FIXME: this TODO must be addressed before release, or we must have a
+    // FIXME: protocol version field
     //
-    // A minimized encoding would need state roots for snapshot_epoch_id
-    // itself (the true state root), snapshot_epoch_id + 1 (the parent
-    // snapshot merkle root), and next snapshot + 1 (this snapshot's merkle
-    // root), plus receipt/bloom entries for the REWARD_EPOCH_COUNT epochs
-    // ending at snapshot_epoch_id. The current impl instead sends the whole
-    // blame range.
+    // We actually need state_root_blame_vec for two epochs: snapshot_epoch_id
+    // and its next snapshot + 1 epoch; and the state_root of snapshot_epoch_id
+    // and the state root of its next snapshot + 1 epoch to get
+    // snapshot_merkle_root of snapshot_epoch_id. The
+    // current implementation passes state_blame_vec for the entire range of
+    // snapshot_epoch_id to its next snapshot's trusted blame block,
+    // which should be improved.
     //
     // TODO: reduce the data to pass over network.
     pub state_root_vec: Vec<StateRoot>,

@@ -80,9 +80,10 @@ impl BlockTracesWithEpoch {
 ///
 /// Note that in database only the data corresponding to the current pivot
 /// chain exist. This multi-version version are only maintained in memory and
-/// will be garbage collected. `insert_current_data()` is only reached via
-/// `insert_version()`; with `persistent=true` the DB version is updated
-/// first, so on that path (absent GC) the DB version is the latest and the
+/// will be garbage collected. `insert_current_data()` only updates the
+/// in-memory current version; the matching DB write is done by the caller and
+/// gated on its `persistent` flag. On the `persistent=true` path the DB
+/// version is updated first, so (absent GC) the DB holds the latest and the
 /// in-memory version is eventually consistent with it. Off-pivot executions
 /// insert with `persistent=false`, so the in-memory current version can
 /// point to a fork view the DB never stores until the block is re-executed

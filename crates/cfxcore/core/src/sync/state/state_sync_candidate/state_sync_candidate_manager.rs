@@ -31,8 +31,7 @@ use std::{
 ///    `max_downloading_chunk_attempts` times, abort the chunk download, drop
 ///    the chunk manager, and re-download the manifest; this handles valid
 ///    manifests whose chunks cannot be served, e.g. chunks over the packet-size
-///    limit. If this drives `manifest_attempts` to
-///    `max_downloading_manifest_attempts`, the next status update panics.
+///    limit.
 ///
 /// All step start/restart are triggered by the periodic check of phase change.
 pub struct StateSyncCandidateManager {
