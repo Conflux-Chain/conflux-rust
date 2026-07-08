@@ -695,9 +695,11 @@ impl ConsensusExecutor {
     /// forks will be garbage-collected, but when we need them,
     /// `process_rewards_and_fees` may recompute them from the reward
     /// epoch's parent state. This relies on that parent state still being
-    /// within the state-availability window; the recompute path currently
-    /// does not check the boundary and will fail if the state has been
-    /// pruned.
+    /// within the state-availability window. In practice it always is: the
+    /// reward epoch is only `REWARD_EPOCH_COUNT` epochs back, far inside the
+    /// maintained window, so the needed state is never pruned here. This is
+    /// not enforced, so it would break only if a future change pushed the
+    /// reward epoch outside the window.
     fn find_start_chain_index(
         inner: &ConsensusGraphInner, chain: &Vec<usize>,
     ) -> usize {
