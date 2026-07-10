@@ -46,10 +46,9 @@ use std::sync::{atomic::AtomicBool, Arc};
 /// be delivered to the ConsensusGraph if 1) the whole block content is
 /// available and 2) all current-era, non-reclaimed past blocks are also in
 /// the ConsensusGraph, and 3) since PoS finality, its PoS reference (if any)
-/// has been committed by the PoS chain and the referenced pivot decision is
-/// itself graph-ready. Past blocks before the era genesis, or already
-/// processed/reclaimed in this run, can count as ready from persisted
-/// non-invalid `LocalBlockInfo` instead of being resident in the graph.
+/// has been committed by the PoS chain and its pivot decision is graph-ready.
+/// Past blocks before the era genesis or already processed/reclaimed count
+/// as ready via persisted non-invalid `LocalBlockInfo`.
 ///
 /// ConsensusGraph maintains the TreeGraph structure of the client and
 /// implements *Timer Chain GHAST*/*Conflux* algorithm to determine the block

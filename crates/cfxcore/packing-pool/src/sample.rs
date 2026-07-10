@@ -34,12 +34,11 @@ pub enum SampleTag {
 /// output in a random order. Transactions    with a higher probability in the
 /// first phase have a greater chance of appearing earlier in this phase.
 /// 3. **Remaining Transactions Phase**: Remaining addresses are output in
-/// descending order of their first transaction gas prices. The Random
-/// Sampling Phase only considers addresses whose loss ratio is below the
-/// truncation threshold (see
-/// [`PackingPool::truncate_loss_ratio`][crate::PackingPool::truncate_loss_ratio]);
-/// the cutoff address and all lower-priced ones -- whose selection
-/// probability would be zero -- are the "remaining addresses" output here.
+/// descending order of their first transaction gas prices. Random sampling
+/// only considers addresses whose loss ratio is below
+/// [`truncate_loss_ratio`](crate::PackingPool::truncate_loss_ratio); the
+/// cutoff address and all lower-priced ones -- whose selection probability
+/// would be zero -- are the "remaining addresses" output here.
 ///
 /// If the block's gas limit can accommodate all transactions in the packing
 /// pool, the iterator directly enters the third phase.

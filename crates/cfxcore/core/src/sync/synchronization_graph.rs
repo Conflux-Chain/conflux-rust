@@ -730,10 +730,8 @@ impl SynchronizationGraphInner {
         // added into the graph until the current timestamp passes the
         // the timestamp of the block. Otherwise, this block can be added
         // into the graph.
-        // Blocks even further ahead -- more than VALID_TIME_DRIFT past
-        // local time -- are dropped as invalid instead of postponed (see
-        // validate_header_timestamp); only the band between the two
-        // drift bounds is buffered.
+        // Blocks more than VALID_TIME_DRIFT ahead are instead dropped as
+        // invalid (see validate_header_timestamp).
         // Meanwhile, Conflux also requires that the timestamp of each
         // block must be later than or equal to its parent's timestamp.
         // This is achieved through adjusting the timestamp of a newly

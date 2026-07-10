@@ -97,11 +97,10 @@
 //! find a vacant slot, the stack is popped. When a slot is released, it is
 //! pushed onto the stack.
 //!
-//! When the vacant-slot stack is empty (no released slot to reuse), the next
-//! never-used slot below capacity is taken (tracked by `size_initialized`);
-//! once that reaches capacity, allocation fails with `Error::OutOfMem`.
-//! `entries` is kept filled to capacity so allocation never mutates the `Vec`
-//! itself.
+//! When the vacant-slot stack is empty, the next never-used slot is taken
+//! (tracked by `size_initialized`); at capacity, allocation fails with
+//! `Error::OutOfMem`. `entries` is kept filled to capacity so allocation
+//! never mutates the `Vec` itself.
 //!
 //! [`Slab::with_capacity`]: struct.Slab.html#with_capacity
 

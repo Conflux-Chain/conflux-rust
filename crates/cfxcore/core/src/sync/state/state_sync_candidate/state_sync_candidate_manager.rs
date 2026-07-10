@@ -26,11 +26,11 @@ use std::{
 ///    3). 3.2.2: `active_peers` is empty, first advance to the next candidate;
 ///    only restart step 1 once candidates are exhausted. If the same candidate
 ///    is selected again, its existing `chunk_manager` is reused (resume step 3,
-///    skip step 2), so downloaded chunk progress survives peer exhaustion.
-///    3.2.3: If a chunk times out `max_downloading_chunk_attempts` times, abort
-///    the chunk download, drop the chunk manager, and re-download the manifest;
-///    this handles valid manifests whose chunks cannot be served, e.g. chunks
-///    over the packet-size limit.
+///    skip step 2). 3.2.3: If a chunk times out
+///    `max_downloading_chunk_attempts` times, abort the chunk download, drop
+///    the chunk manager, and re-download the manifest; this handles valid
+///    manifests whose chunks cannot be served, e.g. chunks over the packet-size
+///    limit.
 ///
 /// All step start/restart are triggered by the periodic check of phase change.
 pub struct StateSyncCandidateManager {

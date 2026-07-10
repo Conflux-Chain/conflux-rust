@@ -48,11 +48,10 @@
 //! the static file records, and the switch is automatically allowed.
 //!
 //! # Extend Validation
-//! Pivot hints also validate direct chain extension (`allow_extend`): when a
-//! new block extends the current pivot tip and its height is a multiple of
-//! `minor_interval` (and below `range_max`), its hash must match the
-//! recorded full hash (major-aligned heights) or hash prefix; otherwise the
-//! extension is rejected.
+//! Pivot hints also validate direct chain extension (`allow_extend`): a new
+//! tip block whose height is a multiple of `minor_interval` (and below
+//! `range_max`) must match the recorded full hash (at major-aligned heights)
+//! or hash prefix.
 //!
 //! # Loading Process
 //! 1. Load and validate Header Part parameters
