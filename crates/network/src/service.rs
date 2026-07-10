@@ -1050,11 +1050,10 @@ impl NetworkServiceInner {
         let mut kill = false;
         let mut token_to_disconnect = None;
 
-        let session = match self.sessions.get(stream) {
-            Some(session) => session,
-            _ => {
-                return;
-            }
+        let session = if let Some(session) = self.sessions.get(stream) {
+            session
+        } else {
+            return;
         };
 
         // We check dropped_nodes first to make sure we stop processing
@@ -1736,18 +1735,19 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
             NetworkIoMessage::DispatchWork {
                 protocol,
                 work_type,
-            } => match self.handlers.read().get(protocol).cloned() {
-                Some(handler) => {
+            } => {
+                if let Some(handler) =
+                    self.handlers.read().get(protocol).cloned()
+                {
                     let network_context =
                         NetworkContext::new(io, handler, *protocol, self);
                     network_context
                         .protocol_handler()
                         .on_work_dispatch(&network_context, *work_type);
-                }
-                _ => {
+                } else {
                     warn!("Work is dispatched to unknown handler");
                 }
-            },
+            }
             NetworkIoMessage::HandleProtocolMessage {
                 protocol,
                 peer: _,
@@ -1755,19 +1755,18 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 data,
             } => {
                 debug!("Receive ProtocolMsg {:?}", protocol);
-                match self.handlers.read().get(protocol).cloned() {
-                    Some(handler) => {
-                        let network_context =
-                            NetworkContext::new(io, handler, *protocol, self);
-                        network_context.protocol_handler().on_message(
-                            &network_context,
-                            node_id,
-                            data,
-                        );
-                    }
-                    _ => {
-                        warn!("Work is handled by unknown handler");
-                    }
+                if let Some(handler) =
+                    self.handlers.read().get(protocol).cloned()
+                {
+                    let network_context =
+                        NetworkContext::new(io, handler, *protocol, self);
+                    network_context.protocol_handler().on_message(
+                        &network_context,
+                        node_id,
+                        data,
+                    );
+                } else {
+                    warn!("Work is handled by unknown handler");
                 }
             }
         }

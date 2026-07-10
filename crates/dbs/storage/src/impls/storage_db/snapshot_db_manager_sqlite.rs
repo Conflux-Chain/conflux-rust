@@ -215,55 +215,51 @@ impl SnapshotDbManagerSqlite {
         // To serialize simultaneous opens.
         let _open_lock = self.open_create_delete_lock.lock();
 
-        match self.open_kv_snapshot_readonly(snapshot_path, try_open)? {
-            Some(snapshot_db) => {
-                let mpt_snapshot_db = if !snapshot_db
-                    .is_mpt_table_in_current_db()
-                    && read_mpt_snapshot
-                {
-                    // Use the existing directory for the specific database (for
-                    // ear checkpoint)
-                    let mpt_snapshot_path = if self
-                        .use_isolated_db_for_mpt_table
-                    {
-                        let mpt_snapshot_path =
-                            self.get_mpt_snapshot_db_path(snapshot_epoch_id);
-                        if mpt_snapshot_path.exists() {
-                            mpt_snapshot_path
-                        } else {
-                            if self.latest_snapshot_id.read().0
-                                == *snapshot_epoch_id
-                            {
-                                self.get_latest_mpt_snapshot_db_path()
-                            } else {
-                                error!("MPT DB not exist, latest snapshot id {:?}, try to open {:?}.", self.latest_snapshot_id.read().0, snapshot_epoch_id);
-                                return Ok(None);
-                            }
-                        }
+        if let Some(snapshot_db) =
+            self.open_kv_snapshot_readonly(snapshot_path, try_open)?
+        {
+            let mpt_snapshot_db = if !snapshot_db.is_mpt_table_in_current_db()
+                && read_mpt_snapshot
+            {
+                // Use the existing directory for the specific database (for ear
+                // checkpoint)
+                let mpt_snapshot_path = if self.use_isolated_db_for_mpt_table {
+                    let mpt_snapshot_path =
+                        self.get_mpt_snapshot_db_path(snapshot_epoch_id);
+                    if mpt_snapshot_path.exists() {
+                        mpt_snapshot_path
                     } else {
-                        error!("MPT table should be in snapshot database.");
-                        return Ok(None);
-                    };
-
-                    let mpt_snapshot_db = self.open_mpt_snapshot_readonly(
-                        mpt_snapshot_path,
-                        try_open,
-                        snapshot_epoch_id,
-                    )?;
-
-                    mpt_snapshot_db
+                        if self.latest_snapshot_id.read().0
+                            == *snapshot_epoch_id
+                        {
+                            self.get_latest_mpt_snapshot_db_path()
+                        } else {
+                            error!("MPT DB not exist, latest snapshot id {:?}, try to open {:?}.", self.latest_snapshot_id.read().0, snapshot_epoch_id);
+                            return Ok(None);
+                        }
+                    }
                 } else {
-                    None
+                    error!("MPT table should be in snapshot database.");
+                    return Ok(None);
                 };
 
-                return Ok(Some(SnapshotDbSqlite {
-                    snapshot_db,
-                    mpt_snapshot_db,
-                }));
-            }
-            _ => {
-                return Ok(None);
-            }
+                let mpt_snapshot_db = self.open_mpt_snapshot_readonly(
+                    mpt_snapshot_path,
+                    try_open,
+                    snapshot_epoch_id,
+                )?;
+
+                mpt_snapshot_db
+            } else {
+                None
+            };
+
+            return Ok(Some(SnapshotDbSqlite {
+                snapshot_db,
+                mpt_snapshot_db,
+            }));
+        } else {
+            return Ok(None);
         }
     }
 

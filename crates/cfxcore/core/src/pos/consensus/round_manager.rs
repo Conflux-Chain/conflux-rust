@@ -1097,21 +1097,18 @@ impl RoundManager {
                 }
                 id = executed_block.parent_id();
                 blocks.push(executed_block.block().clone());
-            } else {
-                match self.block_store.get_ledger_block(&id) {
-                    Ok(Some(block)) => {
-                        if block.is_genesis_block() {
-                            break;
-                        }
-                        id = block.parent_id();
-                        blocks.push(block);
-                    }
-                    _ => {
-                        // TODO(lpl): This error may be needed in the future.
-                        // status = BlockRetrievalStatus::NotEnoughBlocks;
-                        break;
-                    }
+            } else if let Ok(Some(block)) =
+                self.block_store.get_ledger_block(&id)
+            {
+                if block.is_genesis_block() {
+                    break;
                 }
+                id = block.parent_id();
+                blocks.push(block);
+            } else {
+                // TODO(lpl): This error may be needed in the future.
+                // status = BlockRetrievalStatus::NotEnoughBlocks;
+                break;
             }
         }
 

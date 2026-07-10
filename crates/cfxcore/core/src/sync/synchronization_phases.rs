@@ -438,44 +438,41 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
             // true genesis In both cases, we should set
             // `state_availability_boundary` to
             // `[cur_era_stable_height, cur_era_stable_height]`.
-            match &*sync_handler.synced_epoch_id.lock() {
-                Some(epoch_synced) => {
-                    let epoch_synced_height = self
-                        .graph
-                        .data_man
-                        .block_header_by_hash(epoch_synced)
-                        .expect("Header for checkpoint exists")
-                        .height();
-                    *self.graph.data_man.state_availability_boundary.write() =
-                        StateAvailabilityBoundary::new(
-                            *epoch_synced,
-                            epoch_synced_height,
-                            full_state_start_height,
-                            full_state_space,
-                        );
-                    self.graph
-                        .data_man
-                        .state_availability_boundary
-                        .write()
-                        .set_synced_state_height(epoch_synced_height);
-                }
-                _ => {
-                    let cur_era_stable_hash =
-                        self.graph.data_man.get_cur_consensus_era_stable_hash();
-                    let cur_era_stable_height = self
-                        .graph
-                        .data_man
-                        .block_header_by_hash(&cur_era_stable_hash)
-                        .expect("stable era block header must exist")
-                        .height();
-                    *self.graph.data_man.state_availability_boundary.write() =
-                        StateAvailabilityBoundary::new(
-                            cur_era_stable_hash,
-                            cur_era_stable_height,
-                            full_state_start_height,
-                            full_state_space,
-                        );
-                }
+            if let Some(epoch_synced) = &*sync_handler.synced_epoch_id.lock() {
+                let epoch_synced_height = self
+                    .graph
+                    .data_man
+                    .block_header_by_hash(epoch_synced)
+                    .expect("Header for checkpoint exists")
+                    .height();
+                *self.graph.data_man.state_availability_boundary.write() =
+                    StateAvailabilityBoundary::new(
+                        *epoch_synced,
+                        epoch_synced_height,
+                        full_state_start_height,
+                        full_state_space,
+                    );
+                self.graph
+                    .data_man
+                    .state_availability_boundary
+                    .write()
+                    .set_synced_state_height(epoch_synced_height);
+            } else {
+                let cur_era_stable_hash =
+                    self.graph.data_man.get_cur_consensus_era_stable_hash();
+                let cur_era_stable_height = self
+                    .graph
+                    .data_man
+                    .block_header_by_hash(&cur_era_stable_hash)
+                    .expect("stable era block header must exist")
+                    .height();
+                *self.graph.data_man.state_availability_boundary.write() =
+                    StateAvailabilityBoundary::new(
+                        cur_era_stable_hash,
+                        cur_era_stable_height,
+                        full_state_start_height,
+                        full_state_space,
+                    );
             }
             self.graph.inner.write().block_to_fill_set =
                 self.graph.consensus.get_blocks_needing_bodies();

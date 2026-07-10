@@ -185,16 +185,17 @@ impl InProgressSnapshotTask {
     // Returns None if the thread has been joined already. Returns the
     // background snapshotting result when the thread is first joined.
     pub fn join(&mut self) -> Option<Result<()>> {
-        match self.thread_handle.take() {
-            Some(join_handle) => match join_handle.join() {
+        if let Some(join_handle) = self.thread_handle.take() {
+            match join_handle.join() {
                 Ok(task_result) => Some(task_result),
                 Err(_) => Some(Err(Error::ThreadPanicked(format!(
                     "Background Snapshotting for {:?} panicked.",
                     self.snapshot_info
                 ))
                 .into())),
-            },
-            _ => None,
+            }
+        } else {
+            None
         }
     }
 }
@@ -344,34 +345,33 @@ impl StorageManager {
                 drop(_snapshot_info_lock);
                 drop(guard);
                 // Wait for in progress snapshot.
-                match self
+                if let Some(in_progress_snapshot_task) = self
                     .in_progress_snapshotting_tasks
                     .read()
                     .get(snapshot_epoch_id)
                     .cloned()
                 {
-                    Some(in_progress_snapshot_task) => {
-                        // Snapshotting error is thrown-out when the snapshot is
-                        // first requested here.
-                        if let Some(result) =
-                            in_progress_snapshot_task.write().join()
-                        {
-                            result?;
-                        }
-                        let guard = self.current_snapshots.read();
-                        match self.snapshot_manager.get_snapshot_by_epoch_id(
-                            snapshot_epoch_id,
-                            try_open,
-                            open_mpt_snapshot,
-                        ) {
-                            Err(e) => Err(e),
-                            Ok(None) => Ok(None),
-                            Ok(Some(snapshot_db)) => {
-                                Ok(Some(GuardedValue::new(guard, snapshot_db)))
-                            }
+                    // Snapshotting error is thrown-out when the snapshot is
+                    // first requested here.
+                    if let Some(result) =
+                        in_progress_snapshot_task.write().join()
+                    {
+                        result?;
+                    }
+                    let guard = self.current_snapshots.read();
+                    match self.snapshot_manager.get_snapshot_by_epoch_id(
+                        snapshot_epoch_id,
+                        try_open,
+                        open_mpt_snapshot,
+                    ) {
+                        Err(e) => Err(e),
+                        Ok(None) => Ok(None),
+                        Ok(Some(snapshot_db)) => {
+                            Ok(Some(GuardedValue::new(guard, snapshot_db)))
                         }
                     }
-                    _ => Ok(None),
+                } else {
+                    Ok(None)
                 }
             }
         }

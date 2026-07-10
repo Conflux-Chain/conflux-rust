@@ -127,17 +127,16 @@ impl<C: TreapMapConfig> TreapMap<C> {
         U: FnOnce(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
         I: FnOnce(&mut dyn RngCore) -> Result<(Node<C>, T), E>,
     {
-        let sort_key = match self.ext_map.get_sort_key(key) {
-            Some(sort_key) => sort_key,
-            _ => {
-                return match insert(&mut self.rng) {
-                    Ok((node, ret)) => {
-                        self.insert(node.key, node.value, node.weight);
-                        Ok(ret)
-                    }
-                    Err(err) => Err(err),
-                };
-            }
+        let sort_key = if let Some(sort_key) = self.ext_map.get_sort_key(key) {
+            sort_key
+        } else {
+            return match insert(&mut self.rng) {
+                Ok((node, ret)) => {
+                    self.insert(node.key, node.value, node.weight);
+                    Ok(ret)
+                }
+                Err(err) => Err(err),
+            };
         };
         let rng = &mut self.rng;
         let (res, _, _) = Node::update_inner(

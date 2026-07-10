@@ -156,17 +156,15 @@ impl RequestManager {
     pub fn on_peer_disconnected(
         &self, _io: &dyn NetworkContext, peer: &NodeId,
     ) {
-        match self.request_handler.remove_peer(peer) {
-            Some(unfinished_requests) => {
-                for mut msg in unfinished_requests {
-                    msg.request.notify_error(
-                        Error::RpcCancelledByDisconnection.into(),
-                    );
-                }
+        if let Some(unfinished_requests) =
+            self.request_handler.remove_peer(peer)
+        {
+            for mut msg in unfinished_requests {
+                msg.request
+                    .notify_error(Error::RpcCancelledByDisconnection.into());
             }
-            _ => {
-                debug!("Peer already removed form request manager when disconnected peer={}", peer);
-            }
+        } else {
+            debug!("Peer already removed form request manager when disconnected peer={}", peer);
         }
     }
 }

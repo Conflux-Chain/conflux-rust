@@ -978,15 +978,14 @@ impl RequestManager {
     }
 
     pub fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: &NodeId) {
-        match self.request_handler.remove_peer(peer) {
-            Some(unfinished_requests) => {
-                for msg in unfinished_requests {
-                    self.resend_request_to_another_peer(io, &msg);
-                }
+        if let Some(unfinished_requests) =
+            self.request_handler.remove_peer(peer)
+        {
+            for msg in unfinished_requests {
+                self.resend_request_to_another_peer(io, &msg);
             }
-            _ => {
-                debug!("Peer already removed form request manager when disconnected peer={}", peer);
-            }
+        } else {
+            debug!("Peer already removed form request manager when disconnected peer={}", peer);
         }
     }
 

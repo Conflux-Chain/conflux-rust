@@ -171,40 +171,39 @@ impl StateManager {
             None => {
                 // This is the special scenario when the snapshot isn't
                 // available but the snapshot at the intermediate epoch exists.
-                match self.storage_manager.wait_for_snapshot(
-                    &state_index.intermediate_epoch_id,
-                    try_open,
-                    open_mpt_snapshot,
-                )? {
-                    Some(guarded_snapshot) => {
-                        snapshot = guarded_snapshot;
-                        maybe_intermediate_mpt = None;
-                        maybe_intermediate_mpt_key_padding = None;
-                        delta_mpt = match self
-                            .storage_manager
-                            .get_intermediate_mpt(
-                                &state_index.intermediate_epoch_id,
-                            )? {
-                            None => {
-                                warn!(
+                if let Some(guarded_snapshot) =
+                    self.storage_manager.wait_for_snapshot(
+                        &state_index.intermediate_epoch_id,
+                        try_open,
+                        open_mpt_snapshot,
+                    )?
+                {
+                    snapshot = guarded_snapshot;
+                    maybe_intermediate_mpt = None;
+                    maybe_intermediate_mpt_key_padding = None;
+                    delta_mpt = match self
+                        .storage_manager
+                        .get_intermediate_mpt(
+                            &state_index.intermediate_epoch_id,
+                        )? {
+                        None => {
+                            warn!(
                                     "get_state_trees, special case, \
                                     intermediate_mpt not found for epoch {:?}. StateIndex: {:?}.",
                                     state_index.intermediate_epoch_id,
                                     state_index,
                                 );
-                                return Ok(None);
-                            }
-                            Some(delta_mpt) => delta_mpt,
-                        };
-                    }
-                    _ => {
-                        warn!(
-                            "get_state_trees, special case, \
+                            return Ok(None);
+                        }
+                        Some(delta_mpt) => delta_mpt,
+                    };
+                } else {
+                    warn!(
+                        "get_state_trees, special case, \
                          snapshot not found for epoch {:?}. StateIndex: {:?}.",
-                            state_index.intermediate_epoch_id, state_index,
-                        );
-                        return Ok(None);
-                    }
+                        state_index.intermediate_epoch_id, state_index,
+                    );
+                    return Ok(None);
                 }
             }
             Some(guarded_snapshot) => {
@@ -514,42 +513,41 @@ impl StateManager {
                     // This is the special scenario when the snapshot isn't
                     // available but the snapshot at the intermediate epoch
                     // exists.
-                    match self.storage_manager.wait_for_snapshot(
-                        &intermediate_epoch_id,
-                        try_open,
-                        open_mpt_snapshot,
-                    )? {
-                        Some(guarded_snapshot) => {
-                            snapshot = guarded_snapshot;
-                            maybe_intermediate_mpt = None;
-                            maybe_intermediate_mpt_key_padding = None;
-                            delta_mpt = match self
-                                .storage_manager
-                                .get_intermediate_mpt(intermediate_epoch_id)?
-                            {
-                                None => {
-                                    return {
-                                        warn!(
+                    if let Some(guarded_snapshot) =
+                        self.storage_manager.wait_for_snapshot(
+                            &intermediate_epoch_id,
+                            try_open,
+                            open_mpt_snapshot,
+                        )?
+                    {
+                        snapshot = guarded_snapshot;
+                        maybe_intermediate_mpt = None;
+                        maybe_intermediate_mpt_key_padding = None;
+                        delta_mpt = match self
+                            .storage_manager
+                            .get_intermediate_mpt(intermediate_epoch_id)?
+                        {
+                            None => {
+                                return {
+                                    warn!(
                                     "get_state_trees_for_next_epoch, special case, \
                                     intermediate_mpt not found for epoch {:?}. StateIndex: {:?}.",
                                     intermediate_epoch_id,
                                     parent_state_index,
                                 );
-                                        Ok(None)
-                                    }
+                                    Ok(None)
                                 }
-                                Some(delta_mpt) => delta_mpt,
-                            };
-                        }
-                        _ => {
-                            warn!(
+                            }
+                            Some(delta_mpt) => delta_mpt,
+                        };
+                    } else {
+                        warn!(
                             "get_state_trees_for_next_epoch, special case, \
                             snapshot not found for epoch {:?}. StateIndex: {:?}.",
                             intermediate_epoch_id,
                             parent_state_index,
                         );
-                            return Ok(None);
-                        }
+                        return Ok(None);
                     }
                 }
                 Some(guarded_snapshot) => {
