@@ -216,9 +216,12 @@ pub trait EthApi {
     ///
     /// This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type accessList based on a given Transaction.
     ///
-    /// An access list contains all storage slots and addresses touched by the
-    /// transaction, except for the sender account and the chain's
-    /// precompiles.
+    /// An access list contains the storage slots and addresses read or
+    /// written by the transaction. Addresses whose storage is accessed
+    /// always appear; addresses touched without storage access
+    /// (balance/code queries, call targets) are filtered against an
+    /// exclusion set: the sender, the destination (or newly created)
+    /// address, EIP-7702 authorities, and the chain's precompiles.
     ///
     /// It returns list of addresses and storage keys used by the transaction,
     /// plus a gas estimate. Note the returned gas_used is currently the

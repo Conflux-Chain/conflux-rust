@@ -153,11 +153,13 @@ pub struct BlockDataManager {
     ///   1. At start it equals `cur_era_stable_height`, or the height of the
     ///      remotely synchronized state for a full node that synced a
     ///      snapshot.
-    ///   2. Afterwards it tracks the earliest maintained snapshot:
-    ///      `StorageManager::maintain_state_confirmed` advances it when
-    ///      confirmed old snapshots are garbage-collected (currently identical
-    ///      for archive and full nodes; archive nodes keep older state
-    ///      readable only via the single-MPT `full_state_start_height` path).
+    ///   2. Afterwards `StorageManager::maintain_state_confirmed` advances it
+    ///      to the first execution-available state height -- one above the
+    ///      confirmed snapshot's height, since that snapshot (still retained)
+    ///      only serves as the base for the delta MPTs above it -- when old
+    ///      snapshots are garbage-collected (currently identical for archive
+    ///      and full nodes; archive nodes keep older state readable only via
+    ///      the single-MPT `full_state_start_height` path).
     ///
     /// The lower boundary height will be updated when:
     ///   1. New checkpoint
