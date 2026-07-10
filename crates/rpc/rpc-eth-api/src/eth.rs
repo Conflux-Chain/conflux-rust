@@ -217,18 +217,17 @@ pub trait EthApi {
     /// This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type accessList based on a given Transaction.
     ///
     /// An access list contains all storage slots and addresses touched by the
-    /// transaction, except for the sender account, the destination (or
-    /// newly created) address, any EIP-7702 authority addresses, and the
-    /// chain's precompiles.
+    /// transaction, except for the sender account and the chain's
+    /// precompiles.
     ///
     /// It returns list of addresses and storage keys used by the transaction,
-    /// plus the gas consumed. Note: gas_used currently returns the plain gas
-    /// estimate; the added access-list entries' intrinsic gas is not yet
-    /// included (see TODO in create_access_list impl). Like eth_estimateGas,
-    /// this is an estimation; the list could change when the transaction is
-    /// actually mined. Adding an accessList to your transaction does not
-    /// necessary result in lower gas usage compared to a transaction without
-    /// an access list.
+    /// plus a gas estimate. Note the returned gas_used is currently the
+    /// transaction's plain gas estimate, not yet recomputed with the
+    /// collected access list applied (see the TODO on `gas_used` in the
+    /// create_access_list impl). Like eth_estimateGas, this is an estimation;
+    /// the list could change when the transaction is actually mined. Adding
+    /// an accessList to your transaction does not necessary result in lower
+    /// gas usage compared to a transaction without an access list.
     #[method(name = "createAccessList")]
     async fn create_access_list(
         &self, request: TransactionRequest, block_number: Option<BlockId>,

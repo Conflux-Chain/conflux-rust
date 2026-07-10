@@ -17,9 +17,7 @@
 //! client/AC submission path.  When a new transaction is
 //! added, Mempool shares this transaction with other nodes in the system.  This
 //! is a form of “shared mempool” in that transactions between mempools are
-//! shared with other validators.  This helps maintain a pseudo global ordering
-//! since when a validator receives a transaction from another mempool, it will
-//! be ordered when added in the ordered queue of the recipient validator. Every
+//! shared with other validators.  Every
 //! newly inserted transaction — locally submitted or peer-received — is
 //! appended to the broadcast timeline, so nodes rebroadcast peer-received
 //! transactions. Duplicate suppression is receive-side: already-known

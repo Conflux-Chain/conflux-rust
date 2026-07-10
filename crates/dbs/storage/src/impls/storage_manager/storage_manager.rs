@@ -901,11 +901,11 @@ impl StorageManager {
 
     /// Snapshots to remove are decided in two passes over current_snapshots
     /// (sorted by ascending height): a descending pass traces the pivot
-    /// chain down from the confirmed snapshot, and an ascending pass
-    /// filters snapshots above the confirmed height, propagating
-    /// non-pivot removal to deep descendants via
-    /// parent_snapshot_epoch_id. In-progress snapshotting tasks are
-    /// scanned separately.
+    /// chain down from the confirmed snapshot (dropping untraceable and
+    /// mismatched-intermediate snapshots), and an ascending pass removes
+    /// snapshots outside the confirmed epoch's subtree, propagating the
+    /// removal to deep descendants via parent_snapshot_epoch_id.
+    /// In-progress snapshotting tasks are scanned separately.
     ///
     /// In the scan, pivot chain is traced from the confirmed snapshot.
     /// Whatever can't be traced shall be removed as non-pivot snapshot.

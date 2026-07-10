@@ -86,8 +86,9 @@ impl BlockTracesWithEpoch {
 /// version is updated first, so (absent GC) the DB holds the latest and the
 /// in-memory version is eventually consistent with it. Off-pivot executions
 /// insert with `persistent=false`, so the in-memory current version can
-/// point to a fork view the DB never stores until the block is re-executed
-/// on the pivot chain.
+/// point to a fork view the DB does not store; if that fork later becomes
+/// the pivot chain, the in-memory version is promoted and written to the
+/// DB directly (re-execution is only needed if it was already GC'ed).
 ///
 /// FIXME: There is a rare case to cause inconsistency with GC:
 /// Assume a thread T1 is writing the latest data and T2 is answering

@@ -22,7 +22,7 @@ pub struct SnapshotManifestResponse {
     pub request_id: u64,
     pub manifest: RangedManifest,
     // FIXME: this encoding is already deployed, so reducing it now needs a
-    // FIXME: protocol version field for backward compatibility.
+    // FIXME: sync protocol version bump for backward compatibility.
     //
     // We actually need state_root_blame_vec for two epochs: snapshot_epoch_id
     // and its next snapshot + 1 epoch; and the state_root of snapshot_epoch_id

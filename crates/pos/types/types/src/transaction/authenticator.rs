@@ -30,9 +30,9 @@ use std::{convert::TryFrom, fmt, str::FromStr};
 /// public key bytes used to build an `AuthenticationKeyPreimage` when the
 /// variant has per-transaction public key material.
 /// Conflux PoS does not store Diem-style authentication keys on chain. For
-/// locally submitted BLS PoS transactions, mempool validation binds `sender`
-/// to the BLS key carried by the authenticator via
-/// `PosState::check_sender_owns_auth_key`.
+/// BLS PoS transactions entering the mempool (locally submitted or
+/// peer-broadcast), validation binds `sender` to the BLS key carried by the
+/// authenticator via `PosState::check_sender_owns_auth_key`.
 /// Signature well-formedness is checked by `TransactionAuthenticator::verify`
 /// (via `SignedTransaction::verify_signature`); sender-to-key binding is
 /// enforced separately in the mempool `TransactionValidator` /

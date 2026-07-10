@@ -216,7 +216,7 @@ class ConfluxTestFramework:
             dest="nocleanup",
             default=False,
             action="store_true",
-            help="Leave conflux nodes and test.* datadir on exit or error")
+            help="Leave the test.* datadir in place on exit or error")
         parser.add_argument(
             "--cleanup-on-interrupt",
             dest="cleanup_on_interrupt",
@@ -627,7 +627,7 @@ class ConfluxTestFramework:
         ll = int(self.options.loglevel) if self.options.loglevel.isdigit(
         ) else self.options.loglevel.upper()
         ch.setLevel(ll)
-        # Use microsecond-precision UTC timestamps so log files can be concatenated and sorted
+        # Use sortable UTC timestamps (millisecond precision padded to microsecond format) so log files can be concatenated and sorted
         formatter = logging.Formatter(
             fmt=
             '%(asctime)s.%(msecs)03d000Z %(name)s (%(levelname)s): %(message)s',

@@ -327,7 +327,7 @@ class TestNode:
         expected_msg: regex that stderr should match when the conflux node fails
 
         Will throw if the conflux node starts without an error.
-        Will throw if an expected_msg is provided and it does not match the node's stdout."""
+        Will throw if an expected_msg is provided and it does not match the node's stderr."""
         with tempfile.NamedTemporaryFile(dir=self.stderr_dir, delete=False) as log_stderr, \
                 tempfile.NamedTemporaryFile(dir=self.stdout_dir, delete=False) as log_stdout:
             try:

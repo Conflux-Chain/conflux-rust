@@ -75,7 +75,7 @@ Web3NotSetupError = ValueError("w3 is not initialized, please call self.setup_w3
 
 @dataclass
 class FrameworkOptions:
-    nocleanup: bool  # leave conflux nodes and the test datadir on exit or error
+    nocleanup: bool  # leave the test datadir in place on exit or error
     noshutdown: bool  # don't stop conflux nodes after the test execution
     cachedir: str  # directory for caching pregenerated datadirs
     tmpdir: str  # root directory for datadirs
