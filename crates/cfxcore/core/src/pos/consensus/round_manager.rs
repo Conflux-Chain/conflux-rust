@@ -444,11 +444,8 @@ impl RoundManager {
                 // process_proposal returns Ok(true) -- and thus relays --
                 // only for a candidate that improves on the best seen this
                 // round: a strictly lower VRF number, or the first candidate
-                // (`receive_proposal_candidate`). Duplicates and worse
-                // candidates return Ok(false) and are not re-broadcast. This
-                // does not cap relays per author: a proposer holds one VRF
-                // nonce per unit of voting power and can reveal qualifying
-                // ones in decreasing order, each relayed once.
+                // (`receive_proposal_candidate`); duplicates and worse
+                // candidates are not re-broadcast.
                 // TODO(lpl): Do not send to the sender and the original author.
                 let exclude = vec![proposer, self.network.author];
                 self.network

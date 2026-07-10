@@ -1505,12 +1505,9 @@ impl ConsensusNewBlockHandler {
                     //             .lower_bound
                     // );
                     // Wait until the stable block has been executed:
-                    // `compute_state_valid_and_blame_info` below reads the
-                    // execution commitments of the deferred-state blocks of
-                    // the stable block and its precedents (and
-                    // `should_form_checkpoint_at` later unwraps the computed
-                    // `state_valid`); executions finish in order, so this
-                    // wait guarantees those commitments exist.
+                    // executions finish in order, so this guarantees the
+                    // deferred-epoch commitments read by
+                    // `compute_state_valid_and_blame_info` below exist.
                     self.executor
                         .wait_for_result(inner.arena[stable_arena_index].hash)
                         .expect(

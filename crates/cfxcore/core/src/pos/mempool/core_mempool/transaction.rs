@@ -45,9 +45,7 @@ pub enum TimelineState {
     Ready(u64),
     // Not yet inserted into the broadcast timeline.
     NotReady,
-    // Diem-era marker for peer-received transactions. It no longer
-    // suppresses broadcasting: `TimelineIndex::insert` stamps every stored
-    // transaction `Ready`, so peer-received transactions are rebroadcast
-    // like local ones.
+    // Diem-era marker for peer-received transactions; no longer suppresses
+    // broadcasting (insertion stamps every transaction `Ready`).
     NonQualified,
 }
