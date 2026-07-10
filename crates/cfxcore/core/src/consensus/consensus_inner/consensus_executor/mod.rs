@@ -694,8 +694,8 @@ impl ConsensusExecutor {
     /// The receipts for past blocks may not exist because the receipts on
     /// forks will be garbage-collected, but when we need them,
     /// `process_rewards_and_fees` may recompute them from the reward
-    /// epoch's parent state, which is only `REWARD_EPOCH_COUNT` epochs
-    /// back -- well inside the state-availability window (not enforced).
+    /// epoch's parent state, `REWARD_EPOCH_COUNT + 1` epochs back -- well
+    /// inside the state-availability window (not enforced).
     fn find_start_chain_index(
         inner: &ConsensusGraphInner, chain: &Vec<usize>,
     ) -> usize {
