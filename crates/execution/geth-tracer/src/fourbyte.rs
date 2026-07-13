@@ -48,7 +48,7 @@ impl FourByteInspector {
 
     pub fn record_call(&mut self, params: &ActionParams) {
         if let Some(input) = &params.data {
-            if input.len() > 4 {
+            if input.len() >= 4 {
                 let selector = Selector::try_from(&input[..4])
                     .expect("input is at least 4 bytes");
                 let calldata_size = input[4..].len();
@@ -74,5 +74,47 @@ impl From<FourByteInspector> for FourByteFrame {
                 })
                 .collect(),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cfx_vm_types::ActionParams;
+
+    fn record(data: Vec<u8>) -> FourByteInspector {
+        let mut inspector = FourByteInspector::new();
+        let params = ActionParams {
+            data: Some(data),
+            ..Default::default()
+        };
+        inspector.record_call(&params);
+        inspector
+    }
+
+    #[test]
+    fn record_call_selector_boundary() {
+        let selector = Selector::from([0x12, 0x34, 0x56, 0x78]);
+
+        // A bare selector (exactly 4 bytes, no arguments) must count as a
+        // `<selector>-0` entry, matching geth/reth. This is the case the old
+        // `> 4` guard dropped.
+        assert_eq!(
+            record(vec![0x12, 0x34, 0x56, 0x78])
+                .inner()
+                .get(&(selector, 0)),
+            Some(&1)
+        );
+
+        // calldata_size counts only the bytes after the 4-byte selector.
+        assert_eq!(
+            record(vec![0x12, 0x34, 0x56, 0x78, 0xaa])
+                .inner()
+                .get(&(selector, 1)),
+            Some(&1)
+        );
+
+        // Fewer than 4 bytes has no selector and is ignored.
+        assert!(record(vec![0x12, 0x34, 0x56]).inner().is_empty());
     }
 }
