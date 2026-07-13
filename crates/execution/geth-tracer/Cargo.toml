@@ -28,5 +28,8 @@ revm-interpreter = { workspace = true }
 revm-bytecode = { workspace = true }
 alloy-primitives-wrapper = { workspace = true }
 
+[dev-dependencies]
+cfx-vm-types = { workspace = true, features = ["testonly_code"] }
+
 [features]
 serde = []
