@@ -49,8 +49,9 @@ impl StateManager {
         debug!("Storage conf {:?}", conf);
         // Make sure sqlite temp directory is using the data disk instead of the
         // system disk.
-        // FIXME: Audit that the environment access only happens in
-        // single-threaded code.
+        // SAFETY: Production calls this before starting worker threads. In unit
+        // tests, concurrent environment access is limited to this
+        // `std::env` call.
         unsafe {
             std::env::set_var("SQLITE_TMPDIR", conf.path_snapshot_dir.clone())
         };
