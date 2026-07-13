@@ -20,11 +20,12 @@ pub struct RowNumber {
 }
 
 impl RowNumber {
-    /// It's an error for row number to go higher than max u32 4_294_967_296. It
-    /// shouldn't happen because for 2h lifetime it requires 596523 nodes /
-    /// sec.
+    /// Cap at `2^(BITS-1) - 1` (2^31-1 for u32, 2^63-1 for u64): the compact
+    /// node ref (`node_ref.rs`) reserves the top bit of a committed db_key for
+    /// its persistent-key encoding, so a db_key must keep its MSB clear, and
+    /// this is the largest value that does.
     pub const ROW_NUMBER_LIMIT: RowNumberUnderlyingType =
-        1 << (RowNumberUnderlyingType::BITS - 1) - 1;
+        (1 << (RowNumberUnderlyingType::BITS - 1)) - 1;
 
     pub fn get_next(&self) -> Result<RowNumber> {
         if self.value != Self::ROW_NUMBER_LIMIT {
