@@ -72,9 +72,6 @@ impl Handleable for StateSyncCandidateRequest {
                         }
                     }
                 }
-                _ => {
-                    warn!("Unsupported candidate: {:?}", candidate);
-                }
             }
         }
         ctx.send_response(&StateSyncCandidateResponse {
