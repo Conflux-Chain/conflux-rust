@@ -18,7 +18,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{collections::VecDeque, env, fmt, fs, io::Read, process};
+use std::{collections::VecDeque, fmt, fs, io::Read, process};
 
 use cfxstore::{
     accounts_dir::{KeyDirectory, RootDiskDirectory},
@@ -286,12 +286,10 @@ impl fmt::Display for Error {
 
 fn main() {
     panic_hook::set_abort();
-    if env::var("RUST_LOG").is_err() {
-        // FIXME: Audit that the environment access only happens in
-        // single-threaded code.
-        unsafe { env::set_var("RUST_LOG", "warn") }
-    }
-    env_logger::try_init().expect("Logger initialized only once.");
+    env_logger::try_init_from_env(
+        env_logger::Env::default().default_filter_or("warn"),
+    )
+    .expect("Logger initialized only once.");
     let cli = Cli::parse();
 
     match execute(cli) {
