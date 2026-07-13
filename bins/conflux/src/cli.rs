@@ -15,7 +15,9 @@ pub struct Cli {
     pub mode: Option<String>,
 
     /// Specify the port for P2P connections.
-    #[arg(long, short = 'p', value_name = "PORT")]
+    // clap `id` must equal the hyphenated config field (`tcp_port`) that
+    // `RawConfiguration::parse` looks up; the user-facing flag stays `--port`.
+    #[arg(id = "tcp-port", long = "port", short = 'p', value_name = "PORT")]
     pub port: Option<String>,
 
     /// Specify the UDP port for peer discovery.
@@ -88,10 +90,6 @@ pub struct Cli {
     #[arg(id = "net-key", long = "net-key", value_name = "KEY")]
     pub net_key: Option<String>,
 
-    /// Start mining if set to true. Ensure that mining-author is set.
-    #[arg(id = "start-mining", long = "start-mining", value_name = "BOOL")]
-    pub start_mining: Option<String>,
-
     /// Set the address to receive mining rewards.
     #[arg(
         id = "mining-author",
@@ -109,7 +107,11 @@ pub struct Cli {
     pub ledger_cache_size: Option<String>,
 
     /// Sets the db cache size.
-    #[arg(id = "db-cache-size", long = "db-cache-size", value_name = "SIZE")]
+    #[arg(
+        id = "rocksdb-cache-size",
+        long = "db-cache-size",
+        value_name = "SIZE"
+    )]
     pub db_cache_size: Option<String>,
 
     /// Enable discovery protocol.
@@ -137,13 +139,9 @@ pub struct Cli {
     )]
     pub node_table_promotion_timeout_s: Option<String>,
 
-    /// Sets test mode for adding latency
-    #[arg(id = "test-mode", long = "test-mode", value_name = "BOOL")]
-    pub test_mode: Option<String>,
-
     /// Sets the compaction profile of RocksDB.
     #[arg(
-        id = "db-compact-profile",
+        id = "rocksdb-compaction-profile",
         long = "db-compact-profile",
         value_name = "ENUM"
     )]
@@ -152,14 +150,6 @@ pub struct Cli {
     /// Sets the root path of db.
     #[arg(id = "block-db-dir", long = "block-db-dir", value_name = "DIR")]
     pub block_db_dir: Option<String>,
-
-    /// Sets the test chain json file.
-    #[arg(
-        id = "load-test-chain",
-        long = "load-test-chain",
-        value_name = "FILE"
-    )]
-    pub load_test_chain: Option<String>,
 
     /// Sets egress queue capacity of P2P network.
     #[arg(
@@ -246,8 +236,6 @@ pub struct Cli {
     pub light: bool,
     #[arg(long)]
     pub archive: bool,
-    #[arg(long)]
-    pub tg_archive: bool,
     #[arg(long)]
     pub full: bool,
 
@@ -1440,4 +1428,61 @@ pub struct RpcLocalPosVotingStatusArgs {
         hide = true
     )]
     pub rpc_method: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::CommandFactory;
+    use client::configuration::RawConfiguration;
+    use std::collections::HashSet;
+
+    // clap ids consumed directly in `Configuration::parse` /
+    // `RawConfiguration::parse` rather than through a config-field lookup.
+    const EXPLICIT_HANDLERS: &[&str] = &["config", "archive", "full", "light"];
+
+    #[test]
+    fn port_flag_overrides_tcp_port() {
+        let matches = Cli::command()
+            .try_get_matches_from(["conflux", "--port", "42424"])
+            .expect("--port should parse");
+        let raw = RawConfiguration::parse(&matches).expect("config parses");
+        assert_eq!(raw.tcp_port, 42424);
+    }
+
+    #[test]
+    fn db_flags_override_rocksdb_config() {
+        let matches = Cli::command()
+            .try_get_matches_from([
+                "conflux",
+                "--db-cache-size",
+                "256",
+                "--db-compact-profile",
+                "hdd",
+            ])
+            .expect("db flags should parse");
+        let raw = RawConfiguration::parse(&matches).expect("config parses");
+        assert_eq!(raw.rocksdb_cache_size, Some(256));
+        assert_eq!(raw.rocksdb_compaction_profile, Some("hdd".to_string()));
+    }
+
+    // Guards against the id/field mismatch class: a declared option whose clap
+    // `id` matches no config field (and no explicit handler) is silently
+    // dropped at parse time, so the flag looks documented but does nothing.
+    #[test]
+    fn every_top_level_option_is_wired() {
+        let keys: HashSet<String> =
+            RawConfiguration::cli_lookup_keys().into_iter().collect();
+        for arg in Cli::command().get_arguments() {
+            let id = arg.get_id().as_str();
+            if id == "help" || id == "version" {
+                continue;
+            }
+            assert!(
+                keys.contains(id) || EXPLICIT_HANDLERS.contains(&id),
+                "CLI option `{}` resolves to no config field or handler",
+                id
+            );
+        }
+    }
 }
