@@ -296,8 +296,10 @@ tikv-jemallocator = { version = "0.6", features = ["profiling", "unprefixed_mall
 # tikv-jemalloc-ctl = { version = "0.6", features = ["use_std", "stats"] }
 # tikv-jemalloc-sys = { version = "0.6", features = ["profiling"] }
 jemalloc_pprof = { version = "0.8", features = ["symbolize", "flamegraph"] }
-# CPU profiling
-pprof = { version = "0.15", features = ["flamegraph", "protobuf-codec"] }
+# CPU profiling. No "flamegraph" feature: CPU profiles are served as pprof
+# protobuf only, and the feature would pull inferno -> quick-xml
+# (RustSec-flagged, see deny.toml).
+pprof = { version = "0.15", features = ["protobuf-codec"] }
 tracy-client = "0.18.0"
 snmalloc-rs = { version = "0.3.7", features = ["build_cc"] }
 
