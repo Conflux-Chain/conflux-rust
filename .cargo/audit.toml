@@ -1,11 +1,11 @@
 [advisories]
 ignore = [
-    "RUSTSEC-2025-0055", # tracing-subscriber 0.2.25 Introduced by `revm`.
-    # quick-xml DoS advisories, patched only in >= 0.41.0; pulled via
-    # jemalloc_pprof -> inferno, whose APIs used here only write
-    # flamegraph SVG (no untrusted-XML parsing reachable). No inferno
-    # release uses quick-xml 0.41 yet. See deny.toml for details; drop
-    # when upstream catches up.
-    "RUSTSEC-2026-0194",
-    "RUSTSEC-2026-0195",
+    # tracing-subscriber 0.2.25 is an optional dep of ark-relations 0.5.x,
+    # reached only via revm-precompile -> ark-bn254 -> ark-r1cs-std ->
+    # ark-relations. ark-relations 0.6 moved to tracing-subscriber 0.3, but the
+    # whole arkworks 0.5 stack is pinned by revm-precompile, and no
+    # revm-precompile release (through 41.0.0) requires arkworks 0.6 yet, so
+    # there is no upgrade path. cargo-deny's resolved graph omits this edge;
+    # only the raw-lockfile cargo-audit scan flags it, hence audit-only.
+    "RUSTSEC-2025-0055",
 ]
