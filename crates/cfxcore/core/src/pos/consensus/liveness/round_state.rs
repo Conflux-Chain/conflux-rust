@@ -239,8 +239,9 @@ impl RoundState {
         self.current_round_deadline
     }
 
-    /// In case the local timeout corresponds to the current round, reset the
-    /// timeout and return true. Otherwise ignore and return false.
+    /// Processes a local timeout that the caller has already checked against
+    /// the current epoch and round, schedules the next timeout, and returns
+    /// `true`.
     pub fn process_local_timeout(&mut self, epoch_round: (u64, Round)) -> bool {
         diem_info!(round = epoch_round.1, "Local timeout");
         self.setup_timeout(epoch_round.0);

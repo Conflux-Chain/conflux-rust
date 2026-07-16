@@ -94,8 +94,9 @@ pub struct BlockData {
     ///   the block chain.
     ///
     /// It makes the following guarantees:
-    ///   1. Time Monotonicity: Time is monotonically increasing in the block
-    /// chain.      (i.e. If H1 < H2, H1.Time < H2.Time).
+    ///   1. Timestamp monotonicity: timestamps never decrease along a chain.
+    ///      Ordinary proposal blocks must strictly increase; nil and
+    ///      reconfiguration-suffix blocks reuse their parent's timestamp.
     ///   2. If a block of transactions B is agreed on with timestamp T, then
     /// at least      f+1 honest validators think that T is in the past. An
     /// honest validator will      only vote on a block when its own clock
@@ -240,9 +241,8 @@ impl BlockData {
     }
 
     pub fn new_nil(round: Round, quorum_cert: QuorumCert) -> Self {
-        // We want all the NIL blocks to agree on the timestamps even though
-        // they're generated independently by different validators,
-        // hence we're using the timestamp of a parent + 1.
+        // Nil blocks are generated independently, so all validators derive the
+        // same timestamp by reusing the certified parent's timestamp.
         assume!(
             quorum_cert.certified_block().timestamp_usecs() < u64::max_value()
         ); // unlikely to be false in this universe

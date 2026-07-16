@@ -12,7 +12,7 @@ The configuration file path can be specified using the command-line parameter `-
 ./conflux --config /path/to/your/config.toml
 ```
 
-## Enable all CIPs in private network
+## Activate CIPs that inherit the default transition time in a private network
 
 As the Conflux network evolves, we introduce new features, fix bugs, and improve network performance through hard forks. Any changes involving consensus rule modifications are introduced via [CIPs (Conflux Improvement Proposals)](https://github.com/conflux-chain/cips), and each hard fork may include one or more CIPs.
 
@@ -20,14 +20,19 @@ For a complete list of historically activated CIPs, refer to [this page](https:/
 
 Typically, node operators do not need to manually configure hard fork settings, as the upgrade heights for both the mainnet and testnet are fixed and hardcoded in the released Conflux node binaries. However, if you are setting up a [private network](https://doc.confluxnetwork.org/docs/general/run-a-node/advanced-topics/running-independent-chain), you may need to specify the activation height for each CIP according to your requirements.
 
-Most requirements for running a private network are to run an environment that includes all the latest features. Due to the peculiarities of the genesis block, features added by CIP cannot be activated in the genesis block. Therefore, the most common and simplest approach is to activate all features in the block immediately following the genesis block.
+For a private network, the following configuration activates at block 1 the
+CIPs that inherit `default_transition_time` and enables PoS references from
+height 1:
 
 ```toml
 default_transition_time = 1
-# cip1559 needs to be activated after the pos_reference_enable_height
+# CIP-1559 must activate no earlier than PoS references.
 pos_reference_enable_height = 1
 ```
 
-This configuration will activate all implemented features at the first block after the genesis block.
+This does not override features with independent transition settings, such as
+`tanzanite_transition_height`, `cip43_init_end_number`, or
+`align_evm_transition_height`. Configure those explicitly when they are
+required.
 
 More precise control over the activation timing of each feature is mainly used for code integration testing. If you are absolutely certain that you need to use this feature, please read [CIP configuration](./cips-configuration.md).

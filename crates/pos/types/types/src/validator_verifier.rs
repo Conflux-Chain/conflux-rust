@@ -109,9 +109,9 @@ pub struct ValidatorVerifier {
 }
 
 impl ValidatorVerifier {
-    /// Initialize with a map of account address to validator info and set
-    /// quorum size to default (`2f + 1`) or zero if
-    /// `address_to_validator_info` is empty.
+    /// Initializes from validator information. For a nonempty set,
+    /// `quorum_voting_power` is `total_voting_power * 2 / 3 + 1`; for an empty
+    /// set it is zero.
     pub fn new(
         address_to_validator_info: BTreeMap<
             AccountAddress,
@@ -224,12 +224,11 @@ impl ValidatorVerifier {
         }
     }
 
-    /// This function will successfully return when at least quorum_size
-    /// signatures of known authors are successfully verified. Also, an
-    /// aggregated signature is considered invalid if any of the
-    /// attached signatures is invalid or it does not correspond to a known
-    /// author. The latter is to prevent malicious users from adding
-    /// arbitrary content to the signature payload that would go unnoticed.
+    /// Succeeds only if every attached signature is from a known author and
+    /// verifies, and the signers' combined voting power reaches
+    /// `quorum_voting_power`. An unknown author invalidates the whole aggregate
+    /// rather than being ignored, preventing unchecked entries from padding
+    /// the signature payload.
     pub fn verify_aggregated_struct_signature<T: CryptoHash + Serialize>(
         &self, message: &T,
         aggregated_signature: &BTreeMap<AccountAddress, ConsensusSignature>,

@@ -106,7 +106,9 @@ build_config! {
         //     * Allow setting genesis accounts and generate tx from secrets
         //
         // `dev` mode is for users to run a single node that automatically
-        //     generates blocks with fixed intervals
+        //     generates blocks after successful `cfx_sendRawTransaction` calls
+        //     by default, or at fixed intervals when `dev_block_interval_ms`
+        //     is set.
         //     * You are expected to also set `jsonrpc_ws_port`,
         //       and `jsonrpc_http_port` if you want RPC functionalities.
         //     * generate blocks automatically without PoW.
@@ -325,7 +327,10 @@ build_config! {
 
         // Storage Section.
         (additional_maintained_snapshot_count, (u32), 1)
-        // `None` for `additional_maintained*` means the data is never garbage collected.
+        // In the finalized data-manager configuration, `None` for these
+        // optional `additional_maintained_*_epoch_count` settings means
+        // "never garbage collect." Omitted values remain `None` only for
+        // archive nodes; non-archive nodes normalize them to `Some(0)`.
         (additional_maintained_block_body_epoch_count, (Option<usize>), None)
         (additional_maintained_execution_result_epoch_count, (Option<usize>), None)
         (additional_maintained_reward_epoch_count, (Option<usize>), None)

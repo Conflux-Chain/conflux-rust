@@ -41,7 +41,8 @@ pub fn h256_to_u256_be(value: H256) -> U256 {
     U256::from_big_endian(value.as_bytes())
 }
 
-/// Creates an Ethereum address from an EVM word's upper 20 bytes
+/// Creates an Ethereum address from the low-order (rightmost) 20 bytes of a
+/// big-endian EVM word.
 pub fn u256_to_address_be(value: U256) -> Address {
     let buf = value.to_big_endian();
     let mut addr_bytes: [u8; 20] = [0u8; 20];

@@ -7,15 +7,15 @@ use std::collections::VecDeque;
 pub struct CfxFeeHistory {
     /// Oldest epoch
     oldest_epoch: U64,
-    /// An array of pivot block base fees per gas. This includes one block
-    /// earlier than the oldest block. Zeroes are returned for pre-EIP-1559
-    /// blocks.
+    /// Pivot-block base fees per gas for the returned epochs, plus one
+    /// additional base fee for the pivot block immediately after the newest
+    /// returned epoch. Zeroes are returned for pre-EIP-1559 blocks.
     base_fee_per_gas: VecDeque<U256>,
     /// In Conflux, 1559 is adjusted by the current block's gas limit of total
     /// transactions, instead of parent's gas used
     gas_used_ratio: VecDeque<f64>,
-    /// A two-dimensional array of effective priority fees per gas at the
-    /// requested block percentiles.
+    /// Effective gas prices at the requested pivot-block percentiles. Nonzero
+    /// values include the pivot block's base fee.
     reward: VecDeque<Vec<U256>>,
 }
 

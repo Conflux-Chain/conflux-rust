@@ -835,19 +835,26 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// The key is then released and may be associated with future stored
     /// values.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if `key` is not associated with a value.
+    /// Returns `Error::SlabKeyError` when `key` is greater than the backing
+    /// storage length or designates a vacant slot.
+    ///
+    /// # Known limitation
+    ///
+    /// A key equal to the backing storage length is not currently rejected
+    /// before unchecked indexing and must not be passed to this method.
     ///
     /// # Examples
     ///
+    /// ```
     /// # use cfx_storage::Slab;
-    /// let mut slab = Slab::with_capacity(10);
+    /// let slab: Slab<&str> = Slab::with_capacity(10);
+    /// let hello = slab.insert("hello").unwrap();
     ///
-    /// let hello = slab.insert("hello");
-    ///
-    /// assert_eq!(slab.remove(hello), "hello");
+    /// assert_eq!(slab.remove(hello).unwrap(), "hello");
     /// assert!(!slab.contains(hello));
+    /// ```
     pub fn remove(&self, key: usize) -> Result<T> {
         if key > self.entries.len() {
             // Index out of range.

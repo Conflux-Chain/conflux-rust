@@ -86,7 +86,7 @@ class FrameworkOptions:
     # port_seed: int  # the seed to use for assigning port numbers
     coveragedir: str  # write tested RPC commands into this directory
     pdbonfailure: bool  # attach a python debugger if test fails
-    usecli: bool  # use bitcoin-cli instead of RPC for all commands
+    usecli: bool  # request CLI mode (currently unsupported)
     random_seed: int  # set a random seed
     metrics_report_interval_ms: int  # report metrics interval in milliseconds
     conflux: str  # path to conflux binary
@@ -106,9 +106,9 @@ class AutoTraceMiddleware(ConfluxWeb3Middleware):
 
 
 class ConfluxTestFramework:
-    """Base class for a bitcoin test script.
+    """Base class for a Conflux test script.
 
-    Individual bitcoin test scripts should subclass this class and override the set_test_params() and run_test() methods.
+    Individual Conflux test scripts should subclass this class and override the set_test_params() and run_test() methods.
 
     Individual tests can also override the following methods to customize the test setup:
 
@@ -523,7 +523,8 @@ class ConfluxTestFramework:
         ll = int(self.options.loglevel) if self.options.loglevel.isdigit(
         ) else self.options.loglevel.upper()
         # ch.setLevel(ll)
-        # Format logs the same as bitcoind's debug.log with microprecision (so log files can be concatenated and sorted)
+        # Use sortable UTC timestamps (millisecond precision padded to
+        # microsecond format) so log files can be concatenated and sorted.
         formatter = logging.Formatter(
             fmt=
             '%(asctime)s.%(msecs)03d000Z %(name)s (%(levelname)s): %(message)s',

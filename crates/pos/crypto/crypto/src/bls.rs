@@ -329,8 +329,7 @@ pub struct BLSSignatureUnchecked(RawSignature);
 impl TryFrom<&[u8]> for BLSPublicKeyUnchecked {
     type Error = CryptoMaterialError;
 
-    /// Deserialize an BLSPrivateKey. This method will also check for key
-    /// validity.
+    /// Deserializes a BLS public key that was validated before being persisted.
     fn try_from(
         bytes: &[u8],
     ) -> std::result::Result<BLSPublicKeyUnchecked, CryptoMaterialError> {
@@ -351,8 +350,7 @@ impl TryFrom<&[u8]> for BLSPublicKeyUnchecked {
 impl TryFrom<&[u8]> for BLSSignatureUnchecked {
     type Error = CryptoMaterialError;
 
-    /// Deserialize an BLSPrivateKey. This method will also check for key
-    /// validity.
+    /// Deserializes a BLS signature that was validated before being persisted.
     fn try_from(
         bytes: &[u8],
     ) -> std::result::Result<BLSSignatureUnchecked, CryptoMaterialError> {

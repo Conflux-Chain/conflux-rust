@@ -110,7 +110,8 @@ pub struct NetworkConfiguration {
     /// Connection lifetime threshold for promotion
     pub connection_lifetime_for_promotion: Duration,
     pub test_mode: bool,
-    /// Maximum number of P2P nodes for subnet B (ip/16).
+    /// Maximum number of P2P node records retained per IPv4 or IPv6 `/24`
+    /// prefix.
     pub subnet_quota: usize,
     pub session_ip_limit_config: SessionIpLimitConfig,
 

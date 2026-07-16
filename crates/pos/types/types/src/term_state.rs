@@ -473,10 +473,10 @@ pub struct PosState {
     /// All the nodes that have staked in PoW.
     /// Nodes are only inserted and will never be removed.
     node_map: HashMap<AccountAddress, NodeData>,
-    /// `current_view / TERM_LIST_LEN == term_list.current_term` is always
-    /// true. This is not the same as `RoundState.current_view` because the
-    /// view does not increase for blocks following a pending
-    /// reconfiguration block.
+    /// `POS_STATE_CONFIG.get_term_view(current_view).0` equals
+    /// `term_list.current_term`. This is not the same as
+    /// `RoundState.current_view` because the view does not increase for blocks
+    /// following a pending reconfiguration block.
     current_view: Round,
     /// Current epoch state
     epoch_state: EpochState,

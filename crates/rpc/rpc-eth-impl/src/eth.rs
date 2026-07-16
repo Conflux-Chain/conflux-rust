@@ -1039,10 +1039,8 @@ impl EthApiServer for EthApi {
         Ok(None)
     }
 
-    /// Returns the EIP-2718 encoded transaction if it exists.
-    ///
-    /// If this is a EIP-4844 transaction that is in the pool it will include
-    /// the sidecar.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     async fn raw_transaction_by_hash(
         &self, hash: H256,
     ) -> RpcResult<Option<Bytes>> {
@@ -1058,8 +1056,8 @@ impl EthApiServer for EthApi {
         self.async_transaction_by_hash(hash).await
     }
 
-    /// Returns information about a raw transaction by block hash and
-    /// transaction index position.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     async fn raw_transaction_by_block_hash_and_index(
         &self, hash: H256, index: Index,
     ) -> RpcResult<Option<Bytes>> {
@@ -1077,8 +1075,8 @@ impl EthApiServer for EthApi {
         Ok(EthApi::block_tx_by_index(phantom_block, index.value()))
     }
 
-    /// Returns information about a raw transaction by block number and
-    /// transaction index position.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     async fn raw_transaction_by_block_number_and_index(
         &self, number: BlockNumberOrTag, index: Index,
     ) -> RpcResult<Option<Bytes>> {
@@ -1096,7 +1094,8 @@ impl EthApiServer for EthApi {
         Ok(EthApi::block_tx_by_index(phantom_block, index.value()))
     }
 
-    /// Returns information about a transaction by sender and nonce.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     async fn transaction_by_sender_and_nonce(
         &self, address: Address, nonce: U64,
     ) -> RpcResult<Option<Transaction>> {
@@ -1145,7 +1144,8 @@ impl EthApiServer for EthApi {
             .map_err(|err| err.into())
     }
 
-    /// Returns the block's header at given number.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     async fn header_by_number(
         &self, hash: BlockNumberOrTag,
     ) -> RpcResult<Option<Header>> {
@@ -1153,15 +1153,15 @@ impl EthApiServer for EthApi {
         Err(internal_error_with_data("Not implemented"))
     }
 
-    /// Returns the block's header at given hash.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     async fn header_by_hash(&self, hash: H256) -> RpcResult<Option<Header>> {
         let _ = hash;
         Err(internal_error_with_data("Not implemented"))
     }
 
-    /// `eth_simulateV1` executes an arbitrary number of transactions on top of
-    /// the requested state. The transactions are packed into individual
-    /// blocks. Overrides can be provided.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     async fn simulate_v1(
         &self, opts: SimulatePayload, block_number: Option<BlockId>,
     ) -> RpcResult<Vec<SimulatedBlock>> {
@@ -1188,8 +1188,8 @@ impl EthApiServer for EthApi {
         Ok(execution.output.into())
     }
 
-    /// Simulate arbitrary number of transactions at an arbitrary blockchain
-    /// index, with the optionality of state overrides
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     async fn call_many(
         &self, bundle: Bundle, state_context: Option<StateContext>,
         state_override: Option<RpcStateOverride>,
@@ -1297,22 +1297,17 @@ impl EthApiServer for EthApi {
         .map_err(|err| err.into())
     }
 
-    /// Returns whether the client is actively mining new blocks.
+    /// Compatibility stub: always returns `false`.
     async fn is_mining(&self) -> RpcResult<bool> { Ok(false) }
 
-    /// Returns the number of hashes per second that the node is mining with.
+    /// Compatibility stub: always returns zero.
     async fn hashrate(&self) -> RpcResult<U256> { Ok(U256::zero()) }
 
     /// Returns the hash of the current block, the seedHash, and the boundary
     /// condition to be met (“target”)
     // async fn get_work(&self) -> RpcResult<Work>;
 
-    /// Used for submitting mining hashrate.
-    ///
-    /// Can be used for remote miners to submit their hash rate.
-    /// It accepts the miner hash rate and an identifier which must be unique
-    /// between nodes. Returns `true` if the block was successfully
-    /// submitted, `false` otherwise.
+    /// Compatibility stub: ignores its arguments and always returns `false`.
     async fn submit_hashrate(
         &self, hashrate: U256, id: H256,
     ) -> RpcResult<bool> {
@@ -1320,7 +1315,7 @@ impl EthApiServer for EthApi {
         Ok(false)
     }
 
-    /// Used for submitting a proof-of-work solution.
+    /// Compatibility stub: ignores its arguments and always returns `false`.
     async fn submit_work(
         &self, nonce: H64, pow_hash: H256, mix_digest: H256,
     ) -> RpcResult<bool> {
@@ -1328,8 +1323,8 @@ impl EthApiServer for EthApi {
         Ok(false)
     }
 
-    /// Sends transaction; will block waiting for signer to return the
-    /// transaction hash.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     async fn send_transaction(
         &self, request: TransactionRequest,
     ) -> RpcResult<H256> {
@@ -1365,16 +1360,15 @@ impl EthApiServer for EthApi {
         self.send_raw_transaction(raw).await
     }
 
-    /// Returns an Ethereum specific signature with:
-    /// sign(keccak256("\x19Ethereum Signed Message:\n"
-    /// + len(message) + message))).
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     async fn sign(&self, address: Address, message: Bytes) -> RpcResult<Bytes> {
         let _ = (address, message);
         Err(internal_error_with_data("Not implemented"))
     }
 
-    /// Signs a transaction that can be submitted to the network at a later time
-    /// using with `sendRawTransaction.`
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     async fn sign_transaction(
         &self, transaction: TransactionRequest,
     ) -> RpcResult<Bytes> {

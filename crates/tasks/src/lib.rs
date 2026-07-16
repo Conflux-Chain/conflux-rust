@@ -183,12 +183,15 @@ impl TaskManager {
         }
     }
 
-    /// Fires the shutdown signal and awaits until all tasks are shutdown.
+    /// Fires the shutdown signal and waits until all registered
+    /// `GracefulShutdownGuard`s have been dropped.
     pub fn graceful_shutdown(self) { let _ = self.do_graceful_shutdown(None); }
 
-    /// Fires the shutdown signal and awaits until all tasks are shutdown.
+    /// Fires the shutdown signal and waits until all registered
+    /// `GracefulShutdownGuard`s have been dropped.
     ///
-    /// Returns true if all tasks were shutdown before the timeout elapsed.
+    /// Returns `true` if all registered guards were dropped before the timeout
+    /// elapsed.
     pub fn graceful_shutdown_with_timeout(
         self, timeout: std::time::Duration,
     ) -> bool {

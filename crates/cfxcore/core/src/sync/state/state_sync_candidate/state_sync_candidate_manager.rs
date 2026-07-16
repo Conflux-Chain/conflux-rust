@@ -15,8 +15,9 @@ use std::{
 /// 2. Send ManifestRequest to some random peer in `active_peers`. 2.1: Valid
 ///    manifest received, move on to step 3. 2.2: Timeout/invalid/empty
 ///    response. Remove from `active_peers`. 2.2.1: Have more available
-///    `active_peers`, restart step 2. 2.2.2: `active_peers` is empty, reset and
-///    restart step 1.
+///    `active_peers`, restart step 2. 2.2.2: `active_peers` is empty, advance
+///    to the next candidate; reset and restart step 1 only after all candidates
+///    are exhausted.
 /// 3. Send ChunkRequest to multiple peers in `active_peers`. 3.1: Valid chunks
 ///    received. 3.1.1: All chunks received, set state_sync.status to Completed.
 ///    3.1.2: More chunks to request. Request from `active_peers`. 3.2:

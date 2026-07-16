@@ -6,10 +6,10 @@ use super::{pivot_hint::PivotHintConfig, ConsensusInnerConfig};
 pub struct ConsensusConfig {
     /// Chain id configs.
     pub chain_id: ChainIdParams,
-    /// When bench_mode is true, the PoW solution verification will be skipped.
-    /// The transaction execution will also be skipped and only return the
-    /// pair of (KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP) This is for testing
-    /// only
+    /// When `bench_mode` is true, epoch execution is skipped and execution
+    /// result queries return a fixed `EpochExecutionCommitment` containing the
+    /// genesis empty state root, empty receipts root, and empty logs bloom.
+    /// This mode is for testing only.
     pub bench_mode: bool,
     /// The configuration used by inner data
     pub inner_conf: ConsensusInnerConfig,

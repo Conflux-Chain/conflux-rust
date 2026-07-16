@@ -146,9 +146,10 @@ pub struct BlockDataManager {
     pub target_difficulty_manager: TargetDifficultyManager,
     gc_progress: Arc<Mutex<GCProgress>>,
 
-    /// This maintains the boundary height of available state and commitments
-    /// (executed but not deleted or in `ExecutionTaskQueue`).
-    /// The upper bound always equal to latest executed epoch height.
+    /// This tracks the pivot-chain height range whose committed execution
+    /// state and commitments are available. `upper_bound` advances when the
+    /// next pivot epoch is newly executed or its existing execution result is
+    /// recovered.
     /// As for the lower bound:
     ///   1. At start it equals `cur_era_stable_height`, or the height of the
     ///      remotely synchronized state for a full node that synced a

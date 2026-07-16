@@ -293,10 +293,8 @@ impl TracingInspector {
         let trace = &mut self.traces.arena[trace_idx].trace;
 
         if trace_idx == 0 {
-            // this is the root call which should get the gas used of the
-            // transaction refunds are applied after execution,
-            // which is when the root call ends
-            // Conflux have no refund
+            // Transaction-level refunds are computed after the root call
+            // returns, so this callback uses a zero refund counter.
             trace.gas_used = gas_used(gas_spent, 0);
         } else {
             trace.gas_used = gas_spent;
@@ -397,7 +395,7 @@ impl TracingInspector {
             memory_size: memory.len(),
             memory,
             gas_remaining: self.gas_inspector.gas_remaining(),
-            gas_refund_counter: 0, // conflux has no gas refund
+            gas_refund_counter: 0, // TODO: Wire in refund accounting.
 
             // fields will be populated end of call
             gas_cost: 0,

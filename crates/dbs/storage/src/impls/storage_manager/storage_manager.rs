@@ -2,8 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-/// The in mem snapshot_info map and the on disk snapshot_info_db is always in
-/// sync.
+/// Maintains an in-memory snapshot-info index backed by `snapshot_info_db`.
+///
+/// Successful `insert` and `remove` operations update both representations.
+/// Maintenance may intentionally remove entries from memory before deleting
+/// them from the database, and a database error can leave them out of sync.
 pub struct PersistedSnapshotInfoMap {
     // Db to persist snapshot_info.
     snapshot_info_db: KvdbSqlite<Box<[u8]>>,
@@ -1544,7 +1547,9 @@ struct MaybeDeltaTrieDestroyErrors {
     delta_trie_destroy_error_2: Cell<Option<Error>>,
 }
 
-// It's only used when relevant lock has been acquired.
+// FIXME: Replace these `Cell`s with synchronized storage.
+// `DeltaDbReleaser::drop` and `take_result` can access them concurrently from
+// different threads.
 unsafe impl Sync for MaybeDeltaTrieDestroyErrors {}
 
 impl MaybeDeltaTrieDestroyErrors {

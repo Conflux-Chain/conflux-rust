@@ -102,8 +102,8 @@ impl BlockTracesWithEpoch {
 #[derive(Debug, SmartDefault)]
 pub struct BlockDataWithMultiVersion<Version, T> {
     data_version_tuple_array: Vec<DataVersionTuple<Version, T>>,
-    // The current pivot epoch that this block is executed.
-    // This should be consistent with the epoch hash in database.
+    // The execution version currently selected in memory for this block.
+    // It may be an off-pivot version that is absent from the database.
     current_version: Option<Version>,
 }
 
@@ -138,9 +138,9 @@ impl<Version: Copy + Eq + PartialEq, T: Clone>
         self.current_version = Some(version);
     }
 
-    /// Insert the latest data with its version.
-    /// This should be called after we update the version in the database to
-    /// ensure consistency.
+    /// Inserts `data` and selects `version` as the in-memory current version.
+    /// For a persistent current-pivot update, the caller must write the
+    /// database first; off-pivot versions may intentionally remain memory-only.
     pub fn insert_current_data(&mut self, version: &Version, data: T) {
         // If it's inserted before, we do not need to push a duplicated entry.
         if self.get_data_at_version(version).is_none() {

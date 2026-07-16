@@ -148,9 +148,8 @@ impl BlockingTaskPool {
 
 /// Async handle for a blocking task running in a Rayon thread pool.
 ///
-/// ## Panics
-///
-/// If polled from outside a tokio runtime.
+/// This future is backed by a one-shot channel and can be polled by any
+/// executor.
 #[derive(Debug)]
 #[must_use = "futures do nothing unless you `.await` or poll them"]
 #[pin_project::pin_project]

@@ -69,9 +69,8 @@ impl TargetDifficultyCache {
 }
 
 //FIXME: Add logic for persisting entries
-/// This is a data structure to cache the computed target difficulty
-/// of a adjustment period. Each element is indexed by the hash of
-/// the upper boundary block of the period.
+/// Caches the target difficulty for the next adjustment period, keyed by the
+/// hash of the current period's upper-boundary block.
 #[derive(DeriveMallocSizeOf)]
 pub struct TargetDifficultyManager {
     cache: TargetDifficultyCache,
@@ -101,8 +100,8 @@ impl TargetDifficultyManager {
     ) -> U256
     where C: ConsensusProvider {
         if let Some(target_diff) = self.get(cur_hash) {
-            // The target difficulty of this period is already computed and
-            // cached.
+            // The target difficulty for the next period is already computed
+            // and cached.
             return target_diff;
         }
 
@@ -157,7 +156,7 @@ impl TargetDifficultyManager {
             target_diff = lower;
         }
 
-        // Caching the computed target difficulty of this period.
+        // Cache the computed target difficulty for the next period.
         self.set(*cur_hash, target_diff);
 
         target_diff

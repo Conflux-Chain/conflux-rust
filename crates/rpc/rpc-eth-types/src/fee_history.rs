@@ -14,14 +14,15 @@ use primitives::{transaction::SignedTransaction, BlockHeader};
 pub struct FeeHistory {
     /// Oldest Block
     oldest_block: U64,
-    /// An array of block base fees per gas. This includes one block earlier
-    /// than the oldest block. Zeroes are returned for pre-EIP-1559 blocks.
+    /// Base fees per gas for the returned blocks, followed by one additional
+    /// element for the block immediately after the newest returned block.
+    /// Zeroes are returned for pre-EIP-1559 blocks.
     base_fee_per_gas: VecDeque<U256>,
     /// In Conflux, 1559 is adjusted by the current block's gas limit of total
     /// transactions, instead of parent's gas used
     gas_used_ratio: VecDeque<f64>,
-    /// A two-dimensional array of effective priority fees per gas at the
-    /// requested block percentiles.
+    /// Effective gas prices at the requested block percentiles. Nonzero values
+    /// include the block's base fee.
     reward: VecDeque<Vec<U256>>,
 }
 

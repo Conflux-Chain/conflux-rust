@@ -49,7 +49,8 @@ pub trait CfxRpc {
     #[method(name = "maxPriorityFeePerGas")]
     async fn max_priority_fee_per_gas(&self) -> JsonRpcResult<U256>;
 
-    /// Returns highest epoch number.
+    /// Returns the epoch number resolved from the supplied epoch identifier, or
+    /// the latest mined epoch if omitted.
     #[method(name = "epochNumber")]
     async fn epoch_number(
         &self, epoch_number: Option<EpochNumber>,
@@ -92,7 +93,8 @@ pub trait CfxRpc {
         &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<Vec<VoteStakeInfo>>;
 
-    /// Returns balance of the given account.
+    /// Returns the storage collateral occupied by the given account at the
+    /// requested epoch (latest state by default).
     #[method(name = "getCollateralForStorage")]
     async fn collateral_for_storage(
         &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
@@ -242,7 +244,8 @@ pub trait CfxRpc {
         &self, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<U256>;
 
-    /// Returns accumulate interest rate of the given epoch
+    /// Returns PoS economics at the requested epoch: total staked tokens,
+    /// distributable interest, and the last distribution block.
     #[method(name = "getPoSEconomics")]
     async fn pos_economics(
         &self, epoch_number: Option<EpochNumber>,
@@ -272,7 +275,8 @@ pub trait CfxRpc {
         &self, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<TokenSupplyInfo>;
 
-    /// Return information about total token supply.
+    /// Returns aggregate storage-collateral totals and storage-point usage at
+    /// the requested epoch (latest state by default).
     #[method(name = "getCollateralInfo")]
     async fn get_collateral_info(
         &self, epoch_number: Option<EpochNumber>,

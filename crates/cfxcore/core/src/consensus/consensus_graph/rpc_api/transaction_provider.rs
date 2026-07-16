@@ -21,8 +21,8 @@ impl ConsensusGraph {
     pub fn get_signed_tx_and_tx_info(
         &self, hash: &H256,
     ) -> Option<(SignedTransaction, TransactionInfo)> {
-        // We need to hold the inner lock to ensure that tx_index and receipts
-        // are consistent
+        // `get_transaction_info` holds the consensus-inner read lock while
+        // resolving the transaction against the current pivot view.
 
         let tx_info = self.get_transaction_info(hash)?;
         if let Some(executed) = &tx_info.maybe_executed_extra_info {
@@ -48,7 +48,9 @@ impl ConsensusGraph {
         let tx_index = self.data_man.transaction_index_by_hash(
             tx_hash, false, /* update_cache */
         )?;
-        // receipts should never be None if transaction index isn't none.
+        // A transaction index is recorded before the block execution result.
+        // Execution data may therefore be absent while execution is in progress
+        // or when the indexed block is not executed in the current pivot view.
         let maybe_executed_extra_info = inner
             .block_execution_results_by_hash(
                 &tx_index.block_hash,
