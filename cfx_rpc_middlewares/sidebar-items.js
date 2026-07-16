@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CorsDomainError"],"fn":["create_cors_layer","maybe_cors_layer"],"struct":["Logger","Metrics","Throttle"]};
+window.SIDEBAR_ITEMS = {"enum":["CorsDomainError"],"fn":["create_cors_layer","load_throttling_manager","maybe_cors_layer"],"struct":["Logger","Metrics","Throttle"]};
