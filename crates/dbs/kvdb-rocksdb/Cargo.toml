@@ -19,5 +19,11 @@ malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 rocksdb = { workspace = true }
 
+[features]
+# Forward RocksDB's `portable` feature so builds can disable its `-march=native`.
+# Non-portable titan under clang-18 emits `+avx10.1-256`, which `-Werror` rejects
+# on newer AVX10-capable CI runners.
+portable = ["rocksdb/portable"]
+
 [dev-dependencies]
 tempfile = { workspace = true }
