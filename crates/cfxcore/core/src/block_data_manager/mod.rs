@@ -159,15 +159,8 @@ pub struct BlockDataManager {
     ///      still-retained confirmed snapshot) when old snapshots are
     ///      garbage-collected. Archive nodes keep older state readable only
     ///      via the single-MPT `full_state_start_height` path.
-    ///
-    /// The lower boundary height will be updated when:
-    ///   1. New checkpoint
-    ///   2. Full Node snapshot syncing
-    ///   3. New Snapshot
-    ///
-    /// The upper boundary height will be updated when:
-    ///   1. Pivot chain switch
-    ///   2. Execution of new epoch
+    /// A pivot-chain switch may truncate `upper_bound` to just before the fork
+    /// point.
     ///
     /// This boundary tracks the pivot-chain height range whose state can
     /// back new-epoch execution. `check_read_availability` may still allow

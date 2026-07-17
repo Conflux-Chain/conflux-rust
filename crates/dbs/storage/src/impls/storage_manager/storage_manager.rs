@@ -902,10 +902,11 @@ impl StorageManager {
         )
     }
 
-    /// Removal is decided in two passes over current_snapshots (sorted by
-    /// ascending height): the descending trace described below, then an
-    /// ascending pass that removes snapshots outside the confirmed epoch's
-    /// subtree, propagating to deep descendants via parent_snapshot_epoch_id.
+    /// Removal is decided in two passes over `current_snapshots`, whose order
+    /// guarantees only that parents precede their children: a reverse
+    /// traversal performs the descending trace described below, then a forward
+    /// traversal removes snapshots outside the confirmed epoch's subtree,
+    /// propagating to deep descendants via `parent_snapshot_epoch_id`.
     /// In-progress snapshotting tasks are scanned separately.
     ///
     /// In the scan, pivot chain is traced from the confirmed snapshot.

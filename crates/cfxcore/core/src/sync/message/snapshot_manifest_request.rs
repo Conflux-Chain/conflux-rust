@@ -193,9 +193,10 @@ impl SnapshotManifestRequest {
         Some(epoch_receipts)
     }
 
-    /// `None` means some required data is missing from the local db; the caller
-    /// then responds with empty vectors so the requesting peer can fall back to
-    /// another peer.
+    /// Returns blame vectors only when the requested height relation is valid
+    /// and every required block header is available locally. The caller
+    /// converts `None` into empty vectors so the requesting peer can fall back
+    /// to another peer.
     fn get_blame_states(
         &self, ctx: &Context,
     ) -> Option<(Vec<StateRoot>, Vec<H256>, Vec<H256>)> {

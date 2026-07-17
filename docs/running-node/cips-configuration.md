@@ -32,7 +32,7 @@ parameters with independent defaults or mode-specific logic.
 
 Setting `default_transition_time = 1` activates only the CIPs that inherit
 that default. It does not override settings such as
-`tanzanite_transition_height`, `cip43_init_end_number`, or
+`tanzanite_transition_height`, `cip112_transition_height`, or
 `align_evm_transition_height`; set those explicitly when needed.
 
 ### Caution

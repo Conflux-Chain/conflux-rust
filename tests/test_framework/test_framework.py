@@ -216,7 +216,7 @@ class ConfluxTestFramework:
             dest="nocleanup",
             default=False,
             action="store_true",
-            help="Leave the test.* datadir in place on exit or error")
+            help="Leave the test data directory (conflux_test_* by default) in place on exit or error")
         parser.add_argument(
             "--cleanup-on-interrupt",
             dest="cleanup_on_interrupt",

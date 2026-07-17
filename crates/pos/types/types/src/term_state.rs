@@ -475,8 +475,8 @@ pub struct PosState {
     node_map: HashMap<AccountAddress, NodeData>,
     /// `POS_STATE_CONFIG.get_term_view(current_view).0` equals
     /// `term_list.current_term`. This is not the same as
-    /// `RoundState.current_view` because the view does not increase for blocks
-    /// following a pending reconfiguration block.
+    /// `RoundState.current_round` because the view does not increase for
+    /// blocks following a pending reconfiguration block.
     current_view: Round,
     /// Current epoch state
     epoch_state: EpochState,

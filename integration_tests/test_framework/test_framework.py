@@ -108,7 +108,7 @@ class AutoTraceMiddleware(ConfluxWeb3Middleware):
 class ConfluxTestFramework:
     """Base class for a Conflux test script.
 
-    Individual Conflux test scripts should subclass this class and override the set_test_params() and run_test() methods.
+    Individual pytest suites may subclass this class and override the set_test_params() method.
 
     Individual tests can also override the following methods to customize the test setup:
 

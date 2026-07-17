@@ -407,13 +407,13 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// // The slab contains no values, even though it has capacity for more
     /// assert_eq!(slab.len(), 0);
     ///
-    /// // These are all done without reallocating...
+    /// // These are all done without reallocating.
     /// for i in 0..10 {
-    ///     slab.insert(i);
+    ///     slab.insert(i).unwrap();
     /// }
     ///
-    /// // ...but this may make the slab reallocate
-    /// slab.insert(11);
+    /// // The slab does not grow implicitly when it reaches capacity.
+    /// assert!(slab.insert(11).is_err());
     pub fn with_capacity(capacity: usize) -> Self {
         let mut new = Slab::default();
         new.reserve(capacity).unwrap();
@@ -880,10 +880,10 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// # use cfx_storage::Slab;
     /// let mut slab = Slab::with_capacity(10);
     ///
-    /// let hello = slab.insert("hello");
+    /// let hello = slab.insert("hello").unwrap();
     /// assert!(slab.contains(hello));
     ///
-    /// slab.remove(hello);
+    /// slab.remove(hello).unwrap();
     ///
     /// assert!(!slab.contains(hello));
     pub fn contains(&self, key: usize) -> bool { self.get(key).is_some() }

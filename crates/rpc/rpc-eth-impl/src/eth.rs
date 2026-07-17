@@ -1039,8 +1039,6 @@ impl EthApiServer for EthApi {
         Ok(None)
     }
 
-    /// Unsupported: this method currently returns a `Not implemented` RPC
-    /// error.
     async fn raw_transaction_by_hash(
         &self, hash: H256,
     ) -> RpcResult<Option<Bytes>> {
@@ -1056,8 +1054,6 @@ impl EthApiServer for EthApi {
         self.async_transaction_by_hash(hash).await
     }
 
-    /// Unsupported: this method currently returns a `Not implemented` RPC
-    /// error.
     async fn raw_transaction_by_block_hash_and_index(
         &self, hash: H256, index: Index,
     ) -> RpcResult<Option<Bytes>> {
@@ -1075,8 +1071,6 @@ impl EthApiServer for EthApi {
         Ok(EthApi::block_tx_by_index(phantom_block, index.value()))
     }
 
-    /// Unsupported: this method currently returns a `Not implemented` RPC
-    /// error.
     async fn raw_transaction_by_block_number_and_index(
         &self, number: BlockNumberOrTag, index: Index,
     ) -> RpcResult<Option<Bytes>> {
@@ -1094,8 +1088,6 @@ impl EthApiServer for EthApi {
         Ok(EthApi::block_tx_by_index(phantom_block, index.value()))
     }
 
-    /// Unsupported: this method currently returns a `Not implemented` RPC
-    /// error.
     async fn transaction_by_sender_and_nonce(
         &self, address: Address, nonce: U64,
     ) -> RpcResult<Option<Transaction>> {
@@ -1144,8 +1136,6 @@ impl EthApiServer for EthApi {
             .map_err(|err| err.into())
     }
 
-    /// Unsupported: this method currently returns a `Not implemented` RPC
-    /// error.
     async fn header_by_number(
         &self, hash: BlockNumberOrTag,
     ) -> RpcResult<Option<Header>> {
@@ -1153,15 +1143,11 @@ impl EthApiServer for EthApi {
         Err(internal_error_with_data("Not implemented"))
     }
 
-    /// Unsupported: this method currently returns a `Not implemented` RPC
-    /// error.
     async fn header_by_hash(&self, hash: H256) -> RpcResult<Option<Header>> {
         let _ = hash;
         Err(internal_error_with_data("Not implemented"))
     }
 
-    /// Unsupported: this method currently returns a `Not implemented` RPC
-    /// error.
     async fn simulate_v1(
         &self, opts: SimulatePayload, block_number: Option<BlockId>,
     ) -> RpcResult<Vec<SimulatedBlock>> {
@@ -1188,8 +1174,6 @@ impl EthApiServer for EthApi {
         Ok(execution.output.into())
     }
 
-    /// Unsupported: this method currently returns a `Not implemented` RPC
-    /// error.
     async fn call_many(
         &self, bundle: Bundle, state_context: Option<StateContext>,
         state_override: Option<RpcStateOverride>,
@@ -1297,17 +1281,14 @@ impl EthApiServer for EthApi {
         .map_err(|err| err.into())
     }
 
-    /// Compatibility stub: always returns `false`.
     async fn is_mining(&self) -> RpcResult<bool> { Ok(false) }
 
-    /// Compatibility stub: always returns zero.
     async fn hashrate(&self) -> RpcResult<U256> { Ok(U256::zero()) }
 
     /// Returns the hash of the current block, the seedHash, and the boundary
     /// condition to be met (“target”)
     // async fn get_work(&self) -> RpcResult<Work>;
 
-    /// Compatibility stub: ignores its arguments and always returns `false`.
     async fn submit_hashrate(
         &self, hashrate: U256, id: H256,
     ) -> RpcResult<bool> {
@@ -1315,7 +1296,6 @@ impl EthApiServer for EthApi {
         Ok(false)
     }
 
-    /// Compatibility stub: ignores its arguments and always returns `false`.
     async fn submit_work(
         &self, nonce: H64, pow_hash: H256, mix_digest: H256,
     ) -> RpcResult<bool> {
@@ -1323,8 +1303,6 @@ impl EthApiServer for EthApi {
         Ok(false)
     }
 
-    /// Unsupported: this method currently returns a `Not implemented` RPC
-    /// error.
     async fn send_transaction(
         &self, request: TransactionRequest,
     ) -> RpcResult<H256> {
@@ -1360,15 +1338,11 @@ impl EthApiServer for EthApi {
         self.send_raw_transaction(raw).await
     }
 
-    /// Unsupported: this method currently returns a `Not implemented` RPC
-    /// error.
     async fn sign(&self, address: Address, message: Bytes) -> RpcResult<Bytes> {
         let _ = (address, message);
         Err(internal_error_with_data("Not implemented"))
     }
 
-    /// Unsupported: this method currently returns a `Not implemented` RPC
-    /// error.
     async fn sign_transaction(
         &self, transaction: TransactionRequest,
     ) -> RpcResult<Bytes> {

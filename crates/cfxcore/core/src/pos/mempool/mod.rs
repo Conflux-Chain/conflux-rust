@@ -44,7 +44,7 @@
 //! voting power is emitted as a single aggregated BLS-multisig transaction.
 //!
 //! Mempool has no global transaction-count cap; it enforces per-sender
-//! capacity and evicts old transactions by system TTL.
+//! capacity.
 //!
 //! Transactions expire only by systemTTL, GC'd periodically in the background,
 //! so a transaction can't stay stuck in Mempool forever even if Consensus

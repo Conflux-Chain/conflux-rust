@@ -31,7 +31,7 @@ pos_reference_enable_height = 1
 ```
 
 This does not override features with independent transition settings, such as
-`tanzanite_transition_height`, `cip43_init_end_number`, or
+`tanzanite_transition_height`, `cip112_transition_height`, or
 `align_evm_transition_height`. Configure those explicitly when they are
 required.
 

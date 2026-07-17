@@ -161,8 +161,8 @@ impl<H: Handler> EventLoop<H> {
     /// [EventLoopConfig.notify_capacity](struct.EventLoopConfig.html#method.
     /// notify_capacity). When a message is sent to the EventLoop, it is
     /// pushed onto the queue and the poll's waker is woken so the next loop
-    /// iteration processes it. The wakeup strategy is platform dependent;
-    /// e.g. on modern Linux eventfd is used, on older OSes a pipe.
+    /// iteration processes it. The wakeup mechanism is platform dependent;
+    /// see `mio::Waker` for platform-specific implementation details.
     pub fn channel(&self) -> Sender<H::Message> {
         Sender::new(self.notify_tx.clone())
     }
