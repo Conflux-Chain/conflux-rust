@@ -41,10 +41,15 @@ use primitives::EpochId;
 
 use std::sync::{atomic::AtomicBool, Arc};
 
-/// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
-/// collect all blocks that the client has received so far, but a block can only
-/// be delivered to the ConsensusGraph if 1) the whole block content is
-/// available and 2) all of its past blocks are also in the ConsensusGraph.
+/// `ConsensusGraph` is a layer on top of `SynchronizationGraph`. During normal
+/// full-block synchronization, a block is delivered only after its body is
+/// available, all current-era, non-reclaimed past blocks are in
+/// `ConsensusGraph`, and its PoS reference (if any) is committed with a
+/// graph-ready pivot decision. Header recovery and header-only catch-up may
+/// deliver headers before their bodies; body filling happens in a later
+/// catch-up phase. Past blocks before the era genesis or already
+/// processed/reclaimed count as ready via persisted non-invalid
+/// `LocalBlockInfo`.
 ///
 /// ConsensusGraph maintains the TreeGraph structure of the client and
 /// implements *Timer Chain GHAST*/*Conflux* algorithm to determine the block

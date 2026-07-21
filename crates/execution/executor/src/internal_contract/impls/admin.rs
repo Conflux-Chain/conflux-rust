@@ -22,13 +22,12 @@ fn available_admin_address(_spec: &Spec, address: &Address) -> bool {
     address.is_user_account_address() || address.is_null_address()
 }
 
-/// The Actual Implementation of `suicide`.
-/// The contract which has non zero `collateral_for_storage` cannot suicide,
-/// otherwise it will:
-///   1. refund collateral for code
-///   2. refund sponsor balance
-///   3. refund contract balance
-///   4. kill the contract
+/// Applies contract suicide semantics.
+///
+/// After CIP-151, deletion is scheduled only for a contract created in the
+/// same transaction; otherwise the call uses soft-suicide semantics.
+/// Scheduled deletion is post-processed by releasing code and storage
+/// collateral, refunding sponsor balances, and removing the contract.
 pub fn suicide(
     contract_address: &AddressWithSpace, refund_address: &AddressWithSpace,
     state: &mut State, spec: &Spec, substate: &mut Substate, env: &Env,

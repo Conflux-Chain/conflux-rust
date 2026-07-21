@@ -104,14 +104,12 @@ impl Handleable for GetBlockTxnResponse {
 }
 
 enum HandleOutcome {
-    /// Block inserted; mark resp_hash in received_blocks. No retry.
+    /// Complete this block request and report the response hash as received.
     Received,
     /// Insert succeeded but insert_result.request_again() — retry from the
     /// same peer.
     RetrySamePeer,
-    /// Nothing inserted; retry via PeerFilter (different peer). Used when
-    /// the peer is not at fault (our header expired, our compact block was
-    /// evicted).
+    /// Retry this block request using normal peer selection.
     RetryAnotherPeer,
 }
 

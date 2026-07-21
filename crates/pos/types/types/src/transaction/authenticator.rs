@@ -26,18 +26,18 @@ use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt, str::FromStr};
 
 /// A `TransactionAuthenticator` is an abstraction of a signature scheme. It
-/// must know: (1) How to check its signature against a message and public key
-/// (2) How to convert its public key into an `AuthenticationKeyPreimage`
-/// structured as (public_key | signaure_scheme_id).
-/// Each on-chain `DiemAccount` must store an `AuthenticationKey` (computed via
-/// a sha3 hash of an `AuthenticationKeyPreimage`).
-/// Each transaction submitted to the Diem blockchain contains a
-/// `TransactionAuthenticator`. During transaction execution, the executor will
-/// check if the `TransactionAuthenticator`'s signature on the transaction hash
-/// is well-formed (1) and whether the sha3 hash of the
-/// `TransactionAuthenticator`'s `AuthenticationKeyPreimage` matches the
-/// `AuthenticationKey` stored under the transaction's sender account address
-/// (2).
+/// verifies a signature against the signed message and exposes the raw
+/// public key bytes used to build an `AuthenticationKeyPreimage` when the
+/// variant has per-transaction public key material.
+/// Conflux PoS does not store Diem-style authentication keys on chain.
+/// For Election, PivotDecision, and Dispute transactions entering the mempool,
+/// validation binds `sender` to the BLS key carried by the authenticator via
+/// `PosState::check_sender_owns_auth_key`.
+/// Signature well-formedness is checked by `TransactionAuthenticator::verify`
+/// (via `SignedTransaction::verify_signature`). For those three payloads, the
+/// sender-to-key check requires the authenticator's BLS public key
+/// to equal `node_map[sender].public_key`. There is no executor-side
+/// preimage-hash-to-auth-key match.
 
 // TODO: in the future, can tie these to the TransactionAuthenticator enum directly with https://github.com/rust-lang/rust/issues/60553
 //

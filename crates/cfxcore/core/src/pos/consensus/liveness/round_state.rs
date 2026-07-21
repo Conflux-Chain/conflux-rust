@@ -148,6 +148,12 @@ impl RoundTimeInterval for ExponentialTimeInterval {
 /// Whenever a new round starts a local timeout is set following the round
 /// interval. This local timeout is going to send the timeout events once in
 /// interval until the new round starts.
+///
+/// Conflux adds two half-interval timers: a proposal-selection timeout, set
+/// at round start under VRF election, after which the node votes for the
+/// best received proposal (leaderless election); and a new-round timeout,
+/// set when pending votes first form a QC/TC, so the node gathers more
+/// votes before aggregating the certificate and entering the next round.
 pub struct RoundState {
     // Determines the time interval for a round given the number of
     // non-committed rounds since last commit.
@@ -233,8 +239,9 @@ impl RoundState {
         self.current_round_deadline
     }
 
-    /// In case the local timeout corresponds to the current round, reset the
-    /// timeout and return true. Otherwise ignore and return false.
+    /// Processes a local timeout that the caller has already checked against
+    /// the current epoch and round, schedules the next timeout, and returns
+    /// `true`.
     pub fn process_local_timeout(&mut self, epoch_round: (u64, Round)) -> bool {
         diem_info!(round = epoch_round.1, "Local timeout");
         self.setup_timeout(epoch_round.0);

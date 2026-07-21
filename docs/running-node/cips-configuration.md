@@ -25,12 +25,15 @@ If the hardfork configuration parameters are not specified, the system uses the 
 
 ### Final Priority: Node Mode
 
-If default_transition_time is not specified, the activation time is determined based on the node's mode:
+If `default_transition_time` is not specified, test and dev modes use 0 for
+CIPs that may activate at genesis and 1 for CIPs that may not. Other modes use
+an effectively disabled default. These defaults do not override transition
+parameters with independent defaults or mode-specific logic.
 
-For nodes in test or dev mode, the activation time is set to 1, meaning all CIPs are activated immediately after the blockchain starts.
-For nodes in other modes, the activation time is set to infinity, meaning all CIPs are deactivated by default.
-Recommendation
-Configuring default_transition_time=1 is sufficient for launching a node with all the latest features, meeting most use cases. Fine-grained CIP activation configurations are primarily intended for developer debugging and are not recommended for mature products.
+Setting `default_transition_time = 1` activates only the CIPs that inherit
+that default. It does not override settings such as
+`tanzanite_transition_height`, `cip112_transition_height`, or
+`align_evm_transition_height`; set those explicitly when needed.
 
 ### Caution
 

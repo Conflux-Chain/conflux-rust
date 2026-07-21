@@ -56,7 +56,9 @@ pub trait CfxDebugRpc {
         &self, address: RpcAddress,
     ) -> JsonRpcResult<Option<AccountPendingInfo>>;
 
-    /// Get transaction pending info by account address
+    /// Get pending transactions in pool of an account, starting from
+    /// `maybe_start_nonce` (default: the account's local nonce), at most
+    /// `maybe_limit` entries
     #[method(name = "getAccountPendingTransactions")]
     async fn account_pending_transactions(
         &self, address: RpcAddress, maybe_start_nonce: Option<U256>,

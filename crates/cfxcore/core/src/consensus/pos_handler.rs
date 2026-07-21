@@ -261,13 +261,12 @@ impl PosHandler {
         self.pos().get_committed_block(h).is_some()
     }
 
-    /// Check if `me` is equal to or extends `preds` (parent and referees).
-    ///
-    /// Since committed PoS blocks form a chain, and no pos block should be
-    /// skipped, we only need to check if the round of `me` is equal to or plus
-    /// one compared with the predecessors' rounds.
-    ///
-    /// Return `false` if `me` or `preds` contains non-existent PoS blocks.
+    /// Checks whether `me` is equal to or extends every predecessor. All IDs
+    /// accepted here identify blocks on the single committed PoS chain, where
+    /// `(epoch, round)` increases lexicographically; under that invariant, the
+    /// ordering determines equal-or-extends without requiring adjacent rounds.
+    /// Returns `false` if any requested block is not committed or if `me` is
+    /// earlier than a predecessor.
     pub fn verify_against_predecessors(
         &self, me: &PosBlockId, preds: &Vec<PosBlockId>,
     ) -> bool {

@@ -119,9 +119,11 @@ impl TaskSpawner for TokioTaskExecutor {
 ///
 /// The main purpose of this type is to be able to monitor if a critical task
 /// panicked, for diagnostic purposes, since tokio task essentially fail
-/// silently. Therefore, this type is a Stream that yields the name of panicked
-/// task, See [`TaskExecutor::spawn_critical`]. In order to execute Tasks use
-/// the [`TaskExecutor`] type [`TaskManager::executor`].
+/// silently. Therefore, this type is a Future that resolves to a
+/// [`PanickedTaskError`] (the panicked task's name plus its panic message, if
+/// recoverable) the first time a critical task panics. See
+/// [`TaskExecutor::spawn_critical`]. In order to execute Tasks use the
+/// [`TaskExecutor`] type [`TaskManager::executor`].
 #[derive(Debug)]
 #[must_use = "TaskManager must be polled to monitor critical tasks"]
 pub struct TaskManager {
@@ -181,12 +183,15 @@ impl TaskManager {
         }
     }
 
-    /// Fires the shutdown signal and awaits until all tasks are shutdown.
+    /// Fires the shutdown signal and waits until all registered
+    /// `GracefulShutdownGuard`s have been dropped.
     pub fn graceful_shutdown(self) { let _ = self.do_graceful_shutdown(None); }
 
-    /// Fires the shutdown signal and awaits until all tasks are shutdown.
+    /// Fires the shutdown signal and waits until all registered
+    /// `GracefulShutdownGuard`s have been dropped.
     ///
-    /// Returns true if all tasks were shutdown before the timeout elapsed.
+    /// Returns `true` if all registered guards were dropped before the timeout
+    /// elapsed.
     pub fn graceful_shutdown_with_timeout(
         self, timeout: std::time::Duration,
     ) -> bool {

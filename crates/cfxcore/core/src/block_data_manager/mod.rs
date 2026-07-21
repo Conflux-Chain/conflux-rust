@@ -108,8 +108,9 @@ pub struct BlockDataManager {
     local_block_info: RwLock<HashMap<H256, LocalBlockInfo>>,
     blamed_header_verified_roots:
         RwLock<HashMap<u64, BlamedHeaderVerifiedRoots>>,
-    /// Caching for receipts_root and logs_bloom for epochs after
-    /// cur_era_genesis. It is not deferred, i.e., indexed by the hash of
+    /// Caching for `state_root_with_aux_info`, `receipts_root`, and
+    /// `logs_bloom_hash` for epochs after `cur_era_genesis`. It is not
+    /// deferred, i.e., indexed by the hash of
     /// the pivot block that produces the result when executed.
     /// It is also used for checking whether an epoch has been executed.
     /// It can be updated, i.e., adding new items, in the following cases:
@@ -145,26 +146,25 @@ pub struct BlockDataManager {
     pub target_difficulty_manager: TargetDifficultyManager,
     gc_progress: Arc<Mutex<GCProgress>>,
 
-    /// This maintains the boundary height of available state and commitments
-    /// (executed but not deleted or in `ExecutionTaskQueue`).
-    /// The upper bound always equal to latest executed epoch height.
+    /// This tracks the pivot-chain height range whose committed execution
+    /// state and commitments are available. `upper_bound` advances when the
+    /// next pivot epoch is newly executed or its existing execution result is
+    /// recovered.
     /// As for the lower bound:
-    ///   1. For archive node, it always equals `cur_era_stable_height`.
-    ///   2. For full node, it equals the height of remotely synchronized state
-    ///      at start, and equals `cur_era_stable_height` after making a new
-    ///      checkpoint.
+    ///   1. At start it equals `cur_era_stable_height`, or the height of the
+    ///      remotely synchronized state for a full node that synced a
+    ///      snapshot.
+    ///   2. Afterwards `StorageManager::maintain_state_confirmed` advances it
+    ///      to the first execution-available state height (one above the
+    ///      still-retained confirmed snapshot) when old snapshots are
+    ///      garbage-collected. Archive nodes keep older state readable only
+    ///      via the single-MPT `full_state_start_height` path.
+    /// A pivot-chain switch may truncate `upper_bound` to just before the fork
+    /// point.
     ///
-    /// The lower boundary height will be updated when:
-    ///   1. New checkpoint
-    ///   2. Full Node snapshot syncing
-    ///   3. New Snapshot
-    ///
-    /// The upper boundary height will be updated when:
-    ///   1. Pivot chain switch
-    ///   2. Execution of new epoch
-    ///
-    /// The state of an epoch is valid if and only if the height of the epoch
-    /// is inside the boundary.
+    /// This boundary tracks the pivot-chain height range whose state can
+    /// back new-epoch execution. `check_read_availability` may still allow
+    /// reads below `lower_bound` when single-MPT full state is retained.
     pub state_availability_boundary: RwLock<StateAvailabilityBoundary>,
 }
 

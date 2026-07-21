@@ -213,10 +213,9 @@ pub mod block {
     use cfx_types::U256;
 
     // The maximum block size limit in bytes
-    // Consider that the simple payment transaction consumes only 100 bytes per
-    // second. This would allow us to have 2000 simple payment transactions
-    // per block. With two blocks per second, we will have 4000TPS at the
-    // peak with only simple payment, which is good enough for now.
+    // Assuming a simple payment transaction is about 100 bytes, a block can
+    // hold roughly 2,000 such transactions. At two blocks per second, peak
+    // throughput is roughly 4,000 TPS.
     pub const MAX_BLOCK_SIZE_IN_BYTES: usize = 200 * 1024;
     // The maximum number of transactions to be packed in a block given
     // `MAX_BLOCK_SIZE_IN_BYTES`, assuming 50-byte transactions.

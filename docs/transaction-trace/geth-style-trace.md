@@ -41,10 +41,12 @@ Conflux eSpace has implemented main features of geth style trace, include:
 Currently supported tracers:
 
 - opcode
-- prestateTracer (Working)
 - 4byteTracer
 - noopTracer
 - callTracer
+
+`prestateTracer` currently builds its response from an empty state and an empty
+in-memory database.
 
 We will support writing custom tracer with Js in the future.
 
@@ -60,7 +62,9 @@ To enable this feature, a `full state` node is required; otherwise, the `debug_t
 
 Currently the opcode trace's structLogs `error` field is not implemented.
 
-Conflux does not have refund mechanism, so the `refund` field is omitted.
+The opcode tracer's refund counter is hard-coded to zero, so its output omits
+the `refund` field even when execution applies gas refunds such as SSTORE
+refunds.
 
 ### state override
 

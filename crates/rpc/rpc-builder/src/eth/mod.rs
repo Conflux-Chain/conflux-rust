@@ -318,7 +318,9 @@ impl RpcRegistryInner {
 ///    - http
 ///    - ws
 ///
-/// Http and WS share the same settings: [`ServerBuilder`].
+/// Http and WS are configured independently via their own
+/// [ServerConfigBuilder]; when bound to the same address they are merged
+/// into a single server (see start()).
 ///
 /// Once the [`RpcModule`] is built via [`RpcModuleBuilder`] the servers can be
 /// started, See also [`ServerBuilder::build`] and

@@ -40,7 +40,6 @@ pub struct CommonParams {
     pub min_gas_limit: U256,
     /// Gas limit bound divisor (how much gas limit can change per block)
     pub gas_limit_bound_divisor: U256,
-    /// Number of first block where max code size limit is active.
     /// Maximum size of transaction's RLP payload.
     pub max_transaction_size: usize,
     /// Anticone penalty ratio for reward processing.

@@ -94,8 +94,8 @@ class TestNode:
         raise AssertionError(self._node_msg(msg))
 
     def __del__(self):
-        # Ensure that we don't leave any bitcoind processes lying around after
-        # the test ends
+        # Ensure that we don't leave any Conflux node processes running after
+        # the test ends.
         if self.process and self.cleanup_on_exit:
             # Should only happen on test failure
             # Avoid using logger, as that may have already been shutdown when
@@ -139,9 +139,8 @@ class TestNode:
         if "--public-address" not in self.args:
             self.args += ["--public-address", "{}".format(self.ip)]
 
-        # Delete any existing cookie file -- if such a file exists (eg due to
-        # unclean shutdown), it will get overwritten anyway by bitcoind, and
-        # potentially interfere with our attempt to authenticate
+        # Legacy Bitcoin test-framework cleanup. Conflux nodes do not create
+        # this cookie file, so this is normally a no-op.
         delete_cookie_file(self.datadir)
         my_env = os.environ.copy()
         my_env["RUST_BACKTRACE"] = "1"
@@ -216,7 +215,7 @@ class TestNode:
             except JSONRPCException as e:  # Initialization phase
                 if e.error['code'] != -28:  # RPC in warmup?
                     raise  # unknown JSON RPC exception
-            except ValueError as e:  # cookie file not found and no rpcuser or rpcassword. bitcoind still starting
+            except ValueError as e:
                 if "No RPC credentials" not in str(e):
                     raise
             except ReceivedErrorResponseError as e:
@@ -323,11 +322,11 @@ class TestNode:
                                        **kwargs):
         """Attempt to start the node and expect it to raise an error.
 
-        extra_args: extra arguments to pass through to bitcoind
-        expected_msg: regex that stderr should match when bitcoind fails
+        extra_args: extra arguments to pass through to the conflux node
+        expected_msg: regex that stderr should match when the conflux node fails
 
-        Will throw if bitcoind starts without an error.
-        Will throw if an expected_msg is provided and it does not match bitcoind's stdout."""
+        Will throw if the conflux node starts without an error.
+        Will throw if an expected_msg is provided and it does not match the node's stderr."""
         with tempfile.NamedTemporaryFile(dir=self.stderr_dir, delete=False) as log_stderr, \
                 tempfile.NamedTemporaryFile(dir=self.stdout_dir, delete=False) as log_stdout:
             try:

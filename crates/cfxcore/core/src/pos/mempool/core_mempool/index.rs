@@ -149,15 +149,12 @@ impl Ord for TTLOrderingKey {
     }
 }
 
-/// TimelineIndex is an ordered log of all transactions that are "ready" for
-/// broadcast. We only add a transaction to the index if it has a chance to be
-/// included in the next consensus block (which means its status is != NotReady
-/// or its sequential to another "ready" transaction).
+/// TimelineIndex is an insertion-ordered log of all stored transactions
+/// for broadcast.
 ///
 /// It's represented as Map <timeline_id, (Address, hash)>, where
-/// timeline_id is auto increment unique id of "ready" transaction in local
-/// Mempool. (Address, hash) is a logical reference to transaction
-/// content in main storage.
+/// timeline_id is an auto-increment unique id and (Address, hash) is a
+/// logical reference to transaction content in main storage.
 pub struct TimelineIndex {
     timeline_id: u64,
     timeline: BTreeMap<u64, (AccountAddress, HashValue)>,

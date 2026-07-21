@@ -5,14 +5,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-//! This module defines physical storage schema for LedgerInfoWithSignatures
-//! structure.
-//!
-//! Serialized LedgerInfoWithSignatures identified by `epoch`.
-//! ```text
-//! |<---key--->|<---------------value------------->|
-//! | epoch | ledger_info_with_signatures bytes |
-//! ```
+//! This module defines physical storage schema for each epoch's
+//! RewardDistributionEventV2, identified by `epoch`.
 //!
 //! `epoch` is serialized in big endian so that records in RocksDB will be in
 //! order of their numeric value.

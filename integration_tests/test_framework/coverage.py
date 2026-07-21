@@ -76,9 +76,8 @@ def get_filename(dirname, n_node):
 
 def write_all_rpc_commands(dirname, node):
     """
-    Write out a list of all RPC functions available in `bitcoin-cli` for
-    coverage comparison. This will only happen once per coverage
-    directory.
+    Query the node's help RPC and write its reported method list for coverage
+    comparison, unless the reference file already exists.
 
     Args:
         dirname (str): temporary test dir

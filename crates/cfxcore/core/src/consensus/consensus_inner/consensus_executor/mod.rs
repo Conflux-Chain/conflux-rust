@@ -365,7 +365,7 @@ impl ConsensusExecutor {
             inner,
             reward_execution_info,
             true,  /* on_local_pivot */
-            false, /* force_compute */
+            false, /* force_recompute */
         );
         Some(execution_task)
     }
@@ -462,8 +462,7 @@ impl ConsensusExecutor {
                         {
                             no_reward = true;
                         }
-                        // LINT.ThenChange(consensus/consensus_executor.
-                        // rs#ANTICONE_PENALTY_2)
+                        // LINT.ThenChange(#ANTICONE_PENALTY_2)
                     }
                     epoch_block_no_reward.push(no_reward);
                     epoch_block_anticone_difficulties.push(anticone_difficulty);
@@ -685,14 +684,18 @@ impl ConsensusExecutor {
     /// Return the first index that is not executed,
     /// or return `chain.len()` if they are all executed (impossible for now).
     ///
-    /// NOTE: If a state for an block exists, all the blocks on its pivot chain
-    /// must have been executed and state committed. The receipts for these
-    /// past blocks may not exist because the receipts on forks will be
-    /// garbage-collected, but when we need them, we will recompute these
-    /// missing receipts in `process_rewards_and_fees`. This 'recompute' is safe
-    /// because the parent state exists. Thus, it's okay that here we do not
-    /// check existence of the receipts that will be needed for reward
-    /// computation during epoch execution.
+    /// NOTE: On a node that executed its chain (archive), if a state for a
+    /// block exists, all epochs below it on its pivot chain were executed
+    /// and committed. Snapshot-synced full nodes get the checkpoint state
+    /// without executing ancestors; `restore_execution_state` inserts the
+    /// boundary REWARD_EPOCH_COUNT commitments+receipts from the manifest
+    /// because pre-sync receipts cannot be recomputed.
+    ///
+    /// The receipts for past blocks may not exist because the receipts on
+    /// forks will be garbage-collected, but when we need them,
+    /// `process_rewards_and_fees` may recompute them from the reward
+    /// epoch's parent state, `REWARD_EPOCH_COUNT + 1` epochs back -- well
+    /// inside the state-availability window (not enforced).
     fn find_start_chain_index(
         inner: &ConsensusGraphInner, chain: &Vec<usize>,
     ) -> usize {
@@ -871,7 +874,6 @@ impl ConsensusExecutionHandler {
         }
     }
 
-    /// Always return `true` for now
     fn handle_execution_work(&self, task: ExecutionTask) -> bool {
         debug!("Receive execution task: {:?}", task);
         match task {
@@ -1327,7 +1329,7 @@ impl ConsensusExecutionHandler {
                         / U512::from(
                             self.machine.params().anticone_penalty_ratio,
                         );
-                    // Lint.ThenChange(consensus/mod.rs#ANTICONE_PENALTY_1)
+                    // LINT.ThenChange(#ANTICONE_PENALTY_1)
 
                     debug_assert!(reward > anticone_penalty);
                     reward -= anticone_penalty;

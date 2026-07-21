@@ -75,8 +75,9 @@ impl TxWithReadyInfo {
         }
 
         if self.is_already_packed() {
-            // Note: currently, the `packed` is marked only if tx has been
-            // executed locally
+            // Consensus marks a transaction packed when its block is processed
+            // as terminal for mining in the consensus graph, before deferred
+            // execution may update the state snapshot.
             return Ok("tx has been executed");
         }
         if let (Transaction::Native(ref tx), Transaction::Native(ref other)) =
@@ -278,9 +279,14 @@ impl NoncePool {
     ///   1. all nonce in `[nonce, tx.nonce()]` exists
     ///   2. tx.packed is false and tx.nonce() is minimum
     /// Then, find a sequential of transactions started at the first transaction
-    /// such that   
+    /// such that
     ///   1. the nonce is continous and all transactions are not packed
     ///   2. the balance is enough.
+    /// Cost is accumulated from `nonce`, not from the first unpacked tx:
+    /// packed txs in `[nonce, tx.nonce())` have not yet been applied to the
+    /// state snapshot that supplied both `nonce` and `balance`, so their cost
+    /// still counts against `balance`; if the cost of `[nonce, tx.nonce()]`
+    /// alone exceeds `balance`, returns `None`.
     ///
     /// The first return value is the transaction in the first step.
     /// i.e., the first unpacked transaction from a sequential of transactions

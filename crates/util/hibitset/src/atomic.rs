@@ -18,13 +18,10 @@ use crate::{util::*, BitSetLike, DrainableBitSet};
 /// of the hierarchy it holds. Worst case multiple writers set the
 /// same bit twice (but only is told they set it).
 ///
-/// It is possible to atomically remove from the set, but not at the
-/// same time as atomically adding. This is because there is no way
-/// to know if layer 1-3 would be left in a consistent state if they are
-/// being cleared and set at the same time.
-///
-/// `AtromicBitSet` resolves this race by disallowing atomic
-/// clearing of bits.
+/// Atomic removal is NOT supported: there is no way to keep the layer
+/// 1-3 summaries consistent if bits are cleared and set concurrently,
+/// so removal (`remove`/`clear`) requires unique ownership and only
+/// atomic adds are permitted on a shared reference.
 ///
 /// [`BitSet`]: ../struct.BitSet.html
 #[derive(Debug)]

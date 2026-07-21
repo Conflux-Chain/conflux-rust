@@ -317,8 +317,12 @@ impl fmt::Debug for BLSSignature {
     }
 }
 
-/// Used to deserialize keys in local storage whose validity has been checked
-/// before.
+/// Deserializes BLS public keys without curve or subgroup validity checks.
+///
+/// This is used for keys that were validated before persistence and for
+/// validator keys embedded in `EpochState`. A peer-supplied epoch state must
+/// not be trusted until its enclosing quorum certificate or epoch-change proof
+/// has been verified.
 #[derive(SerializeKey, DeserializeKey)]
 pub struct BLSPublicKeyUnchecked(RawPublicKey);
 /// Used to deserialize keys in local storage whose validity has been checked
@@ -329,8 +333,7 @@ pub struct BLSSignatureUnchecked(RawSignature);
 impl TryFrom<&[u8]> for BLSPublicKeyUnchecked {
     type Error = CryptoMaterialError;
 
-    /// Deserialize an BLSPrivateKey. This method will also check for key
-    /// validity.
+    /// Parses BLS public-key bytes without curve or subgroup validity checks.
     fn try_from(
         bytes: &[u8],
     ) -> std::result::Result<BLSPublicKeyUnchecked, CryptoMaterialError> {
@@ -351,8 +354,7 @@ impl TryFrom<&[u8]> for BLSPublicKeyUnchecked {
 impl TryFrom<&[u8]> for BLSSignatureUnchecked {
     type Error = CryptoMaterialError;
 
-    /// Deserialize an BLSPrivateKey. This method will also check for key
-    /// validity.
+    /// Deserializes a BLS signature that was validated before being persisted.
     fn try_from(
         bytes: &[u8],
     ) -> std::result::Result<BLSSignatureUnchecked, CryptoMaterialError> {
@@ -380,7 +382,7 @@ impl From<BLSSignatureUnchecked> for BLSSignature {
     fn from(unchecked: BLSSignatureUnchecked) -> Self { Self(unchecked.0) }
 }
 
-/// Deserialize public key from local storage.
+/// Deserializes a BLS public key without curve or subgroup validity checks.
 pub fn deserialize_bls_public_key_unchecked<'de, D>(
     deserializer: D,
 ) -> Result<BLSPublicKey, D::Error>

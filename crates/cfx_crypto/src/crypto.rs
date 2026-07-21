@@ -90,8 +90,9 @@ pub mod ecies {
 
     type HmacSha256 = Hmac<Sha256>;
 
-    /// Encrypt a message with a public key, writing an HMAC covering both
-    /// the plaintext and authenticated data.
+    /// Encrypts a message with a public key. The HMAC authenticates the
+    /// plaintext indirectly by covering the IV and ciphertext, followed by
+    /// `auth_data`.
     ///
     /// Authenticated data may be empty.
     pub fn encrypt<G, KP, S, P>(

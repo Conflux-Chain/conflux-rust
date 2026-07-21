@@ -85,10 +85,7 @@ impl RpcModuleSelection {
     /// Creates a new _unique_ [`RpcModuleSelection::Selection`] from the given
     /// items.
     ///
-    /// # Note
-    ///
-    /// This will dedupe the selection and remove duplicates while preserving
-    /// the order.
+    /// Duplicate modules are removed; iteration order is unspecified.
     pub fn try_from_selection<I, T>(selection: I) -> Result<Self, T::Error>
     where
         I: IntoIterator<Item = T>,

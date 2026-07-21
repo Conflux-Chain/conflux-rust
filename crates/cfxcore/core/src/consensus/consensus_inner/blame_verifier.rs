@@ -135,8 +135,10 @@ impl BlameVerifier {
             //                                   ---
             //
             // example (BLAME_CHECK_OFFSET = 2):
-            //    check is called with    C, D, E, C, F
-            //    we will process epochs  A, B, C, A, B
+            //    check is called with    C, D, E, F
+            //    we will process epochs  A, B, C, B
+            // (reorg re-delivery starts at the first changed height,
+            //  fork_at = LCA height + 1, so the fork point C is not re-sent)
             //
             // TODO(thegaram): can a fork change the blame status of a header?
 
@@ -271,17 +273,19 @@ impl BlameVerifier {
                 // special case
                 //
                 //      blame
-                //   ...........                                ---        ---        ---
-                //   v          |                           .- | E | <--- | F | <--- | G | <--- ...
-                //  ---        ---        ---        ---    |   ---        ---        ---
-                // | A | <--- | B | <--- | C | <--- | D | <-*
-                //  ---        ---        ---        ---    |   ---
-                //                                          .- | H | <--- ...
-                //                                              ---
+                //   ...........                     ---        ---        ---
+                //   v          |                .- | D | <--- | E | <--- | F | <--- ...
+                //  ---        ---        ---    |   ---        ---        ---
+                // | A | <--- | B | <--- | C | <-*
+                //  ---        ---        ---    |   ---
+                //                               .- | G | <--- | H | <--- ...
+                //                                   ---        ---
                 //
                 // example (BLAME_CHECK_OFFSET = 2)
-                //    check is called with    C, D, E, F, G, D, H
-                //    we will process epochs  A, B, C, D, E, B, C
+                //    check is called with    C, D, E, F, G, H
+                //    we will process epochs  A, B, C, D, B, C
+                // (reorg re-delivery starts at fork_at = LCA height + 1 = G's
+                //  height, so the fork point C is not re-sent)
                 //
                 // after the chain reorg, we will start re-executing from B
                 // B was already covered in A's iteration but it is blaming

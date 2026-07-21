@@ -88,7 +88,7 @@ fn compute_path_merkle(
         // 2nd most significant bit = if the first nibble of the first byte
         // does not belong to the compressed path;
         // least significant 6 bits = number of nibbles in the compressed path %
-        // 64.
+        // 63.
         let path_info_byte = 128u8
             + 64u8 * (without_first_nibble as u8)
             + (compressed_path.path_steps() as u8) % 63u8;

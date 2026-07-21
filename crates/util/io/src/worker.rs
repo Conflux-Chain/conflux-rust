@@ -121,7 +121,6 @@ impl Drop for SocketWorker {
 }
 
 /// An IO worker thread
-/// Sorts them ready for blockchain insertion.
 pub struct Worker {
     thread: Option<JoinHandle<()>>,
     wait: Arc<SCondvar>,

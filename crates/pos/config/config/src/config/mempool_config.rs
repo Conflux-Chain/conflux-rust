@@ -29,7 +29,7 @@ impl Default for MempoolConfig {
             shared_mempool_batch_size: 100,
             shared_mempool_ack_timeout_ms: 5_000,
             shared_mempool_max_concurrent_inbound_syncs: 2,
-            // Allow for 1s latency with the default 500ms tick.
+            // Allow for 2s ack latency with the default 1s tick.
             max_broadcasts_per_peer: 2,
             // ~3x burst headroom over legitimate per-validator traffic.
             capacity_per_sender: 128,

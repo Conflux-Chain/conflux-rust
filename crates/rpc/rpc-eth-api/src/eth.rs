@@ -95,10 +95,8 @@ pub trait EthApi {
         &self, number: BlockNumberOrTag, index: Index,
     ) -> RpcResult<Option<Block>>;
 
-    /// Returns the EIP-2718 encoded transaction if it exists.
-    ///
-    /// If this is a EIP-4844 transaction that is in the pool it will include
-    /// the sidecar.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     #[method(name = "getRawTransactionByHash")]
     async fn raw_transaction_by_hash(
         &self, hash: H256,
@@ -111,8 +109,8 @@ pub trait EthApi {
         &self, hash: H256,
     ) -> RpcResult<Option<Transaction>>;
 
-    /// Returns information about a raw transaction by block hash and
-    /// transaction index position.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     #[method(name = "getRawTransactionByBlockHashAndIndex")]
     async fn raw_transaction_by_block_hash_and_index(
         &self, hash: H256, index: Index,
@@ -125,8 +123,8 @@ pub trait EthApi {
         &self, hash: H256, index: Index,
     ) -> RpcResult<Option<Transaction>>;
 
-    /// Returns information about a raw transaction by block number and
-    /// transaction index position.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     #[method(name = "getRawTransactionByBlockNumberAndIndex")]
     async fn raw_transaction_by_block_number_and_index(
         &self, number: BlockNumberOrTag, index: Index,
@@ -139,7 +137,8 @@ pub trait EthApi {
         &self, number: BlockNumberOrTag, index: Index,
     ) -> RpcResult<Option<Transaction>>;
 
-    /// Returns information about a transaction by sender and nonce.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     #[method(name = "getTransactionBySenderAndNonce")]
     async fn transaction_by_sender_and_nonce(
         &self, address: Address, nonce: U64,
@@ -177,19 +176,20 @@ pub trait EthApi {
         &self, address: Address, block_number: Option<BlockId>,
     ) -> RpcResult<Bytes>;
 
-    /// Returns the block's header at given number.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     #[method(name = "getHeaderByNumber")]
     async fn header_by_number(
         &self, hash: BlockNumberOrTag,
     ) -> RpcResult<Option<Header>>;
 
-    /// Returns the block's header at given hash.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     #[method(name = "getHeaderByHash")]
     async fn header_by_hash(&self, hash: H256) -> RpcResult<Option<Header>>;
 
-    /// `eth_simulateV1` executes an arbitrary number of transactions on top of
-    /// the requested state. The transactions are packed into individual
-    /// blocks. Overrides can be provided.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     #[method(name = "simulateV1")]
     async fn simulate_v1(
         &self, opts: SimulatePayload, block_number: Option<BlockId>,
@@ -204,8 +204,8 @@ pub trait EthApi {
         block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes>;
 
-    /// Simulate arbitrary number of transactions at an arbitrary blockchain
-    /// index, with the optionality of state overrides
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     #[method(name = "callMany")]
     async fn call_many(
         &self, bundle: Bundle, state_context: Option<StateContext>,
@@ -216,17 +216,18 @@ pub trait EthApi {
     ///
     /// This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type accessList based on a given Transaction.
     ///
-    /// An access list contains all storage slots and addresses touched by the
-    /// transaction, except for the sender account and the chain's
-    /// precompiles.
+    /// An access list contains the storage slots and addresses touched by
+    /// the transaction. Address-only touches (balance/code queries, call
+    /// targets) of the sender, the destination, 7702 authorities, and
+    /// precompiles are omitted; storage accesses always appear.
     ///
     /// It returns list of addresses and storage keys used by the transaction,
-    /// plus the gas consumed when the access list is added. That is, it
-    /// gives you the list of addresses and storage keys that will be used
-    /// by that transaction, plus the gas consumed if the access
-    /// list is included. Like eth_estimateGas, this is an estimation; the list
-    /// could change when the transaction is actually mined. Adding an
-    /// accessList to your transaction does not necessary result in lower
+    /// plus a gas estimate. Note the returned gas_used is currently the
+    /// transaction's plain gas estimate, not yet recomputed with the
+    /// collected access list applied (see the TODO on `gas_used` in the
+    /// create_access_list impl). Like eth_estimateGas, this is an estimation;
+    /// the list could change when the transaction is actually mined. Adding
+    /// an accessList to your transaction does not necessary result in lower
     /// gas usage compared to a transaction without an access list.
     #[method(name = "createAccessList")]
     async fn create_access_list(
@@ -279,11 +280,11 @@ pub trait EthApi {
         reward_percentiles: Option<Vec<f64>>,
     ) -> RpcResult<FeeHistory>;
 
-    /// Returns whether the client is actively mining new blocks.
+    /// Compatibility stub: always returns `false`.
     #[method(name = "mining")]
     async fn is_mining(&self) -> RpcResult<bool>;
 
-    /// Returns the number of hashes per second that the node is mining with.
+    /// Compatibility stub: always returns zero.
     #[method(name = "hashrate")]
     async fn hashrate(&self) -> RpcResult<U256>;
 
@@ -292,25 +293,20 @@ pub trait EthApi {
     // #[method(name = "getWork")]
     // async fn get_work(&self) -> RpcResult<Work>;
 
-    /// Used for submitting mining hashrate.
-    ///
-    /// Can be used for remote miners to submit their hash rate.
-    /// It accepts the miner hash rate and an identifier which must be unique
-    /// between nodes. Returns `true` if the block was successfully
-    /// submitted, `false` otherwise.
+    /// Compatibility stub: ignores its arguments and always returns `false`.
     #[method(name = "submitHashrate")]
     async fn submit_hashrate(
         &self, hashrate: U256, id: H256,
     ) -> RpcResult<bool>;
 
-    /// Used for submitting a proof-of-work solution.
+    /// Compatibility stub: ignores its arguments and always returns `false`.
     #[method(name = "submitWork")]
     async fn submit_work(
         &self, nonce: H64, pow_hash: H256, mix_digest: H256,
     ) -> RpcResult<bool>;
 
-    /// Sends transaction; will block waiting for signer to return the
-    /// transaction hash.
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     #[method(name = "sendTransaction")]
     async fn send_transaction(
         &self, request: TransactionRequest,
@@ -324,14 +320,13 @@ pub trait EthApi {
     #[method(name = "submitTransaction")]
     async fn submit_transaction(&self, transaction: Bytes) -> RpcResult<H256>;
 
-    /// Returns an Ethereum specific signature with:
-    /// sign(keccak256("\x19Ethereum Signed Message:\n"
-    /// + len(message) + message))).
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     #[method(name = "sign")]
     async fn sign(&self, address: Address, message: Bytes) -> RpcResult<Bytes>;
 
-    /// Signs a transaction that can be submitted to the network at a later time
-    /// using with `sendRawTransaction.`
+    /// Unsupported: this method currently returns a `Not implemented` RPC
+    /// error.
     #[method(name = "signTransaction")]
     async fn sign_transaction(
         &self, transaction: TransactionRequest,

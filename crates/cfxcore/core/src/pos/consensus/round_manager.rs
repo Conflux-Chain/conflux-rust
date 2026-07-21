@@ -198,16 +198,21 @@ impl RoundManager {
     ///
     /// This event is triggered by a new quorum certificate at the previous
     /// round or a timeout certificate at the previous round.  In either
-    /// case, if this replica is the new proposer for this round, it is
-    /// ready to propose and guarantee that it can create a proposal
-    /// that all honest replicas can vote for.  While this method should only be
+    /// case, if this replica's VRF output qualifies it as a proposer for
+    /// this round (several replicas may qualify simultaneously), it
+    /// broadcasts its proposal; replicas vote for the lowest-VRF-number
+    /// candidate at proposal timeout.  While this method should only be
     /// invoked at most once per round, we ensure that only at most one
     /// proposal can get generated per round to avoid accidental
     /// equivocation of proposals.
     ///
     /// Replica:
     ///
-    /// Do nothing
+    /// Under VRF election, advance proposer election to the new round and
+    /// schedule the proposal timeout; voting on the best received
+    /// candidate happens later in `process_proposal_timeout`. Also try to
+    /// broadcast pivot-decision and election transactions; those helpers
+    /// no-op when this node is not eligible or has nothing new to submit.
     async fn process_new_round_event(
         &mut self, new_round_event: NewRoundEvent,
     ) -> anyhow::Result<()> {
@@ -436,20 +441,11 @@ impl RoundManager {
                 .process_proposal(proposal_msg.clone().take_proposal())
                 .await?
             {
-                // If a proposal has been received and voted, it will return
-                // error or false.
-                //
-                // 1. For old leader elections where there is only one leader
-                // and we vote after receiving the first
-                // proposal, the error is returned in
-                // `execute_and_vote` because `vote_sent.
-                // is_none()` is false. 2. For VRF leader election, we
-                // return Ok(false) when we insert a proposal from the same
-                // author to proposal_candidates.
-                //
-                // This ensures that there is no broadcast storm
-                // because we only broadcast a proposal when we receive it for
-                // the first time.
+                // process_proposal returns Ok(true) -- and thus relays --
+                // only for a candidate that improves on the best seen this
+                // round: a strictly lower VRF number, or the first candidate
+                // (`receive_proposal_candidate`); duplicates and worse
+                // candidates are not re-broadcast.
                 // TODO(lpl): Do not send to the sender and the original author.
                 let exclude = vec![proposer, self.network.author];
                 self.network

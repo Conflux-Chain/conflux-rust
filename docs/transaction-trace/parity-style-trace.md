@@ -8,13 +8,15 @@ Check [this doc](https://doc.confluxnetwork.org/docs/core/build/json-rpc/trace_r
 
 ## eSpace
 
-eSpace methods are compatible with [parity](https://openethereum.github.io/JSONRPC-trace-module) and [erigon](https://docs.erigon.tech/advanced/JSONRPC-trace-module) style trace RPC methods. The following table lists the supported methods:
+eSpace provides [Parity](https://openethereum.github.io/JSONRPC-trace-module)-
+and [Erigon](https://docs.erigon.tech/advanced/JSONRPC-trace-module)-style
+trace RPC methods. Known compatibility limitations are listed below.
 
 | Method Name | Supported |
 | ----------- | ----------- |
 | `trace_block` | ✅ |
 | `trace_filter` | ✅ |
-| `trace_get` | ✅ |
+| `trace_get` | ⚠️ Incompatible: treats the first trace-address component as a flat result index and ignores later components. |
 | `trace_transaction` | ✅ |
 | `trace_call` |  |
 | `trace_callMany` |  |

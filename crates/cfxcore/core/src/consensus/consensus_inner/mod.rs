@@ -317,8 +317,10 @@ impl Default for ConsensusGraphPivotData {
 ///
 /// # Implementation details of partial invalid blocks
 ///
-/// One block may become partial invalid because 1) it chooses incorrect parent
-/// or 2) it generates an adaptive block when it should not. In normal
+/// One block may become partial invalid for several reasons, primarily
+/// because 1) it chooses an incorrect parent or 2) it generates an adaptive
+/// block when it should not (see check_block_full_validity for the full set
+/// of checks). In normal
 /// situations, we should verify every block we receive and determine whether it
 /// is partial invalid or not. For a partial invalid block b, it will not
 /// receive any reward. Normal nodes will also refrain from *directly or
@@ -530,7 +532,7 @@ pub struct ConsensusGraphInner {
     /// block in its anticone.
     has_timer_block_in_anticone_cache: HashSet<usize>,
 
-    /// `true` before we enter `CacheUpSyncBlock`. We need to execute
+    /// `true` before we enter `CatchUpSyncBlock`. We need to execute
     /// transactions and process state if it's `false`.
     header_only: bool,
 }

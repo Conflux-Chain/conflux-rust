@@ -2,8 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-/// The in mem snapshot_info map and the on disk snapshot_info_db is always in
-/// sync.
+/// Maintains an in-memory snapshot-info index backed by `snapshot_info_db`.
+///
+/// Successful `insert` and `remove` operations update both representations.
+/// Maintenance may intentionally remove entries from memory before deleting
+/// them from the database, and a database error can leave them out of sync.
 pub struct PersistedSnapshotInfoMap {
     // Db to persist snapshot_info.
     snapshot_info_db: KvdbSqlite<Box<[u8]>>,
@@ -899,13 +902,18 @@ impl StorageManager {
         )
     }
 
-    /// The algorithm figure out which snapshot to remove by simply going
-    /// through all SnapshotInfo in one pass in the reverse order such that
-    /// the parent snapshot is processed after the children snapshot.
+    /// Removal is decided in two passes over `current_snapshots`, whose order
+    /// guarantees only that parents precede their children: a reverse
+    /// traversal performs the descending trace described below, then a forward
+    /// traversal removes snapshots outside the confirmed epoch's subtree,
+    /// propagating to deep descendants via `parent_snapshot_epoch_id`.
+    /// In-progress snapshotting tasks are scanned separately.
     ///
-    /// In the scan, pivot chain is traced from the confirmed snapshot. Whatever
-    /// can't be traced shall be removed as non-pivot snapshot. Traced
-    /// old pivot snapshot shall be deleted as well.
+    /// In the scan, pivot chain is traced from the confirmed snapshot.
+    /// Whatever can't be traced shall be removed as non-pivot snapshot.
+    /// Traced old pivot snapshots are deleted too, except those retained
+    /// to serve snapshot sync to peers (see extra_snapshots_to_keep /
+    /// SnapshotKeptToProvideSyncStatus).
     ///
     /// Another maintenance of snapshots shall happen at Conflux start-up and
     /// after pivot chain is recognized.
@@ -1540,7 +1548,9 @@ struct MaybeDeltaTrieDestroyErrors {
     delta_trie_destroy_error_2: Cell<Option<Error>>,
 }
 
-// It's only used when relevant lock has been acquired.
+// FIXME: Replace these `Cell`s with synchronized storage.
+// `DeltaDbReleaser::drop` and `take_result` can access them concurrently from
+// different threads.
 unsafe impl Sync for MaybeDeltaTrieDestroyErrors {}
 
 impl MaybeDeltaTrieDestroyErrors {

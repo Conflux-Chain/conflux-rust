@@ -80,11 +80,12 @@ impl BlockTracesWithEpoch {
 ///
 /// Note that in database only the data corresponding to the current pivot
 /// chain exist. This multi-version version are only maintained in memory and
-/// will be garbage collected. When `insert_current_data()` is called, we always
-/// update the version in DB to the current version.
-/// If there is no garbage-collection, this guarantees that the version in DB is
-/// the latest, and the in-memory version is EVENTUALLY consistent with the one
-/// in DB.
+/// will be garbage collected. `insert_current_data()` only updates the
+/// in-memory current version; the DB write is done first by the caller when
+/// `persistent`. Off-pivot executions insert with `persistent=false`, so the
+/// current version can point to a fork view absent from the DB; when that
+/// fork becomes the pivot chain, the in-memory version is promoted and
+/// written to the DB (re-executed only if already GC'ed).
 ///
 /// FIXME: There is a rare case to cause inconsistency with GC:
 /// Assume a thread T1 is writing the latest data and T2 is answering
@@ -101,8 +102,8 @@ impl BlockTracesWithEpoch {
 #[derive(Debug, SmartDefault)]
 pub struct BlockDataWithMultiVersion<Version, T> {
     data_version_tuple_array: Vec<DataVersionTuple<Version, T>>,
-    // The current pivot epoch that this block is executed.
-    // This should be consistent with the epoch hash in database.
+    // The execution version currently selected in memory for this block.
+    // It may be an off-pivot version that is absent from the database.
     current_version: Option<Version>,
 }
 
@@ -137,9 +138,9 @@ impl<Version: Copy + Eq + PartialEq, T: Clone>
         self.current_version = Some(version);
     }
 
-    /// Insert the latest data with its version.
-    /// This should be called after we update the version in the database to
-    /// ensure consistency.
+    /// Inserts `data` and selects `version` as the in-memory current version.
+    /// For a persistent current-pivot update, the caller must write the
+    /// database first; off-pivot versions may intentionally remain memory-only.
     pub fn insert_current_data(&mut self, version: &Version, data: T) {
         // If it's inserted before, we do not need to push a duplicated entry.
         if self.get_data_at_version(version).is_none() {

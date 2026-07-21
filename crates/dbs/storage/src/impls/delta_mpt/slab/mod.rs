@@ -57,9 +57,10 @@
 //! ```
 //!
 //! It is generally a good idea to specify the desired capacity of a slab at
-//! creation time. Note that `Slab` will grow the internal capacity when
-//! attempting to insert a new value once the existing capacity has been
-//! reached. To avoid this, add a check.
+//! creation time. Note that this modified `Slab` never grows on `insert`:
+//! once capacity is reached, `insert` returns `Err(Error::OutOfMem)`. Grow
+//! explicitly with `reserve`/`reserve_exact` (requires `&mut`), or check
+//! before inserting:
 //!
 //! ```
 //! use cfx_storage::Slab;
@@ -80,16 +81,14 @@
 //! values that will be inserted in the slab. This is not to be confused with
 //! the *length* of the slab, which specifies the number of actual values
 //! currently being inserted. If a slab's length is equal to its capacity, the
-//! next value inserted into the slab will require growing the slab by
-//! reallocating.
+//! next `insert` fails with `Error::OutOfMem` — reallocation happens only in
+//! `reserve`/`reserve_exact` (`&mut`). For this reason use
+//! [`Slab::with_capacity`] to size the slab for the values it is expected to
+//! store.
 //!
 //! For example, a slab with capacity 10 and length 0 would be an empty slab
 //! with space for 10 more stored values. Storing 10 or fewer elements into the
-//! slab will not change its capacity or cause reallocation to occur. However,
-//! if the slab length is increased to 11 (due to another `insert`), it will
-//! have to reallocate, which can be slow. For this reason, it is recommended to
-//! use [`Slab::with_capacity`] whenever possible to specify how many values the
-//! slab is expected to store.
+//! slab will not change its capacity or cause reallocation to occur.
 //!
 //! # Implementation
 //!
@@ -98,8 +97,10 @@
 //! find a vacant slot, the stack is popped. When a slot is released, it is
 //! pushed onto the stack.
 //!
-//! If there are no more available slots in the stack, then `Vec::reserve(1)` is
-//! called and a new slot is created.
+//! When the vacant-slot stack is empty, the next never-used slot is taken
+//! (tracked by `size_initialized`); at capacity, allocation fails with
+//! `Error::OutOfMem`. `entries` is kept filled to capacity so allocation
+//! never mutates the `Vec` itself.
 //!
 //! [`Slab::with_capacity`]: struct.Slab.html#with_capacity
 
@@ -406,13 +407,13 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// // The slab contains no values, even though it has capacity for more
     /// assert_eq!(slab.len(), 0);
     ///
-    /// // These are all done without reallocating...
+    /// // These are all done without reallocating.
     /// for i in 0..10 {
-    ///     slab.insert(i);
+    ///     slab.insert(i).unwrap();
     /// }
     ///
-    /// // ...but this may make the slab reallocate
-    /// slab.insert(11);
+    /// // The slab does not grow implicitly when it reaches capacity.
+    /// assert!(slab.insert(11).is_err());
     pub fn with_capacity(capacity: usize) -> Self {
         let mut new = Slab::default();
         new.reserve(capacity).unwrap();
@@ -743,13 +744,15 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// Insert a value in the slab, returning key assigned to the value.
     ///
     /// The returned key can later be used to retrieve or remove the value using
-    /// indexed lookup and `remove`. Additional capacity is allocated if
-    /// needed. See [Capacity and
-    /// reallocation](index.html#capacity-and-reallocation).
+    /// indexed lookup and `remove`. Unlike the upstream `slab` crate, `insert`
+    /// never grows the slab: it takes `&self` and reallocating `entries`
+    /// would invalidate outstanding slot references. When full it returns
+    /// `Err(Error::OutOfMem)`; grow explicitly via `reserve`/`reserve_exact`
+    /// (requires `&mut`).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the number of elements in the vector overflows a `usize`.
+    /// Returns `Error::OutOfMem` when the slab is full.
     ///
     /// # Examples
     /// ```
@@ -832,19 +835,26 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// The key is then released and may be associated with future stored
     /// values.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if `key` is not associated with a value.
+    /// Returns `Error::SlabKeyError` when `key` is greater than the backing
+    /// storage length or designates a vacant slot.
+    ///
+    /// # Known limitation
+    ///
+    /// A key equal to the backing storage length is not currently rejected
+    /// before unchecked indexing and must not be passed to this method.
     ///
     /// # Examples
     ///
+    /// ```
     /// # use cfx_storage::Slab;
-    /// let mut slab = Slab::with_capacity(10);
+    /// let slab: Slab<&str> = Slab::with_capacity(10);
+    /// let hello = slab.insert("hello").unwrap();
     ///
-    /// let hello = slab.insert("hello");
-    ///
-    /// assert_eq!(slab.remove(hello), "hello");
+    /// assert_eq!(slab.remove(hello).unwrap(), "hello");
     /// assert!(!slab.contains(hello));
+    /// ```
     pub fn remove(&self, key: usize) -> Result<T> {
         if key > self.entries.len() {
             // Index out of range.
@@ -870,10 +880,10 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// # use cfx_storage::Slab;
     /// let mut slab = Slab::with_capacity(10);
     ///
-    /// let hello = slab.insert("hello");
+    /// let hello = slab.insert("hello").unwrap();
     /// assert!(slab.contains(hello));
     ///
-    /// slab.remove(hello);
+    /// slab.remove(hello).unwrap();
     ///
     /// assert!(!slab.contains(hello));
     pub fn contains(&self, key: usize) -> bool { self.get(key).is_some() }

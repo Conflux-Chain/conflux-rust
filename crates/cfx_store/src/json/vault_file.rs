@@ -21,7 +21,7 @@ use std::io::{Read, Write};
 /// Vault meta file
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct VaultFile {
-    /// Vault password, encrypted with vault password
+    /// Keccak-256 password verifier encrypted with the vault password.
     pub crypto: Crypto,
     /// Vault metadata string
     pub meta: Option<String>,

@@ -1504,10 +1504,10 @@ impl ConsensusNewBlockHandler {
                     //             .read()
                     //             .lower_bound
                     // );
-                    // If new_era_genesis should have available state,
-                    // make sure state execution is finished before setting
-                    // lower_bound
-                    // to the new_checkpoint_era_genesis.
+                    // Wait until the stable block has been executed:
+                    // executions finish in order, so this guarantees the
+                    // deferred-epoch commitments read by
+                    // `compute_state_valid_and_blame_info` below exist.
                     self.executor
                         .wait_for_result(inner.arena[stable_arena_index].hash)
                         .expect(

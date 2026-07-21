@@ -75,8 +75,8 @@ Web3NotSetupError = ValueError("w3 is not initialized, please call self.setup_w3
 
 @dataclass
 class FrameworkOptions:
-    nocleanup: bool  # leave bitcoinds and test.* datadir on exit or error
-    noshutdown: bool  # don't stop bitcoinds after the test execution
+    nocleanup: bool  # leave the test datadir in place on exit or error
+    noshutdown: bool  # don't stop conflux nodes after the test execution
     cachedir: str  # directory for caching pregenerated datadirs
     tmpdir: str  # root directory for datadirs
     loglevel: str  # log events at this level and higher to the console
@@ -86,7 +86,7 @@ class FrameworkOptions:
     # port_seed: int  # the seed to use for assigning port numbers
     coveragedir: str  # write tested RPC commands into this directory
     pdbonfailure: bool  # attach a python debugger if test fails
-    usecli: bool  # use bitcoin-cli instead of RPC for all commands
+    usecli: bool  # request CLI mode (currently unsupported)
     random_seed: int  # set a random seed
     metrics_report_interval_ms: int  # report metrics interval in milliseconds
     conflux: str  # path to conflux binary
@@ -106,9 +106,9 @@ class AutoTraceMiddleware(ConfluxWeb3Middleware):
 
 
 class ConfluxTestFramework:
-    """Base class for a bitcoin test script.
+    """Base class for a Conflux test script.
 
-    Individual bitcoin test scripts should subclass this class and override the set_test_params() and run_test() methods.
+    Individual pytest suites may subclass this class and override the set_test_params() method.
 
     Individual tests can also override the following methods to customize the test setup:
 
@@ -201,7 +201,7 @@ class ConfluxTestFramework:
             for node in self.nodes:
                 node.cleanup_on_exit = False
             self.log.info(
-                "Note: bitcoinds were not stopped and may still be running")
+                "Note: conflux nodes were not stopped and may still be running")
 
         if not self.options.nocleanup and not self.options.noshutdown and success != TestStatus.FAILED:
             self.log.info("Cleaning up {} on exit".format(self.options.tmpdir))
@@ -448,7 +448,7 @@ class ConfluxTestFramework:
                 ))
 
     def start_node(self, i:int, extra_args=None, phase_to_wait=["NormalSyncPhase"], wait_time=30, *args, **kwargs):
-        """Start a bitcoind"""
+        """Start a conflux node"""
 
         node = self.nodes[i]
 
@@ -466,7 +466,7 @@ class ConfluxTestFramework:
             coverage.write_all_rpc_commands(self.options.coveragedir, node.rpc)
 
     def start_nodes(self, extra_args=None, *args, **kwargs):
-        """Start multiple bitcoinds"""
+        """Start multiple conflux nodes"""
 
         try:
             for i, node in enumerate(self.nodes):
@@ -486,13 +486,13 @@ class ConfluxTestFramework:
                                                 node.rpc)
 
     def stop_node(self, i, expected_stderr='', kill=False, wait=True, clean=False):
-        """Stop a bitcoind test node"""
+        """Stop a conflux test node"""
         self.nodes[i].stop_node(expected_stderr, kill, wait)
         if clean:
             self.nodes[i].clean_data()
 
     def stop_nodes(self):
-        """Stop multiple bitcoind test nodes"""
+        """Stop multiple conflux test nodes"""
         for node in self.nodes:
             # Issue RPC to stop nodes
             node.stop_node()
@@ -523,7 +523,8 @@ class ConfluxTestFramework:
         ll = int(self.options.loglevel) if self.options.loglevel.isdigit(
         ) else self.options.loglevel.upper()
         # ch.setLevel(ll)
-        # Format logs the same as bitcoind's debug.log with microprecision (so log files can be concatenated and sorted)
+        # Use sortable UTC timestamps (millisecond precision padded to
+        # microsecond format) so log files can be concatenated and sorted.
         formatter = logging.Formatter(
             fmt=
             '%(asctime)s.%(msecs)03d000Z %(name)s (%(levelname)s): %(message)s',
