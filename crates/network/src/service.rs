@@ -1262,9 +1262,9 @@ impl NetworkServiceInner {
                         }
                     }
                     sess.set_expired();
+                    failure_id = sess.id().cloned();
                 }
                 deregister = remote || sess.done();
-                failure_id = sess.id().cloned();
                 debug!(
                     "kill connection by token, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
                     deregister, reason, *sess, op
