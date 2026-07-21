@@ -46,7 +46,7 @@ class ThrottleRpcTests(ConfluxTestFramework):
         # throttled
         try:
             client.epoch_number()
-            assert "should be throttled"
+            assert False, "should be throttled"
         except ReceivedErrorResponseError as e:
             assert e.response.code == -32072
             assert e.response.data.startswith("throttled in ")
@@ -54,7 +54,7 @@ class ThrottleRpcTests(ConfluxTestFramework):
     # allow to tolerate 1 time even throttled
         try:
             client.epoch_number()
-            assert "should be throttled"
+            assert False, "should be throttled"
         except ReceivedErrorResponseError as e:
             assert e.response.code == -32072
             assert e.response.data.startswith("throttled in ")
@@ -62,7 +62,7 @@ class ThrottleRpcTests(ConfluxTestFramework):
         # already throttled
         try:
             client.epoch_number()
-            assert "should be throttled"
+            assert False, "should be throttled"
         except ReceivedErrorResponseError as e:
             assert e.response.code == -32072
             assert e.response.data == "already throttled, please try again later"
@@ -75,7 +75,7 @@ class ThrottleRpcTests(ConfluxTestFramework):
         # throttled
         try:
             client.gas_price()
-            assert "should be throttled"
+            assert False, "should be throttled"
         except ReceivedErrorResponseError as e:
             assert e.response.code == -32072
             assert e.response.data.startswith("throttled in ")
@@ -83,7 +83,7 @@ class ThrottleRpcTests(ConfluxTestFramework):
         # do not tolerate once throttled
         try:
             client.gas_price()
-            assert "should be throttled"
+            assert False, "should be throttled"
         except ReceivedErrorResponseError as e:
             assert e.response.code == -32072
             assert e.response.data == "already throttled, please try again later"
@@ -98,7 +98,7 @@ class ThrottleRpcTests(ConfluxTestFramework):
         # throttled again
         try:
             client.gas_price()
-            assert "should be throttled"
+            assert False, "should be throttled"
         except ReceivedErrorResponseError as e:
             assert e.response.code == -32072
             assert e.response.data.startswith("throttled in ")
