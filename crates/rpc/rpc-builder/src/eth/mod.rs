@@ -32,7 +32,9 @@ mod module;
 pub use crate::{
     error::*, id_provider::SubscriptionIdProvider, RpcServerHandle,
 };
-use cfx_rpc_middlewares::{maybe_cors_layer, Logger, Metrics, Throttle};
+use cfx_rpc_middlewares::{
+    load_throttling_manager, maybe_cors_layer, Logger, Metrics, Throttle,
+};
 pub use module::{EthRpcModule, RpcModuleSelection};
 
 use cfx_rpc_cfx_types::RpcImplConfiguration;
@@ -461,14 +463,20 @@ impl RpcServerConfig {
         self, modules: &TransportRpcModules,
         throttling_conf_file: Option<String>, enable_metrics: bool,
     ) -> Result<RpcServerHandle, RpcError> {
+        // No server to build: skip loading (and maybe panicking on) the conf.
+        if !self.has_server() {
+            return Ok(RpcServerHandle {
+                http_local_addr: None,
+                ws_local_addr: None,
+                http: None,
+                ws: None,
+            });
+        }
+
+        let throttle_manager =
+            load_throttling_manager(throttling_conf_file.as_deref(), "rpc");
         let rpc_middleware = RpcServiceBuilder::new()
-            .layer_fn(move |s| {
-                Throttle::new(
-                    throttling_conf_file.as_ref().map(|s| s.as_str()),
-                    "rpc",
-                    s,
-                )
-            })
+            .layer_fn(move |s| Throttle::new(throttle_manager.clone(), s))
             .layer_fn(move |s| Metrics::new(s, enable_metrics))
             .layer_fn(|s| Logger::new(s));
 
