@@ -39,11 +39,7 @@ pub fn get_state_for_genesis_write() -> State {
     state
 }
 
-fn u256_to_vec(val: &U256) -> Vec<u8> {
-    let mut key = vec![0; 32];
-    val.to_big_endian(key.as_mut());
-    key
-}
+fn u256_to_vec(val: &U256) -> Vec<u8> { val.to_big_endian().to_vec() }
 
 #[test]
 fn checkpoint_basic() {

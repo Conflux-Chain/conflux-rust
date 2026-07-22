@@ -39,7 +39,7 @@ pub struct Receipt {
     /// Recipient
     pub to: Option<H160>,
     /// Block number
-    pub block_number: U256,
+    pub block_number: U64,
     /// Cumulative gas used
     pub cumulative_gas_used: U256,
     /// Gas used

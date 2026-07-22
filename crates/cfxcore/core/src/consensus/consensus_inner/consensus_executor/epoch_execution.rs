@@ -97,7 +97,12 @@ impl ConsensusExecutionHandler {
             std::mem::swap(&mut epoch_recorder.geth_traces, task.answer);
         }
 
-        if !dry_run && self.pos_verifier.pos_option().is_some() {
+        // Persist staking events only from canonical (local-pivot) execution,
+        // so every saved row can be trusted as canonical on read.
+        if !dry_run
+            && on_local_pivot
+            && self.pos_verifier.pos_option().is_some()
+        {
             debug!(
                 "put_staking_events: {:?} height={} len={}",
                 pivot_block.hash(),

@@ -5,41 +5,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    account_address::AccountAddress,
-    network_address::{encrypted::EncNetworkAddress, NetworkAddress},
-};
 use diem_crypto::{
     bls::{BLSPrivateKey, BLSPublicKey, BLSSignature},
     ec_vrf::{EcVrfPrivateKey, EcVrfProof, EcVrfPublicKey},
     multi_bls::{MultiBLSPrivateKey, MultiBLSPublicKey, MultiBLSSignature},
 };
-use move_core_types::move_resource::MoveResource;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq, Default)]
-pub struct ValidatorConfigResource {
-    pub validator_config: Option<ValidatorConfig>,
-    pub delegated_account: Option<AccountAddress>,
-    pub human_name: Vec<u8>,
-}
-
-impl MoveResource for ValidatorConfigResource {
-    const MODULE_NAME: &'static str = "ValidatorConfig";
-    const STRUCT_NAME: &'static str = "ValidatorConfig";
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, Eq, PartialEq, Default)]
-pub struct ValidatorOperatorConfigResource {
-    pub human_name: Vec<u8>,
-}
-
-impl MoveResource for ValidatorOperatorConfigResource {
-    const MODULE_NAME: &'static str = "ValidatorOperatorConfig";
-    const STRUCT_NAME: &'static str = "ValidatorOperatorConfig";
-}
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
@@ -47,9 +20,12 @@ pub struct ValidatorConfig {
     pub consensus_public_key: ConsensusPublicKey,
     /// None if the leader election does not need VRF.
     pub vrf_public_key: Option<ConsensusVRFPublicKey>,
-    /// This is an bcs serialized `Vec<EncNetworkAddress>`
+    // Both address fields are placeholders — always `vec![]`. Kept to
+    // preserve the BCS layout of the genesis `ValidatorSet` event (and
+    // thus the genesis transaction hash) for existing deployments.
+    // Historically held BCS-encoded validator network address stacks;
+    // Conflux-PoS never populated them.
     pub validator_network_addresses: Vec<u8>,
-    /// This is an bcs serialized `Vec<NetworkAddress>`
     pub fullnode_network_addresses: Vec<u8>,
 }
 
@@ -66,18 +42,6 @@ impl ValidatorConfig {
             validator_network_addresses,
             fullnode_network_addresses,
         }
-    }
-
-    pub fn fullnode_network_addresses(
-        &self,
-    ) -> Result<Vec<NetworkAddress>, bcs::Error> {
-        bcs::from_bytes(&self.fullnode_network_addresses)
-    }
-
-    pub fn validator_network_addresses(
-        &self,
-    ) -> Result<Vec<EncNetworkAddress>, bcs::Error> {
-        bcs::from_bytes(&self.validator_network_addresses)
     }
 }
 

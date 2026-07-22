@@ -16,7 +16,6 @@
 
 use super::Crypto;
 use serde_derive::{Deserialize, Serialize};
-use serde_json;
 use std::io::{Read, Write};
 
 /// Vault meta file

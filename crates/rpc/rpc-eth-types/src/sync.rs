@@ -18,7 +18,7 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use cfx_types::U256;
+use cfx_types::{U256, U64};
 use serde::{Serialize, Serializer};
 
 /// Sync info
@@ -26,11 +26,11 @@ use serde::{Serialize, Serializer};
 #[serde(rename_all = "camelCase")]
 pub struct SyncInfo {
     /// Starting block
-    pub starting_block: U256,
+    pub starting_block: U64,
     /// Current block
-    pub current_block: U256,
+    pub current_block: U64,
     /// Highest block seen so far
-    pub highest_block: U256,
+    pub highest_block: U64,
     /// Warp sync snapshot chunks total.
     pub warp_chunks_amount: Option<U256>,
     /// Warp sync snpashot chunks processed.

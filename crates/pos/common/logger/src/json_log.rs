@@ -5,11 +5,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use diem_infallible::{duration_since_epoch, Mutex};
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{self, value as json};
-use std::{collections::VecDeque, convert::TryInto};
+use std::{
+    collections::VecDeque,
+    convert::TryInto,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct JsonLogEntry {
@@ -41,7 +45,9 @@ static JSON_LOG_ENTRY_QUEUE: Lazy<Mutex<VecDeque<JsonLogEntry>>> =
 
 impl JsonLogEntry {
     pub fn new(name: &'static str, json: json::Value) -> Self {
-        let timestamp = duration_since_epoch()
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH")
             .as_millis()
             .try_into()
             .expect("Unable to convert u128 into u64");

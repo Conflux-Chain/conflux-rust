@@ -14,6 +14,10 @@ pub struct StoreInner {
     secret_map: HashMap<String, usize>,
 }
 
+impl Default for StoreInner {
+    fn default() -> Self { Self::new() }
+}
+
 impl StoreInner {
     pub fn new() -> Self {
         StoreInner {
@@ -53,6 +57,10 @@ pub struct SecretStore {
 }
 
 pub type SharedSecretStore = Arc<SecretStore>;
+
+impl Default for SecretStore {
+    fn default() -> Self { Self::new() }
+}
 
 impl SecretStore {
     pub fn new() -> Self {

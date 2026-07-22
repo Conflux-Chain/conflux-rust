@@ -16,7 +16,6 @@
 
 use super::{Bytes, H160};
 use serde_derive::Deserialize;
-use serde_json;
 use std::io::Read;
 
 pub type Encseed = Bytes;

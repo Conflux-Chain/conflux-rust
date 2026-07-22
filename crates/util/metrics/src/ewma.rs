@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize};
 
 /// EWMAs continuously calculate an exponentially-weighted moving average based
 /// on an outside source of clock ticks.
+#[allow(clippy::upper_case_acronyms)]
 pub struct EWMA {
     uncounted: AtomicUsize,
     alpha: f64,

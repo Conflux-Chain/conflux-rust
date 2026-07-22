@@ -5,7 +5,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::pos::consensus::counters;
 use anyhow::bail;
 use consensus_types::{
     executed_block::ExecutedBlock, quorum_cert::QuorumCert,
@@ -98,7 +97,6 @@ impl BlockTree {
 
         let mut id_to_block = HashMap::new();
         id_to_block.insert(root_id, LinkableBlock::new(root));
-        counters::NUM_BLOCKS_IN_TREE.set(1);
 
         let root_quorum_cert = Arc::new(root_quorum_cert);
         let mut id_to_quorum_cert = HashMap::new();
@@ -219,7 +217,6 @@ impl BlockTree {
                 .id_to_block
                 .insert(block_id, linkable_block)
                 .is_none());
-            counters::NUM_BLOCKS_IN_TREE.inc();
             Ok(arc_block)
         }
     }
@@ -323,7 +320,6 @@ impl BlockTree {
         assert!(self.block_exists(&root_id));
         // Update the next root
         self.root_id = root_id;
-        counters::NUM_BLOCKS_IN_TREE.sub(newly_pruned_blocks.len() as i64);
         // The newly pruned blocks are pushed back to the deque
         // pruned_block_ids. In case the overall number of the elements
         // is greater than the predefined threshold, the oldest elements

@@ -52,9 +52,9 @@ impl From<json::Prf> for Prf {
     }
 }
 
-impl Into<json::Prf> for Prf {
-    fn into(self) -> json::Prf {
-        match self {
+impl From<Prf> for json::Prf {
+    fn from(val: Prf) -> Self {
+        match val {
             Prf::HmacSha256 => json::Prf::HmacSha256,
         }
     }
@@ -71,13 +71,13 @@ impl From<json::Pbkdf2> for Pbkdf2 {
     }
 }
 
-impl Into<json::Pbkdf2> for Pbkdf2 {
-    fn into(self) -> json::Pbkdf2 {
+impl From<Pbkdf2> for json::Pbkdf2 {
+    fn from(val: Pbkdf2) -> Self {
         json::Pbkdf2 {
-            c: self.c,
-            dklen: self.dklen,
-            prf: self.prf.into(),
-            salt: From::from(self.salt),
+            c: val.c,
+            dklen: val.dklen,
+            prf: val.prf.into(),
+            salt: From::from(val.salt),
         }
     }
 }
@@ -94,14 +94,14 @@ impl From<json::Scrypt> for Scrypt {
     }
 }
 
-impl Into<json::Scrypt> for Scrypt {
-    fn into(self) -> json::Scrypt {
+impl From<Scrypt> for json::Scrypt {
+    fn from(val: Scrypt) -> Self {
         json::Scrypt {
-            dklen: self.dklen,
-            p: self.p,
-            n: self.n,
-            r: self.r,
-            salt: From::from(self.salt),
+            dklen: val.dklen,
+            p: val.p,
+            n: val.n,
+            r: val.r,
+            salt: From::from(val.salt),
         }
     }
 }
@@ -115,9 +115,9 @@ impl From<json::Kdf> for Kdf {
     }
 }
 
-impl Into<json::Kdf> for Kdf {
-    fn into(self) -> json::Kdf {
-        match self {
+impl From<Kdf> for json::Kdf {
+    fn from(val: Kdf) -> Self {
+        match val {
             Kdf::Pbkdf2(params) => json::Kdf::Pbkdf2(params.into()),
             Kdf::Scrypt(params) => json::Kdf::Scrypt(params.into()),
         }

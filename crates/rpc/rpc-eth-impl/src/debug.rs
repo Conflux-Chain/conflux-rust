@@ -201,6 +201,12 @@ impl DebugApi {
                     GethDebugBuiltInTracerType::MuxTracer => {
                         return Err(CoreError::Msg("not supported".to_string()))
                     }
+                    GethDebugBuiltInTracerType::FlatCallTracer => {
+                        return Err(CoreError::Msg("not supported".to_string()))
+                    }
+                    GethDebugBuiltInTracerType::Erc7562Tracer => {
+                        return Err(CoreError::Msg("not supported".to_string()))
+                    }
                 },
                 JsTracer(_) => {
                     return Err(CoreError::Msg("not supported".to_string()))

@@ -1,10 +1,8 @@
-use anyhow::Result;
-use vergen::EmitBuilder;
-fn main() -> Result<()> {
-    EmitBuilder::builder()
-        .git_sha(true)
-        .git_commit_date()
-        .rustc_semver()
-        .emit()?;
-    Ok(())
+use vergen_git2::{Emitter, Git2Builder, RustcBuilder};
+fn main() -> anyhow::Result<()> {
+    let git2 = Git2Builder::default().all().sha(true).build()?;
+    Emitter::default()
+        .add_instructions(&git2)?
+        .add_instructions(&RustcBuilder::all_rustc()?)?
+        .emit()
 }

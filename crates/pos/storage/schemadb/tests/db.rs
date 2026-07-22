@@ -65,7 +65,7 @@ fn get_column_families() -> Vec<ColumnFamilyName> {
     ]
 }
 
-fn open_db(dir: &diem_temppath::TempPath) -> DB {
+fn open_db(dir: &tempfile::TempDir) -> DB {
     let mut db_opts = rocksdb::DBOptions::default();
     db_opts.create_if_missing(true);
     db_opts.create_missing_column_families(true);
@@ -73,7 +73,7 @@ fn open_db(dir: &diem_temppath::TempPath) -> DB {
         .expect("Failed to open DB.")
 }
 
-fn open_db_read_only(dir: &diem_temppath::TempPath) -> DB {
+fn open_db_read_only(dir: &tempfile::TempDir) -> DB {
     DB::open_readonly(
         &dir.path(),
         "test",
@@ -84,13 +84,13 @@ fn open_db_read_only(dir: &diem_temppath::TempPath) -> DB {
 }
 
 struct TestDB {
-    _tmpdir: diem_temppath::TempPath,
+    _tmpdir: tempfile::TempDir,
     db: DB,
 }
 
 impl TestDB {
     fn new() -> Self {
-        let tmpdir = diem_temppath::TempPath::new();
+        let tmpdir = tempfile::TempDir::new().unwrap();
         let db = open_db(&tmpdir);
 
         TestDB {
@@ -275,7 +275,7 @@ fn test_two_schema_batches() {
 
 #[test]
 fn test_reopen() {
-    let tmpdir = diem_temppath::TempPath::new();
+    let tmpdir = tempfile::TempDir::new().unwrap();
     {
         let db = open_db(&tmpdir);
         db.put::<TestSchema1>(&TestField(0), &TestField(0)).unwrap();
@@ -295,7 +295,7 @@ fn test_reopen() {
 
 #[test]
 fn test_open_read_only() {
-    let tmpdir = diem_temppath::TempPath::new();
+    let tmpdir = tempfile::TempDir::new().unwrap();
     {
         let db = open_db(&tmpdir);
         db.put::<TestSchema1>(&TestField(0), &TestField(0)).unwrap();

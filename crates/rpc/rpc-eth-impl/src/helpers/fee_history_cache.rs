@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use cfx_rpc_cfx_types::{FeeHistoryCacheEntry, PhantomBlock};
 use cfx_types::{Space, H256};
 use parking_lot::RwLock;

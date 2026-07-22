@@ -32,7 +32,6 @@ pub enum LogEvent {
     ReceiveSyncInfo,
     ReceiveVote,
     RetrieveBlock,
-    StateSync,
     SyncToPeer,
     Timeout,
     Vote,

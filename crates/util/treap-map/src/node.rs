@@ -111,14 +111,14 @@ impl<C: TreapMapConfig> Node<C> {
             if let (Some(dir), true) = (next_node_dir, update_priority) {
                 match dir {
                     Direction::Left
-                        if node.left.as_ref().map_or(false, |left| {
+                        if node.left.as_ref().is_some_and(|left| {
                             node.priority < left.priority
                         }) =>
                     {
                         node.right_rotate();
                     }
                     Direction::Right
-                        if node.right.as_ref().map_or(false, |right| {
+                        if node.right.as_ref().is_some_and(|right| {
                             node.priority < right.priority
                         }) =>
                     {
@@ -145,7 +145,7 @@ impl<C: TreapMapConfig> Node<C> {
             OpResult::InsertOnVacant { insert, ret } => {
                 // `maybe_node` should be empty here. So we ignore the replaced
                 // value.
-                let _ = mem::replace(maybe_node, Some(insert));
+                let _ = maybe_node.replace(insert);
                 (ret, true, true)
             }
             OpResult::Delete(delete_ret) => {

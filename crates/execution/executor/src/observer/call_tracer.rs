@@ -4,7 +4,7 @@ use cfx_vm_types::ActionParams;
 use impl_tools::autoimpl;
 use impl_trait_for_tuples::impl_for_tuples;
 
-#[impl_for_tuples(3)]
+#[impl_for_tuples(4)]
 #[autoimpl(for<T: trait + ?Sized> &mut T)]
 #[allow(unused_variables)]
 pub trait CallTracer {

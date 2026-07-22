@@ -16,7 +16,7 @@ impl SharedKeyTreapMapConfig for CombinedMap {
     type Weight = u64;
 }
 
-const SIZE: usize = 1 << 20 - 1;
+const SIZE: usize = 1 << (20 - 1);
 
 fn make_combined_map(mut rng: impl Rng) -> TreapMap<CombinedMap> {
     let mut treap_map = TreapMap::<CombinedMap>::new();
@@ -52,10 +52,8 @@ fn bench_combined_treap_map_query(c: &mut Criterion) {
     c.bench_function("Combined Treapmap get", move |b| {
         let mut key = 0usize;
         b.iter(|| {
-            black_box({
-                key = rand::random_range(0..SIZE * 2);
-                black_box(treap_map.get(&key).unwrap_or(&key));
-            })
+            key = rand::random_range(0..SIZE * 2);
+            black_box(treap_map.get(&key).unwrap_or(&key));
         });
     });
 }

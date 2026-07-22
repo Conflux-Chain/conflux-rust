@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::CompatBool;
 use cfx_types::H256;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -28,7 +29,7 @@ impl Encodable for TransactionIndex {
         s.begin_list(4);
         s.append(&self.block_hash);
         s.append(&self.real_index);
-        s.append(&self.is_phantom);
+        s.append(&CompatBool(self.is_phantom));
         s.append(&self.rpc_index);
     }
 }
@@ -45,13 +46,13 @@ impl Decodable for TransactionIndex {
             3 => Ok(TransactionIndex {
                 block_hash: rlp.val_at(0)?,
                 real_index: rlp.val_at(1)?,
-                is_phantom: rlp.val_at(2)?,
+                is_phantom: rlp.val_at::<CompatBool>(2)?.0,
                 rpc_index: None,
             }),
             4 => Ok(TransactionIndex {
                 block_hash: rlp.val_at(0)?,
                 real_index: rlp.val_at(1)?,
-                is_phantom: rlp.val_at(2)?,
+                is_phantom: rlp.val_at::<CompatBool>(2)?.0,
                 rpc_index: rlp.val_at(3)?,
             }),
             _ => Err(DecoderError::RlpInvalidLength),

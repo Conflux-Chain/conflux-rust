@@ -7,13 +7,13 @@
 
 use super::*;
 use crate::{change_set::ChangeSet, PosLedgerDB};
-use diem_temppath::TempPath;
 use diem_types::{
     proptest_types::{AccountInfoUniverse, LedgerInfoWithSignaturesGen},
     transaction::Version,
 };
 use proptest::{collection::vec, prelude::*};
 use std::path::Path;
+use tempfile::TempDir;
 
 fn arb_ledger_infos_with_sigs(
 ) -> impl Strategy<Value = Vec<LedgerInfoWithSignatures>> {
@@ -78,7 +78,7 @@ proptest! {
                 )
             })
     ) {
-        let tmp_dir = TempPath::new();
+        let tmp_dir = TempDir::new().unwrap();
         let db = set_up(&tmp_dir, &ledger_infos_with_sigs);
 
         let actual = db
@@ -110,7 +110,7 @@ proptest! {
                 )
             })
     ) {
-        let tmp_dir = TempPath::new();
+        let tmp_dir = TempDir::new().unwrap();
         let db = set_up(&tmp_dir, &ledger_infos_with_sigs);
 
         let actual = db.ledger_store.get_epoch(version).unwrap();
@@ -125,7 +125,7 @@ proptest! {
 
     #[test]
     fn test_get_epoch_state(ledger_infos_with_sigs in arb_ledger_infos_with_sigs()) {
-        let tmp_dir = TempPath::new();
+        let tmp_dir = TempDir::new().unwrap();
         let db = set_up(&tmp_dir, &ledger_infos_with_sigs);
 
         assert!(db.ledger_store.get_epoch_state(0).is_err());
@@ -154,7 +154,7 @@ proptest! {
                 )
             })
     ) {
-        let tmp_dir = TempPath::new();
+        let tmp_dir = TempDir::new().unwrap();
         let db = set_up(&tmp_dir, &ledger_infos_with_sigs);
         put_transaction_infos(&db, &txn_infos);
 

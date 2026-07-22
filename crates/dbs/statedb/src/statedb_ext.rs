@@ -79,7 +79,7 @@ impl StateDbExt for StateDbGeneric {
         } else {
             self.set_raw(
                 key,
-                ::rlp::encode(value).into_boxed_slice(),
+                ::rlp::encode(value).to_vec().into_boxed_slice(),
                 debug_record,
             )
         }

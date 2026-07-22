@@ -365,7 +365,7 @@ def test_phantom_transaction(network):
     assert_equal(len(receipts[3]["logs"]), 0)
     assert_equal(len(receipts[4]["logs"]), 2)
     assert_equal(receipts[4]["logs"][0]["data"], number_to_topic(23))
-    assert_equal(receipts[4]["logs"][0]["data"], number_to_topic(23))
+    assert_equal(receipts[4]["logs"][1]["data"], number_to_topic(23))
 
     assert_equal(len(receipts[5]["logs"]), 1)
     assert_equal(receipts[5]["logs"][0]["data"], number_to_topic(25))
@@ -377,7 +377,7 @@ def test_phantom_transaction(network):
     assert_equal(len(receipts[8]["logs"]), 0)
     assert_equal(len(receipts[9]["logs"]), 2)
     assert_equal(receipts[9]["logs"][0]["data"], number_to_topic(26))
-    assert_equal(receipts[9]["logs"][0]["data"], number_to_topic(26))
+    assert_equal(receipts[9]["logs"][1]["data"], number_to_topic(26))
 
     # ---------------------------------------------------------------------
 

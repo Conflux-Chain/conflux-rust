@@ -14,11 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use std::{fmt, ptr};
 
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Deserialize)]
 pub struct Password(String);
+
+impl Serialize for Password {
+    fn serialize<S: Serializer>(
+        &self, serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str("******")
+    }
+}
 
 impl fmt::Debug for Password {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

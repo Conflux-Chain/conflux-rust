@@ -16,13 +16,19 @@ use std::{
     time::Duration,
 };
 
-pub static ORDER: Ordering = Ordering::Relaxed;
+pub const ORDER: Ordering = Ordering::Relaxed;
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
+static STOPPED: AtomicBool = AtomicBool::new(false);
 
 pub fn is_enabled() -> bool { ENABLED.load(ORDER) }
 
 pub fn enable() { ENABLED.store(true, ORDER); }
+
+/// Signal all metrics reporter threads to stop.
+pub fn stop() { STOPPED.store(true, ORDER); }
+
+pub fn is_stopped() -> bool { STOPPED.load(ORDER) }
 
 pub trait Metric:
     Send + Sync + Reportable + InfluxdbReportable + PrometheusReportable

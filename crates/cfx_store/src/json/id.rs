@@ -31,13 +31,13 @@ impl From<[u8; 16]> for Uuid {
     fn from(uuid: [u8; 16]) -> Self { Uuid(uuid) }
 }
 
-impl<'a> Into<String> for &'a Uuid {
-    fn into(self) -> String {
-        let d1 = &self.0[0..4];
-        let d2 = &self.0[4..6];
-        let d3 = &self.0[6..8];
-        let d4 = &self.0[8..10];
-        let d5 = &self.0[10..16];
+impl From<&Uuid> for String {
+    fn from(val: &Uuid) -> Self {
+        let d1 = &val.0[0..4];
+        let d2 = &val.0[4..6];
+        let d3 = &val.0[6..8];
+        let d4 = &val.0[8..10];
+        let d5 = &val.0[10..16];
         [d1, d2, d3, d4, d5]
             .iter()
             .map(|d| d.to_hex())
@@ -46,12 +46,12 @@ impl<'a> Into<String> for &'a Uuid {
     }
 }
 
-impl Into<String> for Uuid {
-    fn into(self) -> String { Into::into(&self) }
+impl From<Uuid> for String {
+    fn from(val: Uuid) -> Self { Into::into(&val) }
 }
 
-impl Into<[u8; 16]> for Uuid {
-    fn into(self) -> [u8; 16] { self.0 }
+impl From<Uuid> for [u8; 16] {
+    fn from(val: Uuid) -> Self { val.0 }
 }
 
 impl fmt::Display for Uuid {

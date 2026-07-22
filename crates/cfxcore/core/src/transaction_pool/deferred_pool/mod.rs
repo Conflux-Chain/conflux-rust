@@ -145,7 +145,7 @@ impl DeferredPool {
         {
             'sender: for tx in sender_txs.iter() {
                 if tx.gas_price() < &tx_min_price {
-                    debug!(
+                    trace!(
                         "txpool::packing_sampler skip sender={:?} nonce={} reason=low_price tx_price={} min_price={}",
                         sender,
                         tx.nonce(),
@@ -157,7 +157,7 @@ impl DeferredPool {
                 match validity(&*tx) {
                     PackingCheckResult::Pack => {}
                     PackingCheckResult::Pending => {
-                        debug!(
+                        trace!(
                             "txpool::packing_sampler stop sender={:?} nonce={} reason=pending",
                             sender,
                             tx.nonce()
@@ -166,7 +166,7 @@ impl DeferredPool {
                     }
                     PackingCheckResult::Drop => {
                         to_drop_txs.push(tx.clone());
-                        debug!(
+                        trace!(
                             "txpool::packing_sampler drop sender={:?} nonce={} reason=invalid",
                             sender,
                             tx.nonce()
@@ -179,7 +179,7 @@ impl DeferredPool {
                 if gas_limit > rest_gas_limit {
                     if gas_limit >= minimum_unit_gas_limit {
                         minimum_unit_gas_limit += minimum_unit_gas_limit >> 4;
-                        debug!(
+                        trace!(
                             "txpool::packing_sampler sender={:?} nonce={} gas_limit={} exceeds remaining_gas={} adjust_threshold={}",
                             sender,
                             tx.nonce(),
@@ -189,7 +189,7 @@ impl DeferredPool {
                         );
                         break 'sender;
                     } else {
-                        debug!(
+                        trace!(
                             "txpool::packing_sampler stop all space={:?} reason=gas_exhausted remaining_gas={} next_gas_limit={}",
                             space,
                             rest_gas_limit,
@@ -197,15 +197,13 @@ impl DeferredPool {
                         );
                         break 'all;
                     }
-                } else {
-                    rest_gas_limit -= gas_limit;
                 }
 
                 let tx_size = tx.rlp_size();
                 if tx_size > rest_size_limit {
                     if tx_size >= minimum_unit_tx_size {
                         minimum_unit_tx_size += minimum_unit_tx_size >> 4;
-                        debug!(
+                        trace!(
                             "txpool::packing_sampler sender={:?} nonce={} tx_size={} exceeds remaining_size={} adjust_threshold_size={}",
                             sender,
                             tx.nonce(),
@@ -215,7 +213,7 @@ impl DeferredPool {
                         );
                         break 'sender;
                     } else {
-                        debug!(
+                        trace!(
                             "txpool::packing_sampler stop all space={:?} reason=size_exhausted remaining_size={} next_size={}",
                             space,
                             rest_size_limit,
@@ -223,12 +221,13 @@ impl DeferredPool {
                         );
                         break 'all;
                     }
-                } else {
-                    rest_size_limit -= tx_size;
                 }
 
+                rest_gas_limit -= gas_limit;
+                rest_size_limit -= tx_size;
+
                 to_pack_txs.push(tx.clone());
-                debug!(
+                trace!(
                     "txpool::packing_sampler select sender={:?} nonce={} remaining_gas={} remaining_size={} count={}",
                     sender,
                     tx.nonce(),
@@ -238,7 +237,8 @@ impl DeferredPool {
                 );
                 if to_pack_txs.len() >= tx_num_limit {
                     debug!(
-                        "txpool::packing_sampler reached tx limit {}", tx_num_limit
+                        "txpool::packing_sampler reached tx limit {}",
+                        tx_num_limit
                     );
                     break 'all;
                 }
@@ -249,7 +249,7 @@ impl DeferredPool {
         // directly may break gc logic. So we only update packing
         // pool now.
         for tx in to_drop_txs {
-            debug!(
+            trace!(
                 "txpool::packing_sampler prune sender={:?} nonce={}",
                 tx.sender(),
                 tx.nonce()
@@ -268,8 +268,7 @@ impl DeferredPool {
             gas_used,
             size_used
         );
-        if to_pack_txs.is_empty()
-            && self.packing_pool.in_space(space).len() > 0
+        if to_pack_txs.is_empty() && self.packing_pool.in_space(space).len() > 0
         {
             debug!(
                 "txpool::packing_sampler no_tx_selected space={:?} ready_entries={} block_gas_limit={} block_size_limit={} tx_limit={} remaining_gas={} remaining_size={}",
@@ -382,7 +381,7 @@ impl DeferredPool {
         let bucket = match self.buckets.get_mut(addr) {
             Some(bucket) => bucket,
             None => {
-                debug!(
+                trace!(
                     "txpool::packing readiness addr={:?} missing bucket",
                     addr
                 );
@@ -395,7 +394,7 @@ impl DeferredPool {
         let (first_tx, last_valid_nonce) = if let Some(info) = pack_info {
             info
         } else {
-            debug!(
+            trace!(
                 "txpool::packing readiness addr={:?} no contiguous unpaid tx (nonce={:?}, balance={:?})",
                 addr, nonce, balance
             );
@@ -404,7 +403,7 @@ impl DeferredPool {
             return None;
         };
 
-        debug!(
+        trace!(
             "txpool::packing readiness addr={:?} candidate window start_nonce={:?} last_valid_nonce={:?} first_tx_hash={:?}",
             addr,
             first_tx.nonce(),
@@ -442,7 +441,7 @@ impl DeferredPool {
                 .in_space_mut(addr.space)
                 .split_off_prefix(*addr, &first_valid_nonce);
             if !dropped.is_empty() {
-                debug!(
+                trace!(
                     "txpool::packing readiness addr={:?} dropped {} txs with nonce < {:?}",
                     addr,
                     dropped.len(),
@@ -457,7 +456,7 @@ impl DeferredPool {
                 .in_space_mut(addr.space)
                 .split_off_suffix(*addr, &(last_valid_nonce + 1));
             if !dropped.is_empty() {
-                debug!(
+                trace!(
                     "txpool::packing readiness addr={:?} dropped {} txs with nonce > {:?}",
                     addr,
                     dropped.len(),
@@ -475,7 +474,7 @@ impl DeferredPool {
                     .insert(tx.transaction.clone());
                 match &res {
                     Ok(_) => {
-                        debug!(
+                        trace!(
                             "txpool::packing readiness addr={:?} promoted tx hash={:?} nonce={:?} evicted={}",
                             addr,
                             tx.transaction.hash(),
@@ -484,7 +483,7 @@ impl DeferredPool {
                         );
                     }
                     Err(e) => {
-                        debug!(
+                        trace!(
                             "txpool::packing readiness addr={:?} failed to promote tx hash={:?} nonce={:?} err={:?}",
                             addr,
                             tx.transaction.hash(),
@@ -493,7 +492,7 @@ impl DeferredPool {
                         );
                     }
                 }
-                
+
                 if res.is_err() {
                     break;
                 }

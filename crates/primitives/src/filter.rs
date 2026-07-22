@@ -266,10 +266,10 @@ impl Deref for LogFilter {
     type Target = LogFilterParams;
 
     fn deref(&self) -> &Self::Target {
-        match &self {
-            &LogFilter::EpochLogFilter { params, .. } => params,
-            &LogFilter::BlockHashLogFilter { params, .. } => params,
-            &LogFilter::BlockNumberLogFilter { params, .. } => params,
+        match self {
+            LogFilter::EpochLogFilter { params, .. } => params,
+            LogFilter::BlockHashLogFilter { params, .. } => params,
+            LogFilter::BlockNumberLogFilter { params, .. } => params,
         }
     }
 }
@@ -290,9 +290,7 @@ impl LogFilterParams {
         let blooms = match self.address {
             Some(ref addresses) if !addresses.is_empty() => addresses
                 .iter()
-                .map(|ref address| {
-                    Bloom::from(BloomInput::Raw(address.as_bytes()))
-                })
+                .map(|address| Bloom::from(BloomInput::Raw(address.as_bytes())))
                 .collect(),
             _ => vec![Bloom::default()],
         };
@@ -305,7 +303,7 @@ impl LogFilterParams {
                     topics
                         .iter()
                         .map(|topic| {
-                            let mut b = bloom.clone();
+                            let mut b = bloom;
                             b.accrue(BloomInput::Raw(topic.as_bytes()));
                             b
                         })

@@ -4,9 +4,14 @@
 
 // TODO(7702): refactor this file
 
+mod authorization;
 pub mod eth_transaction;
 pub mod native_transaction;
 
+pub use authorization::{
+    extract_7702_payload, AuthorizationList, AuthorizationListItem, AUTH_MAGIC,
+    CODE_PREFIX_7702,
+};
 pub use eth_transaction::{
     Eip1559Transaction, Eip155Transaction, Eip2930Transaction,
     Eip7702Transaction, EthereumTransaction,
@@ -26,7 +31,8 @@ use crate::{
     },
 };
 use cfx_types::{
-    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H160,
+    cal_contract_address_with_space, Address, AddressSpaceUtil,
+    AddressWithSpace, BigEndianHash, CreateContractAddressType, Space, H160,
     H256, U256,
 };
 use eth_transaction::eip155_signature;
@@ -223,17 +229,16 @@ impl error::Error for TransactionError {
     fn description(&self) -> &str { "Transaction error" }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default,
+)]
 pub enum Action {
     /// Create creates new contract.
+    #[default]
     Create,
     /// Calls contract at given address.
     /// In the case of a transfer, this is the receiver's address.'
     Call(Address),
-}
-
-impl Default for Action {
-    fn default() -> Action { Action::Create }
 }
 
 impl Decodable for Action {
@@ -272,28 +277,6 @@ pub struct AccessListItem {
 }
 
 pub type AccessList = Vec<AccessListItem>;
-
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    RlpEncodable,
-    RlpDecodable,
-)]
-#[serde(rename_all = "camelCase")]
-pub struct AuthorizationListItem {
-    pub chain_id: U256,
-    pub address: Address,
-    pub nonce: u64,
-    pub y_parity: u8,
-    pub r: U256,
-    pub s: U256,
-}
-
-pub type AuthorizationList = Vec<AuthorizationListItem>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Transaction {
@@ -359,7 +342,7 @@ impl Transaction {
     pub fn chain_id(&self) -> Option<u32> {
         match self {
             Transaction::Native(tx) => Some(*tx.chain_id()),
-            Transaction::Ethereum(tx) => tx.chain_id().clone(),
+            Transaction::Ethereum(tx) => tx.chain_id(),
         }
     }
 
@@ -493,7 +476,7 @@ impl Transaction {
         let encoded = s.as_raw();
         let mut out = vec![0; type_prefix.len() + encoded.len()];
         out[0..type_prefix.len()].copy_from_slice(&type_prefix);
-        out[type_prefix.len()..].copy_from_slice(&encoded);
+        out[type_prefix.len()..].copy_from_slice(encoded);
         keccak(&out)
     }
 
@@ -522,8 +505,8 @@ impl Transaction {
         TransactionWithSignature {
             transaction: TransactionWithSignatureSerializePart {
                 unsigned: self,
-                r: sig.r().into(),
-                s: sig.s().into(),
+                r: U256::from_big_endian(sig.r()),
+                s: U256::from_big_endian(sig.s()),
                 v: sig.v(),
             },
             hash: H256::zero(),
@@ -669,7 +652,7 @@ impl Encodable for TransactionWithSignatureSerializePart {
 // TODO(7702): refactor this implementation.
 impl Decodable for TransactionWithSignatureSerializePart {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.as_raw().len() == 0 {
+        if rlp.as_raw().is_empty() {
             return Err(DecoderError::RlpInvalidLength);
         }
         if rlp.is_list() {
@@ -1001,10 +984,10 @@ impl TransactionWithSignature {
 
     /// Recovers the public key of the sender.
     pub fn recover_public(&self) -> Result<Public, keylib::Error> {
-        Ok(recover(
+        recover(
             &self.signature(),
             &self.unsigned.hash_for_compute_signature(),
-        )?)
+        )
     }
 
     pub fn rlp_size(&self) -> usize {
@@ -1116,11 +1099,11 @@ impl SignedTransaction {
 
     pub fn hash(&self) -> H256 { self.transaction.hash() }
 
-    pub fn gas(&self) -> &U256 { &self.transaction.gas() }
+    pub fn gas(&self) -> &U256 { self.transaction.gas() }
 
-    pub fn gas_price(&self) -> &U256 { &self.transaction.gas_price() }
+    pub fn gas_price(&self) -> &U256 { self.transaction.gas_price() }
 
-    pub fn gas_limit(&self) -> &U256 { &self.transaction.gas() }
+    pub fn gas_limit(&self) -> &U256 { self.transaction.gas() }
 
     pub fn storage_limit(&self) -> Option<u64> {
         self.transaction.storage_limit()
@@ -1144,6 +1127,32 @@ impl SignedTransaction {
             )?)
         } else {
             Ok(true)
+        }
+    }
+
+    // Calculates the created contract address if the transaction is a contract
+    // creation.
+    pub fn cal_created_address(&self) -> Option<AddressWithSpace> {
+        if let Action::Create = self.action() {
+            let from = self.sender();
+            let nonce = self.nonce();
+            let space = self.space();
+            let create_type = match space {
+                Space::Native => {
+                    CreateContractAddressType::FromSenderNonceAndCodeHash
+                }
+                Space::Ethereum => CreateContractAddressType::FromSenderNonce,
+            };
+            let code = self.data().as_slice();
+            let (created_address, _) = cal_contract_address_with_space(
+                create_type,
+                &from,
+                nonce,
+                code,
+            );
+            Some(created_address)
+        } else {
+            None
         }
     }
 }

@@ -119,8 +119,8 @@ def run():
         if len(failed) > 5:
             break
         
-        # If some test failed in twice, stop the test
-        if len(failed_twice) == 0:
+        # If some test failed twice, stop the test
+        if len(failed_twice) > 0:
             break
 
 

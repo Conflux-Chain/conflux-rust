@@ -528,7 +528,7 @@ class TreeGraphTracing(ConfluxTestFramework):
     def setup_nodes(self):
         self.add_nodes(self.num_nodes, auto_recovery=True, is_consortium=True)
         for i in range(0, self.num_nodes):
-            self.start_node(i, extra_args=["--tg_archive"], phase_to_wait=None)
+            self.start_node(i, phase_to_wait=None)
 
     def setup_network(self):
         self.log.info("setup nodes ...")

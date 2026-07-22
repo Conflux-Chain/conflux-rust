@@ -25,12 +25,15 @@ use clap::{crate_version, ArgMatches, CommandFactory};
 use cli::Cli;
 use client::{
     archive::ArchiveClient,
-    common::{shutdown_handler, ClientTrait},
+    common::{panic_handler, shutdown_handler, ClientTrait},
     configuration::Configuration,
     full::FullClient,
     light::LightClient,
 };
-use command::account::{AccountCmd, ImportAccounts, ListAccounts, NewAccount};
+use command::{
+    account::{AccountCmd, ImportAccounts, ListAccounts, NewAccount},
+    dump::DumpCommand,
+};
 use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
@@ -83,6 +86,7 @@ fn main() -> Result<(), String> {
     let conf = Configuration::parse(&matches)?;
 
     setup_logger(&conf)?;
+    panic_handler::setup();
 
     THROTTLING_SERVICE.write().initialize(
         conf.raw_conf.egress_queue_capacity,
@@ -107,8 +111,7 @@ Current Version: {}
         get_version()
     );
 
-    let client_handle: Box<dyn ClientTrait>;
-    client_handle = match conf.node_type() {
+    let client_handle: Box<dyn ClientTrait> = match conf.node_type() {
         NodeType::Archive => {
             info!("Starting archive client...");
             ArchiveClient::start(conf, exit.clone())
@@ -127,7 +130,17 @@ Current Version: {}
         NodeType::Unknown => return Err("Unknown node type".into()),
     };
     info!("Conflux client started");
-    shutdown_handler::run(client_handle, exit);
+    let graceful = shutdown_handler::run(client_handle, exit);
+
+    if !graceful {
+        eprintln!("Unclean shutdown, force exiting to avoid static destructor issues.");
+        // Use _exit() to skip C++ static destructors (e.g. RocksDB's
+        // PeriodicWorkScheduler) which may have already been invalidated
+        // by background threads during shutdown.
+        unsafe {
+            libc::_exit(1);
+        }
+    }
 
     Ok(())
 }
@@ -155,6 +168,16 @@ fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
         return Ok(Some(execute_output));
     }
 
+    // dump sub-commands
+    if let Some(("dump", dump_matches)) = matches.subcommand() {
+        let dump_cmd = DumpCommand::parse(dump_matches).map_err(|e| {
+            format!("Failed to parse dump command arguments: {}", e)
+        })?;
+        let mut conf = Configuration::parse(matches)?;
+        let execute_output = dump_cmd.execute(&mut conf)?;
+        return Ok(Some(execute_output));
+    }
+
     // general RPC commands
     let mut subcmd_matches = matches;
     while let Some(m) = subcmd_matches.subcommand() {
@@ -178,8 +201,8 @@ fn setup_logger(conf: &Configuration) -> Result<(), String> {
         Some(ref log_conf) => {
             log4rs::init_file(log_conf, Default::default()).map_err(|e| {
                 format!(
-                    "failed to initialize log with log config file: {:?}",
-                    e
+                    "failed to initialize log with log config file '{}': {:?}; maybe you want 'run/log.yaml'?",
+                    log_conf, e
                 )
             })?;
         }

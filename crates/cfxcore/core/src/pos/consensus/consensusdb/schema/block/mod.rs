@@ -43,6 +43,3 @@ impl ValueCodec<BlockSchema> for Block {
         Ok(bcs::from_bytes::<BlockUnchecked>(data).map(Into::into)?)
     }
 }
-
-#[cfg(test)]
-mod test;

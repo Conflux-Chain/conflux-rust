@@ -38,6 +38,11 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             .zip(chunk_boundary_proofs.iter())
             .enumerate()
         {
+            // Reject over-long boundary keys before they rebuild proof paths
+            // during restore (see CompressedPathRaw::MAX_PATH_BYTES).
+            if chunk_boundary.len() > CompressedPathRaw::MAX_PATH_BYTES {
+                bail!(Error::InvalidSnapshotSyncProof)
+            }
             if merkle_root.ne(proof.get_merkle_root()) {
                 bail!(Error::InvalidSnapshotSyncProof)
             }
@@ -92,6 +97,15 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
                 }
             }
         };
+        // Reject over-long keys before they become compressed paths during
+        // restore (see CompressedPathRaw::MAX_PATH_BYTES).
+        for key in keys {
+            if key.borrow().len() > CompressedPathRaw::MAX_PATH_BYTES {
+                warn!("chunk contains an over-long key, rejecting chunk");
+                return Ok(false);
+            }
+        }
+
         // Check key monotone.
         if !keys.is_empty() {
             let mut previous = keys.first().unwrap();

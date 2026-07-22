@@ -53,10 +53,11 @@ pub fn make_executable<'a>(
     let internal_contract_map = frame_local.machine.internal_contracts();
 
     // Builtin is located for both Conflux Space and EVM Space.
-    if let Some(builtin) = frame_local
-        .machine
-        .builtin(&code_address, frame_local.env.number)
-    {
+    if let Some(builtin) = frame_local.machine.builtin(
+        &code_address,
+        frame_local.env.number,
+        frame_local.env.epoch_height,
+    ) {
         trace!("CallBuiltin");
         return Box::new(BuiltinExec { builtin, params });
     }

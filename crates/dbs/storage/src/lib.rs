@@ -3,8 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 // TODO: check them again and reason about the safety of each usage.
-#![allow(clippy::mut_from_ref, clippy::cast_ref_to_mut, clippy::drop_ref)]
-#![allow(deprecated)]
+#![allow(clippy::mut_from_ref)]
 
 #[macro_use]
 extern crate cfx_util_macros;
@@ -213,6 +212,7 @@ pub use self::{
         storage_db::{
             kvdb_rocksdb::KvdbRocksdb,
             kvdb_sqlite::{KvdbSqlite, KvdbSqliteStatements},
+            kvdb_sqlite_sharded::KvdbSqliteSharded,
             snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
             sqlite::SqliteConnection,
         },
@@ -226,7 +226,7 @@ pub use self::{
         StateIndex, StateManager as StorageManager,
         StateManagerTrait as StorageManagerTrait,
     },
-    storage_db::KeyValueDbTrait,
+    storage_db::{KeyValueDbIterableTrait, KeyValueDbTrait},
 };
 
 #[cfg(any(test, feature = "testonly_code"))]

@@ -40,7 +40,6 @@ sqlite3-sys = { workspace = true }
 strfmt = { workspace = true }
 
 tokio = { workspace = true, features = ["sync"] }
-parity-util-mem = { workspace = true, default-features = false }
 cfx-util-macros = { workspace = true }
 
 [dev-dependencies]

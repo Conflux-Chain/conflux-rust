@@ -12,7 +12,6 @@ use diem_types::{
 };
 use std::sync::mpsc;
 
-pub mod config_subscription;
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod mock_time_service;
 pub mod time_service;

@@ -39,12 +39,12 @@ lazy_static! {
 /// The throttling is achieved by monitoring the message send queue size of all
 /// TCP sockets. Basically, the throttling is used in 2 ways:
 ///
-/// 1. When the queue size reached the configured threshold, the synchronization
-/// layer will reduce the number of peers to broadcast messages, e.g. new block
-/// hashes, transaction digests.
+/// 1. When the queue size reaches the configured threshold, the synchronization
+///    layer will reduce the number of peers to broadcast messages, e.g. new
+///    block hashes, transaction digests.
 ///
 /// 2. On the other hand, synchronization layer will also refuse to respond any
-/// size sensitive message, e.g. blocks.
+///    size sensitive message, e.g. blocks.
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Service {
@@ -94,7 +94,7 @@ impl Service {
 
         // capacity cannot overflow with usize type.
         let mb = n_mb_bytes!(1) as usize;
-        assert!(std::usize::MAX / mb >= cap_mb);
+        assert!(usize::MAX / mb >= cap_mb);
 
         // ensure the current queue size will not exceed the capacity.
         let cap = cap_mb * mb;

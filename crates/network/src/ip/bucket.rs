@@ -3,7 +3,7 @@ use crate::{
     node_database::NodeDatabase,
     node_table::{NodeContact, NodeId},
 };
-use rand::{prelude::ThreadRng, thread_rng, Rng};
+use rand::{prelude::ThreadRng, Rng};
 use std::time::Duration;
 
 /// NodeBucket is used to manage the nodes that grouped by subnet,
@@ -62,18 +62,18 @@ impl NodeBucket {
             }
         }
 
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
 
         // evict out-of-date node with high priority
         if !long_time_nodes.is_empty() {
             let index = rng.random_range(0..long_time_nodes.len());
-            return Some(long_time_nodes[index].clone());
+            return Some(*long_time_nodes[index]);
         }
 
         // randomly evict one
         if !evictable_nodes.is_empty() {
             let index = rng.random_range(0..evictable_nodes.len());
-            return Some(evictable_nodes[index].clone());
+            return Some(*evictable_nodes[index]);
         }
 
         None
@@ -83,7 +83,6 @@ impl NodeBucket {
 #[cfg(test)]
 mod tests {
     use super::{NodeBucket, NodeId};
-    use rand::thread_rng;
 
     #[test]
     fn test_add_remove() {
@@ -119,7 +118,7 @@ mod tests {
     #[test]
     fn test_sample() {
         let mut bucket = NodeBucket::default();
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
 
         // sample None if bucket is empty
         assert_eq!(bucket.sample(&mut rng), None);

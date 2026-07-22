@@ -6,8 +6,8 @@ use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
     Space, H256, U256,
 };
-use cfx_vm_types::extract_7702_payload;
 use keccak_hash::KECCAK_EMPTY;
+use primitives::extract_7702_payload;
 #[cfg(test)]
 use primitives::StorageLayout;
 use std::sync::Arc;

@@ -112,7 +112,7 @@
 //! hasher.update("Test message".as_bytes());
 //! let hash_value = hasher.finish();
 //! ```
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use bytes::Bytes;
 use cfx_types::U256;
 use hex::FromHex;

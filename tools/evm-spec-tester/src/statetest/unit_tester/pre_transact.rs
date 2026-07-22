@@ -1,7 +1,13 @@
 use super::super::error::TestErrorKind;
+use crate::util::set_cips_according_to_spec;
+use alloy_rpc_types_trace::geth::{
+    GethDebugTracingOptions, GethDefaultTracingOptions,
+};
+use cfx_config::Configuration;
+use cfx_execute_helper::observer::Observer;
 use cfx_executor::{
     executive::{ChargeCollateral, TransactOptions, TransactSettings},
-    machine::Machine,
+    machine::{Machine, VmFactory},
     state::State,
 };
 use cfx_rpc_eth_types::{
@@ -16,9 +22,10 @@ use cfx_vm_types::Env;
 use cfxcore::verification::{VerificationConfig, VerifyTxMode};
 use cfxkey::{Address, Secret};
 use eest_types::{
-    AccountInfo, Env as StateTestEnv, SignedAuthorization, TransactionParts,
-    TransactionType, TxPartIndices,
+    AccountInfo, Env as StateTestEnv, SignedAuthorization, SpecName,
+    TransactionParts, TransactionType, TxPartIndices,
 };
+use geth_tracer::TxExecContext;
 use primitives::{
     transaction::{
         Action, AuthorizationListItem, Eip1559Transaction, Eip155Transaction,
@@ -29,8 +36,25 @@ use primitives::{
 };
 use std::{
     collections::{BTreeMap, HashMap},
+    sync::Arc,
     u64,
 };
+
+pub fn make_machine_verify_conf(
+    raw_config: Arc<Configuration>, spec: &SpecName,
+) -> (Arc<Machine>, VerificationConfig) {
+    let mut config = raw_config.as_ref().clone();
+    set_cips_according_to_spec(&mut config, spec);
+    let machine = {
+        let vm_factory = VmFactory::new(1024 * 32);
+        Arc::new(Machine::new_with_builtin(
+            config.common_params(),
+            vm_factory,
+        ))
+    };
+    let verification = config.verification_config(machine.clone());
+    (machine, verification)
+}
 
 pub fn make_tx(
     tx_meta: &TransactionParts, tx_part_indices: &TxPartIndices, chain_id: u64,
@@ -145,7 +169,10 @@ pub fn make_tx(
     Some(Transaction::Ethereum(tx).sign(&secret))
 }
 
-pub fn make_transact_options(check_base_price: bool) -> TransactOptions<()> {
+pub fn make_transact_options(
+    check_base_price: bool, trace: bool, machine: Option<Arc<Machine>>,
+    tx_exec_context: Option<TxExecContext>,
+) -> TransactOptions<Observer> {
     let settings = TransactSettings {
         charge_collateral: ChargeCollateral::Normal,
         charge_gas: true,
@@ -153,10 +180,20 @@ pub fn make_transact_options(check_base_price: bool) -> TransactOptions<()> {
         check_epoch_bound: false,
         forbid_eoa_with_code: true,
     };
-    TransactOptions {
-        observer: (),
-        settings,
-    }
+    let observer = if trace {
+        let mut opts = GethDebugTracingOptions::default();
+        let mut config = GethDefaultTracingOptions::default();
+        config.disable_storage = Some(true);
+        opts.config = config;
+        Observer::geth_tracer(
+            tx_exec_context.expect("exist"),
+            machine.expect("exist"),
+            opts,
+        )
+    } else {
+        Observer::with_no_tracing()
+    };
+    TransactOptions { observer, settings }
 }
 
 pub fn make_state(pre_state: &HashMap<Address, AccountInfo>) -> State {
@@ -272,7 +309,7 @@ pub fn check_tx_bytes(
 
     let raw_tx = rlp::encode(&tx.transaction.transaction);
 
-    if raw_tx != txbytes {
+    if &raw_tx[..] != txbytes {
         // trace!(
         //     "\tCheck txbytes failed expected vs actually: {} \n{} \n{}",
         //     self.name.clone(),

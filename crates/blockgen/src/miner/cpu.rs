@@ -46,7 +46,7 @@ impl MineWorker for CpuMinerCoordinator {
     fn receive_problem(&self, problem: ProofOfWorkProblem) {
         for sender in &self.problem_txs {
             sender
-                .send(problem.clone())
+                .send(problem)
                 .expect("Failed to send the PoW problem.");
         }
     }

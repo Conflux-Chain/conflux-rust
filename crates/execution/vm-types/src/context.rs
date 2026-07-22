@@ -30,11 +30,7 @@ use super::{
 };
 use cfx_bytes::Bytes;
 use cfx_db_errors::statedb::Result as DbResult;
-pub use cfx_types::{
-    cal_contract_address as contract_address,
-    CreateContractAddressType as CreateContractAddress,
-};
-use cfx_types::{Address, Space, H256, U256};
+use cfx_types::{Address, CreateContractAddressType, Space, H256, U256};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -84,7 +80,7 @@ pub trait Context {
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> Result<()>;
 
     /// Returns a value for given key.
-    fn transient_storage_at(&self, key: &Vec<u8>) -> Result<U256>;
+    fn transient_storage_at(&self, key: &[u8]) -> Result<U256>;
 
     /// Stores a value for given key.
     fn transient_set_storage(
@@ -113,7 +109,7 @@ pub trait Context {
     /// succesfull.
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
-        address: CreateContractAddress,
+        address: CreateContractAddressType,
     ) -> DbResult<::std::result::Result<ContractCreateResult, TrapKind>>;
 
     /// Message call.
@@ -172,28 +168,6 @@ pub trait Context {
     fn is_warm_account(&self, account: Address) -> bool;
 
     fn is_warm_storage_entry(&self, key: &H256) -> Result<bool>;
-
-    // /// Decide if any more operations should be traced. Passthrough for the
-    // VM /// trace.
-    // fn trace_next_instruction(
-    //     &mut self, _pc: usize, _instruction: u8, _current_gas: U256,
-    // ) -> bool {
-    //     false
-    // }
-
-    // /// Prepare to trace an operation. Passthrough for the VM trace.
-    // fn trace_prepare_execute(
-    //     &mut self, _pc: usize, _instruction: u8, _gas_cost: U256,
-    //     _mem_written: Option<(usize, usize)>,
-    //     _store_written: Option<(U256, U256)>,
-    // ) {
-    // }
-
-    // /// Trace the finalised execution of a single instruction.
-    // fn trace_executed(
-    //     &mut self, _gas_used: U256, _stack_push: &[U256], _mem: &[u8],
-    // ) {
-    // }
 
     fn trace_step(&mut self, interpreter: &dyn InterpreterInfo) {
         let _ = interpreter;

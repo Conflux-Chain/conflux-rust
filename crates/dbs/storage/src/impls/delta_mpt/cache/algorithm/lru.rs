@@ -164,13 +164,11 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
             // Set new head.
             let new_head = self.size;
             self.head = new_head;
-            unsafe {
-                CacheAlgoDataAdapter::new_mut_most_recently_accessed(
-                    cache_store_util,
-                    cache_index,
-                )
-                .set_most_recently_accessed();
-            }
+            CacheAlgoDataAdapter::new_mut_most_recently_accessed(
+                cache_store_util,
+                cache_index,
+            )
+            .set_most_recently_accessed();
             self.recent.push(DoubleLinkListNode {
                 next: old_head,
                 cache_index,

@@ -5,8 +5,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use diem_infallible::RwLock;
 use diem_logger::{info, DiemLogger, Writer};
+use parking_lot::RwLock;
 use std::sync::Arc;
 
 #[derive(Default)]

@@ -18,7 +18,6 @@
 
 #![warn(missing_docs)]
 
-pub use parity_crypto as crypto;
 pub use parity_wordlist::random_phrase;
 
 mod account;

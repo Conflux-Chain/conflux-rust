@@ -71,8 +71,8 @@ impl Debug for Status {
     }
 }
 
-// TODO: Implement OneStepSync / IncSync as this is currently only implemented
-// for FullSync.
+// Only FullSync is supported. OneStepSync / IncSync were never implemented,
+// are deprecated, and rejected at decode (see `SnapshotSyncCandidate`).
 struct Inner {
     status: Status,
 

@@ -29,9 +29,9 @@ impl From<json::Version> for Version {
     }
 }
 
-impl Into<json::Version> for Version {
-    fn into(self) -> json::Version {
-        match self {
+impl From<Version> for json::Version {
+    fn from(val: Version) -> Self {
+        match val {
             Version::V3 => json::Version::V3,
         }
     }

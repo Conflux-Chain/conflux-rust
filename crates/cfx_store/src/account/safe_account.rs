@@ -19,11 +19,11 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::crypto::Crypto;
-use crate::{account::Version, crypto, json, Error};
+use crate::{account::Version, json, Error};
+use cfx_crypto::crypto::ecdh::agree;
 use cfx_types::address_util::AddressUtil;
 use cfxkey::{
-    self, crypto::ecdh::agree, sign, Address, KeyPair, Message, Password,
-    Public, Secret, Signature,
+    self, sign, Address, KeyPair, Message, Password, Public, Secret, Signature,
 };
 use log::warn;
 
@@ -46,15 +46,15 @@ pub struct SafeAccount {
     pub meta: String,
 }
 
-impl Into<json::KeyFile> for SafeAccount {
-    fn into(self) -> json::KeyFile {
+impl From<SafeAccount> for json::KeyFile {
+    fn from(val: SafeAccount) -> Self {
         json::KeyFile {
-            id: From::from(self.id),
-            version: self.version.into(),
-            address: Some(self.address.into()),
-            crypto: self.crypto.into(),
-            name: Some(self.name),
-            meta: Some(self.meta),
+            id: From::from(val.id),
+            version: val.version.into(),
+            address: Some(val.address.into()),
+            crypto: val.crypto.into(),
+            name: Some(val.name),
+            meta: Some(val.meta),
         }
     }
 }
@@ -64,7 +64,7 @@ impl SafeAccount {
     pub fn create(
         keypair: &KeyPair, id: [u8; 16], password: &Password, iterations: u32,
         name: String, meta: String,
-    ) -> Result<Self, crypto::Error> {
+    ) -> Result<Self, Error> {
         Ok(SafeAccount {
             id,
             version: Version::V3,
@@ -98,19 +98,16 @@ impl SafeAccount {
 				"This keystore does not contain address. You need to provide password to import it".into())),
 			(Some(password), json_address) => {
 				let derived_address = KeyPair::from_secret(
-					crypto.secret(&password).map_err(|_| Error::InvalidPassword)?
+					crypto.secret(password).map_err(|_| Error::InvalidPassword)?
 				)?.address();
 
-				match json_address {
-					Some(json_address) => {
-						let json_address = json_address.into();
-						if derived_address != json_address {
-                            warn!("Detected address mismatch when opening an account. Derived: {:?}, in json got: {:?}. Are you trying to import an Ethkey for Conflux? Note that the address scheme between Ethereum and Conflux are different.", derived_address, json_address);
-                            return Err(Error::Custom(format!("Address mismatch. Derived: {:?}, in json got: {:?}.", derived_address, json_address)));
-						}
-					},
-					_ => {},
-				}
+				if let Some(json_address) = json_address {
+                    let json_address = json_address.into();
+                    if derived_address != json_address {
+                        warn!("Detected address mismatch when opening an account. Derived: {:?}, in json got: {:?}. Are you trying to import an Ethkey for Conflux? Note that the address scheme between Ethereum and Conflux are different.", derived_address, json_address);
+                        return Err(Error::Custom(format!("Address mismatch. Derived: {:?}, in json got: {:?}.", derived_address, json_address)));
+                    }
+                }
 				derived_address
 			}
 		};
@@ -195,7 +192,7 @@ impl SafeAccount {
         &self, password: &Password, shared_mac: &[u8], message: &[u8],
     ) -> Result<Vec<u8>, Error> {
         let secret = self.crypto.secret(password)?;
-        cfxkey::crypto::ecies::decrypt(&secret, shared_mac, message)
+        cfx_crypto::crypto::ecies::decrypt(&secret, shared_mac, message)
             .map_err(From::from)
     }
 
@@ -210,7 +207,7 @@ impl SafeAccount {
     /// Derive public key.
     pub fn public(&self, password: &Password) -> Result<Public, Error> {
         let secret = self.crypto.secret(password)?;
-        Ok(KeyPair::from_secret(secret)?.public().clone())
+        Ok(*KeyPair::from_secret(secret)?.public())
     }
 
     /// Change account's password.
@@ -220,10 +217,10 @@ impl SafeAccount {
     ) -> Result<Self, Error> {
         let secret = self.crypto.secret(old_password)?;
         let result = SafeAccount {
-            id: self.id.clone(),
+            id: self.id,
             version: self.version.clone(),
             crypto: Crypto::with_secret(&secret, new_password, iterations)?,
-            address: self.address.clone(),
+            address: self.address,
             filename: self.filename.clone(),
             name: self.name.clone(),
             meta: self.meta.clone(),

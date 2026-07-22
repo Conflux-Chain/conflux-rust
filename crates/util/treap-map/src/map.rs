@@ -44,6 +44,10 @@ where
     }
 }
 
+impl<C: TreapMapConfig> Default for TreapMap<C> {
+    fn default() -> Self { Self::new() }
+}
+
 impl<C: TreapMapConfig> TreapMap<C> {
     pub fn new() -> TreapMap<C> {
         TreapMap {
@@ -88,7 +92,7 @@ impl<C: TreapMapConfig> TreapMap<C> {
     }
 
     pub fn remove(&mut self, key: &C::SearchKey) -> Option<C::Value> {
-        let sort_key = self.ext_map.get_sort_key(&key)?;
+        let sort_key = self.ext_map.get_sort_key(key)?;
 
         let (result, _, _) = Node::update_inner(
             &mut self.root,
@@ -305,7 +309,7 @@ impl<'a, C: TreapMapConfig> Iterator for Iter<'a, C> {
                     self.nodes.push(&**n);
                     self.extend_path();
                 }
-                Some(&node)
+                Some(node)
             }
         }
     }

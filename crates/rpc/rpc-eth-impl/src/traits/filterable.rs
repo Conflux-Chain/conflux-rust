@@ -2,7 +2,7 @@ use crate::helpers::{poll_filter::SyncPollFilter, poll_manager::PollManager};
 use cfx_rpc_eth_types::{EthRpcLogFilter, Log};
 use cfx_types::H256;
 use cfxcore::{ConsensusGraph, SharedConsensusGraph};
-use jsonrpc_core::Result as RpcResult;
+use jsonrpsee::core::RpcResult;
 use parking_lot::Mutex;
 use primitives::{filter::LogFilter, EpochNumber};
 use std::collections::{BTreeSet, VecDeque};

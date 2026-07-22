@@ -7,6 +7,9 @@ use super::{
     error::{TestError, TestErrorKind},
     utils::extract_155_chain_id_from_raw_tx,
 };
+use alloy_rpc_types_trace::geth::GethTrace;
+use cfx_config::Configuration;
+use cfx_execute_helper::{observer::Observer, tx_outcome::geth_traces};
 use cfx_executor::{
     executive::{ExecutionOutcome, ExecutiveContext, TransactOptions},
     machine::Machine,
@@ -15,20 +18,29 @@ use cfx_executor::{
 use cfx_vm_types::Env;
 use cfxcore::verification::VerificationConfig;
 use eest_types::{SpecId, SpecName, StateTest, StateTestUnit};
+use geth_tracer::TxExecContext;
 use primitives::SignedTransaction;
+use std::sync::Arc;
 
 pub struct UnitTester {
     path: String,
     name: String,
     unit: StateTestUnit,
+    config: Arc<Configuration>,
+    print_trace: bool,
 }
 
 impl UnitTester {
-    pub fn new(path: &String, name: String, unit: StateTestUnit) -> Self {
+    pub fn new(
+        path: &String, name: String, unit: StateTestUnit,
+        config: Arc<Configuration>, print_trace: bool,
+    ) -> Self {
         UnitTester {
             path: path.clone(),
             name,
             unit,
+            config,
+            print_trace,
         }
     }
 
@@ -40,10 +52,7 @@ impl UnitTester {
         }
     }
 
-    pub fn run(
-        &self, machine: &Machine, verification: &VerificationConfig,
-        matches: Option<&str>,
-    ) -> Result<usize, TestError> {
+    pub fn run(&self, matches: Option<&str>) -> Result<usize, TestError> {
         if !matches.map_or(true, |pat| {
             format!("{}::{}", &self.path, &self.name).contains(pat)
         }) {
@@ -60,6 +69,9 @@ impl UnitTester {
             return Ok(0);
         };
 
+        let (machine, verification) =
+            pre_transact::make_machine_verify_conf(self.config.clone(), spec);
+
         let mut transact_cnt = 0;
         // running each test
         for single_test in tests.iter() {
@@ -69,7 +81,11 @@ impl UnitTester {
             if matches.is_some() {
                 info!("Running item with spec {:?}", spec);
             }
-            self.execute_single_test(single_test, machine, verification)?;
+            self.execute_single_test(
+                single_test,
+                machine.clone(),
+                &verification,
+            )?;
             transact_cnt += 1;
         }
 
@@ -77,7 +93,7 @@ impl UnitTester {
     }
 
     fn execute_single_test(
-        &self, test: &StateTest, machine: &Machine,
+        &self, test: &StateTest, machine: Arc<Machine>,
         verification: &VerificationConfig,
     ) -> Result<(), TestError> {
         let mut state = pre_transact::make_state(&self.unit.pre);
@@ -98,14 +114,14 @@ impl UnitTester {
         .map_err(|kind| self.err(kind))?;
 
         let env = pre_transact::make_block_env(
-            machine,
+            &machine,
             &self.unit.env,
             self.unit.config.chainid,
             tx.hash(),
         );
 
         if let Err(e) =
-            pre_transact::check_tx_common(machine, &env, &tx, verification)
+            pre_transact::check_tx_common(&machine, &env, &tx, verification)
         {
             return post_transact::process_consensus_check_fail(
                 e,
@@ -114,10 +130,46 @@ impl UnitTester {
             .map_err(|kind| self.err(kind));
         }
 
-        let transact_options = pre_transact::make_transact_options(true);
+        let trace = self.print_trace;
+        let maybe_machine = if trace { Some(machine.clone()) } else { None };
+        let maybe_tx_exec_context = if trace {
+            Some(TxExecContext {
+                tx_gas_limit: tx.gas_limit().as_u64(),
+                block_height: env.epoch_height,
+                block_number: env.number,
+            })
+        } else {
+            None
+        };
+
+        let transact_options = pre_transact::make_transact_options(
+            true,
+            trace,
+            maybe_machine,
+            maybe_tx_exec_context,
+        );
 
         let outcome =
-            self.transact(machine, &env, &mut state, &tx, transact_options);
+            self.transact(&machine, &env, &mut state, &tx, transact_options);
+
+        if trace {
+            if let Some(geth_traces) = geth_traces(&outcome) {
+                match geth_traces {
+                    GethTrace::Default(v) => {
+                        for log in &v.struct_logs {
+                            trace!(
+                                "{}",
+                                serde_json::to_string(log)
+                                    .expect("struct log must be serializable")
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            } else {
+                trace!("No geth traces found");
+            }
+        }
 
         let maybe_executed = post_transact::extract_executed(
             outcome,
@@ -151,7 +203,7 @@ impl UnitTester {
 
     fn transact(
         &self, machine: &Machine, env: &Env, state: &mut State,
-        transaction: &SignedTransaction, options: TransactOptions<()>,
+        transaction: &SignedTransaction, options: TransactOptions<Observer>,
     ) -> ExecutionOutcome {
         let spec = machine.spec(env.number, env.epoch_height);
 
@@ -168,7 +220,7 @@ fn pick_spec<'a, T>(
     specs
         .filter_map(|spec| {
             let spec_id = spec.0.to_spec_id();
-            if spec_id <= SpecId::PRAGUE {
+            if spec_id <= SpecId::OSAKA {
                 Some((spec, spec_id))
             } else {
                 None

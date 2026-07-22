@@ -70,7 +70,10 @@ fn test_nil_block() {
     let nil_block_child = Block::new_proposal(
         payload,
         2,
-        diem_infallible::duration_since_epoch().as_micros() as u64,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH")
+            .as_micros() as u64,
         nil_block_qc,
         &signer,
     );
@@ -89,7 +92,10 @@ fn test_block_relation() {
     let next_block = Block::new_proposal(
         payload.clone(),
         1,
-        diem_infallible::duration_since_epoch().as_micros() as u64,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("System time is before UNIX_EPOCH")
+            .as_micros() as u64,
         quorum_cert,
         &signer,
     );
@@ -113,8 +119,10 @@ fn test_same_qc_different_authors() {
     let genesis_qc = certificate_for_genesis();
     let round = 1;
     let payload = vec![];
-    let current_timestamp =
-        diem_infallible::duration_since_epoch().as_micros() as u64;
+    let current_timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("System time is before UNIX_EPOCH")
+        .as_micros() as u64;
     let block_round_1 = Block::new_proposal(
         payload.clone(),
         round,

@@ -11,7 +11,7 @@
 use crate::proof::{
     definition::MAX_ACCUMULATOR_PROOF_DEPTH, AccumulatorConsistencyProof,
     AccumulatorProof, AccumulatorRangeProof, SparseMerkleLeafNode,
-    SparseMerkleProof, SparseMerkleRangeProof,
+    SparseMerkleProof,
 };
 use diem_crypto::{
     hash::{
@@ -139,17 +139,6 @@ where H: CryptoHasher
             .prop_map(|(left_siblings, right_siblings)| {
                 AccumulatorRangeProof::new(left_siblings, right_siblings)
             })
-            .boxed()
-    }
-}
-
-impl Arbitrary for SparseMerkleRangeProof {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-        vec(arb_sparse_merkle_sibling(), 0..=256)
-            .prop_map(Self::new)
             .boxed()
     }
 }

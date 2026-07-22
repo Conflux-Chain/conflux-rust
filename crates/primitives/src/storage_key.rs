@@ -58,6 +58,11 @@ pub enum StorageKey<'a> {
     },
     DepositListKey(&'a [u8]),
     VoteListKey(&'a [u8]),
+    // Empty key is used to traverse all key and value pairs.
+    EmptyKey,
+    // Address prefix key is used to search all keys with the same address
+    // prefix, eg [1, 2](0x0102) will search all keys with prefix 0x0102
+    AddressPrefixKey(&'a [u8]),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -119,7 +124,7 @@ impl<'a> StorageKey<'a> {
 impl<'a> StorageKey<'a> {
     // Compatible interface with rpc
     pub fn to_key_bytes(&self) -> Vec<u8> {
-        self.clone().with_native_space().to_key_bytes()
+        (*self).with_native_space().to_key_bytes()
     }
 }
 
@@ -195,9 +200,19 @@ impl<'a> StorageKeyWithSpace<'a> {
             StorageKey::VoteListKey(address_bytes) => {
                 delta_mpt_storage_key::new_vote_list_key(address_bytes, padding)
             }
+            StorageKey::EmptyKey => {
+                return vec![];
+            }
+            StorageKey::AddressPrefixKey(_address_bytes) => {
+                // delta mpt trie does not support address prefix key search
+                // so we search all keys and filter them by address prefix
+                // due to delta mpt trie won't be very big, so the performance
+                // impact is not very big
+                return vec![];
+            }
         };
 
-        return if self.space == Space::Native {
+        if self.space == Space::Native {
             key_bytes
         } else {
             // Insert "0x81" at the position 32.
@@ -207,7 +222,7 @@ impl<'a> StorageKeyWithSpace<'a> {
                 &key_bytes[ACCOUNT_KEYPART_BYTES..],
             ]
             .concat()
-        };
+        }
     }
 
     pub fn to_key_bytes(&self) -> Vec<u8> {
@@ -284,9 +299,17 @@ impl<'a> StorageKeyWithSpace<'a> {
 
                 key
             }
+            StorageKey::EmptyKey => {
+                return vec![];
+            }
+            StorageKey::AddressPrefixKey(address_bytes) => {
+                let mut key = Vec::with_capacity(address_bytes.len());
+                key.extend_from_slice(address_bytes);
+                return key;
+            }
         };
 
-        return if self.space == Space::Native {
+        if self.space == Space::Native {
             key_bytes
         } else {
             // Insert "0x81" at the position 20.
@@ -296,7 +319,7 @@ impl<'a> StorageKeyWithSpace<'a> {
                 &key_bytes[Self::ACCOUNT_BYTES..],
             ]
             .concat()
-        };
+        }
     }
 
     // from_key_bytes::<CheckInput>(...) returns Result<StorageKey, String>
@@ -336,7 +359,7 @@ impl<'a> StorageKeyWithSpace<'a> {
                 .starts_with(Self::STORAGE_PREFIX)
             {
                 let bytes = &bytes[Self::STORAGE_PREFIX_LEN..];
-                if bytes.len() > 0 {
+                if !bytes.is_empty() {
                     StorageKey::StorageKey {
                         address_bytes,
                         storage_key: bytes,
@@ -346,7 +369,7 @@ impl<'a> StorageKeyWithSpace<'a> {
                 }
             } else if bytes.starts_with(Self::CODE_HASH_PREFIX) {
                 let bytes = &bytes[Self::CODE_HASH_PREFIX_LEN..];
-                if bytes.len() > 0 {
+                if !bytes.is_empty() {
                     StorageKey::CodeKey {
                         address_bytes,
                         code_hash_bytes: bytes,
@@ -556,7 +579,7 @@ mod delta_mpt_storage_key {
             &mut key,
             address,
             padding,
-            &StorageKeyWithSpace::CODE_HASH_PREFIX,
+            StorageKeyWithSpace::CODE_HASH_PREFIX,
         );
 
         key
@@ -574,7 +597,7 @@ mod delta_mpt_storage_key {
             &mut key,
             address,
             padding,
-            &StorageKeyWithSpace::CODE_HASH_PREFIX,
+            StorageKeyWithSpace::CODE_HASH_PREFIX,
         );
         key.extend_from_slice(code_hash);
 
@@ -591,7 +614,7 @@ mod delta_mpt_storage_key {
             &mut key,
             address,
             padding,
-            &StorageKeyWithSpace::DEPOSIT_LIST_PREFIX,
+            StorageKeyWithSpace::DEPOSIT_LIST_PREFIX,
         );
         key
     }
@@ -606,7 +629,7 @@ mod delta_mpt_storage_key {
             &mut key,
             address,
             padding,
-            &StorageKeyWithSpace::VOTE_LIST_PREFIX,
+            StorageKeyWithSpace::VOTE_LIST_PREFIX,
         );
         key
     }
@@ -632,8 +655,7 @@ mod delta_mpt_storage_key {
                 if cfg!(feature = "test_no_account_length_check") {
                     // The branch is test only. When an address with incomplete
                     // length, it's passed to DeltaMPT directly.
-                    return StorageKey::AccountKey(remaining_bytes)
-                        .with_native_space();
+                    StorageKey::AccountKey(remaining_bytes).with_native_space()
                 } else {
                     unreachable!(
                         "Invalid delta mpt key format. Unrecognized: {:?}",
@@ -682,7 +704,7 @@ mod delta_mpt_storage_key {
                 {
                     let bytes = &remaining_bytes
                         [StorageKeyWithSpace::CODE_HASH_PREFIX_LEN..];
-                    if bytes.len() > 0 {
+                    if !bytes.is_empty() {
                         StorageKey::CodeKey {
                             address_bytes,
                             code_hash_bytes: bytes,
@@ -713,6 +735,62 @@ mod delta_mpt_storage_key {
                 storage_key_no_space.with_space(space)
             }
         }
+    }
+}
+
+// This enum is used to filter only the wanted contract storage key when
+// traversal the trie for example, when traverse eth space key/value, we can
+// only filter the eSpace storage key/value to accelerate the traversal
+// speed
+// Native means filter(keep) the native space storage key/value
+// Ethereum means filter(keep) the ethereum space storage key/value
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpaceStorageFilter(pub Space);
+
+impl From<Space> for SpaceStorageFilter {
+    fn from(space: Space) -> Self { SpaceStorageFilter(space) }
+}
+
+impl From<SpaceStorageFilter> for Space {
+    fn from(filter: SpaceStorageFilter) -> Self { filter.0 }
+}
+
+impl SpaceStorageFilter {
+    pub fn is_native(&self) -> bool { matches!(self.0, Space::Native) }
+
+    pub fn is_ethereum(&self) -> bool { matches!(self.0, Space::Ethereum) }
+
+    // return the flag index according the trie type
+    // if is_delta_mpt is true, then the space flag is at the 32th index
+    // otherwise, the space flag is at the 20th index
+    pub fn space_flag_index(is_delta_mpt: bool) -> usize {
+        if is_delta_mpt {
+            delta_mpt_storage_key::KEY_PADDING_BYTES
+        } else {
+            StorageKeyWithSpace::ACCOUNT_BYTES
+        }
+    }
+
+    // return true if the key is filtered out
+    pub fn is_filtered(&self, is_delta_mpt: bool, key: &[u8]) -> bool {
+        let flag_index = Self::space_flag_index(is_delta_mpt);
+        if key.len() > flag_index {
+            match self.0 {
+                Space::Native => {
+                    if key[flag_index] == StorageKeyWithSpace::EVM_SPACE_TYPE[0]
+                    {
+                        return true;
+                    }
+                }
+                Space::Ethereum => {
+                    if key[flag_index] != StorageKeyWithSpace::EVM_SPACE_TYPE[0]
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 }
 

@@ -6,8 +6,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::message_queues::{PerKeyQueue, QueueStyle};
-use diem_infallible::NonZeroUsize;
 use diem_types::account_address::AccountAddress;
+use std::num::NonZeroUsize;
 
 /// This represents a proposal message from a validator
 #[derive(Debug, PartialEq)]
@@ -24,7 +24,8 @@ struct VoteMsg {
 
 #[test]
 fn test_fifo() {
-    let mut q = PerKeyQueue::new(QueueStyle::FIFO, NonZeroUsize!(3), None);
+    let mut q =
+        PerKeyQueue::new(QueueStyle::FIFO, NonZeroUsize::new(3).unwrap());
     let validator = AccountAddress::new([0u8; AccountAddress::LENGTH]);
 
     // Test order
@@ -83,7 +84,8 @@ fn test_fifo() {
 
 #[test]
 fn test_lifo() {
-    let mut q = PerKeyQueue::new(QueueStyle::LIFO, NonZeroUsize!(3), None);
+    let mut q =
+        PerKeyQueue::new(QueueStyle::LIFO, NonZeroUsize::new(3).unwrap());
     let validator = AccountAddress::new([0u8; AccountAddress::LENGTH]);
 
     // Test order
@@ -142,7 +144,8 @@ fn test_lifo() {
 
 #[test]
 fn test_klast() {
-    let mut q = PerKeyQueue::new(QueueStyle::KLAST, NonZeroUsize!(3), None);
+    let mut q =
+        PerKeyQueue::new(QueueStyle::KLAST, NonZeroUsize::new(3).unwrap());
     let validator = AccountAddress::new([0u8; AccountAddress::LENGTH]);
 
     // Test order
@@ -201,7 +204,8 @@ fn test_klast() {
 
 #[test]
 fn test_fifo_round_robin() {
-    let mut q = PerKeyQueue::new(QueueStyle::FIFO, NonZeroUsize!(3), None);
+    let mut q =
+        PerKeyQueue::new(QueueStyle::FIFO, NonZeroUsize::new(3).unwrap());
     let validator1 = AccountAddress::new([0u8; AccountAddress::LENGTH]);
     let validator2 = AccountAddress::new([1u8; AccountAddress::LENGTH]);
     let validator3 = AccountAddress::new([2u8; AccountAddress::LENGTH]);
@@ -272,7 +276,8 @@ fn test_fifo_round_robin() {
 
 #[test]
 fn test_lifo_round_robin() {
-    let mut q = PerKeyQueue::new(QueueStyle::LIFO, NonZeroUsize!(3), None);
+    let mut q =
+        PerKeyQueue::new(QueueStyle::LIFO, NonZeroUsize::new(3).unwrap());
     let validator1 = AccountAddress::new([0u8; AccountAddress::LENGTH]);
     let validator2 = AccountAddress::new([1u8; AccountAddress::LENGTH]);
     let validator3 = AccountAddress::new([2u8; AccountAddress::LENGTH]);
@@ -343,7 +348,8 @@ fn test_lifo_round_robin() {
 
 #[test]
 fn test_klast_round_robin() {
-    let mut q = PerKeyQueue::new(QueueStyle::KLAST, NonZeroUsize!(3), None);
+    let mut q =
+        PerKeyQueue::new(QueueStyle::KLAST, NonZeroUsize::new(3).unwrap());
     let validator1 = AccountAddress::new([0u8; AccountAddress::LENGTH]);
     let validator2 = AccountAddress::new([1u8; AccountAddress::LENGTH]);
     let validator3 = AccountAddress::new([2u8; AccountAddress::LENGTH]);
@@ -414,7 +420,8 @@ fn test_klast_round_robin() {
 
 #[test]
 fn test_message_queue_clear() {
-    let mut q = PerKeyQueue::new(QueueStyle::LIFO, NonZeroUsize!(3), None);
+    let mut q =
+        PerKeyQueue::new(QueueStyle::LIFO, NonZeroUsize::new(3).unwrap());
     let validator = AccountAddress::new([0u8; AccountAddress::LENGTH]);
 
     q.push(

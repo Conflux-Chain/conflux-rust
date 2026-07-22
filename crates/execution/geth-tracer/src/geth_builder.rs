@@ -36,7 +36,11 @@ use alloy_rpc_types_trace::geth::{
     DiffMode, GethDefaultTracingOptions, PreStateConfig, PreStateFrame,
     PreStateMode, StructLog,
 };
-use revm_primitives::{db::DatabaseRef, AccountInfo, State, KECCAK_EMPTY};
+use revm::{
+    database::DatabaseRef,
+    state::{AccountInfo, EvmState as State},
+};
+use revm_primitives::KECCAK_EMPTY;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
 /// A type for creating geth style traces
@@ -282,10 +286,9 @@ impl GethTraceBuilder {
 
                 // insert the original value of all modified storage slots
                 for (key, slot) in changed_acc.storage.iter() {
-                    acc_state.storage.insert(
-                        (*key).into(),
-                        slot.previous_or_original_value.into(),
-                    );
+                    acc_state
+                        .storage
+                        .insert((*key).into(), slot.original_value.into());
                 }
 
                 prestate.0.insert(addr, acc_state);
@@ -323,10 +326,9 @@ impl GethTraceBuilder {
                     .iter()
                     .filter(|(_, slot)| slot.is_changed())
                 {
-                    pre_state.storage.insert(
-                        (*key).into(),
-                        slot.previous_or_original_value.into(),
-                    );
+                    pre_state
+                        .storage
+                        .insert((*key).into(), slot.original_value.into());
                     post_state
                         .storage
                         .insert((*key).into(), slot.present_value.into());

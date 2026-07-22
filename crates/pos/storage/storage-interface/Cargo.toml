@@ -11,17 +11,12 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.38"
-itertools = { workspace = true }
 serde = { workspace = true, default-features = false }
 thiserror = "1.0.24"
-parking_lot = { workspace = true }
-
 bcs = "0.1.2"
 diem-crypto = { workspace = true }
-diem-secure-net = { workspace = true }
 diem-state-view = { workspace = true }
 diem-types = { workspace = true }
-scratchpad = { workspace = true }
 
 [features]
 default = []

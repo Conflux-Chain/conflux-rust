@@ -17,10 +17,11 @@ pub struct PrioritySendQueue<T> {
 
 impl<T> Default for PrioritySendQueue<T> {
     fn default() -> PrioritySendQueue<T> {
-        let mut queues = Vec::new();
-        queues.push(VecDeque::new()); // High
-        queues.push(VecDeque::new()); // Normal
-        queues.push(VecDeque::new()); // Low
+        let queues = vec![
+            VecDeque::new(), // High
+            VecDeque::new(), // Normal
+            VecDeque::new(), // Low
+        ];
         PrioritySendQueue { queues }
     }
 }

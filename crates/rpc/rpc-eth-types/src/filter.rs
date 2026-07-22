@@ -52,10 +52,23 @@ pub struct EthRpcLogFilter {
     pub topics: Option<Vec<Topic>>,
 }
 
+const MAX_TOPICS: usize = 4;
+
 impl EthRpcLogFilter {
     pub fn into_primitive(
         self, consensus: impl BlockProvider,
     ) -> Result<PrimitiveFilter, SelfError> {
+        let topics_len = self.topics.as_ref().map_or(0, |v| v.len());
+        if topics_len > MAX_TOPICS {
+            return Err(SelfError::InvalidParams(
+                "topics".into(),
+                format!(
+                    "expected at most {} topic filters, got {}",
+                    MAX_TOPICS, topics_len
+                ),
+            ));
+        }
+
         let params = LogFilterParams {
             address: self.address.map(|v| v.to_vec()),
             topics: self

@@ -28,7 +28,7 @@ impl IsDefault for Account {
 
 impl IsDefault for CodeInfo {
     fn is_default(&self) -> bool {
-        self.code.len() == 0 && self.owner == Address::default()
+        self.code.is_empty() && self.owner == Address::default()
     }
 }
 
@@ -43,7 +43,7 @@ impl IsDefault for VoteStakeList {
 impl IsDefault for StorageValue {
     fn is_default(&self) -> bool {
         self.value == U256::zero()
-            && (self.owner == Some(Address::default()) || self.owner == None)
+            && (self.owner == Some(Address::default()) || self.owner.is_none())
     }
 }
 

@@ -10,6 +10,7 @@ edition = "2021"
 substrate-bn = { workspace = true, default-features = false }
 byteorder = { workspace = true }
 cfxkey = { workspace = true }
+cfx-crypto = { workspace = true }
 cfx-bytes = { workspace = true }
 cfx-math = { workspace = true }
 cfx-internal-common = { workspace = true }
@@ -23,7 +24,6 @@ keccak-hash = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 num = { workspace = true }
-parity-crypto = { workspace = true }
 parking_lot = { workspace = true }
 primitives = { workspace = true }
 rlp ={ workspace = true }
@@ -39,13 +39,12 @@ impl-trait-for-tuples = { workspace = true }
 impl-tools = { workspace = true }
 typemap = { workspace = true }
 hex-literal = { workspace = true }
-derive_more = { workspace = true }
-c-kzg = { workspace = true }
-once_cell = { workspace = true }
+c-kzg = { workspace = true, features = ["ethereum_kzg_settings"]}
 rayon = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 blst = { workspace = true }
+revm-precompile = { workspace = true }
 
 [dev-dependencies]
 cfx-statedb = { workspace = true, features = ["testonly_code"]}

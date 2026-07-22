@@ -20,9 +20,8 @@ use crate::{
 };
 use backtrace::Backtrace;
 use chrono::{SecondsFormat, Utc};
-use diem_infallible::RwLock;
 use once_cell::sync::Lazy;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use pipe_logger_lib::{PipeLogger, PipeLoggerBuilder, RotateMethod};
 use serde::Serialize;
 use std::{

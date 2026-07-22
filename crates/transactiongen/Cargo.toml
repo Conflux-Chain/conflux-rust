@@ -9,7 +9,6 @@ edition = "2021"
 [dependencies]
 cfxcore = { workspace = true }
 cfx-types = { workspace = true }
-cfx-vm-types = { workspace = true }
 cfx-bytes = { workspace = true }
 primitives = { workspace = true }
 parking_lot = { workspace = true }

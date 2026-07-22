@@ -1,7 +1,7 @@
 use cfx_types::U64;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeLockStatus {
     pub in_queue: Vec<VotePowerState>,
@@ -17,7 +17,7 @@ pub struct NodeLockStatus {
     pub forfeited: U64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct VotePowerState {
     pub end_block_number: U64,

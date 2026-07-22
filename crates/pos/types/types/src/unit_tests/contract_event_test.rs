@@ -5,10 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    contract_event::{ContractEvent, EventWithProof},
-    event::EventKey,
-};
+use crate::{contract_event::ContractEvent, event::EventKey};
 use bcs::test_helpers::assert_canonical_encode_decode;
 use proptest::prelude::*;
 
@@ -16,11 +13,6 @@ proptest! {
     #[test]
     fn event_bcs_roundtrip(event in any::<ContractEvent>()) {
         assert_canonical_encode_decode(event);
-    }
-
-    #[test]
-    fn event_with_proof_bcs_roundtrip(event_with_proof in any::<EventWithProof>()) {
-        assert_canonical_encode_decode(event_with_proof);
     }
 }
 

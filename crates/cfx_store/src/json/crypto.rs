@@ -22,7 +22,6 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use serde_json;
 use std::{fmt, str};
 
 pub type CipherText = Bytes;

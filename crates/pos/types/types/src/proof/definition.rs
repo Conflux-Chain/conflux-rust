@@ -13,7 +13,6 @@ use super::{
     SparseMerkleLeafNode,
 };
 use crate::{
-    account_state_blob::AccountStateBlob,
     ledger_info::LedgerInfo,
     transaction::{TransactionInfo, Version},
 };
@@ -493,44 +492,6 @@ pub type TransactionAccumulatorRangeProof =
 #[cfg(any(test, feature = "fuzzing"))]
 pub type TestAccumulatorRangeProof = AccumulatorRangeProof<TestOnlyHasher>;
 
-/// A proof that can be used authenticate a range of consecutive leaves, from
-/// the leftmost leaf to a certain one, in a sparse Merkle tree. For example,
-/// given the following sparse Merkle tree:
-///
-/// ```text
-///                   root
-///                  /     \
-///                 /       \
-///                /         \
-///               o           o
-///              / \         / \
-///             a   o       o   h
-///                / \     / \
-///               o   d   e   X
-///              / \         / \
-///             b   c       f   g
-/// ```
-///
-/// if the proof wants show that `[a, b, c, d, e]` exists in the tree, it would
-/// need the siblings `X` and `h` on the right.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct SparseMerkleRangeProof {
-    /// The vector of siblings on the right of the path from root to last leaf.
-    /// The ones near the bottom are at the beginning of the vector. In the
-    /// above example, it's `[X, h]`.
-    right_siblings: Vec<HashValue>,
-}
-
-impl SparseMerkleRangeProof {
-    /// Constructs a new `SparseMerkleRangeProof`.
-    pub fn new(right_siblings: Vec<HashValue>) -> Self {
-        Self { right_siblings }
-    }
-
-    /// Returns the siblings.
-    pub fn right_siblings(&self) -> &[HashValue] { &self.right_siblings }
-}
-
 /// `TransactionInfo` and a `TransactionAccumulatorProof` connecting it to the
 /// ledger root.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -581,122 +542,6 @@ impl TransactionInfoWithProof {
             &self.transaction_info,
             &self.ledger_info_to_transaction_info_proof,
         )?;
-        Ok(())
-    }
-}
-
-/// The complete proof used to authenticate the state of an account. This
-/// structure consists of the `AccumulatorProof` from `LedgerInfo` to
-/// `TransactionInfo`, the `TransactionInfo` object and the `SparseMerkleProof`
-/// from state root to the account.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
-pub struct AccountStateProof {
-    transaction_info_with_proof: TransactionInfoWithProof,
-
-    /// The sparse merkle proof from state root to the account state.
-    transaction_info_to_account_proof: SparseMerkleProof<AccountStateBlob>,
-}
-
-impl AccountStateProof {
-    /// Constructs a new `AccountStateProof` using given
-    /// `ledger_info_to_transaction_info_proof`, `transaction_info` and
-    /// `transaction_info_to_account_proof`.
-    pub fn new(
-        transaction_info_with_proof: TransactionInfoWithProof,
-        transaction_info_to_account_proof: SparseMerkleProof<AccountStateBlob>,
-    ) -> Self {
-        AccountStateProof {
-            transaction_info_with_proof,
-            transaction_info_to_account_proof,
-        }
-    }
-
-    /// Returns the `transaction_info_with_proof` object in this proof.
-    pub fn transaction_info_with_proof(&self) -> &TransactionInfoWithProof {
-        &self.transaction_info_with_proof
-    }
-
-    /// Returns the `transaction_info_to_account_proof` object in this proof.
-    pub fn transaction_info_to_account_proof(
-        &self,
-    ) -> &SparseMerkleProof<AccountStateBlob> {
-        &self.transaction_info_to_account_proof
-    }
-
-    /// Verifies that the state of an account at version `state_version` is
-    /// correct using the provided proof. If `account_state_blob` is
-    /// present, we expect the account to exist, otherwise we expect the
-    /// account to not exist.
-    pub fn verify(
-        &self, ledger_info: &LedgerInfo, state_version: Version,
-        account_address_hash: HashValue,
-        account_state_blob: Option<&AccountStateBlob>,
-    ) -> Result<()> {
-        self.transaction_info_to_account_proof.verify(
-            self.transaction_info_with_proof
-                .transaction_info
-                .state_root_hash(),
-            account_address_hash,
-            account_state_blob,
-        )?;
-
-        self.transaction_info_with_proof
-            .verify(ledger_info, state_version)?;
-
-        Ok(())
-    }
-}
-
-/// The complete proof used to authenticate a contract event. This structure
-/// consists of the `AccumulatorProof` from `LedgerInfo` to `TransactionInfo`,
-/// the `TransactionInfo` object and the `AccumulatorProof` from event
-/// accumulator root to the event.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
-pub struct EventProof {
-    transaction_info_with_proof: TransactionInfoWithProof,
-
-    /// The accumulator proof from event root to the actual event.
-    transaction_info_to_event_proof: EventAccumulatorProof,
-}
-
-impl EventProof {
-    /// Constructs a new `EventProof` using given
-    /// `ledger_info_to_transaction_info_proof`, `transaction_info` and
-    /// `transaction_info_to_event_proof`.
-    pub fn new(
-        transaction_info_with_proof: TransactionInfoWithProof,
-        transaction_info_to_event_proof: EventAccumulatorProof,
-    ) -> Self {
-        EventProof {
-            transaction_info_with_proof,
-            transaction_info_to_event_proof,
-        }
-    }
-
-    /// Returns the `transaction_info_with_proof` object in this proof.
-    pub fn transaction_info_with_proof(&self) -> &TransactionInfoWithProof {
-        &self.transaction_info_with_proof
-    }
-
-    /// Verifies that a given event is correct using provided proof.
-    pub fn verify(
-        &self, ledger_info: &LedgerInfo, event_hash: HashValue,
-        transaction_version: Version,
-        event_version_within_transaction: Version,
-    ) -> Result<()> {
-        self.transaction_info_to_event_proof.verify(
-            self.transaction_info_with_proof
-                .transaction_info()
-                .event_root_hash(),
-            event_hash,
-            event_version_within_transaction,
-        )?;
-
-        self.transaction_info_with_proof
-            .verify(ledger_info, transaction_version)?;
-
         Ok(())
     }
 }

@@ -1,10 +1,5 @@
+use super::{PricePlan, Pricer};
 use cfx_vm_types::Spec;
-
-use super::Pricer;
-
-pub trait PricePlan: Send + Sync {
-    fn pricer(&self, spec: &Spec) -> &dyn Pricer;
-}
 
 pub struct StaticPlan<T: Pricer>(pub T);
 

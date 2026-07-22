@@ -21,9 +21,8 @@ use cfx_executor::{
 };
 use cfx_types::{Space, H160};
 use cfx_vm_types::{ActionParams, CallType, Error, InterpreterInfo};
-use revm::db::InMemoryDB;
+use revm::{database::InMemoryDB, state::EvmState as State};
 use revm_interpreter::{Gas, InstructionResult, InterpreterResult};
-use revm_primitives::State;
 
 use std::sync::Arc;
 
@@ -63,6 +62,7 @@ impl GethTracer {
                             .expect("should success");
                         TracingInspectorConfig::from_geth_call_config(&c)
                     }
+                    FlatCallTracer => TracingInspectorConfig::none(),
                     PreStateTracer => {
                         let c = opts
                             .tracer_config
@@ -71,6 +71,7 @@ impl GethTracer {
                             .expect("should success");
                         TracingInspectorConfig::from_geth_prestate_config(&c)
                     }
+                    Erc7562Tracer => TracingInspectorConfig::none(),
                 }
             }
             Some(GethDebugTracerType::JsTracer(_)) => {
@@ -145,7 +146,7 @@ impl GethTracer {
                         .unwrap();
                     GethTrace::PreStateTracer(frame)
                 }
-                NoopTracer | MuxTracer => {
+                NoopTracer | MuxTracer | FlatCallTracer | Erc7562Tracer => {
                     GethTrace::NoopTracer(NoopFrame::default())
                 }
             },

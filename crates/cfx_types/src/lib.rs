@@ -7,6 +7,9 @@ pub use ethereum_types::{
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
 };
 
+pub type StorageKey = H256;
+pub type StorageValue = U256;
+
 mod space;
 pub use space::{Space, SpaceMap};
 
@@ -20,12 +23,16 @@ mod utils;
 pub use utils::*;
 
 pub mod address_util;
+pub use address_util::AddressUtil;
 
 pub mod space_util;
 pub use space_util::AddressSpaceUtil;
 
 pub mod contract_address;
-pub use contract_address::{cal_contract_address, CreateContractAddressType};
+pub use contract_address::{
+    cal_contract_address, cal_contract_address_with_space,
+    CreateContractAddressType,
+};
 
 /// The KECCAK hash of an empty bloom filter (0x00 * 256)
 pub const KECCAK_EMPTY_BLOOM: H256 = H256([

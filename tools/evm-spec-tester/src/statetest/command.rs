@@ -17,4 +17,8 @@ pub struct StateTestCmd {
     /// Only run tests matching this string
     #[arg(short, long, value_name = "Matches")]
     pub(super) matches: Option<String>,
+
+    /// Output step traces in JSON format
+    #[arg(long)]
+    pub(super) json: bool,
 }

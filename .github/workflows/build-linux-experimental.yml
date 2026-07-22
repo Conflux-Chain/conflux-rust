@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: ""
+      upload_to_release:
+        description: "If checked, upload built artifacts to an existing GitHub Release for the given tag (only for workflow_dispatch)."
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - "v*"
@@ -32,7 +37,7 @@ jobs:
             compatibility_mode: "false"
             cpu_march: haswell
             rust_target_cpu: haswell
-          - id: linux-x86_64-portable
+          - id: linux-x86_64-compatible
             arch: x86_64
             target: x86_64-unknown-linux-gnu
             dockerfile: .github/docker/linux/x86_64.Dockerfile
@@ -46,11 +51,22 @@ jobs:
             compatibility_mode: "false"
 
     steps:
-      - uses: actions/checkout@v4
+      # Checkout target ref to build
+      - name: Checkout source code
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.ref != '' && github.event.inputs.ref || github.event.repository.default_branch) || github.ref }}
           fetch-depth: 0
           fetch-tags: true
+
+      # Checkout default branch to get Dockerfiles and build scripts.
+      # Some tags may not include the required Dockerfiles.
+      - name: Checkout workflow files
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          path: workflow
 
       - name: Compute artifact label
         id: label
@@ -99,8 +115,8 @@ jobs:
           docker build \
             "${BUILD_ARGS[@]}" \
             -t "conflux-linux:${{ matrix.id }}" \
-            -f "${{ matrix.dockerfile }}" \
-            .
+            -f "workflow/${{ matrix.dockerfile }}" \
+            workflow
 
       - name: Build in container
         shell: bash
@@ -137,16 +153,16 @@ jobs:
 
           SUFFIX=""
           if [[ "${{ matrix.compatibility_mode }}" == "true" ]]; then
-            SUFFIX="-portable"
+            SUFFIX="-compatible"
           fi
 
-          ARCHIVE_NAME="conflux-${{ steps.label.outputs.label }}-linux-${{ matrix.arch }}-glibc2.27-openssl3${SUFFIX}.tar.gz"
+          ARCHIVE_NAME="conflux-${{ steps.label.outputs.label }}-linux-${{ matrix.arch }}-glibc2.27${SUFFIX}.tar.gz"
 
           rm -rf packaging_temp dist
           mkdir -p packaging_temp dist
 
           cp "${BIN_PATH}" packaging_temp/conflux
-          cp -R run packaging_temp/run
+          cp -R run/. packaging_temp/
 
           tar -C packaging_temp -czf "dist/${ARCHIVE_NAME}" .
 
@@ -159,3 +175,14 @@ jobs:
           name: ${{ steps.package.outputs.archive_name }}
           path: ${{ steps.package.outputs.archive }}
           retention-days: 30
+
+  upload_release:
+    name: Upload to GitHub Release
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_to_release }}
+    uses: ./.github/workflows/_upload-to-existing-release.yml
+    with:
+      ref: ${{ inputs.ref }}
+    permissions:
+      contents: write
+      actions: read

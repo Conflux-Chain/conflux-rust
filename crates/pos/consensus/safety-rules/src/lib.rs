@@ -7,27 +7,56 @@
 
 #![forbid(unsafe_code)]
 
+extern crate rand_08 as rand;
+
 mod configurable_validator_signer;
 mod consensus_state;
-mod counters;
 mod error;
-mod local_client;
 mod logging;
 mod persistent_safety_storage;
-mod process;
-mod remote_service;
 mod safety_rules;
-mod safety_rules_manager;
-mod serializer;
-mod t_safety_rules;
-mod thread;
 
 pub use crate::{
     consensus_state::ConsensusState, error::Error,
-    persistent_safety_storage::PersistentSafetyStorage, process::Process,
-    safety_rules::SafetyRules, safety_rules_manager::SafetyRulesManager,
-    t_safety_rules::TSafetyRules,
+    persistent_safety_storage::PersistentSafetyStorage,
+    safety_rules::SafetyRules,
 };
+
+/// Create a SafetyRules instance.
+///
+/// The author and keys are threaded directly from the runtime rather than read
+/// from `SafetyRulesConfig`, because they're always overwritten from
+/// Conflux-side config at startup.
+pub fn create_safety_rules(
+    config: &diem_config::config::SafetyRulesConfig,
+    author: diem_types::PeerId,
+    consensus_private_key: diem_types::validator_config::ConsensusPrivateKey,
+    vrf_private_key: Option<
+        diem_types::validator_config::ConsensusVRFPrivateKey,
+    >,
+    export_consensus_key: bool,
+) -> SafetyRules {
+    use diem_secure_storage::{KVStorage, OnDiskStorage};
+
+    let internal_storage: OnDiskStorage = (&config.backend).into();
+    if let Err(error) = internal_storage.available() {
+        panic!("Storage is not available: {:?}", error);
+    }
+
+    let persistent_storage = PersistentSafetyStorage::initialize(
+        internal_storage,
+        author,
+        consensus_private_key,
+        config.enable_cached_safety_data,
+    );
+
+    SafetyRules::new(
+        persistent_storage,
+        export_consensus_key,
+        vrf_private_key,
+        author,
+    )
+}
 
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod fuzzing_utils;

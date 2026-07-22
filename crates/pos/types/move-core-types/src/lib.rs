@@ -6,18 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 //! Core types for Move.
+extern crate rand_08 as rand;
 
 pub mod account_address;
-pub mod effects;
-pub mod gas_schedule;
-pub mod identifier;
-pub mod language_storage;
-pub mod move_resource;
-pub mod parser;
-#[cfg(any(test, feature = "fuzzing"))]
-pub mod proptest_types;
-pub mod transaction_argument;
-#[cfg(test)]
-mod unit_tests;
-pub mod value;
 pub mod vm_status;

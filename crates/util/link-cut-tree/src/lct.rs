@@ -304,10 +304,8 @@ pub trait Update: Clone + Default + Sized {
 
         for i in 0..2 {
             let child = tree.tree[o].child[i];
-            if child != NULL {
-                if tree.tree[o].min > tree.tree[child].min {
-                    tree.tree[o].min = tree.tree[child].min;
-                }
+            if child != NULL && tree.tree[o].min > tree.tree[child].min {
+                tree.tree[o].min = tree.tree[child].min;
             }
         }
     }

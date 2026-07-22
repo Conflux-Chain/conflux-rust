@@ -61,7 +61,7 @@ fn test_sharded_iter_merger() -> Result<()> {
     let total_keys: usize = shard_sizes.iter().sum();
     let mut sorted = vec![];
     while sorted.len() != total_keys {
-        let number_key = rng.gen();
+        let number_key = rng.random();
         let shard_id = number_key_to_shard_id(number_key, num_shards);
         if shards[shard_id].len() != shard_sizes[shard_id] {
             sorted.push((number_key, ()));

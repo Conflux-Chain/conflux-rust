@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use crate::{
     block_data_manager::BlockExecutionResult,
     message::NetworkContext,
@@ -27,12 +25,9 @@ use cfx_types::{option_vec_to_hex, H256};
 use network::node_table::NodeId;
 use primitives::{
     BlockHeaderBuilder, BlockReceipts, EpochId, EpochNumber, StateRoot,
-    StorageKey, StorageKeyWithSpace, NULL_EPOCH,
+    StorageKeyWithSpace, NULL_EPOCH,
 };
-use rand::{
-    rng,
-    seq::{IndexedRandom, SliceRandom},
-};
+use rand::{rng, seq::IndexedRandom};
 
 use std::{
     collections::HashSet,
@@ -439,7 +434,7 @@ impl SnapshotManifestManager {
                 .unwrap()
                 .height()
         };
-        let mut snapshot_state_root = state_root_vec[offset].clone();
+        let snapshot_state_root = state_root_vec[offset].clone();
         let state_root_hash = state_root_vec[offset].compute_state_root_hash();
 
         let snapshot_before_stable_checkpoint = if snapshot_block_header

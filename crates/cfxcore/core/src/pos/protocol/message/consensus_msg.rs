@@ -9,15 +9,23 @@ use crate::{
     },
     sync::Error,
 };
-use diem_logger::prelude::diem_debug;
+use diem_logger::prelude::{diem_debug, diem_trace};
 use std::mem::discriminant;
 
 impl Handleable for ConsensusMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         diem_debug!("on_consensus_msg, msg={:?}", &self);
         let peer_address = ctx.get_peer_account_address()?;
+        // Mirror `proposal.rs`'s reject-at-handler policy for authorless
+        // proposals.
         let author = match &self {
-            ConsensusMsg::ProposalMsg(p) => p.proposer(),
+            ConsensusMsg::ProposalMsg(p) => p.proposer().ok_or_else(|| {
+                diem_trace!(
+                    "Dropping authorless proposal from {:?}",
+                    peer_address
+                );
+                Error::InvalidMessageFormat
+            })?,
             ConsensusMsg::VoteMsg(v) => v.vote().author(),
             _ => peer_address,
         };

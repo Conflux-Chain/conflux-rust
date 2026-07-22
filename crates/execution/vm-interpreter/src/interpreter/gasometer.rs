@@ -18,10 +18,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Address, Space, H256, U256};
+use cfx_types::{u256_to_h256_be, Space, U256};
 use cfx_vm_types::{self as vm, Spec};
-use std::{cmp, sync::Arc};
-use vm::{BlockHashSource, CODE_PREFIX_7702};
+use primitives::extract_7702_payload;
+use std::cmp;
+use vm::BlockHashSource;
 
 use super::{
     instructions::{self, Instruction, InstructionInfo},
@@ -149,8 +150,7 @@ impl<Gas: CostType> Gasometer<Gas> {
             }
             instructions::SLOAD => {
                 let gas = if spec.cip645.eip_cold_warm_access {
-                    let mut key = H256::zero();
-                    stack.peek(0).to_big_endian(&mut key.0);
+                    let key = u256_to_h256_be(*stack.peek(0));
                     if context.is_warm_storage_entry(&key)? {
                         spec.warm_access_gas
                     } else {
@@ -531,8 +531,7 @@ fn calc_sstore_gas<Gas: CostType>(
         return Ok((spec.call_stipend + 1, 0));
     }
 
-    let mut key = H256::zero();
-    stack.peek(0).to_big_endian(&mut key.0);
+    let key = u256_to_h256_be(*stack.peek(0));
 
     let new_val = *stack.peek(1);
     let warm_val = context.is_warm_storage_entry(&key)?;
@@ -625,7 +624,9 @@ fn calc_call_gas<Gas: CostType>(
         return Ok(call_gas);
     }
 
-    let Some(delegated_address) = delegated_address(context.extcode(&address)?)
+    let maybe_code = context.extcode(&address)?;
+    let Some(delegated_address) =
+        maybe_code.and_then(|code| extract_7702_payload(&code))
     else {
         return Ok(call_gas);
     };
@@ -636,21 +637,6 @@ fn calc_call_gas<Gas: CostType>(
         } else {
             spec.cold_account_access_cost
         })
-}
-
-fn delegated_address(extcode: Option<Arc<Vec<u8>>>) -> Option<Address> {
-    let code = extcode?;
-    if !code.starts_with(CODE_PREFIX_7702) {
-        return None;
-    }
-
-    let (_prefix, payload) = code.split_at(CODE_PREFIX_7702.len());
-
-    if payload.len() == Address::len_bytes() {
-        Some(Address::from_slice(payload))
-    } else {
-        None
-    }
 }
 
 #[test]

@@ -6,8 +6,9 @@ use super::trace::ActionType;
 use crate::EpochNumber;
 use cfx_parity_trace_types::TraceFilter as PrimitiveTraceFilter;
 use cfx_rpc_primitives::{maybe_vec_into, VariadicValue};
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
 use cfx_types::{Address, Space, H256, U64};
-use jsonrpc_core::Error as RpcError;
+use jsonrpsee::types::ErrorObjectOwned;
 use serde::{Deserialize, Serialize};
 
 const FILTER_BLOCK_HASH_LIMIT: usize = 128;
@@ -44,7 +45,9 @@ pub struct TraceFilter {
 }
 
 impl TraceFilter {
-    pub fn into_primitive(self) -> Result<PrimitiveTraceFilter, RpcError> {
+    pub fn into_primitive(
+        self,
+    ) -> Result<PrimitiveTraceFilter, ErrorObjectOwned> {
         // from_epoch, to_epoch
         let from_epoch = self
             .from_epoch
@@ -55,8 +58,8 @@ impl TraceFilter {
 
         // block_hashes
         match self.block_hashes {
-            Some(ref bhs) if bhs.len() > FILTER_BLOCK_HASH_LIMIT => return Err(RpcError::invalid_params(
-                format!("filter.block_hashes can contain up to {} hashes; {} were provided.", FILTER_BLOCK_HASH_LIMIT, bhs.len())
+            Some(ref bhs) if bhs.len() > FILTER_BLOCK_HASH_LIMIT => return Err(invalid_params_msg(
+                &format!("filter.block_hashes can contain up to {} hashes; {} were provided.", FILTER_BLOCK_HASH_LIMIT, bhs.len())
             )),
             _ => {}
         }

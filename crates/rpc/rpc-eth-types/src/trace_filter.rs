@@ -19,7 +19,7 @@
 use crate::BlockId;
 use cfx_parity_trace_types::TraceFilter as PrimitiveTraceFilter;
 use cfx_types::{Space, H160};
-use jsonrpc_core::Error as RpcError;
+use jsonrpsee::types::ErrorObjectOwned;
 use primitives::EpochNumber;
 use serde::Deserialize;
 use std::convert::TryInto;
@@ -44,7 +44,9 @@ pub struct TraceFilter {
 }
 
 impl TraceFilter {
-    pub fn into_primitive(self) -> Result<PrimitiveTraceFilter, RpcError> {
+    pub fn into_primitive(
+        self,
+    ) -> Result<PrimitiveTraceFilter, ErrorObjectOwned> {
         let from_epoch = match self.from_block {
             // FIXME(thegaram): this is probably not consistent with eth
             // FIXME(lpl): Support BlockHash?

@@ -1,64 +1,36 @@
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
-
+//
 // Parity Ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-
+//
 // Parity Ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-
+//
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use parity_crypto::error::SymmError;
-use std::io;
+// Copyright 2020 Parity Technologies
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("secp256k1 error: {0}")]
-    Secp(#[from] secp256k1::Error),
-    #[error("i/o error: {0}")]
-    Io(#[from] io::Error),
-    #[error("invalid message")]
-    InvalidMessage,
-    #[error(transparent)]
-    Symm(#[from] SymmError),
-}
+// Re-export everything from cfx_crypto for compatibility
+pub use cfx_crypto::crypto::*;
 
-/// ECDH functions
-pub mod ecdh {
-    use super::Error;
-    use crate::{Public, Secret, SECP256K1};
-    use secp256k1::{self, ecdh, key};
+// Re-export constants
+pub use cfx_crypto::crypto::{KEY_ITERATIONS, KEY_LENGTH, KEY_LENGTH_AES};
 
-    /// Agree on a shared secret
-    pub fn agree(secret: &Secret, public: &Public) -> Result<Secret, Error> {
-        let context = &SECP256K1;
-        let pdata = {
-            let mut temp = [4u8; 65];
-            (&mut temp[1..65]).copy_from_slice(&public[0..64]);
-            temp
-        };
-
-        let publ = key::PublicKey::from_slice(context, &pdata)?;
-        let sec = key::SecretKey::from_slice(context, secret.as_bytes())?;
-        let shared = ecdh::SharedSecret::new_raw(context, &publ, &sec);
-
-        Secret::from_unsafe_slice(&shared[0..32])
-            .map_err(|_| Error::Secp(secp256k1::Error::InvalidSecretKey))
-    }
-}
-
-/// ECIES function
 pub mod ecies {
-    use super::{ecdh, Error};
-    use crate::{KeyPairGenerator, Public, Random, Secret};
-    use cfx_types::H128;
-    use parity_crypto::{aes, digest, hmac, is_equal};
+    use super::Error;
+    use crate::{Public, Random, Secret};
 
     /// Encrypt a message with a public key, writing an HMAC covering both
     /// the plaintext and authenticated data.
@@ -67,35 +39,13 @@ pub mod ecies {
     pub fn encrypt(
         public: &Public, auth_data: &[u8], plain: &[u8],
     ) -> Result<Vec<u8>, Error> {
-        let r = Random.generate()?;
-        let z = ecdh::agree(r.secret(), public)?;
-        let mut key = [0u8; 32];
-        kdf(&z, &[0u8; 0], &mut key);
-
-        let ekey = &key[0..16];
-        let mkey = hmac::SigKey::sha256(&digest::sha256(&key[16..32]));
-
-        let mut msg = vec![0u8; 1 + 64 + 16 + plain.len() + 32];
-        msg[0] = 0x04u8;
-        {
-            let msgd = &mut msg[1..];
-            msgd[0..64].copy_from_slice(r.public().as_bytes());
-            let iv = H128::random();
-            msgd[64..80].copy_from_slice(iv.as_bytes());
-            {
-                let cipher = &mut msgd[(64 + 16)..(64 + 16 + plain.len())];
-                aes::encrypt_128_ctr(ekey, iv.as_bytes(), plain, cipher)?;
-            }
-            let mut hmac = hmac::Signer::with(&mkey);
-            {
-                let cipher_iv = &msgd[64..(64 + 16 + plain.len())];
-                hmac.update(cipher_iv);
-            }
-            hmac.update(auth_data);
-            let sig = hmac.sign();
-            msgd[(64 + 16 + plain.len())..].copy_from_slice(&sig);
-        }
-        Ok(msg)
+        let mut generator = Random;
+        cfx_crypto::crypto::ecies::encrypt(
+            &mut generator,
+            public,
+            auth_data,
+            plain,
+        )
     }
 
     /// Decrypt a message with a secret key, checking HMAC for ciphertext
@@ -103,71 +53,17 @@ pub mod ecies {
     pub fn decrypt(
         secret: &Secret, auth_data: &[u8], encrypted: &[u8],
     ) -> Result<Vec<u8>, Error> {
-        let meta_len = 1 + 64 + 16 + 32;
-        if encrypted.len() < meta_len || encrypted[0] < 2 || encrypted[0] > 4 {
-            return Err(Error::InvalidMessage); //invalid message: publickey
-        }
-
-        let e = &encrypted[1..];
-        let p = Public::from_slice(&e[0..64]);
-        let z = ecdh::agree(secret, &p)?;
-        let mut key = [0u8; 32];
-        kdf(&z, &[0u8; 0], &mut key);
-
-        let ekey = &key[0..16];
-        let mkey = hmac::SigKey::sha256(&digest::sha256(&key[16..32]));
-
-        let clen = encrypted.len() - meta_len;
-        let cipher_with_iv = &e[64..(64 + 16 + clen)];
-        let cipher_iv = &cipher_with_iv[0..16];
-        let cipher_no_iv = &cipher_with_iv[16..];
-        let msg_mac = &e[(64 + 16 + clen)..];
-
-        // Verify tag
-        let mut hmac = hmac::Signer::with(&mkey);
-        hmac.update(cipher_with_iv);
-        hmac.update(auth_data);
-        let mac = hmac.sign();
-
-        if !is_equal(&mac.as_ref()[..], msg_mac) {
-            return Err(Error::InvalidMessage);
-        }
-
-        let mut msg = vec![0u8; clen];
-        aes::decrypt_128_ctr(ekey, cipher_iv, cipher_no_iv, &mut msg[..])?;
-        Ok(msg)
-    }
-
-    fn kdf(secret: &Secret, s1: &[u8], dest: &mut [u8]) {
-        // SEC/ISO/Shoup specify counter size SHOULD be equivalent
-        // to size of hash output, however, it also notes that
-        // the 4 bytes is okay. NIST specifies 4 bytes.
-        let mut ctr = 1u32;
-        let mut written = 0usize;
-        while written < dest.len() {
-            let mut hasher = digest::Hasher::sha256();
-            let ctrs = [
-                (ctr >> 24) as u8,
-                (ctr >> 16) as u8,
-                (ctr >> 8) as u8,
-                ctr as u8,
-            ];
-            hasher.update(&ctrs);
-            hasher.update(secret.as_bytes());
-            hasher.update(s1);
-            let d = hasher.finish();
-            dest[written..(written + 32)].copy_from_slice(&d);
-            written += 32;
-            ctr += 1;
-        }
+        cfx_crypto::crypto::ecies::decrypt(secret, auth_data, encrypted)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{ecdh, ecies};
-    use crate::{KeyPairGenerator, Public, Random, Secret};
-    use std::str::FromStr;
+    use crate::{
+        crypto::scrypt::derive_key, KeyPairGenerator, Public, Random, Secret,
+    };
+    use std::{io::Error, str::FromStr};
 
     #[test]
     fn ecies_shared() {
@@ -177,7 +73,7 @@ mod tests {
         let shared = b"shared";
         let wrong_shared = b"incorrect";
         let encrypted = ecies::encrypt(kp.public(), shared, message).unwrap();
-        assert!(encrypted[..] != message[..]);
+        assert_ne!(encrypted[..], message[..]);
         assert_eq!(encrypted[0], 0x04);
 
         assert!(ecies::decrypt(kp.secret(), wrong_shared, &encrypted).is_err());
@@ -205,5 +101,39 @@ mod tests {
         )
         .unwrap();
         assert_eq!(agree_secret, expected);
+    }
+    // test is build from previous crypto lib behaviour, values may be incorrect
+    // if previous crypto lib got a bug.
+    #[test]
+    pub fn test_derive() -> Result<(), Error> {
+        let pass = [109, 121, 112, 97, 115, 115, 10];
+        let salt = [
+            109, 121, 115, 97, 108, 116, 115, 104, 111, 117, 108, 100, 102,
+            105, 108, 108, 115, 111, 109, 109, 101, 98, 121, 116, 101, 108,
+            101, 110, 103, 116, 104, 10,
+        ];
+        let r1 = [
+            93, 134, 79, 68, 223, 27, 44, 174, 236, 184, 179, 203, 74, 139, 73,
+            66,
+        ];
+        let r2 = [
+            2, 24, 239, 131, 172, 164, 18, 171, 132, 207, 22, 217, 150, 20,
+            203, 37,
+        ];
+        let l1 = [
+            6, 90, 119, 45, 67, 2, 99, 151, 81, 88, 166, 210, 244, 19, 123, 208,
+        ];
+        let l2 = [
+            253, 123, 132, 12, 188, 89, 196, 2, 107, 224, 239, 231, 135, 177,
+            125, 62,
+        ];
+
+        let (l, r) = derive_key(&pass[..], &salt, 262, 1, 8).unwrap();
+        assert_eq!(l, r1);
+        assert_eq!(r, l1);
+        let (l, r) = derive_key(&pass[..], &salt, 144, 4, 4).unwrap();
+        assert_eq!(l, r2);
+        assert_eq!(r, l2);
+        Ok(())
     }
 }

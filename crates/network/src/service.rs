@@ -128,6 +128,10 @@ pub struct UdpChannel {
     pub send_queue: VecDeque<Datagram>,
 }
 
+impl Default for UdpChannel {
+    fn default() -> Self { Self::new() }
+}
+
 impl UdpChannel {
     pub fn new() -> UdpChannel {
         UdpChannel {
@@ -288,7 +292,7 @@ impl NetworkService {
             Some(ref inner) => {
                 Ok(inner.with_context(handler, protocol, &io, action))
             }
-            None => Err("Network service not started yet!".to_owned().into()),
+            None => Err("Network service not started yet!".to_owned()),
         }
     }
 
@@ -596,6 +600,7 @@ impl NetworkServiceInner {
         };
 
         let nodes_path = config.config_path.clone();
+        let own_node_id = *keys.public();
 
         let mut inner = NetworkServiceInner {
             metadata: HostMetadata {
@@ -616,6 +621,7 @@ impl NetworkServiceInner {
                 FIRST_SESSION,
                 MAX_SESSIONS,
                 config.max_incoming_peers,
+                own_node_id,
                 &config.session_ip_limit_config,
                 Some(pos_pub_keys),
             ),
@@ -650,11 +656,7 @@ impl NetworkServiceInner {
         config: &NetworkConfiguration,
         pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
     ) -> Result<NetworkServiceInner, Error> {
-        let r = NetworkServiceInner::new(config, pos_pub_keys);
-        if r.is_err() {
-            return r;
-        }
-        let mut inner = r.unwrap();
+        let mut inner = NetworkServiceInner::new(config, pos_pub_keys)?;
         inner.delayed_queue = Some(DelayedQueue::new());
         Ok(inner)
     }
@@ -695,7 +697,7 @@ impl NetworkServiceInner {
     fn add_reserved_node(&mut self, id: &str) -> Result<(), Error> {
         let n = Node::from_str(id)?;
         self.node_db.write().insert_trusted(NodeEntry {
-            id: n.id.clone(),
+            id: n.id,
             endpoint: n.endpoint.clone(),
         });
         self.reserved_nodes.write().insert(n.id);
@@ -795,13 +797,18 @@ impl NetworkServiceInner {
 
     // Connect to all reserved and trusted peers if not yet
     fn connect_peers(&self, io: &IoContext<NetworkIoMessage>) {
-        if self.metadata.minimum_peer_protocol_version.read().len() == 0 {
+        if self
+            .metadata
+            .minimum_peer_protocol_version
+            .read()
+            .is_empty()
+        {
             // The protocol handler has not been registered, we just wait for
             // the next time.
             return;
         }
 
-        let self_id = self.metadata.id().clone();
+        let self_id = *self.metadata.id();
 
         let sampled_archive_nodes = self.sample_archive_nodes();
 
@@ -882,7 +889,7 @@ impl NetworkServiceInner {
     // Kill connections of all dropped peers
     fn drop_peers(&self, io: &IoContext<NetworkIoMessage>) {
         {
-            if self.dropped_nodes.read().len() == 0 {
+            if self.dropped_nodes.read().is_empty() {
                 return;
             }
         }
@@ -967,7 +974,7 @@ impl NetworkServiceInner {
             if !sess.expired() {
                 peers.push(PeerInfo {
                     id: sess.token(),
-                    nodeid: sess.id().unwrap_or(&NodeId::default()).clone(),
+                    nodeid: *sess.id().unwrap_or(&NodeId::default()),
                     addr: sess.address(),
                     protocols: sess.metadata.peer_protocols.clone(),
                 });
@@ -1051,7 +1058,7 @@ impl NetworkServiceInner {
 
         // We check dropped_nodes first to make sure we stop processing
         // communications from any dropped peers
-        let mut session_node_id = session.read().id().map(|id| *id);
+        let mut session_node_id = session.read().id().copied();
         let mut pos_public_key_opt = None;
         if let Some(node_id) = session_node_id {
             let to_drop = self.dropped_nodes.read().contains(&node_id);
@@ -1112,11 +1119,13 @@ impl NetworkServiceInner {
         }
 
         if let Some(token_to_disconnect) = token_to_disconnect {
+            // Sim-dial dedup, not a peer failure — `op = None`, no
+            // note_failure.
             self.kill_connection_by_token(
                 token_to_disconnect.0,
                 io,
                 true,
-                Some(UpdateNodeOperation::Failure),
+                None,
                 token_to_disconnect.1.as_str(), // reason
             );
         }
@@ -1169,7 +1178,7 @@ impl NetworkServiceInner {
                 NetworkIoMessage::HandleProtocolMessage {
                     protocol,
                     peer: stream,
-                    node_id: session_node_id.as_ref().unwrap().clone(),
+                    node_id: *session_node_id.as_ref().unwrap(),
                     data,
                 },
             ) {
@@ -1185,7 +1194,7 @@ impl NetworkServiceInner {
             {
                 // We check dropped_nodes first to make sure we stop processing
                 // communications from any dropped peers
-                let sess_id = session.read().id().map(|id| *id);
+                let sess_id = session.read().id().copied();
                 if let Some(node_id) = sess_id {
                     let to_drop = self.dropped_nodes.read().contains(&node_id);
                     self.drop_peers(io);
@@ -1237,6 +1246,11 @@ impl NetworkServiceInner {
             if let Some(session) = self.sessions.get(token) {
                 let mut sess = session.write();
                 if !sess.expired() {
+                    // Removed before the disconnect packets (not just before
+                    // `set_expired`) to minimize the stale-entry window.
+                    if let Some(id) = sess.id() {
+                        self.sessions.remove_node_id_entry(id, token);
+                    }
                     if sess.is_ready() {
                         for (p, _) in self.handlers.read().iter() {
                             if sess.have_capability(*p) {
@@ -1310,6 +1324,9 @@ impl NetworkServiceInner {
         if let Some(session) = self.sessions.get_by_id(node_id) {
             let mut sess = session.write();
             if !sess.expired() {
+                // Removed before the disconnect packets (not just before
+                // `set_expired`) to minimize the stale-entry window.
+                self.sessions.remove_node_id_entry(node_id, sess.token());
                 if sess.is_ready() {
                     for (p, _) in self.handlers.read().iter() {
                         if sess.have_capability(*p) {
@@ -1566,11 +1583,11 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     self.config.max_outgoing_peers_archive,
                 );
                 if disc_general || disc_archive {
-                    self.discovery.lock().as_mut().map(|d| {
+                    if let Some(d) = self.discovery.lock().as_mut() {
                         d.disc_option.general = disc_general;
                         d.disc_option.archive = disc_archive;
                         d.refresh();
-                    });
+                    }
                     io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
                         debug!("Error updating discovery registration: {:?}", e)
                     });
@@ -1587,11 +1604,11 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     self.config.max_outgoing_peers_archive,
                 );
                 if disc_general || disc_archive {
-                    self.discovery.lock().as_mut().map(|d| {
+                    if let Some(d) = self.discovery.lock().as_mut() {
                         d.disc_option.general = disc_general;
                         d.disc_option.archive = disc_archive;
                         d.refresh();
-                    });
+                    }
                     io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
                         debug!("Error updating discovery registration: {:?}", e)
                     });
@@ -1803,7 +1820,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                                 false, /* trusted_only */
                             );
                         }
-                        self.sessions.remove(&*sess);
+                        self.sessions.remove(&sess);
                         debug!("Removed session: {:?}", *sess);
                     }
                 }
@@ -1862,6 +1879,7 @@ struct DelayMessageContext {
 }
 
 impl DelayMessageContext {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ts: Instant, io: IoContext<NetworkIoMessage>, protocol: ProtocolId,
         session: SharedSession, peer: NodeId, msg: Vec<u8>,
@@ -1948,7 +1966,8 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         if version_valid_till < self.min_supported_version {
             bail!(Error::SendUnsupportedMessage {
                 protocol: self.protocol,
-                msg_id: parse_msg_id_leb128_2_bytes_at_most(&mut &*msg),
+                msg_id: parse_msg_id_leb128_2_bytes_at_most(&mut &*msg)
+                    .expect("locally encoded message must contain a valid leb128 msg id"),
                 peer_protocol_version: None,
                 min_supported_version: Some(self.min_supported_version),
             });
@@ -2055,7 +2074,7 @@ fn save_key(path: &Path, key: &Secret) {
     };
     path_buf.push("key");
     let path = path_buf.as_path();
-    let mut file = match fs::File::create(&path) {
+    let mut file = match fs::File::create(path) {
         Ok(file) => file,
         Err(e) => {
             warn!("Error creating key file: {:?}", e);
@@ -2118,19 +2137,19 @@ pub fn load_pos_private_key(
         }
     }
     let key_str: Vec<_> = buf.split(",").collect();
-    let private_key =
-        match ConsensusPrivateKey::from_encoded_string(&key_str[0]) {
-            Ok(key) => Some(key),
-            Err(e) => {
-                warn!("Error parsing key file: {:?}", e);
-                None
-            }
-        }?;
+    let private_key = match ConsensusPrivateKey::from_encoded_string(key_str[0])
+    {
+        Ok(key) => Some(key),
+        Err(e) => {
+            warn!("Error parsing key file: {:?}", e);
+            None
+        }
+    }?;
     if key_str.len() <= 1 {
         return Some((private_key, None));
     }
     let vrf_private_key =
-        match ConsensusVRFPrivateKey::from_encoded_string(&key_str[1]) {
+        match ConsensusVRFPrivateKey::from_encoded_string(key_str[1]) {
             Ok(key) => Some(key),
             Err(e) => {
                 warn!("Error parsing key file: {:?}", e);

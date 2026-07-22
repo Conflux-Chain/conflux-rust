@@ -22,13 +22,18 @@ impl Encodable for SnapshotKeptToProvideSyncStatus {
 
 impl Decodable for SnapshotKeptToProvideSyncStatus {
     fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
-        Ok(unsafe { std::mem::transmute(rlp.as_val::<u8>()?) })
+        match rlp.as_val::<u8>()? {
+            0 => Ok(Self::No),
+            1 => Ok(Self::InfoOnly),
+            2 => Ok(Self::InfoAndSnapshot),
+            _ => Err(DecoderError::Custom(
+                "invalid SnapshotKeptToProvideSyncStatus",
+            )),
+        }
     }
 }
 
-#[derive(
-    Clone, Default, DeriveMallocSizeOf, RlpEncodable, RlpDecodable, Debug,
-)]
+#[derive(Clone, Default, DeriveMallocSizeOf, Debug)]
 pub struct SnapshotInfo {
     /// This field is true when the snapshot info is kept but the snapshot
     /// itself is removed, or when
@@ -44,6 +49,33 @@ pub struct SnapshotInfo {
     // itself.
     #[debug(skip)]
     pub pivot_chain_parts: Vec<EpochId>,
+}
+
+impl Encodable for SnapshotInfo {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(7)
+            .append(&self.snapshot_info_kept_to_provide_sync)
+            .append(&CompatBool(self.serve_one_step_sync))
+            .append(&self.merkle_root)
+            .append(&self.parent_snapshot_height)
+            .append(&self.height)
+            .append(&self.parent_snapshot_epoch_id)
+            .append_list(&self.pivot_chain_parts);
+    }
+}
+
+impl Decodable for SnapshotInfo {
+    fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
+        Ok(SnapshotInfo {
+            snapshot_info_kept_to_provide_sync: rlp.val_at(0)?,
+            serve_one_step_sync: rlp.val_at::<CompatBool>(1)?.0,
+            merkle_root: rlp.val_at(2)?,
+            parent_snapshot_height: rlp.val_at(3)?,
+            height: rlp.val_at(4)?,
+            parent_snapshot_epoch_id: rlp.val_at(5)?,
+            pivot_chain_parts: rlp.list_at(6)?,
+        })
+    }
 }
 
 impl SnapshotInfo {
@@ -71,11 +103,10 @@ impl SnapshotInfo {
         } else if height > self.height {
             None
         } else {
-            unsafe {
-                Some(self.pivot_chain_parts.get_unchecked(
-                    (height - self.parent_snapshot_height - 1) as usize,
-                ))
-            }
+            let index =
+                usize::try_from(height - self.parent_snapshot_height - 1)
+                    .ok()?;
+            self.pivot_chain_parts.get(index)
         }
     }
 }
@@ -186,8 +217,9 @@ use crate::{
 };
 use derive_more::Debug;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
+use primitives::{
+    CompatBool, EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH,
+};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{path::Path, sync::Arc};
 use tokio::sync::Semaphore;

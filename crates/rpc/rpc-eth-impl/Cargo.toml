@@ -1,5 +1,5 @@
 [package]
-name = "cfx-rpc"
+name = "cfx-rpc-eth-impl"
 edition = "2021"
 version.workspace = true
 authors.workspace = true
@@ -22,13 +22,13 @@ cfx-rpc-cfx-impl = { workspace = true }
 async-trait = { workspace = true }
 keccak-hash = { workspace = true }
 alloy-rpc-types-trace = { workspace = true }
+alloy-primitives = { workspace = true }
 cfxcore = { workspace = true }
 primitives = { workspace = true }
 geth-tracer = { workspace = true }
 cfx-rpc-utils = { workspace = true }
 parking_lot = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
-jsonrpc-core = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfx-statedb = { workspace = true }
 cfx-executor = { workspace = true }
@@ -40,10 +40,7 @@ tokio = { workspace = true }
 log = { workspace = true }
 futures = { workspace = true }
 cfx-util-macros = { workspace = true }
-thiserror = { workspace = true }
-serde_json = { workspace = true }
 tokio-stream = { workspace = true }
-serde = { workspace = true }
 cfx-addr = { workspace = true }
 solidity-abi = { workspace = true }
 cfx-rpc-common-impl = { workspace = true }

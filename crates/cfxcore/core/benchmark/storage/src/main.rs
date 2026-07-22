@@ -190,7 +190,7 @@ impl<EthTxT: EthTxTypeTrait> EthTxVerifierWorkerThread<EthTxT> {
         }
         let mut rlp_stream = RlpStream::new();
         rlp_stream.append_list(&list);
-        let rlp = rlp_stream.drain();
+        let rlp = rlp_stream.out();
 
         file.write_all(&rlp).unwrap();
     }
