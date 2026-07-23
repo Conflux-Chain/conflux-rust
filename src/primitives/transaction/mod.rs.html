@@ -944,221 +944,344 @@
 <a href=#944 id=944 data-nosnippet>944</a>        }
 <a href=#945 id=945 data-nosnippet>945</a>    }
 <a href=#946 id=946 data-nosnippet>946</a>
-<a href=#947 id=947 data-nosnippet>947</a>    <span class="doccomment">/// Used to compute hash of created transactions
-<a href=#948 id=948 data-nosnippet>948</a>    </span><span class="kw">fn </span>compute_hash(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; TransactionWithSignature {
-<a href=#949 id=949 data-nosnippet>949</a>        <span class="kw">let </span>hash = keccak(<span class="kw-2">&amp;*</span><span class="self">self</span>.transaction.rlp_bytes());
-<a href=#950 id=950 data-nosnippet>950</a>        <span class="self">self</span>.hash = hash;
-<a href=#951 id=951 data-nosnippet>951</a>        <span class="self">self
-<a href=#952 id=952 data-nosnippet>952</a>    </span>}
-<a href=#953 id=953 data-nosnippet>953</a>
-<a href=#954 id=954 data-nosnippet>954</a>    <span class="doccomment">/// Checks whether signature is empty.
-<a href=#955 id=955 data-nosnippet>955</a>    </span><span class="kw">pub fn </span>is_unsigned(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool { <span class="self">self</span>.r.is_zero() &amp;&amp; <span class="self">self</span>.s.is_zero() }
-<a href=#956 id=956 data-nosnippet>956</a>
-<a href=#957 id=957 data-nosnippet>957</a>    <span class="doccomment">/// Construct a signature object from the sig.
-<a href=#958 id=958 data-nosnippet>958</a>    </span><span class="kw">pub fn </span>signature(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Signature {
-<a href=#959 id=959 data-nosnippet>959</a>        <span class="kw">let </span>r: H256 = BigEndianHash::from_uint(<span class="kw-2">&amp;</span><span class="self">self</span>.r);
-<a href=#960 id=960 data-nosnippet>960</a>        <span class="kw">let </span>s: H256 = BigEndianHash::from_uint(<span class="kw-2">&amp;</span><span class="self">self</span>.s);
-<a href=#961 id=961 data-nosnippet>961</a>        Signature::from_rsv(<span class="kw-2">&amp;</span>r, <span class="kw-2">&amp;</span>s, <span class="self">self</span>.v)
-<a href=#962 id=962 data-nosnippet>962</a>    }
-<a href=#963 id=963 data-nosnippet>963</a>
-<a href=#964 id=964 data-nosnippet>964</a>    <span class="doccomment">/// Checks whether the signature has a low 's' value.
-<a href=#965 id=965 data-nosnippet>965</a>    </span><span class="kw">pub fn </span>check_low_s(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), keylib::Error&gt; {
-<a href=#966 id=966 data-nosnippet>966</a>        <span class="kw">if </span>!<span class="self">self</span>.signature().is_low_s() {
-<a href=#967 id=967 data-nosnippet>967</a>            <span class="prelude-val">Err</span>(keylib::Error::InvalidSignature)
-<a href=#968 id=968 data-nosnippet>968</a>        } <span class="kw">else </span>{
-<a href=#969 id=969 data-nosnippet>969</a>            <span class="prelude-val">Ok</span>(())
-<a href=#970 id=970 data-nosnippet>970</a>        }
-<a href=#971 id=971 data-nosnippet>971</a>    }
-<a href=#972 id=972 data-nosnippet>972</a>
-<a href=#973 id=973 data-nosnippet>973</a>    <span class="kw">pub fn </span>check_y_parity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), keylib::Error&gt; {
-<a href=#974 id=974 data-nosnippet>974</a>        <span class="kw">if </span><span class="self">self</span>.is_2718() &amp;&amp; <span class="self">self</span>.v &gt; <span class="number">1 </span>{
-<a href=#975 id=975 data-nosnippet>975</a>            <span class="comment">// In Typed transactions (EIP-2718), v means y_parity, which must be
-<a href=#976 id=976 data-nosnippet>976</a>            // 0 or 1
-<a href=#977 id=977 data-nosnippet>977</a>            </span><span class="prelude-val">Err</span>(keylib::Error::InvalidYParity)
-<a href=#978 id=978 data-nosnippet>978</a>        } <span class="kw">else </span>{
-<a href=#979 id=979 data-nosnippet>979</a>            <span class="prelude-val">Ok</span>(())
-<a href=#980 id=980 data-nosnippet>980</a>        }
-<a href=#981 id=981 data-nosnippet>981</a>    }
-<a href=#982 id=982 data-nosnippet>982</a>
-<a href=#983 id=983 data-nosnippet>983</a>    <span class="kw">pub fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H256 { <span class="self">self</span>.hash }
-<a href=#984 id=984 data-nosnippet>984</a>
-<a href=#985 id=985 data-nosnippet>985</a>    <span class="doccomment">/// Recovers the public key of the sender.
-<a href=#986 id=986 data-nosnippet>986</a>    </span><span class="kw">pub fn </span>recover_public(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Public, keylib::Error&gt; {
-<a href=#987 id=987 data-nosnippet>987</a>        recover(
-<a href=#988 id=988 data-nosnippet>988</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.signature(),
-<a href=#989 id=989 data-nosnippet>989</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.unsigned.hash_for_compute_signature(),
-<a href=#990 id=990 data-nosnippet>990</a>        )
-<a href=#991 id=991 data-nosnippet>991</a>    }
-<a href=#992 id=992 data-nosnippet>992</a>
-<a href=#993 id=993 data-nosnippet>993</a>    <span class="kw">pub fn </span>rlp_size(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-<a href=#994 id=994 data-nosnippet>994</a>        <span class="self">self</span>.rlp_size.unwrap_or_else(|| <span class="self">self</span>.rlp_bytes().len())
-<a href=#995 id=995 data-nosnippet>995</a>    }
-<a href=#996 id=996 data-nosnippet>996</a>
-<a href=#997 id=997 data-nosnippet>997</a>    <span class="kw">pub fn </span>from_raw(raw: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecoderError&gt; {
-<a href=#998 id=998 data-nosnippet>998</a>        <span class="prelude-val">Ok</span>(TransactionWithSignature {
-<a href=#999 id=999 data-nosnippet>999</a>            transaction: Rlp::new(raw).as_val()<span class="question-mark">?</span>,
-<a href=#1000 id=1000 data-nosnippet>1000</a>            hash: keccak(raw),
-<a href=#1001 id=1001 data-nosnippet>1001</a>            rlp_size: <span class="prelude-val">Some</span>(raw.len()),
-<a href=#1002 id=1002 data-nosnippet>1002</a>        })
-<a href=#1003 id=1003 data-nosnippet>1003</a>    }
-<a href=#1004 id=1004 data-nosnippet>1004</a>}
-<a href=#1005 id=1005 data-nosnippet>1005</a>
-<a href=#1006 id=1006 data-nosnippet>1006</a><span class="kw">impl </span>MallocSizeOf <span class="kw">for </span>TransactionWithSignature {
-<a href=#1007 id=1007 data-nosnippet>1007</a>    <span class="kw">fn </span>size_of(<span class="kw-2">&amp;</span><span class="self">self</span>, ops: <span class="kw-2">&amp;mut </span>MallocSizeOfOps) -&gt; usize {
-<a href=#1008 id=1008 data-nosnippet>1008</a>        <span class="self">self</span>.unsigned.size_of(ops)
-<a href=#1009 id=1009 data-nosnippet>1009</a>    }
-<a href=#1010 id=1010 data-nosnippet>1010</a>}
-<a href=#1011 id=1011 data-nosnippet>1011</a>
-<a href=#1012 id=1012 data-nosnippet>1012</a><span class="doccomment">/// A signed transaction with successfully recovered `sender`.
-<a href=#1013 id=1013 data-nosnippet>1013</a></span><span class="attr">#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-<a href=#1014 id=1014 data-nosnippet>1014</a></span><span class="kw">pub struct </span>SignedTransaction {
-<a href=#1015 id=1015 data-nosnippet>1015</a>    <span class="kw">pub </span>transaction: TransactionWithSignature,
-<a href=#1016 id=1016 data-nosnippet>1016</a>    <span class="kw">pub </span>sender: Address,
-<a href=#1017 id=1017 data-nosnippet>1017</a>    <span class="kw">pub </span>public: <span class="prelude-ty">Option</span>&lt;Public&gt;,
-<a href=#1018 id=1018 data-nosnippet>1018</a>}
-<a href=#1019 id=1019 data-nosnippet>1019</a>
-<a href=#1020 id=1020 data-nosnippet>1020</a><span class="comment">// The default encoder for local storage.
-<a href=#1021 id=1021 data-nosnippet>1021</a></span><span class="kw">impl </span>Encodable <span class="kw">for </span>SignedTransaction {
-<a href=#1022 id=1022 data-nosnippet>1022</a>    <span class="kw">fn </span>rlp_append(<span class="kw-2">&amp;</span><span class="self">self</span>, s: <span class="kw-2">&amp;mut </span>RlpStream) {
-<a href=#1023 id=1023 data-nosnippet>1023</a>        s.begin_list(<span class="number">3</span>);
-<a href=#1024 id=1024 data-nosnippet>1024</a>        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.transaction);
-<a href=#1025 id=1025 data-nosnippet>1025</a>        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.sender);
-<a href=#1026 id=1026 data-nosnippet>1026</a>        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.public);
-<a href=#1027 id=1027 data-nosnippet>1027</a>    }
+<a href=#947 id=947 data-nosnippet>947</a>    <span class="doccomment">/// keccak of the canonical RLP re-encoding — unlike `hash`, which is over
+<a href=#948 id=948 data-nosnippet>948</a>    /// the (possibly non-canonical) bytes the tx was decoded from.
+<a href=#949 id=949 data-nosnippet>949</a>    </span><span class="kw">pub fn </span>canonical_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H256 {
+<a href=#950 id=950 data-nosnippet>950</a>        keccak(<span class="kw-2">&amp;*</span><span class="self">self</span>.transaction.rlp_bytes())
+<a href=#951 id=951 data-nosnippet>951</a>    }
+<a href=#952 id=952 data-nosnippet>952</a>
+<a href=#953 id=953 data-nosnippet>953</a>    <span class="kw">fn </span>compute_hash(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; TransactionWithSignature {
+<a href=#954 id=954 data-nosnippet>954</a>        <span class="self">self</span>.hash = <span class="self">self</span>.canonical_hash();
+<a href=#955 id=955 data-nosnippet>955</a>        <span class="self">self
+<a href=#956 id=956 data-nosnippet>956</a>    </span>}
+<a href=#957 id=957 data-nosnippet>957</a>
+<a href=#958 id=958 data-nosnippet>958</a>    <span class="doccomment">/// Checks whether signature is empty.
+<a href=#959 id=959 data-nosnippet>959</a>    </span><span class="kw">pub fn </span>is_unsigned(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool { <span class="self">self</span>.r.is_zero() &amp;&amp; <span class="self">self</span>.s.is_zero() }
+<a href=#960 id=960 data-nosnippet>960</a>
+<a href=#961 id=961 data-nosnippet>961</a>    <span class="doccomment">/// Construct a signature object from the sig.
+<a href=#962 id=962 data-nosnippet>962</a>    </span><span class="kw">pub fn </span>signature(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Signature {
+<a href=#963 id=963 data-nosnippet>963</a>        <span class="kw">let </span>r: H256 = BigEndianHash::from_uint(<span class="kw-2">&amp;</span><span class="self">self</span>.r);
+<a href=#964 id=964 data-nosnippet>964</a>        <span class="kw">let </span>s: H256 = BigEndianHash::from_uint(<span class="kw-2">&amp;</span><span class="self">self</span>.s);
+<a href=#965 id=965 data-nosnippet>965</a>        Signature::from_rsv(<span class="kw-2">&amp;</span>r, <span class="kw-2">&amp;</span>s, <span class="self">self</span>.v)
+<a href=#966 id=966 data-nosnippet>966</a>    }
+<a href=#967 id=967 data-nosnippet>967</a>
+<a href=#968 id=968 data-nosnippet>968</a>    <span class="doccomment">/// Checks whether the signature has a low 's' value.
+<a href=#969 id=969 data-nosnippet>969</a>    </span><span class="kw">pub fn </span>check_low_s(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), keylib::Error&gt; {
+<a href=#970 id=970 data-nosnippet>970</a>        <span class="kw">if </span>!<span class="self">self</span>.signature().is_low_s() {
+<a href=#971 id=971 data-nosnippet>971</a>            <span class="prelude-val">Err</span>(keylib::Error::InvalidSignature)
+<a href=#972 id=972 data-nosnippet>972</a>        } <span class="kw">else </span>{
+<a href=#973 id=973 data-nosnippet>973</a>            <span class="prelude-val">Ok</span>(())
+<a href=#974 id=974 data-nosnippet>974</a>        }
+<a href=#975 id=975 data-nosnippet>975</a>    }
+<a href=#976 id=976 data-nosnippet>976</a>
+<a href=#977 id=977 data-nosnippet>977</a>    <span class="kw">pub fn </span>check_y_parity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), keylib::Error&gt; {
+<a href=#978 id=978 data-nosnippet>978</a>        <span class="kw">if </span><span class="self">self</span>.is_2718() &amp;&amp; <span class="self">self</span>.v &gt; <span class="number">1 </span>{
+<a href=#979 id=979 data-nosnippet>979</a>            <span class="comment">// In Typed transactions (EIP-2718), v means y_parity, which must be
+<a href=#980 id=980 data-nosnippet>980</a>            // 0 or 1
+<a href=#981 id=981 data-nosnippet>981</a>            </span><span class="prelude-val">Err</span>(keylib::Error::InvalidYParity)
+<a href=#982 id=982 data-nosnippet>982</a>        } <span class="kw">else </span>{
+<a href=#983 id=983 data-nosnippet>983</a>            <span class="prelude-val">Ok</span>(())
+<a href=#984 id=984 data-nosnippet>984</a>        }
+<a href=#985 id=985 data-nosnippet>985</a>    }
+<a href=#986 id=986 data-nosnippet>986</a>
+<a href=#987 id=987 data-nosnippet>987</a>    <span class="kw">pub fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H256 { <span class="self">self</span>.hash }
+<a href=#988 id=988 data-nosnippet>988</a>
+<a href=#989 id=989 data-nosnippet>989</a>    <span class="doccomment">/// False when the lenient decoder accepted a non-canonical encoding (e.g. a
+<a href=#990 id=990 data-nosnippet>990</a>    /// trailing partial item): same fields, different cached hash.
+<a href=#991 id=991 data-nosnippet>991</a>    </span><span class="kw">pub fn </span>is_canonical_rlp(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#992 id=992 data-nosnippet>992</a>        <span class="self">self</span>.hash == <span class="self">self</span>.canonical_hash()
+<a href=#993 id=993 data-nosnippet>993</a>    }
+<a href=#994 id=994 data-nosnippet>994</a>
+<a href=#995 id=995 data-nosnippet>995</a>    <span class="doccomment">/// Recovers the public key of the sender.
+<a href=#996 id=996 data-nosnippet>996</a>    </span><span class="kw">pub fn </span>recover_public(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Public, keylib::Error&gt; {
+<a href=#997 id=997 data-nosnippet>997</a>        recover(
+<a href=#998 id=998 data-nosnippet>998</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.signature(),
+<a href=#999 id=999 data-nosnippet>999</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.unsigned.hash_for_compute_signature(),
+<a href=#1000 id=1000 data-nosnippet>1000</a>        )
+<a href=#1001 id=1001 data-nosnippet>1001</a>    }
+<a href=#1002 id=1002 data-nosnippet>1002</a>
+<a href=#1003 id=1003 data-nosnippet>1003</a>    <span class="kw">pub fn </span>rlp_size(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#1004 id=1004 data-nosnippet>1004</a>        <span class="self">self</span>.rlp_size.unwrap_or_else(|| <span class="self">self</span>.rlp_bytes().len())
+<a href=#1005 id=1005 data-nosnippet>1005</a>    }
+<a href=#1006 id=1006 data-nosnippet>1006</a>
+<a href=#1007 id=1007 data-nosnippet>1007</a>    <span class="kw">pub fn </span>from_raw(raw: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecoderError&gt; {
+<a href=#1008 id=1008 data-nosnippet>1008</a>        <span class="prelude-val">Ok</span>(TransactionWithSignature {
+<a href=#1009 id=1009 data-nosnippet>1009</a>            transaction: Rlp::new(raw).as_val()<span class="question-mark">?</span>,
+<a href=#1010 id=1010 data-nosnippet>1010</a>            hash: keccak(raw),
+<a href=#1011 id=1011 data-nosnippet>1011</a>            rlp_size: <span class="prelude-val">Some</span>(raw.len()),
+<a href=#1012 id=1012 data-nosnippet>1012</a>        })
+<a href=#1013 id=1013 data-nosnippet>1013</a>    }
+<a href=#1014 id=1014 data-nosnippet>1014</a>}
+<a href=#1015 id=1015 data-nosnippet>1015</a>
+<a href=#1016 id=1016 data-nosnippet>1016</a><span class="kw">impl </span>MallocSizeOf <span class="kw">for </span>TransactionWithSignature {
+<a href=#1017 id=1017 data-nosnippet>1017</a>    <span class="kw">fn </span>size_of(<span class="kw-2">&amp;</span><span class="self">self</span>, ops: <span class="kw-2">&amp;mut </span>MallocSizeOfOps) -&gt; usize {
+<a href=#1018 id=1018 data-nosnippet>1018</a>        <span class="self">self</span>.unsigned.size_of(ops)
+<a href=#1019 id=1019 data-nosnippet>1019</a>    }
+<a href=#1020 id=1020 data-nosnippet>1020</a>}
+<a href=#1021 id=1021 data-nosnippet>1021</a>
+<a href=#1022 id=1022 data-nosnippet>1022</a><span class="doccomment">/// A signed transaction with successfully recovered `sender`.
+<a href=#1023 id=1023 data-nosnippet>1023</a></span><span class="attr">#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+<a href=#1024 id=1024 data-nosnippet>1024</a></span><span class="kw">pub struct </span>SignedTransaction {
+<a href=#1025 id=1025 data-nosnippet>1025</a>    <span class="kw">pub </span>transaction: TransactionWithSignature,
+<a href=#1026 id=1026 data-nosnippet>1026</a>    <span class="kw">pub </span>sender: Address,
+<a href=#1027 id=1027 data-nosnippet>1027</a>    <span class="kw">pub </span>public: <span class="prelude-ty">Option</span>&lt;Public&gt;,
 <a href=#1028 id=1028 data-nosnippet>1028</a>}
 <a href=#1029 id=1029 data-nosnippet>1029</a>
-<a href=#1030 id=1030 data-nosnippet>1030</a><span class="kw">impl </span>Decodable <span class="kw">for </span>SignedTransaction {
-<a href=#1031 id=1031 data-nosnippet>1031</a>    <span class="kw">fn </span>decode(rlp: <span class="kw-2">&amp;</span>Rlp) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecoderError&gt; {
-<a href=#1032 id=1032 data-nosnippet>1032</a>        <span class="prelude-val">Ok</span>(SignedTransaction {
-<a href=#1033 id=1033 data-nosnippet>1033</a>            transaction: rlp.val_at(<span class="number">0</span>)<span class="question-mark">?</span>,
-<a href=#1034 id=1034 data-nosnippet>1034</a>            sender: rlp.val_at(<span class="number">1</span>)<span class="question-mark">?</span>,
-<a href=#1035 id=1035 data-nosnippet>1035</a>            public: rlp.val_at(<span class="number">2</span>)<span class="question-mark">?</span>,
-<a href=#1036 id=1036 data-nosnippet>1036</a>        })
+<a href=#1030 id=1030 data-nosnippet>1030</a><span class="comment">// The default encoder for local storage.
+<a href=#1031 id=1031 data-nosnippet>1031</a></span><span class="kw">impl </span>Encodable <span class="kw">for </span>SignedTransaction {
+<a href=#1032 id=1032 data-nosnippet>1032</a>    <span class="kw">fn </span>rlp_append(<span class="kw-2">&amp;</span><span class="self">self</span>, s: <span class="kw-2">&amp;mut </span>RlpStream) {
+<a href=#1033 id=1033 data-nosnippet>1033</a>        s.begin_list(<span class="number">3</span>);
+<a href=#1034 id=1034 data-nosnippet>1034</a>        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.transaction);
+<a href=#1035 id=1035 data-nosnippet>1035</a>        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.sender);
+<a href=#1036 id=1036 data-nosnippet>1036</a>        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.public);
 <a href=#1037 id=1037 data-nosnippet>1037</a>    }
 <a href=#1038 id=1038 data-nosnippet>1038</a>}
 <a href=#1039 id=1039 data-nosnippet>1039</a>
-<a href=#1040 id=1040 data-nosnippet>1040</a><span class="kw">impl </span>Deref <span class="kw">for </span>SignedTransaction {
-<a href=#1041 id=1041 data-nosnippet>1041</a>    <span class="kw">type </span>Target = TransactionWithSignature;
-<a href=#1042 id=1042 data-nosnippet>1042</a>
-<a href=#1043 id=1043 data-nosnippet>1043</a>    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target { <span class="kw-2">&amp;</span><span class="self">self</span>.transaction }
-<a href=#1044 id=1044 data-nosnippet>1044</a>}
-<a href=#1045 id=1045 data-nosnippet>1045</a>
-<a href=#1046 id=1046 data-nosnippet>1046</a><span class="kw">impl </span>DerefMut <span class="kw">for </span>SignedTransaction {
-<a href=#1047 id=1047 data-nosnippet>1047</a>    <span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Target { <span class="kw-2">&amp;mut </span><span class="self">self</span>.transaction }
+<a href=#1040 id=1040 data-nosnippet>1040</a><span class="kw">impl </span>Decodable <span class="kw">for </span>SignedTransaction {
+<a href=#1041 id=1041 data-nosnippet>1041</a>    <span class="kw">fn </span>decode(rlp: <span class="kw-2">&amp;</span>Rlp) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecoderError&gt; {
+<a href=#1042 id=1042 data-nosnippet>1042</a>        <span class="prelude-val">Ok</span>(SignedTransaction {
+<a href=#1043 id=1043 data-nosnippet>1043</a>            transaction: rlp.val_at(<span class="number">0</span>)<span class="question-mark">?</span>,
+<a href=#1044 id=1044 data-nosnippet>1044</a>            sender: rlp.val_at(<span class="number">1</span>)<span class="question-mark">?</span>,
+<a href=#1045 id=1045 data-nosnippet>1045</a>            public: rlp.val_at(<span class="number">2</span>)<span class="question-mark">?</span>,
+<a href=#1046 id=1046 data-nosnippet>1046</a>        })
+<a href=#1047 id=1047 data-nosnippet>1047</a>    }
 <a href=#1048 id=1048 data-nosnippet>1048</a>}
 <a href=#1049 id=1049 data-nosnippet>1049</a>
-<a href=#1050 id=1050 data-nosnippet>1050</a><span class="kw">impl </span>From&lt;SignedTransaction&gt; <span class="kw">for </span>TransactionWithSignature {
-<a href=#1051 id=1051 data-nosnippet>1051</a>    <span class="kw">fn </span>from(tx: SignedTransaction) -&gt; <span class="self">Self </span>{ tx.transaction }
-<a href=#1052 id=1052 data-nosnippet>1052</a>}
-<a href=#1053 id=1053 data-nosnippet>1053</a>
-<a href=#1054 id=1054 data-nosnippet>1054</a><span class="kw">impl </span>SignedTransaction {
-<a href=#1055 id=1055 data-nosnippet>1055</a>    <span class="doccomment">/// Try to verify transaction and recover sender.
-<a href=#1056 id=1056 data-nosnippet>1056</a>    </span><span class="kw">pub fn </span>new(public: Public, transaction: TransactionWithSignature) -&gt; <span class="self">Self </span>{
-<a href=#1057 id=1057 data-nosnippet>1057</a>        <span class="kw">if </span>transaction.is_unsigned() {
-<a href=#1058 id=1058 data-nosnippet>1058</a>            SignedTransaction {
-<a href=#1059 id=1059 data-nosnippet>1059</a>                transaction,
-<a href=#1060 id=1060 data-nosnippet>1060</a>                sender: UNSIGNED_SENDER,
-<a href=#1061 id=1061 data-nosnippet>1061</a>                public: <span class="prelude-val">None</span>,
-<a href=#1062 id=1062 data-nosnippet>1062</a>            }
-<a href=#1063 id=1063 data-nosnippet>1063</a>        } <span class="kw">else </span>{
-<a href=#1064 id=1064 data-nosnippet>1064</a>            <span class="kw">let </span>sender = public_to_address(
-<a href=#1065 id=1065 data-nosnippet>1065</a>                <span class="kw-2">&amp;</span>public,
-<a href=#1066 id=1066 data-nosnippet>1066</a>                transaction.space() == Space::Native,
-<a href=#1067 id=1067 data-nosnippet>1067</a>            );
+<a href=#1050 id=1050 data-nosnippet>1050</a><span class="kw">impl </span>Deref <span class="kw">for </span>SignedTransaction {
+<a href=#1051 id=1051 data-nosnippet>1051</a>    <span class="kw">type </span>Target = TransactionWithSignature;
+<a href=#1052 id=1052 data-nosnippet>1052</a>
+<a href=#1053 id=1053 data-nosnippet>1053</a>    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target { <span class="kw-2">&amp;</span><span class="self">self</span>.transaction }
+<a href=#1054 id=1054 data-nosnippet>1054</a>}
+<a href=#1055 id=1055 data-nosnippet>1055</a>
+<a href=#1056 id=1056 data-nosnippet>1056</a><span class="kw">impl </span>DerefMut <span class="kw">for </span>SignedTransaction {
+<a href=#1057 id=1057 data-nosnippet>1057</a>    <span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Target { <span class="kw-2">&amp;mut </span><span class="self">self</span>.transaction }
+<a href=#1058 id=1058 data-nosnippet>1058</a>}
+<a href=#1059 id=1059 data-nosnippet>1059</a>
+<a href=#1060 id=1060 data-nosnippet>1060</a><span class="kw">impl </span>From&lt;SignedTransaction&gt; <span class="kw">for </span>TransactionWithSignature {
+<a href=#1061 id=1061 data-nosnippet>1061</a>    <span class="kw">fn </span>from(tx: SignedTransaction) -&gt; <span class="self">Self </span>{ tx.transaction }
+<a href=#1062 id=1062 data-nosnippet>1062</a>}
+<a href=#1063 id=1063 data-nosnippet>1063</a>
+<a href=#1064 id=1064 data-nosnippet>1064</a><span class="kw">impl </span>SignedTransaction {
+<a href=#1065 id=1065 data-nosnippet>1065</a>    <span class="doccomment">/// Try to verify transaction and recover sender.
+<a href=#1066 id=1066 data-nosnippet>1066</a>    </span><span class="kw">pub fn </span>new(public: Public, transaction: TransactionWithSignature) -&gt; <span class="self">Self </span>{
+<a href=#1067 id=1067 data-nosnippet>1067</a>        <span class="kw">if </span>transaction.is_unsigned() {
 <a href=#1068 id=1068 data-nosnippet>1068</a>            SignedTransaction {
 <a href=#1069 id=1069 data-nosnippet>1069</a>                transaction,
-<a href=#1070 id=1070 data-nosnippet>1070</a>                sender,
-<a href=#1071 id=1071 data-nosnippet>1071</a>                public: <span class="prelude-val">Some</span>(public),
+<a href=#1070 id=1070 data-nosnippet>1070</a>                sender: UNSIGNED_SENDER,
+<a href=#1071 id=1071 data-nosnippet>1071</a>                public: <span class="prelude-val">None</span>,
 <a href=#1072 id=1072 data-nosnippet>1072</a>            }
-<a href=#1073 id=1073 data-nosnippet>1073</a>        }
-<a href=#1074 id=1074 data-nosnippet>1074</a>    }
-<a href=#1075 id=1075 data-nosnippet>1075</a>
-<a href=#1076 id=1076 data-nosnippet>1076</a>    <span class="kw">pub fn </span>new_unsigned(transaction: TransactionWithSignature) -&gt; <span class="self">Self </span>{
-<a href=#1077 id=1077 data-nosnippet>1077</a>        SignedTransaction {
-<a href=#1078 id=1078 data-nosnippet>1078</a>            transaction,
-<a href=#1079 id=1079 data-nosnippet>1079</a>            sender: UNSIGNED_SENDER,
-<a href=#1080 id=1080 data-nosnippet>1080</a>            public: <span class="prelude-val">None</span>,
-<a href=#1081 id=1081 data-nosnippet>1081</a>        }
-<a href=#1082 id=1082 data-nosnippet>1082</a>    }
-<a href=#1083 id=1083 data-nosnippet>1083</a>
-<a href=#1084 id=1084 data-nosnippet>1084</a>    <span class="kw">pub fn </span>set_public(<span class="kw-2">&amp;mut </span><span class="self">self</span>, public: Public) {
-<a href=#1085 id=1085 data-nosnippet>1085</a>        <span class="kw">let </span>type_nibble = <span class="self">self</span>.unsigned.space() == Space::Native;
-<a href=#1086 id=1086 data-nosnippet>1086</a>        <span class="self">self</span>.sender = public_to_address(<span class="kw-2">&amp;</span>public, type_nibble);
-<a href=#1087 id=1087 data-nosnippet>1087</a>        <span class="self">self</span>.public = <span class="prelude-val">Some</span>(public);
-<a href=#1088 id=1088 data-nosnippet>1088</a>    }
-<a href=#1089 id=1089 data-nosnippet>1089</a>
-<a href=#1090 id=1090 data-nosnippet>1090</a>    <span class="doccomment">/// Returns transaction sender.
-<a href=#1091 id=1091 data-nosnippet>1091</a>    </span><span class="kw">pub fn </span>sender(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AddressWithSpace {
-<a href=#1092 id=1092 data-nosnippet>1092</a>        <span class="self">self</span>.sender.with_space(<span class="self">self</span>.space())
-<a href=#1093 id=1093 data-nosnippet>1093</a>    }
-<a href=#1094 id=1094 data-nosnippet>1094</a>
-<a href=#1095 id=1095 data-nosnippet>1095</a>    <span class="kw">pub fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>U256 { <span class="self">self</span>.transaction.nonce() }
-<a href=#1096 id=1096 data-nosnippet>1096</a>
-<a href=#1097 id=1097 data-nosnippet>1097</a>    <span class="doccomment">/// Checks if signature is empty.
-<a href=#1098 id=1098 data-nosnippet>1098</a>    </span><span class="kw">pub fn </span>is_unsigned(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool { <span class="self">self</span>.transaction.is_unsigned() }
+<a href=#1073 id=1073 data-nosnippet>1073</a>        } <span class="kw">else </span>{
+<a href=#1074 id=1074 data-nosnippet>1074</a>            <span class="kw">let </span>sender = public_to_address(
+<a href=#1075 id=1075 data-nosnippet>1075</a>                <span class="kw-2">&amp;</span>public,
+<a href=#1076 id=1076 data-nosnippet>1076</a>                transaction.space() == Space::Native,
+<a href=#1077 id=1077 data-nosnippet>1077</a>            );
+<a href=#1078 id=1078 data-nosnippet>1078</a>            SignedTransaction {
+<a href=#1079 id=1079 data-nosnippet>1079</a>                transaction,
+<a href=#1080 id=1080 data-nosnippet>1080</a>                sender,
+<a href=#1081 id=1081 data-nosnippet>1081</a>                public: <span class="prelude-val">Some</span>(public),
+<a href=#1082 id=1082 data-nosnippet>1082</a>            }
+<a href=#1083 id=1083 data-nosnippet>1083</a>        }
+<a href=#1084 id=1084 data-nosnippet>1084</a>    }
+<a href=#1085 id=1085 data-nosnippet>1085</a>
+<a href=#1086 id=1086 data-nosnippet>1086</a>    <span class="kw">pub fn </span>new_unsigned(transaction: TransactionWithSignature) -&gt; <span class="self">Self </span>{
+<a href=#1087 id=1087 data-nosnippet>1087</a>        SignedTransaction {
+<a href=#1088 id=1088 data-nosnippet>1088</a>            transaction,
+<a href=#1089 id=1089 data-nosnippet>1089</a>            sender: UNSIGNED_SENDER,
+<a href=#1090 id=1090 data-nosnippet>1090</a>            public: <span class="prelude-val">None</span>,
+<a href=#1091 id=1091 data-nosnippet>1091</a>        }
+<a href=#1092 id=1092 data-nosnippet>1092</a>    }
+<a href=#1093 id=1093 data-nosnippet>1093</a>
+<a href=#1094 id=1094 data-nosnippet>1094</a>    <span class="kw">pub fn </span>set_public(<span class="kw-2">&amp;mut </span><span class="self">self</span>, public: Public) {
+<a href=#1095 id=1095 data-nosnippet>1095</a>        <span class="kw">let </span>type_nibble = <span class="self">self</span>.unsigned.space() == Space::Native;
+<a href=#1096 id=1096 data-nosnippet>1096</a>        <span class="self">self</span>.sender = public_to_address(<span class="kw-2">&amp;</span>public, type_nibble);
+<a href=#1097 id=1097 data-nosnippet>1097</a>        <span class="self">self</span>.public = <span class="prelude-val">Some</span>(public);
+<a href=#1098 id=1098 data-nosnippet>1098</a>    }
 <a href=#1099 id=1099 data-nosnippet>1099</a>
-<a href=#1100 id=1100 data-nosnippet>1100</a>    <span class="kw">pub fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H256 { <span class="self">self</span>.transaction.hash() }
-<a href=#1101 id=1101 data-nosnippet>1101</a>
-<a href=#1102 id=1102 data-nosnippet>1102</a>    <span class="kw">pub fn </span>gas(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>U256 { <span class="self">self</span>.transaction.gas() }
-<a href=#1103 id=1103 data-nosnippet>1103</a>
-<a href=#1104 id=1104 data-nosnippet>1104</a>    <span class="kw">pub fn </span>gas_price(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>U256 { <span class="self">self</span>.transaction.gas_price() }
-<a href=#1105 id=1105 data-nosnippet>1105</a>
-<a href=#1106 id=1106 data-nosnippet>1106</a>    <span class="kw">pub fn </span>gas_limit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>U256 { <span class="self">self</span>.transaction.gas() }
-<a href=#1107 id=1107 data-nosnippet>1107</a>
-<a href=#1108 id=1108 data-nosnippet>1108</a>    <span class="kw">pub fn </span>storage_limit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
-<a href=#1109 id=1109 data-nosnippet>1109</a>        <span class="self">self</span>.transaction.storage_limit()
-<a href=#1110 id=1110 data-nosnippet>1110</a>    }
+<a href=#1100 id=1100 data-nosnippet>1100</a>    <span class="doccomment">/// Returns transaction sender.
+<a href=#1101 id=1101 data-nosnippet>1101</a>    </span><span class="kw">pub fn </span>sender(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AddressWithSpace {
+<a href=#1102 id=1102 data-nosnippet>1102</a>        <span class="self">self</span>.sender.with_space(<span class="self">self</span>.space())
+<a href=#1103 id=1103 data-nosnippet>1103</a>    }
+<a href=#1104 id=1104 data-nosnippet>1104</a>
+<a href=#1105 id=1105 data-nosnippet>1105</a>    <span class="kw">pub fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>U256 { <span class="self">self</span>.transaction.nonce() }
+<a href=#1106 id=1106 data-nosnippet>1106</a>
+<a href=#1107 id=1107 data-nosnippet>1107</a>    <span class="doccomment">/// Checks if signature is empty.
+<a href=#1108 id=1108 data-nosnippet>1108</a>    </span><span class="kw">pub fn </span>is_unsigned(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool { <span class="self">self</span>.transaction.is_unsigned() }
+<a href=#1109 id=1109 data-nosnippet>1109</a>
+<a href=#1110 id=1110 data-nosnippet>1110</a>    <span class="kw">pub fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H256 { <span class="self">self</span>.transaction.hash() }
 <a href=#1111 id=1111 data-nosnippet>1111</a>
-<a href=#1112 id=1112 data-nosnippet>1112</a>    <span class="kw">pub fn </span>rlp_size(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize { <span class="self">self</span>.transaction.rlp_size() }
+<a href=#1112 id=1112 data-nosnippet>1112</a>    <span class="kw">pub fn </span>gas(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>U256 { <span class="self">self</span>.transaction.gas() }
 <a href=#1113 id=1113 data-nosnippet>1113</a>
-<a href=#1114 id=1114 data-nosnippet>1114</a>    <span class="kw">pub fn </span>public(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Public&gt; { <span class="kw-2">&amp;</span><span class="self">self</span>.public }
+<a href=#1114 id=1114 data-nosnippet>1114</a>    <span class="kw">pub fn </span>gas_price(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>U256 { <span class="self">self</span>.transaction.gas_price() }
 <a href=#1115 id=1115 data-nosnippet>1115</a>
-<a href=#1116 id=1116 data-nosnippet>1116</a>    <span class="kw">pub fn </span>verify_public(<span class="kw-2">&amp;</span><span class="self">self</span>, skip: bool) -&gt; <span class="prelude-ty">Result</span>&lt;bool, keylib::Error&gt; {
-<a href=#1117 id=1117 data-nosnippet>1117</a>        <span class="kw">if </span><span class="self">self</span>.public.is_none() {
-<a href=#1118 id=1118 data-nosnippet>1118</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">false</span>);
-<a href=#1119 id=1119 data-nosnippet>1119</a>        }
-<a href=#1120 id=1120 data-nosnippet>1120</a>
-<a href=#1121 id=1121 data-nosnippet>1121</a>        <span class="kw">if </span>!skip {
-<a href=#1122 id=1122 data-nosnippet>1122</a>            <span class="kw">let </span>public = <span class="self">self</span>.public.unwrap();
-<a href=#1123 id=1123 data-nosnippet>1123</a>            <span class="prelude-val">Ok</span>(verify_public(
-<a href=#1124 id=1124 data-nosnippet>1124</a>                <span class="kw-2">&amp;</span>public,
-<a href=#1125 id=1125 data-nosnippet>1125</a>                <span class="kw-2">&amp;</span><span class="self">self</span>.signature(),
-<a href=#1126 id=1126 data-nosnippet>1126</a>                <span class="kw-2">&amp;</span><span class="self">self</span>.unsigned.hash_for_compute_signature(),
-<a href=#1127 id=1127 data-nosnippet>1127</a>            )<span class="question-mark">?</span>)
-<a href=#1128 id=1128 data-nosnippet>1128</a>        } <span class="kw">else </span>{
-<a href=#1129 id=1129 data-nosnippet>1129</a>            <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>)
-<a href=#1130 id=1130 data-nosnippet>1130</a>        }
-<a href=#1131 id=1131 data-nosnippet>1131</a>    }
-<a href=#1132 id=1132 data-nosnippet>1132</a>
-<a href=#1133 id=1133 data-nosnippet>1133</a>    <span class="comment">// Calculates the created contract address if the transaction is a contract
-<a href=#1134 id=1134 data-nosnippet>1134</a>    // creation.
-<a href=#1135 id=1135 data-nosnippet>1135</a>    </span><span class="kw">pub fn </span>cal_created_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;AddressWithSpace&gt; {
-<a href=#1136 id=1136 data-nosnippet>1136</a>        <span class="kw">if let </span>Action::Create = <span class="self">self</span>.action() {
-<a href=#1137 id=1137 data-nosnippet>1137</a>            <span class="kw">let </span>from = <span class="self">self</span>.sender();
-<a href=#1138 id=1138 data-nosnippet>1138</a>            <span class="kw">let </span>nonce = <span class="self">self</span>.nonce();
-<a href=#1139 id=1139 data-nosnippet>1139</a>            <span class="kw">let </span>space = <span class="self">self</span>.space();
-<a href=#1140 id=1140 data-nosnippet>1140</a>            <span class="kw">let </span>create_type = <span class="kw">match </span>space {
-<a href=#1141 id=1141 data-nosnippet>1141</a>                Space::Native =&gt; {
-<a href=#1142 id=1142 data-nosnippet>1142</a>                    CreateContractAddressType::FromSenderNonceAndCodeHash
-<a href=#1143 id=1143 data-nosnippet>1143</a>                }
-<a href=#1144 id=1144 data-nosnippet>1144</a>                Space::Ethereum =&gt; CreateContractAddressType::FromSenderNonce,
-<a href=#1145 id=1145 data-nosnippet>1145</a>            };
-<a href=#1146 id=1146 data-nosnippet>1146</a>            <span class="kw">let </span>code = <span class="self">self</span>.data().as_slice();
-<a href=#1147 id=1147 data-nosnippet>1147</a>            <span class="kw">let </span>(created_address, <span class="kw">_</span>) = cal_contract_address_with_space(
-<a href=#1148 id=1148 data-nosnippet>1148</a>                create_type,
-<a href=#1149 id=1149 data-nosnippet>1149</a>                <span class="kw-2">&amp;</span>from,
-<a href=#1150 id=1150 data-nosnippet>1150</a>                nonce,
-<a href=#1151 id=1151 data-nosnippet>1151</a>                code,
-<a href=#1152 id=1152 data-nosnippet>1152</a>            );
-<a href=#1153 id=1153 data-nosnippet>1153</a>            <span class="prelude-val">Some</span>(created_address)
-<a href=#1154 id=1154 data-nosnippet>1154</a>        } <span class="kw">else </span>{
-<a href=#1155 id=1155 data-nosnippet>1155</a>            <span class="prelude-val">None
-<a href=#1156 id=1156 data-nosnippet>1156</a>        </span>}
-<a href=#1157 id=1157 data-nosnippet>1157</a>    }
-<a href=#1158 id=1158 data-nosnippet>1158</a>}
-<a href=#1159 id=1159 data-nosnippet>1159</a>
-<a href=#1160 id=1160 data-nosnippet>1160</a><span class="kw">impl </span>MallocSizeOf <span class="kw">for </span>SignedTransaction {
-<a href=#1161 id=1161 data-nosnippet>1161</a>    <span class="kw">fn </span>size_of(<span class="kw-2">&amp;</span><span class="self">self</span>, ops: <span class="kw-2">&amp;mut </span>MallocSizeOfOps) -&gt; usize {
-<a href=#1162 id=1162 data-nosnippet>1162</a>        <span class="self">self</span>.transaction.size_of(ops)
-<a href=#1163 id=1163 data-nosnippet>1163</a>    }
-<a href=#1164 id=1164 data-nosnippet>1164</a>}</code></pre></div></section></main></body></html>
+<a href=#1116 id=1116 data-nosnippet>1116</a>    <span class="kw">pub fn </span>gas_limit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>U256 { <span class="self">self</span>.transaction.gas() }
+<a href=#1117 id=1117 data-nosnippet>1117</a>
+<a href=#1118 id=1118 data-nosnippet>1118</a>    <span class="kw">pub fn </span>storage_limit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+<a href=#1119 id=1119 data-nosnippet>1119</a>        <span class="self">self</span>.transaction.storage_limit()
+<a href=#1120 id=1120 data-nosnippet>1120</a>    }
+<a href=#1121 id=1121 data-nosnippet>1121</a>
+<a href=#1122 id=1122 data-nosnippet>1122</a>    <span class="kw">pub fn </span>rlp_size(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize { <span class="self">self</span>.transaction.rlp_size() }
+<a href=#1123 id=1123 data-nosnippet>1123</a>
+<a href=#1124 id=1124 data-nosnippet>1124</a>    <span class="kw">pub fn </span>public(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Public&gt; { <span class="kw-2">&amp;</span><span class="self">self</span>.public }
+<a href=#1125 id=1125 data-nosnippet>1125</a>
+<a href=#1126 id=1126 data-nosnippet>1126</a>    <span class="kw">pub fn </span>verify_public(<span class="kw-2">&amp;</span><span class="self">self</span>, skip: bool) -&gt; <span class="prelude-ty">Result</span>&lt;bool, keylib::Error&gt; {
+<a href=#1127 id=1127 data-nosnippet>1127</a>        <span class="kw">if </span><span class="self">self</span>.public.is_none() {
+<a href=#1128 id=1128 data-nosnippet>1128</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">false</span>);
+<a href=#1129 id=1129 data-nosnippet>1129</a>        }
+<a href=#1130 id=1130 data-nosnippet>1130</a>
+<a href=#1131 id=1131 data-nosnippet>1131</a>        <span class="kw">if </span>!skip {
+<a href=#1132 id=1132 data-nosnippet>1132</a>            <span class="kw">let </span>public = <span class="self">self</span>.public.unwrap();
+<a href=#1133 id=1133 data-nosnippet>1133</a>            <span class="prelude-val">Ok</span>(verify_public(
+<a href=#1134 id=1134 data-nosnippet>1134</a>                <span class="kw-2">&amp;</span>public,
+<a href=#1135 id=1135 data-nosnippet>1135</a>                <span class="kw-2">&amp;</span><span class="self">self</span>.signature(),
+<a href=#1136 id=1136 data-nosnippet>1136</a>                <span class="kw-2">&amp;</span><span class="self">self</span>.unsigned.hash_for_compute_signature(),
+<a href=#1137 id=1137 data-nosnippet>1137</a>            )<span class="question-mark">?</span>)
+<a href=#1138 id=1138 data-nosnippet>1138</a>        } <span class="kw">else </span>{
+<a href=#1139 id=1139 data-nosnippet>1139</a>            <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>)
+<a href=#1140 id=1140 data-nosnippet>1140</a>        }
+<a href=#1141 id=1141 data-nosnippet>1141</a>    }
+<a href=#1142 id=1142 data-nosnippet>1142</a>
+<a href=#1143 id=1143 data-nosnippet>1143</a>    <span class="comment">// Calculates the created contract address if the transaction is a contract
+<a href=#1144 id=1144 data-nosnippet>1144</a>    // creation.
+<a href=#1145 id=1145 data-nosnippet>1145</a>    </span><span class="kw">pub fn </span>cal_created_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;AddressWithSpace&gt; {
+<a href=#1146 id=1146 data-nosnippet>1146</a>        <span class="kw">if let </span>Action::Create = <span class="self">self</span>.action() {
+<a href=#1147 id=1147 data-nosnippet>1147</a>            <span class="kw">let </span>from = <span class="self">self</span>.sender();
+<a href=#1148 id=1148 data-nosnippet>1148</a>            <span class="kw">let </span>nonce = <span class="self">self</span>.nonce();
+<a href=#1149 id=1149 data-nosnippet>1149</a>            <span class="kw">let </span>space = <span class="self">self</span>.space();
+<a href=#1150 id=1150 data-nosnippet>1150</a>            <span class="kw">let </span>create_type = <span class="kw">match </span>space {
+<a href=#1151 id=1151 data-nosnippet>1151</a>                Space::Native =&gt; {
+<a href=#1152 id=1152 data-nosnippet>1152</a>                    CreateContractAddressType::FromSenderNonceAndCodeHash
+<a href=#1153 id=1153 data-nosnippet>1153</a>                }
+<a href=#1154 id=1154 data-nosnippet>1154</a>                Space::Ethereum =&gt; CreateContractAddressType::FromSenderNonce,
+<a href=#1155 id=1155 data-nosnippet>1155</a>            };
+<a href=#1156 id=1156 data-nosnippet>1156</a>            <span class="kw">let </span>code = <span class="self">self</span>.data().as_slice();
+<a href=#1157 id=1157 data-nosnippet>1157</a>            <span class="kw">let </span>(created_address, <span class="kw">_</span>) = cal_contract_address_with_space(
+<a href=#1158 id=1158 data-nosnippet>1158</a>                create_type,
+<a href=#1159 id=1159 data-nosnippet>1159</a>                <span class="kw-2">&amp;</span>from,
+<a href=#1160 id=1160 data-nosnippet>1160</a>                nonce,
+<a href=#1161 id=1161 data-nosnippet>1161</a>                code,
+<a href=#1162 id=1162 data-nosnippet>1162</a>            );
+<a href=#1163 id=1163 data-nosnippet>1163</a>            <span class="prelude-val">Some</span>(created_address)
+<a href=#1164 id=1164 data-nosnippet>1164</a>        } <span class="kw">else </span>{
+<a href=#1165 id=1165 data-nosnippet>1165</a>            <span class="prelude-val">None
+<a href=#1166 id=1166 data-nosnippet>1166</a>        </span>}
+<a href=#1167 id=1167 data-nosnippet>1167</a>    }
+<a href=#1168 id=1168 data-nosnippet>1168</a>}
+<a href=#1169 id=1169 data-nosnippet>1169</a>
+<a href=#1170 id=1170 data-nosnippet>1170</a><span class="kw">impl </span>MallocSizeOf <span class="kw">for </span>SignedTransaction {
+<a href=#1171 id=1171 data-nosnippet>1171</a>    <span class="kw">fn </span>size_of(<span class="kw-2">&amp;</span><span class="self">self</span>, ops: <span class="kw-2">&amp;mut </span>MallocSizeOfOps) -&gt; usize {
+<a href=#1172 id=1172 data-nosnippet>1172</a>        <span class="self">self</span>.transaction.size_of(ops)
+<a href=#1173 id=1173 data-nosnippet>1173</a>    }
+<a href=#1174 id=1174 data-nosnippet>1174</a>}
+<a href=#1175 id=1175 data-nosnippet>1175</a>
+<a href=#1176 id=1176 data-nosnippet>1176</a><span class="attr">#[cfg(test)]
+<a href=#1177 id=1177 data-nosnippet>1177</a></span><span class="kw">mod </span>canonical_rlp_tests {
+<a href=#1178 id=1178 data-nosnippet>1178</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#1179 id=1179 data-nosnippet>1179</a>    <span class="kw">use </span>EthereumTransaction::<span class="kw-2">*</span>;
+<a href=#1180 id=1180 data-nosnippet>1180</a>    <span class="kw">use </span>TypedNativeTransaction::<span class="kw-2">*</span>;
+<a href=#1181 id=1181 data-nosnippet>1181</a>
+<a href=#1182 id=1182 data-nosnippet>1182</a>    <span class="kw">fn </span>part(unsigned: Transaction) -&gt; TransactionWithSignatureSerializePart {
+<a href=#1183 id=1183 data-nosnippet>1183</a>        TransactionWithSignatureSerializePart {
+<a href=#1184 id=1184 data-nosnippet>1184</a>            unsigned,
+<a href=#1185 id=1185 data-nosnippet>1185</a>            v: <span class="number">1</span>,
+<a href=#1186 id=1186 data-nosnippet>1186</a>            r: U256::from(<span class="number">0x1234u64</span>),
+<a href=#1187 id=1187 data-nosnippet>1187</a>            s: U256::from(<span class="number">0x5678u64</span>),
+<a href=#1188 id=1188 data-nosnippet>1188</a>        }
+<a href=#1189 id=1189 data-nosnippet>1189</a>    }
+<a href=#1190 id=1190 data-nosnippet>1190</a>
+<a href=#1191 id=1191 data-nosnippet>1191</a>    <span class="kw">fn </span>is_list_form(p: <span class="kw-2">&amp;</span>TransactionWithSignatureSerializePart) -&gt; bool {
+<a href=#1192 id=1192 data-nosnippet>1192</a>        <span class="macro">matches!</span>(
+<a href=#1193 id=1193 data-nosnippet>1193</a>            p.unsigned,
+<a href=#1194 id=1194 data-nosnippet>1194</a>            Transaction::Native(Cip155(<span class="kw">_</span>)) | Transaction::Ethereum(Eip155(<span class="kw">_</span>))
+<a href=#1195 id=1195 data-nosnippet>1195</a>        )
+<a href=#1196 id=1196 data-nosnippet>1196</a>    }
+<a href=#1197 id=1197 data-nosnippet>1197</a>
+<a href=#1198 id=1198 data-nosnippet>1198</a>    <span class="comment">// `decode` takes a bare list (legacy) or an RLP-string-wrapped
+<a href=#1199 id=1199 data-nosnippet>1199</a>    // `type||list` (typed).
+<a href=#1200 id=1200 data-nosnippet>1200</a>    </span><span class="kw">fn </span>wire(p: <span class="kw-2">&amp;</span>TransactionWithSignatureSerializePart) -&gt; Vec&lt;u8&gt; {
+<a href=#1201 id=1201 data-nosnippet>1201</a>        <span class="kw">let </span>s = rlp::encode(p).to_vec();
+<a href=#1202 id=1202 data-nosnippet>1202</a>        <span class="kw">if </span>is_list_form(p) {
+<a href=#1203 id=1203 data-nosnippet>1203</a>            s
+<a href=#1204 id=1204 data-nosnippet>1204</a>        } <span class="kw">else </span>{
+<a href=#1205 id=1205 data-nosnippet>1205</a>            rlp::encode(<span class="kw-2">&amp;</span>s).to_vec()
+<a href=#1206 id=1206 data-nosnippet>1206</a>        }
+<a href=#1207 id=1207 data-nosnippet>1207</a>    }
+<a href=#1208 id=1208 data-nosnippet>1208</a>
+<a href=#1209 id=1209 data-nosnippet>1209</a>    <span class="comment">// Non-canonical, same fields: a trailing partial item (0xb8) the decoder
+<a href=#1210 id=1210 data-nosnippet>1210</a>    // tolerates; for a list, bump the header length so it stays inside.
+<a href=#1211 id=1211 data-nosnippet>1211</a>    </span><span class="kw">fn </span>malleate(p: <span class="kw-2">&amp;</span>TransactionWithSignatureSerializePart) -&gt; Vec&lt;u8&gt; {
+<a href=#1212 id=1212 data-nosnippet>1212</a>        <span class="kw">let </span><span class="kw-2">mut </span>s = rlp::encode(p).to_vec();
+<a href=#1213 id=1213 data-nosnippet>1213</a>        <span class="kw">if </span>is_list_form(p) {
+<a href=#1214 id=1214 data-nosnippet>1214</a>            <span class="comment">// Only short-form list headers (payload &lt;= 55 bytes) — the
+<a href=#1215 id=1215 data-nosnippet>1215</a>            // single-byte length can be bumped. Keep test variants small.
+<a href=#1216 id=1216 data-nosnippet>1216</a>            </span><span class="macro">assert!</span>(
+<a href=#1217 id=1217 data-nosnippet>1217</a>                (<span class="number">0xc0</span>..=<span class="number">0xf7</span>).contains(<span class="kw-2">&amp;</span>s[<span class="number">0</span>]),
+<a href=#1218 id=1218 data-nosnippet>1218</a>                <span class="string">"malleate: long-form list header not supported"
+<a href=#1219 id=1219 data-nosnippet>1219</a>            </span>);
+<a href=#1220 id=1220 data-nosnippet>1220</a>            s[<span class="number">0</span>] += <span class="number">1</span>;
+<a href=#1221 id=1221 data-nosnippet>1221</a>            s.push(<span class="number">0xb8</span>);
+<a href=#1222 id=1222 data-nosnippet>1222</a>            s
+<a href=#1223 id=1223 data-nosnippet>1223</a>        } <span class="kw">else </span>{
+<a href=#1224 id=1224 data-nosnippet>1224</a>            s.push(<span class="number">0xb8</span>);
+<a href=#1225 id=1225 data-nosnippet>1225</a>            rlp::encode(<span class="kw-2">&amp;</span>s).to_vec()
+<a href=#1226 id=1226 data-nosnippet>1226</a>        }
+<a href=#1227 id=1227 data-nosnippet>1227</a>    }
+<a href=#1228 id=1228 data-nosnippet>1228</a>
+<a href=#1229 id=1229 data-nosnippet>1229</a>    <span class="kw">fn </span>assert_predicate(p: TransactionWithSignatureSerializePart) {
+<a href=#1230 id=1230 data-nosnippet>1230</a>        <span class="kw">let </span>canon: TransactionWithSignature = rlp::decode(<span class="kw-2">&amp;</span>wire(<span class="kw-2">&amp;</span>p)).unwrap();
+<a href=#1231 id=1231 data-nosnippet>1231</a>        <span class="macro">assert_eq!</span>(canon.transaction, p);
+<a href=#1232 id=1232 data-nosnippet>1232</a>        <span class="macro">assert!</span>(canon.is_canonical_rlp());
+<a href=#1233 id=1233 data-nosnippet>1233</a>
+<a href=#1234 id=1234 data-nosnippet>1234</a>        <span class="kw">let </span>mall: TransactionWithSignature =
+<a href=#1235 id=1235 data-nosnippet>1235</a>            rlp::decode(<span class="kw-2">&amp;</span>malleate(<span class="kw-2">&amp;</span>p)).unwrap();
+<a href=#1236 id=1236 data-nosnippet>1236</a>        <span class="macro">assert_eq!</span>(mall.transaction, p);
+<a href=#1237 id=1237 data-nosnippet>1237</a>        <span class="macro">assert!</span>(!mall.is_canonical_rlp());
+<a href=#1238 id=1238 data-nosnippet>1238</a>
+<a href=#1239 id=1239 data-nosnippet>1239</a>        <span class="kw">let </span>raw = rlp::encode(<span class="kw-2">&amp;</span>p).to_vec();
+<a href=#1240 id=1240 data-nosnippet>1240</a>        <span class="macro">assert!</span>(TransactionWithSignature::from_raw(<span class="kw-2">&amp;</span>raw)
+<a href=#1241 id=1241 data-nosnippet>1241</a>            .unwrap()
+<a href=#1242 id=1242 data-nosnippet>1242</a>            .is_canonical_rlp());
+<a href=#1243 id=1243 data-nosnippet>1243</a>    }
+<a href=#1244 id=1244 data-nosnippet>1244</a>
+<a href=#1245 id=1245 data-nosnippet>1245</a>    <span class="comment">// One case per encoded form: list vs typed-string, Ethereum vs native.
+<a href=#1246 id=1246 data-nosnippet>1246</a>    </span><span class="attr">#[test]
+<a href=#1247 id=1247 data-nosnippet>1247</a>    </span><span class="kw">fn </span>is_canonical_rlp_all_variants() {
+<a href=#1248 id=1248 data-nosnippet>1248</a>        <span class="kw">let </span>variants = [
+<a href=#1249 id=1249 data-nosnippet>1249</a>            Transaction::Ethereum(Eip155(Eip155Transaction {
+<a href=#1250 id=1250 data-nosnippet>1250</a>                chain_id: <span class="prelude-val">Some</span>(<span class="number">1</span>),
+<a href=#1251 id=1251 data-nosnippet>1251</a>                ..Default::default()
+<a href=#1252 id=1252 data-nosnippet>1252</a>            })),
+<a href=#1253 id=1253 data-nosnippet>1253</a>            <span class="comment">// pre-155: chain_id None -&gt; v = 27/28.
+<a href=#1254 id=1254 data-nosnippet>1254</a>            </span>Transaction::Ethereum(Eip155(Eip155Transaction {
+<a href=#1255 id=1255 data-nosnippet>1255</a>                chain_id: <span class="prelude-val">None</span>,
+<a href=#1256 id=1256 data-nosnippet>1256</a>                ..Default::default()
+<a href=#1257 id=1257 data-nosnippet>1257</a>            })),
+<a href=#1258 id=1258 data-nosnippet>1258</a>            Transaction::Native(Cip155(NativeTransaction {
+<a href=#1259 id=1259 data-nosnippet>1259</a>                chain_id: <span class="number">1</span>,
+<a href=#1260 id=1260 data-nosnippet>1260</a>                ..Default::default()
+<a href=#1261 id=1261 data-nosnippet>1261</a>            })),
+<a href=#1262 id=1262 data-nosnippet>1262</a>            Transaction::Ethereum(Eip2930(Eip2930Transaction {
+<a href=#1263 id=1263 data-nosnippet>1263</a>                chain_id: <span class="number">1</span>,
+<a href=#1264 id=1264 data-nosnippet>1264</a>                ..Default::default()
+<a href=#1265 id=1265 data-nosnippet>1265</a>            })),
+<a href=#1266 id=1266 data-nosnippet>1266</a>            Transaction::Ethereum(Eip1559(Eip1559Transaction {
+<a href=#1267 id=1267 data-nosnippet>1267</a>                chain_id: <span class="number">1</span>,
+<a href=#1268 id=1268 data-nosnippet>1268</a>                ..Default::default()
+<a href=#1269 id=1269 data-nosnippet>1269</a>            })),
+<a href=#1270 id=1270 data-nosnippet>1270</a>            Transaction::Ethereum(Eip7702(Eip7702Transaction {
+<a href=#1271 id=1271 data-nosnippet>1271</a>                chain_id: <span class="number">1</span>,
+<a href=#1272 id=1272 data-nosnippet>1272</a>                ..Default::default()
+<a href=#1273 id=1273 data-nosnippet>1273</a>            })),
+<a href=#1274 id=1274 data-nosnippet>1274</a>            Transaction::Native(Cip2930(Cip2930Transaction {
+<a href=#1275 id=1275 data-nosnippet>1275</a>                chain_id: <span class="number">1</span>,
+<a href=#1276 id=1276 data-nosnippet>1276</a>                ..Default::default()
+<a href=#1277 id=1277 data-nosnippet>1277</a>            })),
+<a href=#1278 id=1278 data-nosnippet>1278</a>            Transaction::Native(Cip1559(Cip1559Transaction {
+<a href=#1279 id=1279 data-nosnippet>1279</a>                chain_id: <span class="number">1</span>,
+<a href=#1280 id=1280 data-nosnippet>1280</a>                ..Default::default()
+<a href=#1281 id=1281 data-nosnippet>1281</a>            })),
+<a href=#1282 id=1282 data-nosnippet>1282</a>        ];
+<a href=#1283 id=1283 data-nosnippet>1283</a>        <span class="kw">for </span>unsigned <span class="kw">in </span>variants {
+<a href=#1284 id=1284 data-nosnippet>1284</a>            assert_predicate(part(unsigned));
+<a href=#1285 id=1285 data-nosnippet>1285</a>        }
+<a href=#1286 id=1286 data-nosnippet>1286</a>    }
+<a href=#1287 id=1287 data-nosnippet>1287</a>}</code></pre></div></section></main></body></html>

@@ -846,7 +846,7 @@
 <a href=#846 id=846 data-nosnippet>846</a>    /// assert_eq!(slab.remove(hello), "hello");
 <a href=#847 id=847 data-nosnippet>847</a>    /// assert!(!slab.contains(hello));
 <a href=#848 id=848 data-nosnippet>848</a>    </span><span class="kw">pub fn </span>remove(<span class="kw-2">&amp;</span><span class="self">self</span>, key: usize) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt; {
-<a href=#849 id=849 data-nosnippet>849</a>        <span class="kw">if </span>key &gt; <span class="self">self</span>.entries.len() {
+<a href=#849 id=849 data-nosnippet>849</a>        <span class="kw">if </span>key &gt;= <span class="self">self</span>.entries.len() {
 <a href=#850 id=850 data-nosnippet>850</a>            <span class="comment">// Index out of range.
 <a href=#851 id=851 data-nosnippet>851</a>            </span><span class="kw">return </span><span class="prelude-val">Err</span>(Error::SlabKeyError);
 <a href=#852 id=852 data-nosnippet>852</a>        }
@@ -1023,4 +1023,30 @@
 <a href=#1023 id=1023 data-nosnippet>1023</a>
 <a href=#1024 id=1024 data-nosnippet>1024</a>        <span class="prelude-val">None
 <a href=#1025 id=1025 data-nosnippet>1025</a>    </span>}
-<a href=#1026 id=1026 data-nosnippet>1026</a>}</code></pre></div></section></main></body></html>
+<a href=#1026 id=1026 data-nosnippet>1026</a>}
+<a href=#1027 id=1027 data-nosnippet>1027</a>
+<a href=#1028 id=1028 data-nosnippet>1028</a><span class="attr">#[cfg(test)]
+<a href=#1029 id=1029 data-nosnippet>1029</a></span><span class="kw">mod </span>tests {
+<a href=#1030 id=1030 data-nosnippet>1030</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#1031 id=1031 data-nosnippet>1031</a>
+<a href=#1032 id=1032 data-nosnippet>1032</a>    <span class="comment">// `entries` is kept filled to capacity, so `capacity()` is exactly the
+<a href=#1033 id=1033 data-nosnippet>1033</a>    // first out-of-bounds key; an off-by-one bound check in `remove` turns
+<a href=#1034 id=1034 data-nosnippet>1034</a>    // it into a one-past-the-end unchecked access.
+<a href=#1035 id=1035 data-nosnippet>1035</a>    </span><span class="attr">#[test]
+<a href=#1036 id=1036 data-nosnippet>1036</a>    </span><span class="kw">fn </span>remove_key_at_capacity_is_rejected() {
+<a href=#1037 id=1037 data-nosnippet>1037</a>        <span class="kw">let </span>slab: Slab&lt;u32&gt; = Slab::with_capacity(<span class="number">10</span>);
+<a href=#1038 id=1038 data-nosnippet>1038</a>        slab.insert(<span class="number">1</span>).unwrap();
+<a href=#1039 id=1039 data-nosnippet>1039</a>        <span class="macro">assert!</span>(<span class="macro">matches!</span>(
+<a href=#1040 id=1040 data-nosnippet>1040</a>            slab.remove(slab.capacity()),
+<a href=#1041 id=1041 data-nosnippet>1041</a>            <span class="prelude-val">Err</span>(Error::SlabKeyError)
+<a href=#1042 id=1042 data-nosnippet>1042</a>        ));
+<a href=#1043 id=1043 data-nosnippet>1043</a>    }
+<a href=#1044 id=1044 data-nosnippet>1044</a>
+<a href=#1045 id=1045 data-nosnippet>1045</a>    <span class="comment">// Zero-capacity slab: entries' buffer is unallocated, so key 0 must
+<a href=#1046 id=1046 data-nosnippet>1046</a>    // already be rejected by the bound check.
+<a href=#1047 id=1047 data-nosnippet>1047</a>    </span><span class="attr">#[test]
+<a href=#1048 id=1048 data-nosnippet>1048</a>    </span><span class="kw">fn </span>remove_from_empty_slab_is_rejected() {
+<a href=#1049 id=1049 data-nosnippet>1049</a>        <span class="kw">let </span>empty: Slab&lt;u32&gt; = Slab::default();
+<a href=#1050 id=1050 data-nosnippet>1050</a>        <span class="macro">assert!</span>(<span class="macro">matches!</span>(empty.remove(<span class="number">0</span>), <span class="prelude-val">Err</span>(Error::SlabKeyError)));
+<a href=#1051 id=1051 data-nosnippet>1051</a>    }
+<a href=#1052 id=1052 data-nosnippet>1052</a>}</code></pre></div></section></main></body></html>
