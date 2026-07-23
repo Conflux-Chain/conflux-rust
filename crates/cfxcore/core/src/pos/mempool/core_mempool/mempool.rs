@@ -120,25 +120,29 @@ impl Mempool {
         let mut chosen_pivot_tx = None;
         // iterate all pivot decision transaction
         for pivot_decision_set in self.transactions.iter_pivot_decision() {
-            let mut pivot_decision_opt = None;
-            diem_debug!("get_block: 0 {:?}", pivot_decision_set.len());
-            for (account, hash) in pivot_decision_set.iter() {
-                if validators.get_public_key(account).is_some() {
-                    if pivot_decision_opt.is_none() {
-                        if let Some(txn) = self.transactions.get(hash) {
-                            pivot_decision_opt = Some(txn);
-                        }
-                    }
-                }
-            }
-            diem_debug!("get_block: 1 {:?}", pivot_decision_opt);
+            // Admission accepts node_map (non-committee) voters, and
+            // `check_voting_power` errors `UnknownAuthor` on them; filter to
+            // the committee so one such vote can't fail a valid quorum.
+            let committee_votes: Vec<&(AccountAddress, HashValue)> =
+                pivot_decision_set
+                    .iter()
+                    .filter(|(addr, _)| {
+                        validators.get_voting_power(addr).is_some()
+                    })
+                    .collect();
             if validators
                 .check_voting_power(
-                    pivot_decision_set.iter().map(|(addr, _)| addr),
+                    committee_votes.iter().map(|(addr, _)| addr),
                 )
                 .is_ok()
             {
-                let pivot_decision = pivot_decision_opt.unwrap();
+                // Any committee vote carries the same payload; use the first.
+                let Some(pivot_decision) = committee_votes
+                    .iter()
+                    .find_map(|(_, hash)| self.transactions.get(hash))
+                else {
+                    continue;
+                };
                 let pivot_height = match pivot_decision.payload() {
                     TransactionPayload::PivotDecision(decision) => {
                         decision.height
@@ -152,7 +156,6 @@ impl Mempool {
                     chosen_pivot_tx = Some(pivot_decision);
                 }
             }
-            diem_debug!("get_block: 2 {:?}", chosen_pivot_tx);
         }
         if let Some(tx) = chosen_pivot_tx {
             let pivot_decision_hash = match tx.payload() {
@@ -165,6 +168,7 @@ impl Mempool {
             let senders: Vec<AccountAddress> =
                 validators.get_ordered_account_addresses_iter().collect();
             let mut signatures = vec![];
+            let mut seen_signers = HashSet::new();
             for hash in &txn_hashes {
                 if let Some(txn) = self.transactions.get(hash) {
                     match txn.authenticator() {
@@ -172,17 +176,31 @@ impl Mempool {
                             if let Ok(index) =
                                 senders.binary_search(&txn.sender())
                             {
-                                signatures.push((signature, index));
+                                // One slot per validator: guard the index so a
+                                // repeated signer can't abort aggregation.
+                                if seen_signers.insert(index) {
+                                    signatures.push((signature, index));
+                                }
                             }
                         }
                         _ => unreachable!(),
                     }
                 }
             }
-            let new_tx =
-                SignedTransaction::new_multisig(tx.raw_txn(), signatures);
-            block_log.add(new_tx.sender(), new_tx.hash());
-            block.push(new_tx);
+            match SignedTransaction::new_multisig(tx.raw_txn(), signatures) {
+                Ok(new_tx) => {
+                    block_log.add(new_tx.sender(), new_tx.hash());
+                    block.push(new_tx);
+                }
+                Err(e) => {
+                    // Never panic in proposal construction; skip this decision.
+                    diem_error!(
+                        "get_block: failed to aggregate pivot decision \
+                         multisig, skipping: {:?}",
+                        e
+                    );
+                }
+            }
         }
 
         diem_debug!(
@@ -214,5 +232,104 @@ impl Mempool {
         &mut self, start_id: u64, end_id: u64,
     ) -> Vec<SignedTransaction> {
         self.transactions.timeline_range(start_id, end_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cfx_types::H256;
+    use diem_crypto::{PrivateKey, Uniform};
+    use diem_types::{
+        block_info::PivotBlockDecision,
+        chain_id::ChainId,
+        mempool_status::MempoolStatusCode,
+        term_state::{
+            pos_state_config::{PosStateConfig, POS_STATE_CONFIG},
+            NodeID, PosState,
+        },
+        transaction::RawTransaction,
+        validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
+    };
+
+    fn new_node() -> (NodeID, ConsensusPrivateKey) {
+        let sk = ConsensusPrivateKey::generate_for_testing();
+        let vrf_sk = ConsensusVRFPrivateKey::generate_for_testing();
+        (NodeID::new(sk.public_key(), vrf_sk.public_key()), sk)
+    }
+
+    fn insert_pivot_vote(
+        mempool: &mut Mempool, node: &NodeID, sk: &ConsensusPrivateKey,
+        decision: &PivotBlockDecision,
+    ) {
+        let signed = RawTransaction::new_pivot_decision(
+            node.addr,
+            decision.clone(),
+            ChainId::new(1),
+        )
+        .sign(sk)
+        .unwrap()
+        .into_inner();
+        assert_eq!(
+            mempool.add_txn(signed, TimelineState::NotReady).code,
+            MempoolStatusCode::Accepted
+        );
+    }
+
+    /// A registered non-committee voter (admission gates on `node_map`,
+    /// broader than the committee) must not stall aggregation of a committee
+    /// quorum: it is ignored, not counted as `UnknownAuthor`.
+    #[test]
+    fn get_block_aggregates_committee_quorum_ignoring_non_committee_voter() {
+        POS_STATE_CONFIG.get_or_init(PosStateConfig::default);
+        let (v1, sk1) = new_node();
+        let (v2, sk2) = new_node();
+        let (v3, sk3) = new_node();
+        let (outsider, sk_out) = new_node();
+
+        // All four are registered (node_map), so the outsider's vote is
+        // admitted; the committee is only v1/v2/v3.
+        let initial_nodes = vec![
+            (v1.clone(), 1),
+            (v2.clone(), 1),
+            (v3.clone(), 1),
+            (outsider.clone(), 1),
+        ];
+        let initial_committee = vec![(v1.addr, 1), (v2.addr, 1), (v3.addr, 1)];
+        let pos_state = PosState::new(
+            vec![7; 32],
+            initial_nodes,
+            initial_committee,
+            PivotBlockDecision {
+                block_hash: H256::zero(),
+                height: 0,
+            },
+        );
+        let validators = pos_state.epoch_state().verifier().clone();
+        let mut mempool = Mempool::new(&NodeConfig::default());
+
+        let decision = PivotBlockDecision {
+            block_hash: H256::from([9u8; 32]),
+            height: 1,
+        };
+        // Full committee reaches quorum; the outsider also votes.
+        insert_pivot_vote(&mut mempool, &v1, &sk1, &decision);
+        insert_pivot_vote(&mut mempool, &v2, &sk2, &decision);
+        insert_pivot_vote(&mut mempool, &v3, &sk3, &decision);
+        insert_pivot_vote(&mut mempool, &outsider, &sk_out, &decision);
+
+        let block =
+            mempool.get_block(10, HashSet::new(), &pos_state, validators);
+
+        let aggregated_pivot = block.iter().any(|tx| {
+            matches!(
+                tx.payload(),
+                TransactionPayload::PivotDecision(d) if *d == decision
+            )
+        });
+        assert!(
+            aggregated_pivot,
+            "committee quorum must aggregate despite a non-committee voter",
+        );
     }
 }
