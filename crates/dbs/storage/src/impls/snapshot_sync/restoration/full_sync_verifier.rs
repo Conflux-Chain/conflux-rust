@@ -33,11 +33,21 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             bail!(Error::InvalidSnapshotSyncProof)
         }
         let mut chunk_index_by_upper_key = HashMap::new();
+        let mut prev_boundary: Option<&[u8]> = None;
         for (chunk_index, (chunk_boundary, proof)) in chunk_boundaries
             .iter()
             .zip(chunk_boundary_proofs.iter())
             .enumerate()
         {
+            // Strictly increasing: `chunk_index_by_upper_key` is keyed by
+            // boundary and `restore_chunk` derives ranges from adjacent
+            // boundaries, so a duplicate would silently collapse chunk indexes.
+            if let Some(prev) = prev_boundary {
+                if chunk_boundary.as_slice() <= prev {
+                    bail!(Error::InvalidSnapshotSyncProof)
+                }
+            }
+            prev_boundary = Some(chunk_boundary.as_slice());
             // Reject over-long boundary keys before they rebuild proof paths
             // during restore (see CompressedPathRaw::MAX_PATH_BYTES).
             if chunk_boundary.len() > CompressedPathRaw::MAX_PATH_BYTES {

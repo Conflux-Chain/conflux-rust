@@ -220,27 +220,29 @@ impl SnapshotChunkSync {
             let r = manifest_manager
                 .handle_snapshot_manifest_response(ctx, response, request)?;
             if let Some(related_data) = r {
-                // update status
+                // Build into a local first: if `new_and_start` fails, setting
+                // status to `DownloadingChunks` before it would leave
+                // `chunk_manager == None` and panic the next `update_status`.
+                let chunk_manager = SnapshotChunkManager::new_and_start(
+                    ctx,
+                    manifest_manager.snapshot_candidate.clone(),
+                    related_data.snapshot_info.clone(),
+                    related_data.parent_snapshot_info.clone(),
+                    manifest_manager.chunk_boundaries.clone(),
+                    manifest_manager.chunk_boundary_proofs.clone(),
+                    manifest_manager.active_peers.clone(),
+                    self.config.chunk_config(),
+                    // This delta_root is the intermediate_delta_root of
+                    // the new snapshot, and this field will be used to
+                    // fill new state_root in
+                    // get_state_trees_for_next_epoch
+                    related_data
+                        .true_state_root_by_blame_info
+                        .state_root
+                        .delta_root,
+                )?;
                 inner.status = Status::DownloadingChunks(Instant::now());
-                inner.chunk_manager =
-                    Some(SnapshotChunkManager::new_and_start(
-                        ctx,
-                        manifest_manager.snapshot_candidate.clone(),
-                        related_data.snapshot_info.clone(),
-                        related_data.parent_snapshot_info.clone(),
-                        manifest_manager.chunk_boundaries.clone(),
-                        manifest_manager.chunk_boundary_proofs.clone(),
-                        manifest_manager.active_peers.clone(),
-                        self.config.chunk_config(),
-                        // This delta_root is the intermediate_delta_root of
-                        // the new snapshot, and this field will be used to
-                        // fill new state_root in
-                        // get_state_trees_for_next_epoch
-                        related_data
-                            .true_state_root_by_blame_info
-                            .state_root
-                            .delta_root,
-                    )?);
+                inner.chunk_manager = Some(chunk_manager);
                 inner.related_data = Some(related_data);
             }
             debug!("sync state progress: {:?}", *inner);
@@ -370,10 +372,20 @@ impl SnapshotChunkSync {
         if inner.manifest_attempts
             >= self.config.max_downloading_manifest_attempts
         {
-            panic!(
-                "Exceed max manifest attempts {}",
+            // Remote-triggerable (peers serving unusable manifests/chunks), so
+            // panicking here would be a remote crash; reset and fall through to
+            // restart candidate discovery instead.
+            error!(
+                "Exceeded max manifest download attempts ({}); resetting state \
+                 sync and restarting candidate discovery. This usually means \
+                 peers served unusable manifests or chunks.",
                 self.config.max_downloading_manifest_attempts
             );
+            inner.manifest_attempts = 0;
+            inner.status = Status::Inactive;
+            inner.manifest_manager = None;
+            inner.chunk_manager = None;
+            inner.related_data = None;
         }
 
         debug!("sync state status before updating: {:?}", *inner);
