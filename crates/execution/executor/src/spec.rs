@@ -162,6 +162,9 @@ pub struct TransitionsEpochHeight {
     pub cip166: BlockHeight,
     /// EIP-7212 / RIP-7212: precompile secp256r1 activation height
     pub cip167: BlockHeight,
+    /// Height at/after which a block with a non-canonically-encoded tx is
+    /// invalid. Far-future until a CIP/height is scheduled.
+    pub canonical_tx_rlp: BlockHeight,
 }
 
 impl Default for CommonParams {
