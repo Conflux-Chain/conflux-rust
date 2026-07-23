@@ -106,7 +106,7 @@ impl TxInfos {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, hash: H256,
-    ) -> impl Future<Output = Result<TxInfoValidated>> {
+    ) -> impl Future<Output = Result<TxInfoValidated>> + use<> {
         let mut verified = self.verified.write();
 
         if !verified.contains_key(&hash) {

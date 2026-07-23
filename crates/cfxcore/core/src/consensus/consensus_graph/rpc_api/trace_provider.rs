@@ -58,7 +58,7 @@ impl ConsensusGraph {
         &self, filter: &'a LogFilter, epoch_number: u64, block_hash: H256,
         block_timestamp: Option<u64>, mut receipts: Vec<Receipt>,
         mut tx_hashes: Vec<H256>,
-    ) -> impl Iterator<Item = LocalizedLogEntry> + 'a {
+    ) -> impl Iterator<Item = LocalizedLogEntry> + 'a + use<'a> {
         // sanity check
         if receipts.len() != tx_hashes.len() {
             warn!("Block ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", block_hash, receipts.len(), tx_hashes.len());
@@ -113,7 +113,10 @@ impl ConsensusGraph {
     fn filter_block<'a>(
         &self, filter: &'a LogFilter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64, pivot_hash: H256, block_hash: H256,
-    ) -> Result<impl Iterator<Item = LocalizedLogEntry> + 'a, FilterError> {
+    ) -> Result<
+        impl Iterator<Item = LocalizedLogEntry> + 'a + use<'a>,
+        FilterError,
+    > {
         // special case for genesis (for now, genesis has no logs)
         if epoch == 0 {
             return Ok(Either::Left(std::iter::empty()));
@@ -177,7 +180,10 @@ impl ConsensusGraph {
     fn filter_phantom_block<'a>(
         &self, filter: &'a LogFilter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64, pivot_hash: H256,
-    ) -> Result<impl Iterator<Item = LocalizedLogEntry> + 'a, FilterError> {
+    ) -> Result<
+        impl Iterator<Item = LocalizedLogEntry> + 'a + use<'a>,
+        FilterError,
+    > {
         // special case for genesis (for now, genesis has no logs)
         if epoch == 0 {
             return Ok(Either::Left(std::iter::empty()));
@@ -319,7 +325,7 @@ impl ConsensusGraph {
     pub fn get_log_filter_epoch_range(
         &self, from_epoch: EpochNumber, to_epoch: EpochNumber,
         check_range: bool,
-    ) -> Result<impl Iterator<Item = u64>, FilterError> {
+    ) -> Result<impl Iterator<Item = u64> + use<>, FilterError> {
         // lock so that we have a consistent view
         let _inner = self.inner.read_recursive();
 
@@ -359,7 +365,7 @@ impl ConsensusGraph {
 
     pub fn get_trace_filter_epoch_range(
         &self, filter: &TraceFilter,
-    ) -> Result<impl Iterator<Item = u64>, FilterError> {
+    ) -> Result<impl Iterator<Item = u64> + use<>, FilterError> {
         // lock so that we have a consistent view
         let _inner = self.inner.read_recursive();
 

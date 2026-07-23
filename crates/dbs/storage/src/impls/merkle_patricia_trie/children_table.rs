@@ -115,7 +115,7 @@ impl<NodeRefT: 'static + NodeRefTrait> VanillaChildrenTable<NodeRefT> {
     pub unsafe fn get_child_mut_unchecked(
         &mut self, child_index: u8,
     ) -> &mut NodeRefT {
-        self.table.get_unchecked_mut(child_index as usize)
+        unsafe { self.table.get_unchecked_mut(child_index as usize) }
     }
 
     pub fn iter(&self) -> VanillaChildrenTableIterator<'_, NodeRefT> {
@@ -310,13 +310,17 @@ impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
     pub unsafe fn get_child_mut_unchecked(
         &mut self, index: u8,
     ) -> &mut NodeRefT {
-        &mut *self.table_ptr.add(Self::lower_bound(self.bitmap, index))
+        unsafe {
+            &mut *self.table_ptr.add(Self::lower_bound(self.bitmap, index))
+        }
     }
 
     /// Unsafe because child must already exist at the index.
     pub unsafe fn set_child_unchecked(&mut self, index: u8, value: NodeRefT) {
-        *self.table_ptr.add(Self::lower_bound(self.bitmap, index)) =
-            value.clone();
+        unsafe {
+            *self.table_ptr.add(Self::lower_bound(self.bitmap, index)) =
+                value.clone();
+        }
     }
 
     pub fn new_from_one_child(index: u8, value: NodeRefT) -> Self {
@@ -332,37 +336,41 @@ impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
     pub unsafe fn insert_child_unchecked(
         old_table: ChildrenTableRef<NodeRefT>, index: u8, value: NodeRefT,
     ) -> Self {
-        let insertion_pos = Self::lower_bound(old_table.bitmap, index);
-        Self {
-            bitmap: old_table.bitmap | Self::bit(index.into()),
-            children_count: old_table.table.len() as u8 + 1,
-            table_ptr: Self::managed_slice_into_raw(
-                [
-                    &old_table.table[0..insertion_pos],
-                    &[value],
-                    &old_table.table[insertion_pos..],
-                ]
-                .concat()
-                .into_boxed_slice(),
-            ),
+        unsafe {
+            let insertion_pos = Self::lower_bound(old_table.bitmap, index);
+            Self {
+                bitmap: old_table.bitmap | Self::bit(index.into()),
+                children_count: old_table.table.len() as u8 + 1,
+                table_ptr: Self::managed_slice_into_raw(
+                    [
+                        &old_table.table[0..insertion_pos],
+                        &[value],
+                        &old_table.table[insertion_pos..],
+                    ]
+                    .concat()
+                    .into_boxed_slice(),
+                ),
+            }
         }
     }
 
     pub unsafe fn delete_child_unchecked(
         old_table: ChildrenTableRef<NodeRefT>, index: u8,
     ) -> Self {
-        let deletion_pos = Self::lower_bound(old_table.bitmap, index);
-        Self {
-            bitmap: old_table.bitmap & (!Self::bit(index.into())),
-            children_count: old_table.table.len() as u8 - 1,
-            table_ptr: Self::managed_slice_into_raw(
-                [
-                    &old_table.table[0..deletion_pos],
-                    &old_table.table[deletion_pos + 1..],
-                ]
-                .concat()
-                .into_boxed_slice(),
-            ),
+        unsafe {
+            let deletion_pos = Self::lower_bound(old_table.bitmap, index);
+            Self {
+                bitmap: old_table.bitmap & (!Self::bit(index.into())),
+                children_count: old_table.table.len() as u8 - 1,
+                table_ptr: Self::managed_slice_into_raw(
+                    [
+                        &old_table.table[0..deletion_pos],
+                        &old_table.table[deletion_pos + 1..],
+                    ]
+                    .concat()
+                    .into_boxed_slice(),
+                ),
+            }
         }
     }
 }
@@ -402,15 +410,17 @@ impl<NodeRefT: NodeRefTrait> Drop for CompactedChildrenTable<NodeRefT> {
 
 impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
     unsafe fn into_managed_slice(&self) -> Option<Vec<NodeRefT>> {
-        if self.children_count != 0 {
-            assert_ne!(self.table_ptr, null_mut());
-            Some(Vec::from_raw_parts(
-                self.table_ptr,
-                self.children_count.into(),
-                self.children_count.into(),
-            ))
-        } else {
-            None
+        unsafe {
+            if self.children_count != 0 {
+                assert_ne!(self.table_ptr, null_mut());
+                Some(Vec::from_raw_parts(
+                    self.table_ptr,
+                    self.children_count.into(),
+                    self.children_count.into(),
+                ))
+            } else {
+                None
+            }
         }
     }
 

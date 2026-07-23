@@ -91,7 +91,7 @@ impl StateEntries {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, epoch: u64, key: Vec<u8>,
-    ) -> impl Future<Output = Result<StateEntry>> {
+    ) -> impl Future<Output = Result<StateEntry>> + use<> {
         let mut verified = self.verified.write();
         let key = StateKey { epoch, key };
 

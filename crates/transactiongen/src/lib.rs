@@ -470,16 +470,14 @@ impl DirectTransactionGenerator {
             }
 
             // Calls transfer of ERC20 contract.
+            let h: H256 = BigEndianHash::from_uint(&balance_to_transfer);
+            let value_hex = h.0.to_hex::<String>();
             let tx_data = (String::new()
                 + "a9059cbb000000000000000000000000"
                 + &receiver_address.0.to_hex::<String>()[2..]
-                + {
-                    let h: H256 =
-                        BigEndianHash::from_uint(&balance_to_transfer);
-                    &h.0.to_hex::<String>()[2..]
-                })
-            .from_hex()
-            .unwrap();
+                + &value_hex[2..])
+                .from_hex()
+                .unwrap();
 
             let tx: Transaction = NativeTransaction {
                 nonce: sender_nonce,

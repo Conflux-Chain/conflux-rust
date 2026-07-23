@@ -12,7 +12,7 @@ macro_rules! if_option {
 }
 
 macro_rules! underscore_to_hyphen {
-    ($e:expr) => {
+    ($e:expr_2021) => {
         str::replace($e, "_", "-")
     };
 }
@@ -21,10 +21,10 @@ macro_rules! underscore_to_hyphen {
 macro_rules! build_config{
     (
         {
-            $(($name:ident, ($($type:tt)+), $default:expr))*
+            $(($name:ident, ($($type:tt)+), $default:expr_2021))*
         }
         {
-            $(($c_name:ident, ($($c_type:tt)+), $c_default:expr, $converter:expr))*
+            $(($c_name:ident, ($($c_type:tt)+), $c_default:expr_2021, $converter:expr_2021))*
         }
     ) => {
         use cfxcore::pow::ProofOfWorkConfig;
@@ -143,7 +143,7 @@ macro_rules! build_config{
 
 #[macro_export]
 macro_rules! set_conf {
-    ($src: expr; $dst: expr => {$($field: tt),* }) => {
+    ($src: expr_2021; $dst: expr_2021 => {$($field: tt),* }) => {
         {
             let number = $src;
             $($dst.$field = number;)*

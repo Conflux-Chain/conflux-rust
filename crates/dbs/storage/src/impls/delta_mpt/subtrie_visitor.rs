@@ -719,178 +719,186 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     unsafe fn insert_checked_value(
         mut self, key: KeyPart, value: Box<[u8]>,
     ) -> Result<(bool, NodeRefDeltaMptCompact)> {
-        let node_memory_manager = self.node_memory_manager();
-        let allocator = node_memory_manager.get_allocator();
-        let mut node_cow = self.root.take();
-        // TODO(yz): be compliant to borrow rule and avoid duplicated
+        unsafe {
+            let node_memory_manager = self.node_memory_manager();
+            let allocator = node_memory_manager.get_allocator();
+            let mut node_cow = self.root.take();
+            // TODO(yz): be compliant to borrow rule and avoid duplicated
 
-        let is_owned = node_cow.is_owned();
-        // FIXME: apply db_load_counter to all places where it matters, and also
-        // FIXME: pass down to recursion. (Also check other methods.)
-        let trie_node_ref = node_cow.get_trie_node(
-            node_memory_manager,
-            &allocator,
-            &mut *self.db.get_mut().to_owned_read()?,
-        )?;
-        trace!(
-            "insert_checked_value: trie_node.path={:?} {:?}",
-            trie_node_ref.compressed_path_ref(),
-            trie_node_ref.get_compressed_path_size()
-        );
-        match trie_node_ref.walk::<access_mode::Write>(key) {
-            WalkStop::Arrived => {
-                let node_ref_changed = !is_owned;
-                let trie_node = GuardedValue::take(trie_node_ref);
-                node_cow.cow_replace_value_valid(
-                    &node_memory_manager,
-                    self.owned_node_set.get_mut(),
-                    trie_node,
-                    value,
-                )?;
+            let is_owned = node_cow.is_owned();
+            // FIXME: apply db_load_counter to all places where it matters, and
+            // also FIXME: pass down to recursion. (Also check other
+            // methods.)
+            let trie_node_ref = node_cow.get_trie_node(
+                node_memory_manager,
+                &allocator,
+                &mut *self.db.get_mut().to_owned_read()?,
+            )?;
+            trace!(
+                "insert_checked_value: trie_node.path={:?} {:?}",
+                trie_node_ref.compressed_path_ref(),
+                trie_node_ref.get_compressed_path_size()
+            );
+            match trie_node_ref.walk::<access_mode::Write>(key) {
+                WalkStop::Arrived => {
+                    let node_ref_changed = !is_owned;
+                    let trie_node = GuardedValue::take(trie_node_ref);
+                    node_cow.cow_replace_value_valid(
+                        &node_memory_manager,
+                        self.owned_node_set.get_mut(),
+                        trie_node,
+                        value,
+                    )?;
 
-                Ok((node_ref_changed, node_cow.into_child().unwrap()))
-            }
-            WalkStop::Descent {
-                key_remaining,
-                child_node,
-                child_index,
-            } => {
-                drop(trie_node_ref);
-                let result = self
-                    .new_visitor_for_subtree(child_node.clone().into())
-                    .insert_checked_value(key_remaining, value);
-                if result.is_err() {
-                    node_cow.into_child();
-                    return result;
+                    Ok((node_ref_changed, node_cow.into_child().unwrap()))
                 }
-                let (child_changed, new_child_node) = result.unwrap();
+                WalkStop::Descent {
+                    key_remaining,
+                    child_node,
+                    child_index,
+                } => {
+                    drop(trie_node_ref);
+                    let result = self
+                        .new_visitor_for_subtree(child_node.clone().into())
+                        .insert_checked_value(key_remaining, value);
+                    if result.is_err() {
+                        node_cow.into_child();
+                        return result;
+                    }
+                    let (child_changed, new_child_node) = result.unwrap();
 
-                if child_changed {
-                    let node_ref_changed = !node_cow.is_owned();
-                    let trie_node =
-                        GuardedValue::take(node_cow.get_trie_node(
-                            node_memory_manager,
+                    if child_changed {
+                        let node_ref_changed = !node_cow.is_owned();
+                        let trie_node =
+                            GuardedValue::take(node_cow.get_trie_node(
+                                node_memory_manager,
+                                &allocator,
+                                &mut *self.db.get_mut().to_owned_read()?,
+                            )?);
+                        node_cow
+                            .cow_modify(
+                                &allocator,
+                                self.owned_node_set.get_mut(),
+                                trie_node,
+                            )?
+                            .replace_child_unchecked(
+                                child_index,
+                                new_child_node,
+                            );
+
+                        Ok((node_ref_changed, node_cow.into_child().unwrap()))
+                    } else {
+                        Ok((false, node_cow.into_child().unwrap()))
+                    }
+                }
+                WalkStop::PathDiverted {
+                    key_child_index,
+                    key_remaining,
+                    matched_path,
+                    unmatched_child_index,
+                    unmatched_path_remaining,
+                } => {
+                    // create a new node to replace self with compressed
+                    // path = matched_path, modify current
+                    // node with the remaining path, and attach it as child to
+                    // the replacement node create a new
+                    // node for insertion (if key_remaining
+                    // is non-empty), set it to child,
+                    // with key_remaining.
+                    let (new_node_cow, new_node_entry) =
+                        CowNodeRef::new_uninitialized_node(
                             &allocator,
-                            &mut *self.db.get_mut().to_owned_read()?,
-                        )?);
+                            self.owned_node_set.get_mut(),
+                            self.trie_ref.get_mpt_id(),
+                        )?;
+                    let mut new_node = MemOptimizedTrieNode::default();
+                    // set compressed path.
+                    new_node.set_compressed_path(matched_path);
+
+                    let trie_node = GuardedValue::take(trie_node_ref);
+                    node_cow.cow_set_compressed_path(
+                        &node_memory_manager,
+                        self.owned_node_set.get_mut(),
+                        unmatched_path_remaining,
+                        trie_node,
+                    )?;
+
+                    // It's safe because we know that this is the first child.
+                    new_node.set_first_child_unchecked(
+                        unmatched_child_index,
+                        // It's safe to unwrap because we know that it's not
+                        // none.
+                        node_cow.into_child().unwrap(),
+                    );
+
+                    // TODO(yz): remove duplicated code.
+                    match key_child_index {
+                        None => {
+                            // Insert value at the current node
+                            new_node.replace_value_valid(value);
+                        }
+                        Some(child_index) => {
+                            // TODO(yz): Maybe create CowNodeRef on NULL then
+                            // cow_set_value then set path.
+                            let (child_node_cow, child_node_entry) =
+                                CowNodeRef::new_uninitialized_node(
+                                    &allocator,
+                                    self.owned_node_set.get_mut(),
+                                    self.trie_ref.get_mpt_id(),
+                                )?;
+                            let mut new_child_node =
+                                MemOptimizedTrieNode::default();
+                            // set compressed path.
+                            new_child_node.copy_compressed_path(key_remaining);
+                            new_child_node.replace_value_valid(value);
+                            child_node_entry.insert(&new_child_node);
+
+                            // It's safe because it's guaranteed that
+                            // key_child_index != unmatched_child_index
+                            new_node.add_new_child_unchecked(
+                                child_index,
+                                // It's safe to unwrap here because it's not
+                                // null node.
+                                child_node_cow.into_child().unwrap(),
+                            );
+                        }
+                    }
+                    new_node_entry.insert(&new_node);
+                    Ok((true, new_node_cow.into_child().unwrap()))
+                }
+                WalkStop::ChildNotFound {
+                    key_remaining,
+                    child_index,
+                } => {
+                    // TODO(yz): Maybe create CowNodeRef on NULL then
+                    // cow_set_value then set path.
+                    let (child_node_cow, child_node_entry) =
+                        CowNodeRef::new_uninitialized_node(
+                            &allocator,
+                            self.owned_node_set.get_mut(),
+                            self.trie_ref.get_mpt_id(),
+                        )?;
+                    let mut new_child_node = MemOptimizedTrieNode::default();
+                    // set compressed path.
+                    new_child_node.copy_compressed_path(key_remaining);
+                    new_child_node.replace_value_valid(value);
+                    child_node_entry.insert(&new_child_node);
+
+                    let node_ref_changed = !is_owned;
+                    let trie_node = GuardedValue::take(trie_node_ref);
                     node_cow
                         .cow_modify(
                             &allocator,
                             self.owned_node_set.get_mut(),
                             trie_node,
                         )?
-                        .replace_child_unchecked(child_index, new_child_node);
-
-                    Ok((node_ref_changed, node_cow.into_child().unwrap()))
-                } else {
-                    Ok((false, node_cow.into_child().unwrap()))
-                }
-            }
-            WalkStop::PathDiverted {
-                key_child_index,
-                key_remaining,
-                matched_path,
-                unmatched_child_index,
-                unmatched_path_remaining,
-            } => {
-                // create a new node to replace self with compressed
-                // path = matched_path, modify current
-                // node with the remaining path, and attach it as child to the
-                // replacement node create a new node for
-                // insertion (if key_remaining is non-empty), set it to child,
-                // with key_remaining.
-                let (new_node_cow, new_node_entry) =
-                    CowNodeRef::new_uninitialized_node(
-                        &allocator,
-                        self.owned_node_set.get_mut(),
-                        self.trie_ref.get_mpt_id(),
-                    )?;
-                let mut new_node = MemOptimizedTrieNode::default();
-                // set compressed path.
-                new_node.set_compressed_path(matched_path);
-
-                let trie_node = GuardedValue::take(trie_node_ref);
-                node_cow.cow_set_compressed_path(
-                    &node_memory_manager,
-                    self.owned_node_set.get_mut(),
-                    unmatched_path_remaining,
-                    trie_node,
-                )?;
-
-                // It's safe because we know that this is the first child.
-                new_node.set_first_child_unchecked(
-                    unmatched_child_index,
-                    // It's safe to unwrap because we know that it's not none.
-                    node_cow.into_child().unwrap(),
-                );
-
-                // TODO(yz): remove duplicated code.
-                match key_child_index {
-                    None => {
-                        // Insert value at the current node
-                        new_node.replace_value_valid(value);
-                    }
-                    Some(child_index) => {
-                        // TODO(yz): Maybe create CowNodeRef on NULL then
-                        // cow_set_value then set path.
-                        let (child_node_cow, child_node_entry) =
-                            CowNodeRef::new_uninitialized_node(
-                                &allocator,
-                                self.owned_node_set.get_mut(),
-                                self.trie_ref.get_mpt_id(),
-                            )?;
-                        let mut new_child_node =
-                            MemOptimizedTrieNode::default();
-                        // set compressed path.
-                        new_child_node.copy_compressed_path(key_remaining);
-                        new_child_node.replace_value_valid(value);
-                        child_node_entry.insert(&new_child_node);
-
-                        // It's safe because it's guaranteed that
-                        // key_child_index != unmatched_child_index
-                        new_node.add_new_child_unchecked(
+                        .add_new_child_unchecked(
                             child_index,
-                            // It's safe to unwrap here because it's not null
-                            // node.
                             child_node_cow.into_child().unwrap(),
                         );
-                    }
+
+                    Ok((node_ref_changed, node_cow.into_child().unwrap()))
                 }
-                new_node_entry.insert(&new_node);
-                Ok((true, new_node_cow.into_child().unwrap()))
-            }
-            WalkStop::ChildNotFound {
-                key_remaining,
-                child_index,
-            } => {
-                // TODO(yz): Maybe create CowNodeRef on NULL then cow_set_value
-                // then set path.
-                let (child_node_cow, child_node_entry) =
-                    CowNodeRef::new_uninitialized_node(
-                        &allocator,
-                        self.owned_node_set.get_mut(),
-                        self.trie_ref.get_mpt_id(),
-                    )?;
-                let mut new_child_node = MemOptimizedTrieNode::default();
-                // set compressed path.
-                new_child_node.copy_compressed_path(key_remaining);
-                new_child_node.replace_value_valid(value);
-                child_node_entry.insert(&new_child_node);
-
-                let node_ref_changed = !is_owned;
-                let trie_node = GuardedValue::take(trie_node_ref);
-                node_cow
-                    .cow_modify(
-                        &allocator,
-                        self.owned_node_set.get_mut(),
-                        trie_node,
-                    )?
-                    .add_new_child_unchecked(
-                        child_index,
-                        child_node_cow.into_child().unwrap(),
-                    );
-
-                Ok((node_ref_changed, node_cow.into_child().unwrap()))
             }
         }
     }

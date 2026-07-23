@@ -1,4 +1,4 @@
-edition = "2021"
+edition = "2024"
 unstable_features = true
 max_width = 80
 comment_width = 80
@@ -31,3 +31,4 @@ imports_indent = "Block"
 hard_tabs = false
 format_macro_matchers = true
 format_macro_bodies = true
+style_edition = "2021"
