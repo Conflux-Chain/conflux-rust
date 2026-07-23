@@ -1262,9 +1262,9 @@ impl NetworkServiceInner {
                         }
                     }
                     sess.set_expired();
+                    failure_id = sess.id().cloned();
                 }
                 deregister = remote || sess.done();
-                failure_id = sess.id().cloned();
                 debug!(
                     "kill connection by token, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
                     deregister, reason, *sess, op
@@ -1814,12 +1814,8 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     if sess.expired() {
                         sess.deregister_socket(poll_registry)
                             .expect("Error deregistering socket");
-                        if let Some(node_id) = sess.id() {
-                            self.node_db.write().note_failure(
-                                node_id, true,  /* by_connection */
-                                false, /* trusted_only */
-                            );
-                        }
+                        // Reputation on disconnect is recorded by the kill
+                        // path (its `UpdateNodeOperation`), not here.
                         self.sessions.remove(&sess);
                         debug!("Removed session: {:?}", *sess);
                     }
