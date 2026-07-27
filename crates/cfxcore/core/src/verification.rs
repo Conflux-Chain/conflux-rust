@@ -498,7 +498,19 @@ impl VerificationConfig {
     ) -> Result<(), Error> {
         let mut total_gas: SpaceMap<U256> = SpaceMap::default();
         for t in &block.transactions {
-            total_gas[t.space()] += *t.gas_limit();
+            // gas_limit has no per-tx upper bound on the block-verification
+            // path (only the tx pool caps it, which a block producer
+            // bypasses), so the running per-space sum can exceed U256. A bare
+            // `+=` panics on overflow (release overflow-checks are on) and
+            // halts block processing; reject the block instead.
+            let acc = &mut total_gas[t.space()];
+            *acc = acc.checked_add(*t.gas_limit()).ok_or_else(|| {
+                BlockError::InvalidPackedGasLimit(OutOfBounds {
+                    min: None,
+                    max: Some(*block.block_header.gas_limit()),
+                    found: U256::MAX,
+                })
+            })?;
         }
 
         if block.block_header.height()
@@ -525,7 +537,17 @@ impl VerificationConfig {
             };
 
         let evm_total_gas = total_gas[Space::Ethereum];
-        let block_total_gas = total_gas.map_sum(|x| *x);
+        // Each per-space sum fits in U256 (bounded in the caller) but their
+        // total may not; `map_sum` (`native + evm`) would panic on overflow.
+        let block_total_gas = total_gas[Space::Native]
+            .checked_add(total_gas[Space::Ethereum])
+            .ok_or_else(|| {
+                BlockError::InvalidPackedGasLimit(OutOfBounds {
+                    min: None,
+                    max: Some(*block.block_header.gas_limit()),
+                    found: U256::MAX,
+                })
+            })?;
 
         if evm_total_gas > evm_space_gas_limit {
             return Err(From::from(BlockError::InvalidPackedGasLimit(
@@ -1112,5 +1134,157 @@ mod tests {
         let deserialized: EpochReceiptProof =
             serde_json::from_str(&serialized).unwrap();
         assert_eq!(epoch_proof, deserialized);
+    }
+
+    // Regression tests for the per-block gas-limit summation overflow: a miner
+    // can pack transactions whose gas_limit values sum past U256, and the bare
+    // `+=` used to panic (release overflow-checks) inside
+    // `verify_sync_graph_ready_block`, halting block processing on every node
+    // that received the block. Both sums must now reject the block instead.
+    mod gas_sum_overflow {
+        use crate::{
+            core_error::{BlockError, CoreError as Error},
+            verification::{compute_transaction_root, VerificationConfig},
+        };
+        use cfx_executor::{
+            machine::{Machine, VmFactory},
+            spec::CommonParams,
+        };
+        use cfx_types::{AddressSpaceUtil, AllChainID, U256};
+        use cfxkey::{Address, Generator, Random};
+        use primitives::{
+            transaction::{
+                eth_transaction::Eip155Transaction,
+                native_transaction::{
+                    NativeTransaction, TypedNativeTransaction,
+                },
+            },
+            Action, Block, BlockHeader, BlockHeaderBuilder, SignedTransaction,
+            Transaction,
+        };
+        use std::sync::Arc;
+
+        const HALF: U256 = U256([0, 0, 0, 1 << 63]); // 2^255
+
+        fn config(cip1559_height: u64) -> (VerificationConfig, AllChainID) {
+            let mut params = CommonParams::default();
+            // Route height-1 blocks to `check_hard_gas_limit` (the pre-CIP-1559
+            // branch) when the caller wants the cross-space `map_sum` site.
+            params.transition_heights.cip1559 = cip1559_height;
+            let chain_id = params.chain_id.read().get_chain_id(1);
+            let machine = Arc::new(Machine::new_with_builtin(
+                params,
+                VmFactory::new(1024),
+            ));
+            let config = VerificationConfig::new(
+                false,
+                200,
+                200 * 1024,
+                100_000,
+                128,
+                u64::MAX,
+                machine,
+            );
+            (config, chain_id)
+        }
+
+        fn native_tx(
+            nonce: u64, gas: U256, chain_id: u32,
+        ) -> Arc<SignedTransaction> {
+            let keypair = Random.generate().unwrap();
+            Arc::new(
+                Transaction::Native(TypedNativeTransaction::Cip155(
+                    NativeTransaction {
+                        nonce: nonce.into(),
+                        gas_price: U256::one(),
+                        gas,
+                        action: Action::Create,
+                        value: U256::zero(),
+                        storage_limit: 0,
+                        epoch_height: 1,
+                        chain_id,
+                        data: vec![],
+                    },
+                ))
+                .sign(keypair.secret()),
+            )
+        }
+
+        fn eth_tx(gas: U256, chain_id: u32) -> Arc<SignedTransaction> {
+            Arc::new(
+                Eip155Transaction {
+                    nonce: U256::zero(),
+                    gas_price: U256::one(),
+                    gas,
+                    action: Action::Create,
+                    value: U256::zero(),
+                    chain_id: Some(chain_id),
+                    data: vec![],
+                }
+                .fake_sign_rpc(Address::zero().with_evm_space()),
+            )
+        }
+
+        fn block(txs: Vec<Arc<SignedTransaction>>) -> (Block, BlockHeader) {
+            let parent = BlockHeaderBuilder::new().with_height(0).build();
+            let header = BlockHeaderBuilder::new()
+                .with_height(1)
+                .with_parent_hash(parent.hash())
+                .with_transactions_root(compute_transaction_root(&txs))
+                .with_gas_limit(30_000_000.into())
+                .build();
+            (Block::new(header, txs), parent)
+        }
+
+        // Two same-space txs overflow a single per-space accumulator
+        // (verify_sync_graph_ready_block loop). Guards the primary site.
+        #[test]
+        fn same_space_sum_is_rejected_not_panicking() {
+            let (config, chain_id) = config(0);
+            let native = chain_id.in_native_space();
+            let txs =
+                vec![native_tx(0, HALF, native), native_tx(1, HALF, native)];
+            let (block, parent) = block(txs);
+
+            // The malicious txs clear every per-tx check on the remote path:
+            // nothing bounds gas_limit from above before the sum.
+            config
+                .verify_sync_graph_block_basic(&block, chain_id)
+                .expect("block passes phase-1 verification");
+
+            let result = config.verify_sync_graph_ready_block(&block, &parent);
+            assert!(
+                matches!(
+                    result,
+                    Err(Error::Block(BlockError::InvalidPackedGasLimit(_)))
+                ),
+                "expected InvalidPackedGasLimit, got {:?}",
+                result
+            );
+        }
+
+        // One Native + one Ethereum tx keep each per-space accumulator in range
+        // but overflow their cross-space sum in check_hard_gas_limit. Guards
+        // the second site that a fix to the loop alone would leave
+        // live.
+        #[test]
+        fn cross_space_sum_is_rejected_not_panicking() {
+            let (config, chain_id) = config(u64::MAX);
+            let txs = vec![
+                native_tx(0, HALF, chain_id.in_native_space()),
+                eth_tx(HALF, chain_id.in_evm_space()),
+            ];
+            let (block, parent) = block(txs);
+
+            let result = config.verify_sync_graph_ready_block(&block, &parent);
+            assert!(
+                matches!(
+                    result,
+                    Err(Error::Block(BlockError::InvalidPackedGasLimit(_)))
+                ),
+                "expected InvalidPackedGasLimit, got {:?}",
+                result
+            );
+        }
     }
 }
