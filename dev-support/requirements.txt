@@ -270,7 +270,7 @@ safe-pysha3==1.0.4
     # via conflux-rust-tests (pyproject.toml)
 semver==3.0.4
     # via ethereum-execution-spec-tests
-setuptools==80.9.0
+setuptools==83.0.0
     # via conflux-rust-tests (pyproject.toml)
 smmap==5.0.2
     # via gitdb
