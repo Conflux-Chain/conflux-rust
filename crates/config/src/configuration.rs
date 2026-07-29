@@ -405,6 +405,9 @@ build_config! {
         (pos_fix_cip156_transition_view, (u64), u64::MAX)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
         (pos_started_as_voter, (bool), true)
+        // Enable logging of NewBlockHashes source peer (IP and NodeId) for
+        // bootnode deployment to track block propagation. Default: false.
+        (log_block_source, (bool), false)
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)
@@ -957,6 +960,7 @@ impl Configuration {
                 .expect("set to genesis if none"),
             check_status_genesis: self.raw_conf.check_status_genesis,
             pos_started_as_voter: self.raw_conf.pos_started_as_voter,
+            log_block_source: self.raw_conf.log_block_source,
         }
     }
 

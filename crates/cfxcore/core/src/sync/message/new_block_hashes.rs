@@ -31,6 +31,23 @@ impl Handleable for NewBlockHashes {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_new_block_hashes, msg={:?}", self);
 
+        // Log the source peer information for each NewBlockHashes message.
+        // This is controlled by the log_block_source config flag and is
+        // designed for bootnode deployment to track block propagation.
+        if ctx.manager.protocol_config.log_block_source {
+            let peer_addr = ctx
+                .peer_addr
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
+            for hash in &self.block_hashes {
+                info!(
+                    "[BLOCK_SOURCE] hash={:#x} from_node={} from_addr={}",
+                    hash, ctx.node_id, peer_addr
+                );
+            }
+        }
+
         if ctx.manager.catch_up_mode() {
             // If a node is in catch-up mode and we are not in test-mode, we
             // just simple ignore new block hashes.
@@ -67,5 +84,54 @@ impl Handleable for NewBlockHashes {
         );
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rlp_round_trip_empty() {
+        let original = NewBlockHashes {
+            block_hashes: vec![],
+        };
+        let encoded = rlp::encode(&original);
+        let decoded: NewBlockHashes = rlp::decode(&encoded).unwrap();
+        assert_eq!(original, decoded);
+    }
+
+    #[test]
+    fn rlp_round_trip_single_hash() {
+        let original = NewBlockHashes {
+            block_hashes: vec![H256::from_low_u64_be(42)],
+        };
+        let encoded = rlp::encode(&original);
+        let decoded: NewBlockHashes = rlp::decode(&encoded).unwrap();
+        assert_eq!(original, decoded);
+    }
+
+    #[test]
+    fn rlp_round_trip_multiple_hashes() {
+        let original = NewBlockHashes {
+            block_hashes: vec![
+                H256::from_low_u64_be(1),
+                H256::from_low_u64_be(2),
+                H256::from_low_u64_be(3),
+                H256::random(),
+            ],
+        };
+        let encoded = rlp::encode(&original);
+        let decoded: NewBlockHashes = rlp::decode(&encoded).unwrap();
+        assert_eq!(original, decoded);
+    }
+
+    #[test]
+    fn rlp_decode_rejects_short_element() {
+        // 0xc1 0x01 is an RLP list with one 1-byte element.
+        // H256 requires 32 bytes, so this should fail to decode.
+        let short_element: &[u8] = &[0xc1, 0x01];
+        let result: Result<NewBlockHashes, _> = rlp::decode(short_element);
+        assert!(result.is_err());
     }
 }

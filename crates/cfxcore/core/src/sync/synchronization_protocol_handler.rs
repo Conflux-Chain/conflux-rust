@@ -427,6 +427,11 @@ pub struct ProtocolConfiguration {
     pub check_status_genesis: bool,
 
     pub pos_started_as_voter: bool,
+
+    /// Enable logging of NewBlockHashes source peer information (IP and
+    /// NodeId). Designed for bootnode deployment to track block propagation.
+    /// Default: false. Set to true in production via config to enable.
+    pub log_block_source: bool,
 }
 
 impl SynchronizationProtocolHandler {
@@ -578,6 +583,7 @@ impl SynchronizationProtocolHandler {
             node_id: *peer,
             io,
             manager: self,
+            peer_addr: io.get_peer_addr(peer),
         };
 
         if !handle_rlp_message(msg_id, &ctx, &rlp)? {
@@ -1023,6 +1029,7 @@ impl SynchronizationProtocolHandler {
                 node_id: io.self_node_id(),
                 io,
                 manager: self,
+                peer_addr: None,
             };
 
             ctx.send_response(&block_headers_resp)
