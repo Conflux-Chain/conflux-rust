@@ -338,11 +338,8 @@ impl ModexpPricer {
         if max_len % 8 > 0 {
             words += 1;
         }
-        let multiplication_complexity = if max_len <= 32 {
-            16
-        } else {
-            2 * words * words
-        };
+        let multiplication_complexity =
+            if max_len <= 32 { 16 } else { 2 * words * words };
         let gas = multiplication_complexity * iter_count;
         max(base_gas as u64, gas).into()
     }
