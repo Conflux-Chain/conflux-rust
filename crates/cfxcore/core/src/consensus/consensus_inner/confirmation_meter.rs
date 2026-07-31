@@ -177,6 +177,39 @@ impl ConfirmationMeter {
         }
     }
 
+    fn confirmation_risk_from_m_n(m: i128, n: i128) -> f64 {
+        let m_n_diff = m as f64 - n as f64;
+        let mut risk = 0.9;
+        let threshold_1 = if 0.75 * m as f64 - 22.0 < 2250.0 {
+            0.75 * m as f64 - 22.0
+        } else {
+            2250.0
+        };
+        if m_n_diff >= threshold_1 {
+            return risk;
+        }
+        risk = 0.0001;
+        let threshold_2 = if 0.70 * m as f64 - 22.0 < 1500.0 {
+            0.70 * m as f64 - 22.0
+        } else {
+            1500.0
+        };
+        if m_n_diff >= threshold_2 {
+            return risk;
+        }
+        risk = 0.000001;
+        let threshold_3 = if 0.65 * m as f64 - 22.0 < 750.0 {
+            0.65 * m as f64 - 22.0
+        } else {
+            750.0
+        };
+        if m_n_diff >= threshold_3 {
+            return risk;
+        }
+        risk = 0.00000001;
+        risk
+    }
+
     fn confirmation_risk(
         &self, g_inner: &ConsensusGraphInner, w_0: i128, w_4: i128,
         epoch_num: u64,
@@ -223,37 +256,7 @@ impl ConfirmationMeter {
         // w_4 {}, epoch_num {} genesis {}", m, n, w_0, w_1, w_2, w_3, w_4,
         // epoch_num, g_inner.cur_era_genesis_block_arena_index);
 
-        // Compute risk
-        let m_n_diff = m as f64 - n as f64;
-        let mut risk = 0.9;
-        let threshold_1 = if 0.75 * m as f64 - 22.0 < 2250.0 {
-            0.75 * m as f64 - 22.0
-        } else {
-            2250.0
-        };
-        if m_n_diff >= threshold_1 {
-            return risk;
-        }
-        risk = 0.0001;
-        let threshold_2 = if 0.70 * m as f64 - 22.0 < 1500.0 {
-            0.70 * m as f64 - 22.0
-        } else {
-            1500.0
-        };
-        if m_n_diff >= threshold_2 {
-            return risk;
-        }
-        risk = 0.000001;
-        let threshold_3 = if 0.65 * m as f64 - 22.0 < 750.0 {
-            0.65 * m as f64
-        } else {
-            750.0
-        };
-        if m_n_diff >= threshold_3 {
-            return risk;
-        }
-        risk = 0.00000001;
-        risk
+        Self::confirmation_risk_from_m_n(m, n)
     }
 
     /// `ConsensusGraphInner` invokes this function to recompute confirmation
@@ -375,5 +378,22 @@ impl ConfirmationMeter {
         }
 
         adaptive_risk > CONFIRMATION_METER_MAXIMUM_ADAPTIVE_RISK
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ConfirmationMeter;
+
+    #[test]
+    fn confirmation_risk_uses_offset_in_lowest_threshold() {
+        assert_eq!(
+            ConfirmationMeter::confirmation_risk_from_m_n(500, 190),
+            0.000001,
+        );
+        assert_eq!(
+            ConfirmationMeter::confirmation_risk_from_m_n(500, 198),
+            0.00000001,
+        );
     }
 }
