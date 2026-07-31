@@ -427,11 +427,6 @@ pub struct ProtocolConfiguration {
     pub check_status_genesis: bool,
 
     pub pos_started_as_voter: bool,
-
-    /// Enable logging of NewBlockHashes source peer information (IP and
-    /// NodeId). Designed for bootnode deployment to track block propagation.
-    /// Default: false. Set to true in production via config to enable.
-    pub log_block_source: bool,
 }
 
 impl SynchronizationProtocolHandler {
