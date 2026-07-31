@@ -177,203 +177,223 @@
 <a href=#177 id=177 data-nosnippet>177</a>        }
 <a href=#178 id=178 data-nosnippet>178</a>    }
 <a href=#179 id=179 data-nosnippet>179</a>
-<a href=#180 id=180 data-nosnippet>180</a>    <span class="kw">fn </span>confirmation_risk(
-<a href=#181 id=181 data-nosnippet>181</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, g_inner: <span class="kw-2">&amp;</span>ConsensusGraphInner, w_0: i128, w_4: i128,
-<a href=#182 id=182 data-nosnippet>182</a>        epoch_num: u64,
-<a href=#183 id=183 data-nosnippet>183</a>    ) -&gt; f64 {
-<a href=#184 id=184 data-nosnippet>184</a>        <span class="comment">// Compute w_1
-<a href=#185 id=185 data-nosnippet>185</a>        </span><span class="kw">let </span>idx = g_inner.get_pivot_block_arena_index(epoch_num);
-<a href=#186 id=186 data-nosnippet>186</a>        <span class="kw">let </span>pivot_idx = g_inner.height_to_pivot_index(epoch_num);
-<a href=#187 id=187 data-nosnippet>187</a>        <span class="kw">let </span>w_1 = g_inner.weight_tree.get(idx);
-<a href=#188 id=188 data-nosnippet>188</a>
-<a href=#189 id=189 data-nosnippet>189</a>        <span class="comment">// Compute w_2
-<a href=#190 id=190 data-nosnippet>190</a>        </span><span class="kw">let </span>parent = g_inner.arena[idx].parent;
-<a href=#191 id=191 data-nosnippet>191</a>        <span class="macro">assert!</span>(parent != NULL);
-<a href=#192 id=192 data-nosnippet>192</a>        <span class="kw">let </span><span class="kw-2">mut </span>max_weight = <span class="number">0</span>;
-<a href=#193 id=193 data-nosnippet>193</a>        <span class="kw">for </span>child <span class="kw">in </span>g_inner.arena[parent].children.iter() {
-<a href=#194 id=194 data-nosnippet>194</a>            <span class="kw">if </span><span class="kw-2">*</span>child == idx {
-<a href=#195 id=195 data-nosnippet>195</a>                <span class="kw">continue</span>;
-<a href=#196 id=196 data-nosnippet>196</a>            }
-<a href=#197 id=197 data-nosnippet>197</a>
-<a href=#198 id=198 data-nosnippet>198</a>            <span class="kw">let </span>child_weight = g_inner.weight_tree.get(<span class="kw-2">*</span>child);
-<a href=#199 id=199 data-nosnippet>199</a>            <span class="kw">if </span>child_weight &gt; max_weight {
-<a href=#200 id=200 data-nosnippet>200</a>                max_weight = child_weight;
-<a href=#201 id=201 data-nosnippet>201</a>            }
-<a href=#202 id=202 data-nosnippet>202</a>        }
-<a href=#203 id=203 data-nosnippet>203</a>        <span class="kw">let </span>w_2 = max_weight;
-<a href=#204 id=204 data-nosnippet>204</a>
-<a href=#205 id=205 data-nosnippet>205</a>        <span class="comment">// Compute w_3
-<a href=#206 id=206 data-nosnippet>206</a>        </span><span class="kw">let </span>w_3 = g_inner.pivot_chain_metadata[pivot_idx].past_weight;
-<a href=#207 id=207 data-nosnippet>207</a>
-<a href=#208 id=208 data-nosnippet>208</a>        <span class="comment">// Compute d
-<a href=#209 id=209 data-nosnippet>209</a>        </span><span class="kw">let </span>d = i128::try_from(g_inner.current_difficulty.low_u128()).unwrap();
-<a href=#210 id=210 data-nosnippet>210</a>
-<a href=#211 id=211 data-nosnippet>211</a>        <span class="comment">// Compute n
-<a href=#212 id=212 data-nosnippet>212</a>        </span><span class="kw">let </span>w_2_4 = w_2 + w_4;
-<a href=#213 id=213 data-nosnippet>213</a>        <span class="kw">let </span>n = <span class="kw">if </span>w_1 &gt;= w_2_4 { w_1 - w_2_4 } <span class="kw">else </span>{ <span class="number">0 </span>};
-<a href=#214 id=214 data-nosnippet>214</a>
-<a href=#215 id=215 data-nosnippet>215</a>        <span class="kw">let </span>n = (n / d) + <span class="number">1</span>;
-<a href=#216 id=216 data-nosnippet>216</a>
-<a href=#217 id=217 data-nosnippet>217</a>        <span class="comment">// Compute m
-<a href=#218 id=218 data-nosnippet>218</a>        </span><span class="kw">let </span>m = <span class="kw">if </span>w_0 &gt;= w_3 { w_0 - w_3 } <span class="kw">else </span>{ <span class="number">0 </span>};
-<a href=#219 id=219 data-nosnippet>219</a>
-<a href=#220 id=220 data-nosnippet>220</a>        <span class="kw">let </span>m = m / d;
+<a href=#180 id=180 data-nosnippet>180</a>    <span class="kw">fn </span>confirmation_risk_from_m_n(m: i128, n: i128) -&gt; f64 {
+<a href=#181 id=181 data-nosnippet>181</a>        <span class="kw">let </span>m_n_diff = m <span class="kw">as </span>f64 - n <span class="kw">as </span>f64;
+<a href=#182 id=182 data-nosnippet>182</a>        <span class="kw">let </span><span class="kw-2">mut </span>risk = <span class="number">0.9</span>;
+<a href=#183 id=183 data-nosnippet>183</a>        <span class="kw">let </span>threshold_1 = <span class="kw">if </span><span class="number">0.75 </span>* m <span class="kw">as </span>f64 - <span class="number">22.0 </span>&lt; <span class="number">2250.0 </span>{
+<a href=#184 id=184 data-nosnippet>184</a>            <span class="number">0.75 </span>* m <span class="kw">as </span>f64 - <span class="number">22.0
+<a href=#185 id=185 data-nosnippet>185</a>        </span>} <span class="kw">else </span>{
+<a href=#186 id=186 data-nosnippet>186</a>            <span class="number">2250.0
+<a href=#187 id=187 data-nosnippet>187</a>        </span>};
+<a href=#188 id=188 data-nosnippet>188</a>        <span class="kw">if </span>m_n_diff &gt;= threshold_1 {
+<a href=#189 id=189 data-nosnippet>189</a>            <span class="kw">return </span>risk;
+<a href=#190 id=190 data-nosnippet>190</a>        }
+<a href=#191 id=191 data-nosnippet>191</a>        risk = <span class="number">0.0001</span>;
+<a href=#192 id=192 data-nosnippet>192</a>        <span class="kw">let </span>threshold_2 = <span class="kw">if </span><span class="number">0.70 </span>* m <span class="kw">as </span>f64 - <span class="number">22.0 </span>&lt; <span class="number">1500.0 </span>{
+<a href=#193 id=193 data-nosnippet>193</a>            <span class="number">0.70 </span>* m <span class="kw">as </span>f64 - <span class="number">22.0
+<a href=#194 id=194 data-nosnippet>194</a>        </span>} <span class="kw">else </span>{
+<a href=#195 id=195 data-nosnippet>195</a>            <span class="number">1500.0
+<a href=#196 id=196 data-nosnippet>196</a>        </span>};
+<a href=#197 id=197 data-nosnippet>197</a>        <span class="kw">if </span>m_n_diff &gt;= threshold_2 {
+<a href=#198 id=198 data-nosnippet>198</a>            <span class="kw">return </span>risk;
+<a href=#199 id=199 data-nosnippet>199</a>        }
+<a href=#200 id=200 data-nosnippet>200</a>        risk = <span class="number">0.000001</span>;
+<a href=#201 id=201 data-nosnippet>201</a>        <span class="kw">let </span>threshold_3 = <span class="kw">if </span><span class="number">0.65 </span>* m <span class="kw">as </span>f64 - <span class="number">22.0 </span>&lt; <span class="number">750.0 </span>{
+<a href=#202 id=202 data-nosnippet>202</a>            <span class="number">0.65 </span>* m <span class="kw">as </span>f64 - <span class="number">22.0
+<a href=#203 id=203 data-nosnippet>203</a>        </span>} <span class="kw">else </span>{
+<a href=#204 id=204 data-nosnippet>204</a>            <span class="number">750.0
+<a href=#205 id=205 data-nosnippet>205</a>        </span>};
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="kw">if </span>m_n_diff &gt;= threshold_3 {
+<a href=#207 id=207 data-nosnippet>207</a>            <span class="kw">return </span>risk;
+<a href=#208 id=208 data-nosnippet>208</a>        }
+<a href=#209 id=209 data-nosnippet>209</a>        risk = <span class="number">0.00000001</span>;
+<a href=#210 id=210 data-nosnippet>210</a>        risk
+<a href=#211 id=211 data-nosnippet>211</a>    }
+<a href=#212 id=212 data-nosnippet>212</a>
+<a href=#213 id=213 data-nosnippet>213</a>    <span class="kw">fn </span>confirmation_risk(
+<a href=#214 id=214 data-nosnippet>214</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, g_inner: <span class="kw-2">&amp;</span>ConsensusGraphInner, w_0: i128, w_4: i128,
+<a href=#215 id=215 data-nosnippet>215</a>        epoch_num: u64,
+<a href=#216 id=216 data-nosnippet>216</a>    ) -&gt; f64 {
+<a href=#217 id=217 data-nosnippet>217</a>        <span class="comment">// Compute w_1
+<a href=#218 id=218 data-nosnippet>218</a>        </span><span class="kw">let </span>idx = g_inner.get_pivot_block_arena_index(epoch_num);
+<a href=#219 id=219 data-nosnippet>219</a>        <span class="kw">let </span>pivot_idx = g_inner.height_to_pivot_index(epoch_num);
+<a href=#220 id=220 data-nosnippet>220</a>        <span class="kw">let </span>w_1 = g_inner.weight_tree.get(idx);
 <a href=#221 id=221 data-nosnippet>221</a>
-<a href=#222 id=222 data-nosnippet>222</a>        <span class="comment">// debug!("Confirmation Risk: m {} n {} w_0 {}, w_1 {}, w_2 {}, w_3 {},
-<a href=#223 id=223 data-nosnippet>223</a>        // w_4 {}, epoch_num {} genesis {}", m, n, w_0, w_1, w_2, w_3, w_4,
-<a href=#224 id=224 data-nosnippet>224</a>        // epoch_num, g_inner.cur_era_genesis_block_arena_index);
-<a href=#225 id=225 data-nosnippet>225</a>
-<a href=#226 id=226 data-nosnippet>226</a>        // Compute risk
-<a href=#227 id=227 data-nosnippet>227</a>        </span><span class="kw">let </span>m_n_diff = m <span class="kw">as </span>f64 - n <span class="kw">as </span>f64;
-<a href=#228 id=228 data-nosnippet>228</a>        <span class="kw">let </span><span class="kw-2">mut </span>risk = <span class="number">0.9</span>;
-<a href=#229 id=229 data-nosnippet>229</a>        <span class="kw">let </span>threshold_1 = <span class="kw">if </span><span class="number">0.75 </span>* m <span class="kw">as </span>f64 - <span class="number">22.0 </span>&lt; <span class="number">2250.0 </span>{
-<a href=#230 id=230 data-nosnippet>230</a>            <span class="number">0.75 </span>* m <span class="kw">as </span>f64 - <span class="number">22.0
-<a href=#231 id=231 data-nosnippet>231</a>        </span>} <span class="kw">else </span>{
-<a href=#232 id=232 data-nosnippet>232</a>            <span class="number">2250.0
-<a href=#233 id=233 data-nosnippet>233</a>        </span>};
-<a href=#234 id=234 data-nosnippet>234</a>        <span class="kw">if </span>m_n_diff &gt;= threshold_1 {
-<a href=#235 id=235 data-nosnippet>235</a>            <span class="kw">return </span>risk;
-<a href=#236 id=236 data-nosnippet>236</a>        }
-<a href=#237 id=237 data-nosnippet>237</a>        risk = <span class="number">0.0001</span>;
-<a href=#238 id=238 data-nosnippet>238</a>        <span class="kw">let </span>threshold_2 = <span class="kw">if </span><span class="number">0.70 </span>* m <span class="kw">as </span>f64 - <span class="number">22.0 </span>&lt; <span class="number">1500.0 </span>{
-<a href=#239 id=239 data-nosnippet>239</a>            <span class="number">0.70 </span>* m <span class="kw">as </span>f64 - <span class="number">22.0
-<a href=#240 id=240 data-nosnippet>240</a>        </span>} <span class="kw">else </span>{
-<a href=#241 id=241 data-nosnippet>241</a>            <span class="number">1500.0
-<a href=#242 id=242 data-nosnippet>242</a>        </span>};
-<a href=#243 id=243 data-nosnippet>243</a>        <span class="kw">if </span>m_n_diff &gt;= threshold_2 {
-<a href=#244 id=244 data-nosnippet>244</a>            <span class="kw">return </span>risk;
-<a href=#245 id=245 data-nosnippet>245</a>        }
-<a href=#246 id=246 data-nosnippet>246</a>        risk = <span class="number">0.000001</span>;
-<a href=#247 id=247 data-nosnippet>247</a>        <span class="kw">let </span>threshold_3 = <span class="kw">if </span><span class="number">0.65 </span>* m <span class="kw">as </span>f64 - <span class="number">22.0 </span>&lt; <span class="number">750.0 </span>{
-<a href=#248 id=248 data-nosnippet>248</a>            <span class="number">0.65 </span>* m <span class="kw">as </span>f64
-<a href=#249 id=249 data-nosnippet>249</a>        } <span class="kw">else </span>{
-<a href=#250 id=250 data-nosnippet>250</a>            <span class="number">750.0
-<a href=#251 id=251 data-nosnippet>251</a>        </span>};
-<a href=#252 id=252 data-nosnippet>252</a>        <span class="kw">if </span>m_n_diff &gt;= threshold_3 {
-<a href=#253 id=253 data-nosnippet>253</a>            <span class="kw">return </span>risk;
-<a href=#254 id=254 data-nosnippet>254</a>        }
-<a href=#255 id=255 data-nosnippet>255</a>        risk = <span class="number">0.00000001</span>;
-<a href=#256 id=256 data-nosnippet>256</a>        risk
-<a href=#257 id=257 data-nosnippet>257</a>    }
+<a href=#222 id=222 data-nosnippet>222</a>        <span class="comment">// Compute w_2
+<a href=#223 id=223 data-nosnippet>223</a>        </span><span class="kw">let </span>parent = g_inner.arena[idx].parent;
+<a href=#224 id=224 data-nosnippet>224</a>        <span class="macro">assert!</span>(parent != NULL);
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="kw">let </span><span class="kw-2">mut </span>max_weight = <span class="number">0</span>;
+<a href=#226 id=226 data-nosnippet>226</a>        <span class="kw">for </span>child <span class="kw">in </span>g_inner.arena[parent].children.iter() {
+<a href=#227 id=227 data-nosnippet>227</a>            <span class="kw">if </span><span class="kw-2">*</span>child == idx {
+<a href=#228 id=228 data-nosnippet>228</a>                <span class="kw">continue</span>;
+<a href=#229 id=229 data-nosnippet>229</a>            }
+<a href=#230 id=230 data-nosnippet>230</a>
+<a href=#231 id=231 data-nosnippet>231</a>            <span class="kw">let </span>child_weight = g_inner.weight_tree.get(<span class="kw-2">*</span>child);
+<a href=#232 id=232 data-nosnippet>232</a>            <span class="kw">if </span>child_weight &gt; max_weight {
+<a href=#233 id=233 data-nosnippet>233</a>                max_weight = child_weight;
+<a href=#234 id=234 data-nosnippet>234</a>            }
+<a href=#235 id=235 data-nosnippet>235</a>        }
+<a href=#236 id=236 data-nosnippet>236</a>        <span class="kw">let </span>w_2 = max_weight;
+<a href=#237 id=237 data-nosnippet>237</a>
+<a href=#238 id=238 data-nosnippet>238</a>        <span class="comment">// Compute w_3
+<a href=#239 id=239 data-nosnippet>239</a>        </span><span class="kw">let </span>w_3 = g_inner.pivot_chain_metadata[pivot_idx].past_weight;
+<a href=#240 id=240 data-nosnippet>240</a>
+<a href=#241 id=241 data-nosnippet>241</a>        <span class="comment">// Compute d
+<a href=#242 id=242 data-nosnippet>242</a>        </span><span class="kw">let </span>d = i128::try_from(g_inner.current_difficulty.low_u128()).unwrap();
+<a href=#243 id=243 data-nosnippet>243</a>
+<a href=#244 id=244 data-nosnippet>244</a>        <span class="comment">// Compute n
+<a href=#245 id=245 data-nosnippet>245</a>        </span><span class="kw">let </span>w_2_4 = w_2 + w_4;
+<a href=#246 id=246 data-nosnippet>246</a>        <span class="kw">let </span>n = <span class="kw">if </span>w_1 &gt;= w_2_4 { w_1 - w_2_4 } <span class="kw">else </span>{ <span class="number">0 </span>};
+<a href=#247 id=247 data-nosnippet>247</a>
+<a href=#248 id=248 data-nosnippet>248</a>        <span class="kw">let </span>n = (n / d) + <span class="number">1</span>;
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a>        <span class="comment">// Compute m
+<a href=#251 id=251 data-nosnippet>251</a>        </span><span class="kw">let </span>m = <span class="kw">if </span>w_0 &gt;= w_3 { w_0 - w_3 } <span class="kw">else </span>{ <span class="number">0 </span>};
+<a href=#252 id=252 data-nosnippet>252</a>
+<a href=#253 id=253 data-nosnippet>253</a>        <span class="kw">let </span>m = m / d;
+<a href=#254 id=254 data-nosnippet>254</a>
+<a href=#255 id=255 data-nosnippet>255</a>        <span class="comment">// debug!("Confirmation Risk: m {} n {} w_0 {}, w_1 {}, w_2 {}, w_3 {},
+<a href=#256 id=256 data-nosnippet>256</a>        // w_4 {}, epoch_num {} genesis {}", m, n, w_0, w_1, w_2, w_3, w_4,
+<a href=#257 id=257 data-nosnippet>257</a>        // epoch_num, g_inner.cur_era_genesis_block_arena_index);
 <a href=#258 id=258 data-nosnippet>258</a>
-<a href=#259 id=259 data-nosnippet>259</a>    <span class="doccomment">/// `ConsensusGraphInner` invokes this function to recompute confirmation
-<a href=#260 id=260 data-nosnippet>260</a>    /// risk of all epochs periodically
-<a href=#261 id=261 data-nosnippet>261</a>    </span><span class="kw">pub fn </span>update_confirmation_risks(<span class="kw-2">&amp;</span><span class="self">self</span>, g_inner: <span class="kw-2">&amp;</span>ConsensusGraphInner) {
-<a href=#262 id=262 data-nosnippet>262</a>        <span class="kw">if </span>g_inner.pivot_chain.len() &gt; DEFERRED_STATE_EPOCH_COUNT <span class="kw">as </span>usize {
-<a href=#263 id=263 data-nosnippet>263</a>            <span class="kw">let </span>w_0 = g_inner
-<a href=#264 id=264 data-nosnippet>264</a>                .weight_tree
-<a href=#265 id=265 data-nosnippet>265</a>                .get(g_inner.cur_era_genesis_block_arena_index);
-<a href=#266 id=266 data-nosnippet>266</a>            <span class="kw">let </span><span class="kw-2">mut </span>risks = VecDeque::new();
-<a href=#267 id=267 data-nosnippet>267</a>            <span class="kw">let </span><span class="kw-2">mut </span>epoch_num = g_inner
-<a href=#268 id=268 data-nosnippet>268</a>                .pivot_index_to_height(g_inner.pivot_chain.len())
-<a href=#269 id=269 data-nosnippet>269</a>                - DEFERRED_STATE_EPOCH_COUNT;
-<a href=#270 id=270 data-nosnippet>270</a>            <span class="kw">let </span><span class="kw-2">mut </span>count = <span class="number">0</span>;
-<a href=#271 id=271 data-nosnippet>271</a>            <span class="kw">while </span>epoch_num &gt; g_inner.cur_era_genesis_height
-<a href=#272 id=272 data-nosnippet>272</a>                &amp;&amp; count &lt; CONFIRMATION_METER_MAX_NUM_MAINTAINED_RISK
-<a href=#273 id=273 data-nosnippet>273</a>            {
-<a href=#274 id=274 data-nosnippet>274</a>                <span class="kw">let </span>w_4 = <span class="self">self</span>.inner.read().total_weight_in_past_2d.delta;
-<a href=#275 id=275 data-nosnippet>275</a>                <span class="kw">let </span>risk = <span class="self">self</span>.confirmation_risk(g_inner, w_0, w_4, epoch_num);
-<a href=#276 id=276 data-nosnippet>276</a>                risks.push_front(risk);
-<a href=#277 id=277 data-nosnippet>277</a>                epoch_num -= <span class="number">1</span>;
-<a href=#278 id=278 data-nosnippet>278</a>                count += <span class="number">1</span>;
-<a href=#279 id=279 data-nosnippet>279</a>                <span class="kw">if </span>risk &lt;= CONFIRMATION_METER_MIN_MAINTAINED_RISK {
-<a href=#280 id=280 data-nosnippet>280</a>                    <span class="kw">break</span>;
-<a href=#281 id=281 data-nosnippet>281</a>                }
-<a href=#282 id=282 data-nosnippet>282</a>            }
-<a href=#283 id=283 data-nosnippet>283</a>
-<a href=#284 id=284 data-nosnippet>284</a>            <span class="kw">if </span>risks.is_empty() {
-<a href=#285 id=285 data-nosnippet>285</a>                epoch_num = g_inner.cur_era_genesis_height;
-<a href=#286 id=286 data-nosnippet>286</a>            } <span class="kw">else </span>{
-<a href=#287 id=287 data-nosnippet>287</a>                epoch_num += <span class="number">1</span>;
-<a href=#288 id=288 data-nosnippet>288</a>            }
-<a href=#289 id=289 data-nosnippet>289</a>
-<a href=#290 id=290 data-nosnippet>290</a>            <span class="kw">let </span>finality = <span class="kw-2">&amp;mut </span><span class="self">self</span>.inner.write().finality_manager;
-<a href=#291 id=291 data-nosnippet>291</a>            <span class="macro">debug!</span>(<span class="string">"Confirmation Risk: {:?}"</span>, risks);
-<a href=#292 id=292 data-nosnippet>292</a>            finality.lowest_epoch_num = epoch_num;
-<a href=#293 id=293 data-nosnippet>293</a>            finality.risks_less_than = risks;
-<a href=#294 id=294 data-nosnippet>294</a>        }
-<a href=#295 id=295 data-nosnippet>295</a>    }
-<a href=#296 id=296 data-nosnippet>296</a>
-<a href=#297 id=297 data-nosnippet>297</a>    <span class="doccomment">/// This is an expensive function to check whether the current tree graph
-<a href=#298 id=298 data-nosnippet>298</a>    /// will generate adaptive block under `me` in future. This function is
-<a href=#299 id=299 data-nosnippet>299</a>    /// used by Conflux to determine when we will remove old snapshots. If
-<a href=#300 id=300 data-nosnippet>300</a>    /// this is true, we will avoid remove snapshots from the storage layer.
-<a href=#301 id=301 data-nosnippet>301</a>    </span><span class="kw">pub fn </span>is_adaptive_possible(
-<a href=#302 id=302 data-nosnippet>302</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, g_inner: <span class="kw-2">&amp;</span>ConsensusGraphInner, me: usize,
-<a href=#303 id=303 data-nosnippet>303</a>    ) -&gt; bool {
-<a href=#304 id=304 data-nosnippet>304</a>        <span class="kw">let </span>psi = CONFIRMATION_METER_PSI;
-<a href=#305 id=305 data-nosnippet>305</a>        <span class="comment">// Find the first pivot chain block whose timer diff is less than 140
-<a href=#306 id=306 data-nosnippet>306</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>cur_height = g_inner.cur_era_stable_height;
-<a href=#307 id=307 data-nosnippet>307</a>        <span class="kw">let </span><span class="kw-2">mut </span>cur_arena_index =
-<a href=#308 id=308 data-nosnippet>308</a>            g_inner.get_pivot_block_arena_index(cur_height);
-<a href=#309 id=309 data-nosnippet>309</a>        <span class="kw">while </span>g_inner.arena[cur_arena_index]
-<a href=#310 id=310 data-nosnippet>310</a>            .data
-<a href=#311 id=311 data-nosnippet>311</a>            .ledger_view_timer_chain_height
-<a href=#312 id=312 data-nosnippet>312</a>            + CONFIRMATION_METER_ADAPTIVE_TEST_TIMER_DIFF
-<a href=#313 id=313 data-nosnippet>313</a>            &lt;= g_inner.arena[me].data.ledger_view_timer_chain_height
-<a href=#314 id=314 data-nosnippet>314</a>            &amp;&amp; cur_height &lt; g_inner.best_epoch_number()
-<a href=#315 id=315 data-nosnippet>315</a>        {
-<a href=#316 id=316 data-nosnippet>316</a>            cur_height += <span class="number">1</span>;
-<a href=#317 id=317 data-nosnippet>317</a>            cur_arena_index = g_inner.get_pivot_block_arena_index(cur_height);
-<a href=#318 id=318 data-nosnippet>318</a>        }
-<a href=#319 id=319 data-nosnippet>319</a>
-<a href=#320 id=320 data-nosnippet>320</a>        <span class="kw">if </span>cur_height == g_inner.cur_era_stable_height {
-<a href=#321 id=321 data-nosnippet>321</a>            <span class="kw">return </span><span class="bool-val">false</span>;
-<a href=#322 id=322 data-nosnippet>322</a>        }
-<a href=#323 id=323 data-nosnippet>323</a>
-<a href=#324 id=324 data-nosnippet>324</a>        <span class="kw">let </span><span class="kw-2">mut </span>end_checking_height =
-<a href=#325 id=325 data-nosnippet>325</a>            (cur_height - g_inner.cur_era_stable_height + psi - <span class="number">1</span>) / psi * psi
-<a href=#326 id=326 data-nosnippet>326</a>                + g_inner.cur_era_stable_height;
-<a href=#327 id=327 data-nosnippet>327</a>        <span class="comment">// corner case, should be extremely rare
-<a href=#328 id=328 data-nosnippet>328</a>        </span><span class="kw">if </span>end_checking_height &gt; g_inner.best_epoch_number() {
-<a href=#329 id=329 data-nosnippet>329</a>            end_checking_height -= psi;
-<a href=#330 id=330 data-nosnippet>330</a>        }
-<a href=#331 id=331 data-nosnippet>331</a>        <span class="kw">let </span>n = (end_checking_height - g_inner.cur_era_stable_height) / psi;
-<a href=#332 id=332 data-nosnippet>332</a>        <span class="kw">let </span>total_weight = g_inner
-<a href=#333 id=333 data-nosnippet>333</a>            .weight_tree
-<a href=#334 id=334 data-nosnippet>334</a>            .get(g_inner.cur_era_genesis_block_arena_index);
-<a href=#335 id=335 data-nosnippet>335</a>        <span class="kw">let </span>me_index =
-<a href=#336 id=336 data-nosnippet>336</a>            g_inner.height_to_pivot_index(g_inner.arena[me].data.epoch_number);
-<a href=#337 id=337 data-nosnippet>337</a>        <span class="kw">let </span>x_3 =
-<a href=#338 id=338 data-nosnippet>338</a>            total_weight - g_inner.pivot_chain_metadata[me_index].past_weight;
-<a href=#339 id=339 data-nosnippet>339</a>
-<a href=#340 id=340 data-nosnippet>340</a>        <span class="kw">let </span><span class="kw-2">mut </span>adaptive_risk = <span class="number">0f64</span>;
-<a href=#341 id=341 data-nosnippet>341</a>        <span class="kw">let </span>d = i128::try_from(g_inner.current_difficulty.low_u128()).unwrap();
-<a href=#342 id=342 data-nosnippet>342</a>        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..n {
-<a href=#343 id=343 data-nosnippet>343</a>            <span class="kw">let </span>a_pivot_index = g_inner.height_to_pivot_index(
-<a href=#344 id=344 data-nosnippet>344</a>                g_inner.cur_era_stable_height + i * psi <span class="kw">as </span>u64,
-<a href=#345 id=345 data-nosnippet>345</a>            );
-<a href=#346 id=346 data-nosnippet>346</a>            <span class="kw">let </span>b_pivot_index = g_inner.height_to_pivot_index(
-<a href=#347 id=347 data-nosnippet>347</a>                g_inner.cur_era_stable_height + (i + <span class="number">1</span>) * psi <span class="kw">as </span>u64,
+<a href=#259 id=259 data-nosnippet>259</a>        </span><span class="self">Self</span>::confirmation_risk_from_m_n(m, n)
+<a href=#260 id=260 data-nosnippet>260</a>    }
+<a href=#261 id=261 data-nosnippet>261</a>
+<a href=#262 id=262 data-nosnippet>262</a>    <span class="doccomment">/// `ConsensusGraphInner` invokes this function to recompute confirmation
+<a href=#263 id=263 data-nosnippet>263</a>    /// risk of all epochs periodically
+<a href=#264 id=264 data-nosnippet>264</a>    </span><span class="kw">pub fn </span>update_confirmation_risks(<span class="kw-2">&amp;</span><span class="self">self</span>, g_inner: <span class="kw-2">&amp;</span>ConsensusGraphInner) {
+<a href=#265 id=265 data-nosnippet>265</a>        <span class="kw">if </span>g_inner.pivot_chain.len() &gt; DEFERRED_STATE_EPOCH_COUNT <span class="kw">as </span>usize {
+<a href=#266 id=266 data-nosnippet>266</a>            <span class="kw">let </span>w_0 = g_inner
+<a href=#267 id=267 data-nosnippet>267</a>                .weight_tree
+<a href=#268 id=268 data-nosnippet>268</a>                .get(g_inner.cur_era_genesis_block_arena_index);
+<a href=#269 id=269 data-nosnippet>269</a>            <span class="kw">let </span><span class="kw-2">mut </span>risks = VecDeque::new();
+<a href=#270 id=270 data-nosnippet>270</a>            <span class="kw">let </span><span class="kw-2">mut </span>epoch_num = g_inner
+<a href=#271 id=271 data-nosnippet>271</a>                .pivot_index_to_height(g_inner.pivot_chain.len())
+<a href=#272 id=272 data-nosnippet>272</a>                - DEFERRED_STATE_EPOCH_COUNT;
+<a href=#273 id=273 data-nosnippet>273</a>            <span class="kw">let </span><span class="kw-2">mut </span>count = <span class="number">0</span>;
+<a href=#274 id=274 data-nosnippet>274</a>            <span class="kw">while </span>epoch_num &gt; g_inner.cur_era_genesis_height
+<a href=#275 id=275 data-nosnippet>275</a>                &amp;&amp; count &lt; CONFIRMATION_METER_MAX_NUM_MAINTAINED_RISK
+<a href=#276 id=276 data-nosnippet>276</a>            {
+<a href=#277 id=277 data-nosnippet>277</a>                <span class="kw">let </span>w_4 = <span class="self">self</span>.inner.read().total_weight_in_past_2d.delta;
+<a href=#278 id=278 data-nosnippet>278</a>                <span class="kw">let </span>risk = <span class="self">self</span>.confirmation_risk(g_inner, w_0, w_4, epoch_num);
+<a href=#279 id=279 data-nosnippet>279</a>                risks.push_front(risk);
+<a href=#280 id=280 data-nosnippet>280</a>                epoch_num -= <span class="number">1</span>;
+<a href=#281 id=281 data-nosnippet>281</a>                count += <span class="number">1</span>;
+<a href=#282 id=282 data-nosnippet>282</a>                <span class="kw">if </span>risk &lt;= CONFIRMATION_METER_MIN_MAINTAINED_RISK {
+<a href=#283 id=283 data-nosnippet>283</a>                    <span class="kw">break</span>;
+<a href=#284 id=284 data-nosnippet>284</a>                }
+<a href=#285 id=285 data-nosnippet>285</a>            }
+<a href=#286 id=286 data-nosnippet>286</a>
+<a href=#287 id=287 data-nosnippet>287</a>            <span class="kw">if </span>risks.is_empty() {
+<a href=#288 id=288 data-nosnippet>288</a>                epoch_num = g_inner.cur_era_genesis_height;
+<a href=#289 id=289 data-nosnippet>289</a>            } <span class="kw">else </span>{
+<a href=#290 id=290 data-nosnippet>290</a>                epoch_num += <span class="number">1</span>;
+<a href=#291 id=291 data-nosnippet>291</a>            }
+<a href=#292 id=292 data-nosnippet>292</a>
+<a href=#293 id=293 data-nosnippet>293</a>            <span class="kw">let </span>finality = <span class="kw-2">&amp;mut </span><span class="self">self</span>.inner.write().finality_manager;
+<a href=#294 id=294 data-nosnippet>294</a>            <span class="macro">debug!</span>(<span class="string">"Confirmation Risk: {:?}"</span>, risks);
+<a href=#295 id=295 data-nosnippet>295</a>            finality.lowest_epoch_num = epoch_num;
+<a href=#296 id=296 data-nosnippet>296</a>            finality.risks_less_than = risks;
+<a href=#297 id=297 data-nosnippet>297</a>        }
+<a href=#298 id=298 data-nosnippet>298</a>    }
+<a href=#299 id=299 data-nosnippet>299</a>
+<a href=#300 id=300 data-nosnippet>300</a>    <span class="doccomment">/// This is an expensive function to check whether the current tree graph
+<a href=#301 id=301 data-nosnippet>301</a>    /// will generate adaptive block under `me` in future. This function is
+<a href=#302 id=302 data-nosnippet>302</a>    /// used by Conflux to determine when we will remove old snapshots. If
+<a href=#303 id=303 data-nosnippet>303</a>    /// this is true, we will avoid remove snapshots from the storage layer.
+<a href=#304 id=304 data-nosnippet>304</a>    </span><span class="kw">pub fn </span>is_adaptive_possible(
+<a href=#305 id=305 data-nosnippet>305</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, g_inner: <span class="kw-2">&amp;</span>ConsensusGraphInner, me: usize,
+<a href=#306 id=306 data-nosnippet>306</a>    ) -&gt; bool {
+<a href=#307 id=307 data-nosnippet>307</a>        <span class="kw">let </span>psi = CONFIRMATION_METER_PSI;
+<a href=#308 id=308 data-nosnippet>308</a>        <span class="comment">// Find the first pivot chain block whose timer diff is less than 140
+<a href=#309 id=309 data-nosnippet>309</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>cur_height = g_inner.cur_era_stable_height;
+<a href=#310 id=310 data-nosnippet>310</a>        <span class="kw">let </span><span class="kw-2">mut </span>cur_arena_index =
+<a href=#311 id=311 data-nosnippet>311</a>            g_inner.get_pivot_block_arena_index(cur_height);
+<a href=#312 id=312 data-nosnippet>312</a>        <span class="kw">while </span>g_inner.arena[cur_arena_index]
+<a href=#313 id=313 data-nosnippet>313</a>            .data
+<a href=#314 id=314 data-nosnippet>314</a>            .ledger_view_timer_chain_height
+<a href=#315 id=315 data-nosnippet>315</a>            + CONFIRMATION_METER_ADAPTIVE_TEST_TIMER_DIFF
+<a href=#316 id=316 data-nosnippet>316</a>            &lt;= g_inner.arena[me].data.ledger_view_timer_chain_height
+<a href=#317 id=317 data-nosnippet>317</a>            &amp;&amp; cur_height &lt; g_inner.best_epoch_number()
+<a href=#318 id=318 data-nosnippet>318</a>        {
+<a href=#319 id=319 data-nosnippet>319</a>            cur_height += <span class="number">1</span>;
+<a href=#320 id=320 data-nosnippet>320</a>            cur_arena_index = g_inner.get_pivot_block_arena_index(cur_height);
+<a href=#321 id=321 data-nosnippet>321</a>        }
+<a href=#322 id=322 data-nosnippet>322</a>
+<a href=#323 id=323 data-nosnippet>323</a>        <span class="kw">if </span>cur_height == g_inner.cur_era_stable_height {
+<a href=#324 id=324 data-nosnippet>324</a>            <span class="kw">return </span><span class="bool-val">false</span>;
+<a href=#325 id=325 data-nosnippet>325</a>        }
+<a href=#326 id=326 data-nosnippet>326</a>
+<a href=#327 id=327 data-nosnippet>327</a>        <span class="kw">let </span><span class="kw-2">mut </span>end_checking_height =
+<a href=#328 id=328 data-nosnippet>328</a>            (cur_height - g_inner.cur_era_stable_height + psi - <span class="number">1</span>) / psi * psi
+<a href=#329 id=329 data-nosnippet>329</a>                + g_inner.cur_era_stable_height;
+<a href=#330 id=330 data-nosnippet>330</a>        <span class="comment">// corner case, should be extremely rare
+<a href=#331 id=331 data-nosnippet>331</a>        </span><span class="kw">if </span>end_checking_height &gt; g_inner.best_epoch_number() {
+<a href=#332 id=332 data-nosnippet>332</a>            end_checking_height -= psi;
+<a href=#333 id=333 data-nosnippet>333</a>        }
+<a href=#334 id=334 data-nosnippet>334</a>        <span class="kw">let </span>n = (end_checking_height - g_inner.cur_era_stable_height) / psi;
+<a href=#335 id=335 data-nosnippet>335</a>        <span class="kw">let </span>total_weight = g_inner
+<a href=#336 id=336 data-nosnippet>336</a>            .weight_tree
+<a href=#337 id=337 data-nosnippet>337</a>            .get(g_inner.cur_era_genesis_block_arena_index);
+<a href=#338 id=338 data-nosnippet>338</a>        <span class="kw">let </span>me_index =
+<a href=#339 id=339 data-nosnippet>339</a>            g_inner.height_to_pivot_index(g_inner.arena[me].data.epoch_number);
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="kw">let </span>x_3 =
+<a href=#341 id=341 data-nosnippet>341</a>            total_weight - g_inner.pivot_chain_metadata[me_index].past_weight;
+<a href=#342 id=342 data-nosnippet>342</a>
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="kw">let </span><span class="kw-2">mut </span>adaptive_risk = <span class="number">0f64</span>;
+<a href=#344 id=344 data-nosnippet>344</a>        <span class="kw">let </span>d = i128::try_from(g_inner.current_difficulty.low_u128()).unwrap();
+<a href=#345 id=345 data-nosnippet>345</a>        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..n {
+<a href=#346 id=346 data-nosnippet>346</a>            <span class="kw">let </span>a_pivot_index = g_inner.height_to_pivot_index(
+<a href=#347 id=347 data-nosnippet>347</a>                g_inner.cur_era_stable_height + i * psi <span class="kw">as </span>u64,
 <a href=#348 id=348 data-nosnippet>348</a>            );
-<a href=#349 id=349 data-nosnippet>349</a>            <span class="kw">let </span>b = g_inner.pivot_chain[b_pivot_index];
-<a href=#350 id=350 data-nosnippet>350</a>            <span class="kw">let </span>y = g_inner.weight_tree.get(b);
-<a href=#351 id=351 data-nosnippet>351</a>            <span class="kw">let </span><span class="kw-2">mut </span>x_1 = <span class="number">0</span>;
-<a href=#352 id=352 data-nosnippet>352</a>            <span class="kw">for </span>v <span class="kw">in </span>a_pivot_index..b_pivot_index {
-<a href=#353 id=353 data-nosnippet>353</a>                <span class="kw">let </span>pivot = g_inner.pivot_chain[v];
-<a href=#354 id=354 data-nosnippet>354</a>                <span class="kw">let </span>next_pivot = g_inner.pivot_chain[v + <span class="number">1</span>];
-<a href=#355 id=355 data-nosnippet>355</a>                <span class="kw">for </span>child <span class="kw">in </span><span class="kw-2">&amp;</span>g_inner.arena[pivot].children {
-<a href=#356 id=356 data-nosnippet>356</a>                    <span class="kw">if </span><span class="kw-2">*</span>child != next_pivot {
-<a href=#357 id=357 data-nosnippet>357</a>                        <span class="kw">let </span>child_subtree_weight =
-<a href=#358 id=358 data-nosnippet>358</a>                            g_inner.weight_tree.get(<span class="kw-2">*</span>child);
-<a href=#359 id=359 data-nosnippet>359</a>                        x_1 = max(x_1, child_subtree_weight);
-<a href=#360 id=360 data-nosnippet>360</a>                    }
-<a href=#361 id=361 data-nosnippet>361</a>                }
-<a href=#362 id=362 data-nosnippet>362</a>            }
-<a href=#363 id=363 data-nosnippet>363</a>            <span class="kw">let </span>n_j = (y
-<a href=#364 id=364 data-nosnippet>364</a>                - x_1
-<a href=#365 id=365 data-nosnippet>365</a>                - x_3
-<a href=#366 id=366 data-nosnippet>366</a>                - <span class="self">self</span>.inner.read().total_weight_in_past_2d.delta)
-<a href=#367 id=367 data-nosnippet>367</a>                / d;
-<a href=#368 id=368 data-nosnippet>368</a>            <span class="kw">let </span>m_j = (total_weight
-<a href=#369 id=369 data-nosnippet>369</a>                - g_inner.pivot_chain_metadata[a_pivot_index].past_weight)
+<a href=#349 id=349 data-nosnippet>349</a>            <span class="kw">let </span>b_pivot_index = g_inner.height_to_pivot_index(
+<a href=#350 id=350 data-nosnippet>350</a>                g_inner.cur_era_stable_height + (i + <span class="number">1</span>) * psi <span class="kw">as </span>u64,
+<a href=#351 id=351 data-nosnippet>351</a>            );
+<a href=#352 id=352 data-nosnippet>352</a>            <span class="kw">let </span>b = g_inner.pivot_chain[b_pivot_index];
+<a href=#353 id=353 data-nosnippet>353</a>            <span class="kw">let </span>y = g_inner.weight_tree.get(b);
+<a href=#354 id=354 data-nosnippet>354</a>            <span class="kw">let </span><span class="kw-2">mut </span>x_1 = <span class="number">0</span>;
+<a href=#355 id=355 data-nosnippet>355</a>            <span class="kw">for </span>v <span class="kw">in </span>a_pivot_index..b_pivot_index {
+<a href=#356 id=356 data-nosnippet>356</a>                <span class="kw">let </span>pivot = g_inner.pivot_chain[v];
+<a href=#357 id=357 data-nosnippet>357</a>                <span class="kw">let </span>next_pivot = g_inner.pivot_chain[v + <span class="number">1</span>];
+<a href=#358 id=358 data-nosnippet>358</a>                <span class="kw">for </span>child <span class="kw">in </span><span class="kw-2">&amp;</span>g_inner.arena[pivot].children {
+<a href=#359 id=359 data-nosnippet>359</a>                    <span class="kw">if </span><span class="kw-2">*</span>child != next_pivot {
+<a href=#360 id=360 data-nosnippet>360</a>                        <span class="kw">let </span>child_subtree_weight =
+<a href=#361 id=361 data-nosnippet>361</a>                            g_inner.weight_tree.get(<span class="kw-2">*</span>child);
+<a href=#362 id=362 data-nosnippet>362</a>                        x_1 = max(x_1, child_subtree_weight);
+<a href=#363 id=363 data-nosnippet>363</a>                    }
+<a href=#364 id=364 data-nosnippet>364</a>                }
+<a href=#365 id=365 data-nosnippet>365</a>            }
+<a href=#366 id=366 data-nosnippet>366</a>            <span class="kw">let </span>n_j = (y
+<a href=#367 id=367 data-nosnippet>367</a>                - x_1
+<a href=#368 id=368 data-nosnippet>368</a>                - x_3
+<a href=#369 id=369 data-nosnippet>369</a>                - <span class="self">self</span>.inner.read().total_weight_in_past_2d.delta)
 <a href=#370 id=370 data-nosnippet>370</a>                / d;
-<a href=#371 id=371 data-nosnippet>371</a>
-<a href=#372 id=372 data-nosnippet>372</a>            <span class="kw">let </span>i_risk =
-<a href=#373 id=373 data-nosnippet>373</a>                <span class="number">10f64</span>.powf((m_j <span class="kw">as </span>f64 / <span class="number">3.0 </span>- n_j <span class="kw">as </span>f64) / <span class="number">700.0 </span>+ <span class="number">5.3</span>);
-<a href=#374 id=374 data-nosnippet>374</a>            adaptive_risk += i_risk;
-<a href=#375 id=375 data-nosnippet>375</a>        }
-<a href=#376 id=376 data-nosnippet>376</a>
-<a href=#377 id=377 data-nosnippet>377</a>        adaptive_risk &gt; CONFIRMATION_METER_MAXIMUM_ADAPTIVE_RISK
-<a href=#378 id=378 data-nosnippet>378</a>    }
-<a href=#379 id=379 data-nosnippet>379</a>}</code></pre></div></section></main></body></html>
+<a href=#371 id=371 data-nosnippet>371</a>            <span class="kw">let </span>m_j = (total_weight
+<a href=#372 id=372 data-nosnippet>372</a>                - g_inner.pivot_chain_metadata[a_pivot_index].past_weight)
+<a href=#373 id=373 data-nosnippet>373</a>                / d;
+<a href=#374 id=374 data-nosnippet>374</a>
+<a href=#375 id=375 data-nosnippet>375</a>            <span class="kw">let </span>i_risk =
+<a href=#376 id=376 data-nosnippet>376</a>                <span class="number">10f64</span>.powf((m_j <span class="kw">as </span>f64 / <span class="number">3.0 </span>- n_j <span class="kw">as </span>f64) / <span class="number">700.0 </span>+ <span class="number">5.3</span>);
+<a href=#377 id=377 data-nosnippet>377</a>            adaptive_risk += i_risk;
+<a href=#378 id=378 data-nosnippet>378</a>        }
+<a href=#379 id=379 data-nosnippet>379</a>
+<a href=#380 id=380 data-nosnippet>380</a>        adaptive_risk &gt; CONFIRMATION_METER_MAXIMUM_ADAPTIVE_RISK
+<a href=#381 id=381 data-nosnippet>381</a>    }
+<a href=#382 id=382 data-nosnippet>382</a>}
+<a href=#383 id=383 data-nosnippet>383</a>
+<a href=#384 id=384 data-nosnippet>384</a><span class="attr">#[cfg(test)]
+<a href=#385 id=385 data-nosnippet>385</a></span><span class="kw">mod </span>tests {
+<a href=#386 id=386 data-nosnippet>386</a>    <span class="kw">use </span><span class="kw">super</span>::ConfirmationMeter;
+<a href=#387 id=387 data-nosnippet>387</a>
+<a href=#388 id=388 data-nosnippet>388</a>    <span class="attr">#[test]
+<a href=#389 id=389 data-nosnippet>389</a>    </span><span class="kw">fn </span>confirmation_risk_uses_offset_in_lowest_threshold() {
+<a href=#390 id=390 data-nosnippet>390</a>        <span class="macro">assert_eq!</span>(
+<a href=#391 id=391 data-nosnippet>391</a>            ConfirmationMeter::confirmation_risk_from_m_n(<span class="number">500</span>, <span class="number">190</span>),
+<a href=#392 id=392 data-nosnippet>392</a>            <span class="number">0.000001</span>,
+<a href=#393 id=393 data-nosnippet>393</a>        );
+<a href=#394 id=394 data-nosnippet>394</a>        <span class="macro">assert_eq!</span>(
+<a href=#395 id=395 data-nosnippet>395</a>            ConfirmationMeter::confirmation_risk_from_m_n(<span class="number">500</span>, <span class="number">198</span>),
+<a href=#396 id=396 data-nosnippet>396</a>            <span class="number">0.00000001</span>,
+<a href=#397 id=397 data-nosnippet>397</a>        );
+<a href=#398 id=398 data-nosnippet>398</a>    }
+<a href=#399 id=399 data-nosnippet>399</a>}</code></pre></div></section></main></body></html>

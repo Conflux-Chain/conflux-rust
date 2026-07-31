@@ -382,7 +382,7 @@
 <a href=#382 id=382 data-nosnippet>382</a>        <span class="kw">if </span>instruction == <span class="prelude-val">Some</span>(BASEFEE) &amp;&amp; !spec.cip1559 {
 <a href=#383 id=383 data-nosnippet>383</a>            instruction = <span class="prelude-val">None</span>;
 <a href=#384 id=384 data-nosnippet>384</a>        }
-<a href=#385 id=385 data-nosnippet>385</a>        <span class="kw">if </span>instruction == <span class="prelude-val">Some</span>(CLZ) &amp;&amp; !spec.eip7939 {
+<a href=#385 id=385 data-nosnippet>385</a>        <span class="kw">if </span>instruction == <span class="prelude-val">Some</span>(CLZ) &amp;&amp; !spec.cip166 {
 <a href=#386 id=386 data-nosnippet>386</a>            instruction = <span class="prelude-val">None</span>;
 <a href=#387 id=387 data-nosnippet>387</a>        }
 <a href=#388 id=388 data-nosnippet>388</a>        <span class="kw">return </span>instruction;
@@ -432,16 +432,16 @@
 <a href=#432 id=432 data-nosnippet>432</a>
 <a href=#433 id=433 data-nosnippet>433</a>    <span class="doccomment">/// Returns the instruction info.
 <a href=#434 id=434 data-nosnippet>434</a>    </span><span class="kw">pub fn </span>info&lt;<span class="kw">const </span>CANCUN: bool&gt;(
-<a href=#435 id=435 data-nosnippet>435</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, cip645: bool, eip7939: bool,
+<a href=#435 id=435 data-nosnippet>435</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, cip645: bool, cip166: bool,
 <a href=#436 id=436 data-nosnippet>436</a>    ) -&gt; <span class="kw-2">&amp;</span>InstructionInfo {
 <a href=#437 id=437 data-nosnippet>437</a>        <span class="kw">let </span>instrs = <span class="kw">if </span>!CANCUN {
 <a href=#438 id=438 data-nosnippet>438</a>            <span class="kw-2">&amp;*</span>INSTRUCTIONS
 <a href=#439 id=439 data-nosnippet>439</a>        } <span class="kw">else if </span>!cip645 {
 <a href=#440 id=440 data-nosnippet>440</a>            <span class="kw-2">&amp;*</span>INSTRUCTIONS_CANCUN
-<a href=#441 id=441 data-nosnippet>441</a>        } <span class="kw">else if </span>!eip7939 {
+<a href=#441 id=441 data-nosnippet>441</a>        } <span class="kw">else if </span>!cip166 {
 <a href=#442 id=442 data-nosnippet>442</a>            <span class="kw-2">&amp;*</span>INSTRUCTIONS_CIP645
 <a href=#443 id=443 data-nosnippet>443</a>        } <span class="kw">else </span>{
-<a href=#444 id=444 data-nosnippet>444</a>            <span class="kw-2">&amp;*</span>INSTRUCTIONS_EIP7939
+<a href=#444 id=444 data-nosnippet>444</a>            <span class="kw-2">&amp;*</span>INSTRUCTIONS_CIP166
 <a href=#445 id=445 data-nosnippet>445</a>        };
 <a href=#446 id=446 data-nosnippet>446</a>
 <a href=#447 id=447 data-nosnippet>447</a>        instrs[<span class="kw-2">*</span><span class="self">self </span><span class="kw">as </span>usize].as_ref().expect(<span class="string">"A instruction is defined in Instruction enum, but it is not found in InstructionInfo struct; this indicates a logic failure in the code."</span>)
@@ -682,7 +682,7 @@
 <a href=#682 id=682 data-nosnippet>682</a>        arr
 <a href=#683 id=683 data-nosnippet>683</a>    };
 <a href=#684 id=684 data-nosnippet>684</a>
-<a href=#685 id=685 data-nosnippet>685</a>    <span class="kw">pub static </span><span class="kw-2">ref </span>INSTRUCTIONS_EIP7939: [<span class="prelude-ty">Option</span>&lt;InstructionInfo&gt;; <span class="number">0x100</span>] = {
+<a href=#685 id=685 data-nosnippet>685</a>    <span class="kw">pub static </span><span class="kw-2">ref </span>INSTRUCTIONS_CIP166: [<span class="prelude-ty">Option</span>&lt;InstructionInfo&gt;; <span class="number">0x100</span>] = {
 <a href=#686 id=686 data-nosnippet>686</a>        <span class="kw">let </span><span class="kw-2">mut </span>arr = <span class="kw-2">*</span>INSTRUCTIONS_CIP645;
 <a href=#687 id=687 data-nosnippet>687</a>        arr[CLZ <span class="kw">as </span>usize] = <span class="prelude-val">Some</span>(InstructionInfo::new(<span class="string">"CLZ"</span>, <span class="number">1</span>, <span class="number">1</span>, GasPriceTier::Low));
 <a href=#688 id=688 data-nosnippet>688</a>
