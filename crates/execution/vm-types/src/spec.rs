@@ -202,8 +202,11 @@ pub struct Spec {
     pub eip7623: bool,
     pub align_evm: bool,
     pub cip_c2_fix: bool,
-    /// EIP-7939: Count Leading Zeros Instruction
-    pub eip7939: bool,
+    /// CIP-166: EIP-7939 Count Leading Zeros Instruction
+    pub cip166: bool,
+    /// CIP-174: EIP-7823 (ModExp input upper bounds) and EIP-7883 (ModExp
+    /// gas cost increase)
+    pub cip174: bool,
 }
 
 /// Represents the feature flags for CIP-645 implementation.
@@ -415,7 +418,8 @@ impl Spec {
             eip7623: false,
             cip_c2_fix: false,
             align_evm: false,
-            eip7939: false,
+            cip166: false,
+            cip174: false,
         }
     }
 

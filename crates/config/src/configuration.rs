@@ -208,6 +208,7 @@ build_config! {
         (osaka_opcode_transition_height, (Option<u64>), None)
         (cip166_transition_height, (Option<u64>), None)
         (cip167_transition_height, (Option<u64>), None)
+        (cip174_transition_height, (Option<u64>), None)
         (canonical_tx_rlp_transition_height, (Option<u64>), None)
 
         // Mining section.
@@ -1535,13 +1536,16 @@ impl Configuration {
         // hardfork (V3.1)
         set_conf!(
             self.raw_conf.osaka_opcode_transition_height.unwrap_or(default_transition_time);
-            params.transition_heights => { cip166, cip167 }
+            params.transition_heights => { cip166, cip167, cip174 }
         );
         if let Some(x) = self.raw_conf.cip166_transition_height {
             params.transition_heights.cip166 = x;
         }
         if let Some(x) = self.raw_conf.cip167_transition_height {
             params.transition_heights.cip167 = x;
+        }
+        if let Some(x) = self.raw_conf.cip174_transition_height {
+            params.transition_heights.cip174 = x;
         }
 
         params.transition_heights.canonical_tx_rlp = self
