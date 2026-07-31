@@ -1,12 +1,17 @@
-use super::{Error, Precompile, Pricer};
+use super::{Error, Precompile, PricePlan, Pricer};
 use byteorder::{BigEndian, ByteOrder};
 use cfx_bytes::BytesRef;
 use cfx_types::U256;
+use cfx_vm_types::Spec;
 use num::{BigUint, One, Zero};
 use std::{
     cmp::{max, min},
     io::{self, Read},
 };
+
+/// EIP-7823: upper bound (in bytes) for each of the base, exponent and
+/// modulus length inputs.
+const EIP7823_INPUT_LEN_LIMIT: u64 = 1024;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -132,6 +137,8 @@ pub(crate) enum ModexpPricer {
     Byzantium { divisor: usize },
     // CIP-645e: EIP-2565
     Berlin { base: usize },
+    // CIP-174: EIP-7823 + EIP-7883
+    Osaka { base: usize },
 }
 
 impl ModexpPricer {
@@ -141,6 +148,42 @@ impl ModexpPricer {
 
     pub(crate) fn new_berlin(base: usize) -> ModexpPricer {
         ModexpPricer::Berlin { base }
+    }
+
+    pub(crate) fn new_osaka(base: usize) -> ModexpPricer {
+        ModexpPricer::Osaka { base }
+    }
+}
+
+/// Selects the modexp pricer by the active spec: Osaka (CIP-174), Berlin
+/// (CIP-645e) or Byzantium.
+pub(crate) struct ModexpPricePlan {
+    osaka: ModexpPricer,
+    berlin: ModexpPricer,
+    byzantium: ModexpPricer,
+}
+
+impl ModexpPricePlan {
+    pub(crate) fn new(
+        osaka: ModexpPricer, berlin: ModexpPricer, byzantium: ModexpPricer,
+    ) -> Self {
+        Self {
+            osaka,
+            berlin,
+            byzantium,
+        }
+    }
+}
+
+impl PricePlan for ModexpPricePlan {
+    fn pricer(&self, spec: &Spec) -> &dyn Pricer {
+        if spec.cip174 {
+            &self.osaka
+        } else if spec.cip645.eip2565 {
+            &self.berlin
+        } else {
+            &self.byzantium
+        }
     }
 }
 
@@ -160,11 +203,25 @@ impl Pricer for ModexpPricer {
         let exp_len = read_len();
         let mod_len = read_len();
 
+        // EIP-7823: over-limit inputs make the precompile fail; returning
+        // the maximal cost makes the call run out of gas, which consumes
+        // all gas passed to the call as the EIP requires.
+        if matches!(self, Self::Osaka { .. }) {
+            let limit = U256::from(EIP7823_INPUT_LEN_LIMIT);
+            if base_len > limit || exp_len > limit || mod_len > limit {
+                return U256::max_value();
+            }
+        }
+
         if mod_len.is_zero() && base_len.is_zero() {
-            return match self {
-                Self::Byzantium { .. } => 0.into(),
-                Self::Berlin { base } => (*base).into(),
-            };
+            match self {
+                Self::Byzantium { .. } => return 0.into(),
+                Self::Berlin { base } => return (*base).into(),
+                // EIP-7883: multiplication complexity is at least 16, so a
+                // long exponent still charges iteration costs even with
+                // empty base and modulus — fall through to the full formula.
+                Self::Osaka { .. } => {}
+            }
         }
 
         let max_len = U256::from(u32::max_value() / 2);
@@ -188,7 +245,13 @@ impl Pricer for ModexpPricer {
                 .expect("reading from zero-extended memory cannot fail; qed");
             U256::from_big_endian(&buf[..])
         };
-        let iter_count = max(Self::adjusted_exp_len(exp_len, exp_low), 1);
+        // EIP-7883 doubles the per-byte cost of the exponent tail.
+        let exp_byte_factor = match self {
+            ModexpPricer::Osaka { .. } => 16,
+            _ => 8,
+        };
+        let iter_count =
+            max(Self::adjusted_exp_len(exp_len, exp_low, exp_byte_factor), 1);
 
         match self {
             ModexpPricer::Byzantium { divisor } => Self::byzantium_gas_calc(
@@ -196,6 +259,9 @@ impl Pricer for ModexpPricer {
             ),
             ModexpPricer::Berlin { base } => {
                 Self::berlin_gas_calc(base_len, mod_len, iter_count, *base)
+            }
+            ModexpPricer::Osaka { base } => {
+                Self::osaka_gas_calc(base_len, mod_len, iter_count, *base)
             }
         }
     }
@@ -214,7 +280,7 @@ impl ModexpPricer {
         (gas / divisor as u64).into()
     }
 
-    fn adjusted_exp_len(len: u64, exp_low: U256) -> u64 {
+    fn adjusted_exp_len(len: u64, exp_low: U256, byte_factor: u64) -> u64 {
         let bit_index = if exp_low.is_zero() {
             0
         } else {
@@ -223,7 +289,7 @@ impl ModexpPricer {
         if len <= 32 {
             bit_index
         } else {
-            8 * (len - 32) + bit_index
+            byte_factor * (len - 32) + bit_index
         }
     }
 
@@ -260,5 +326,24 @@ impl ModexpPricer {
             gas.as_u64()
         };
         max(base_gas as u64, gas_u64).into()
+    }
+
+    // CIP-174: EIP-7883. Inputs are bounded by EIP-7823 (checked in `cost`),
+    // so none of the arithmetic below can overflow u64.
+    pub fn osaka_gas_calc(
+        base_len: u64, mod_len: u64, iter_count: u64, base_gas: usize,
+    ) -> U256 {
+        let max_len = max(base_len, mod_len);
+        let mut words = max_len / 8;
+        if max_len % 8 > 0 {
+            words += 1;
+        }
+        let multiplication_complexity = if max_len <= 32 {
+            16
+        } else {
+            2 * words * words
+        };
+        let gas = multiplication_complexity * iter_count;
+        max(base_gas as u64, gas).into()
     }
 }

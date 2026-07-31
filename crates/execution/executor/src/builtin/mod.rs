@@ -53,7 +53,7 @@ use blake2f::compress;
 
 use bls12_381::bls12_builtin_factory;
 use modexp::ModexpImpl;
-pub(crate) use modexp::ModexpPricer;
+pub(crate) use modexp::{ModexpPricePlan, ModexpPricer};
 pub(crate) use pricer::{
     AltBn128PairingPricer, Blake2FPricer, ConstPricer, Linear,
 };
@@ -557,10 +557,12 @@ impl Precompile for KzgPointEval {
 mod tests {
     use super::{
         builtin_factory, modexp::modexp as me, price_plan::StaticPlan,
-        ActivateAt, Blake2FPricer, Builtin, Linear, ModexpPricer,
+        ActivateAt, Blake2FPricer, Builtin, Linear, ModexpPricePlan,
+        ModexpPricer,
     };
     use cfx_bytes::BytesRef;
     use cfx_types::U256;
+    use cfx_vm_types::{CIP645Spec, Spec};
     use num::{BigUint, One, Zero};
     use rustc_hex::FromHex;
 
@@ -872,6 +874,127 @@ mod tests {
             assert_eq!(output.len(), 0); // shouldn't have written any output.
             assert_eq!(f.cost_on_genesis(&input[..]), expected_cost.into());
         }
+    }
+
+    // CIP-174: EIP-7823 + EIP-7883
+    #[test]
+    fn modexp_osaka() {
+        let f = Builtin {
+            price_plan: Box::new(StaticPlan(ModexpPricer::new_osaka(500))),
+            native: builtin_factory("modexp"),
+            activate_at: ALWAYS,
+        };
+
+        // fermat's little theorem example: 32-byte exponent with the top bit
+        // set gives iteration_count = 255; multiplication_complexity = 16.
+        {
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
+				0000000000000000000000000000000000000000000000000000000000000001\
+				0000000000000000000000000000000000000000000000000000000000000020\
+				0000000000000000000000000000000000000000000000000000000000000020\
+				03\
+				fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e\
+				fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f",
+            )
+            .unwrap();
+            // max(500, 16 * 255) = 4080
+            assert_eq!(f.cost_on_genesis(&input[..]), U256::from(4080));
+        }
+
+        // small work is charged the 500 minimum: two-byte exponent 0xffff
+        // gives iteration_count = 15, 16 * 15 = 240 < 500.
+        {
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
+				0000000000000000000000000000000000000000000000000000000000000001\
+				0000000000000000000000000000000000000000000000000000000000000002\
+				0000000000000000000000000000000000000000000000000000000000000020\
+				03\
+				ffff\
+				80",
+            )
+            .unwrap();
+            assert_eq!(f.cost_on_genesis(&input[..]), U256::from(500));
+        }
+
+        // empty base and modulus no longer short-circuit: a 64-byte exponent
+        // still pays iteration costs (16 * (64 - 32) = 512 iterations,
+        // multiplication_complexity = 16).
+        {
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
+				0000000000000000000000000000000000000000000000000000000000000000\
+				0000000000000000000000000000000000000000000000000000000000000040\
+				0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap();
+            assert_eq!(f.cost_on_genesis(&input[..]), U256::from(8192));
+        }
+
+        // EIP-7823: lengths up to 1024 bytes are priced normally; 1024-byte
+        // base and modulus give words = 128, 2 * 128^2 = 32768.
+        {
+            let input: Vec<u8> = FromHex::from_hex(
+                "\
+				0000000000000000000000000000000000000000000000000000000000000400\
+				0000000000000000000000000000000000000000000000000000000000000000\
+				0000000000000000000000000000000000000000000000000000000000000400",
+            )
+            .unwrap();
+            assert_eq!(f.cost_on_genesis(&input[..]), U256::from(32768));
+        }
+
+        // EIP-7823: any length above 1024 bytes fails, consuming all gas.
+        for oversized in [
+            "\
+			0000000000000000000000000000000000000000000000000000000000000401\
+			0000000000000000000000000000000000000000000000000000000000000001\
+			0000000000000000000000000000000000000000000000000000000000000001",
+            "\
+			0000000000000000000000000000000000000000000000000000000000000001\
+			0000000000000000000000000000000000000000000000000000000000000401\
+			0000000000000000000000000000000000000000000000000000000000000001",
+            "\
+			0000000000000000000000000000000000000000000000000000000000000001\
+			0000000000000000000000000000000000000000000000000000000000000001\
+			0000000000000000000000000000000000000000000000000000000000000401",
+        ] {
+            let input: Vec<u8> = FromHex::from_hex(oversized).unwrap();
+            assert_eq!(f.cost_on_genesis(&input[..]), U256::max_value());
+        }
+    }
+
+    #[test]
+    fn modexp_price_plan_selection() {
+        let f = Builtin {
+            price_plan: Box::new(ModexpPricePlan::new(
+                ModexpPricer::new_osaka(500),
+                ModexpPricer::new_berlin(200),
+                ModexpPricer::new_byzantium(20),
+            )),
+            native: builtin_factory("modexp"),
+            activate_at: ALWAYS,
+        };
+        let input: Vec<u8> = FromHex::from_hex(
+            "\
+			0000000000000000000000000000000000000000000000000000000000000001\
+			0000000000000000000000000000000000000000000000000000000000000020\
+			0000000000000000000000000000000000000000000000000000000000000020\
+			03\
+			fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e\
+			fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f",
+        )
+        .unwrap();
+
+        let mut spec = Spec::genesis_spec();
+        assert_eq!(f.cost(&input[..], &spec), U256::from(13056)); // Byzantium
+
+        spec.cip645 = CIP645Spec::new(true);
+        assert_eq!(f.cost(&input[..], &spec), U256::from(1360)); // Berlin
+
+        spec.cip174 = true;
+        assert_eq!(f.cost(&input[..], &spec), U256::from(4080)); // Osaka
     }
 
     #[test]
