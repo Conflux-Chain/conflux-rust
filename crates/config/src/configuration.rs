@@ -209,6 +209,7 @@ build_config! {
         (cip166_transition_height, (Option<u64>), None)
         (cip167_transition_height, (Option<u64>), None)
         (canonical_tx_rlp_transition_height, (Option<u64>), None)
+        (cip175_transition_height, (Option<u64>), None)
 
         // Mining section.
         (mining_author, (Option<String>), None)
@@ -1547,6 +1548,11 @@ impl Configuration {
         params.transition_heights.canonical_tx_rlp = self
             .raw_conf
             .canonical_tx_rlp_transition_height
+            .unwrap_or(default_transition_time);
+
+        params.transition_heights.cip175 = self
+            .raw_conf
+            .cip175_transition_height
             .unwrap_or(default_transition_time);
     }
 }

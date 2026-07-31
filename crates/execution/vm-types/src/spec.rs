@@ -194,6 +194,8 @@ pub struct Spec {
     pub cip154: bool,
     /// CIP-7702: Set Code for EOA
     pub cip7702: bool,
+    /// CIP-175: Resolve EIP-7702 Delegation in Cross-Space Calls
+    pub cip175: bool,
     /// CIP-645: Align Conflux Gas Pricing with EVM
     pub cip645: CIP645Spec,
     /// EIP-2935: Serve historical block hashes from state
@@ -411,6 +413,7 @@ impl Spec {
             cip154: false,
             cip645: CIP645Spec::new(false),
             cip7702: false,
+            cip175: false,
             eip2935: false,
             eip7623: false,
             cip_c2_fix: false,

@@ -147,6 +147,8 @@ pub struct TransitionsEpochHeight {
     pub cip154: BlockHeight,
     /// CIP-7702: Set Code for EOA
     pub cip7702: BlockHeight,
+    /// CIP-175: Resolve EIP-7702 Delegation in Cross-Space Calls
+    pub cip175: BlockHeight,
     /// CIP-645: Align Conflux Gas Pricing with EVM
     pub cip645: BlockHeight,
     pub align_evm: BlockHeight,
@@ -229,6 +231,7 @@ impl CommonParams {
         spec.cip152 = height >= self.transition_heights.cip152;
         spec.cip154 = height >= self.transition_heights.cip154;
         spec.cip7702 = height >= self.transition_heights.cip7702;
+        spec.cip175 = height >= self.transition_heights.cip175;
         let cip645 = height >= self.transition_heights.cip645;
         spec.cip645 = CIP645Spec::new(cip645);
         spec.eip2935 = height >= self.transition_heights.eip2935;
