@@ -60,9 +60,11 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         }
 
         if let Some(access_list) = self.tx.access_list() {
-            self.context
-                .state
-                .set_tx_access_list(self.tx.space(), &access_list);
+            self.context.state.set_tx_access_list(
+                self.tx.space(),
+                &access_list,
+                self.context.spec.cip176,
+            );
         }
 
         let eip7702_refund = self.process_cip7702_authorization()?;
