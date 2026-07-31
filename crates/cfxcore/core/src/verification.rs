@@ -4,7 +4,10 @@
 
 use crate::{
     core_error::{BlockError, CoreError as Error},
-    pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
+    pow::{
+        self, nonce_has_non_zero_high_128_bits, nonce_to_lower_bound,
+        PowComputer, ProofOfWorkProblem,
+    },
     sync::Error as SyncError,
 };
 use cfx_executor::{
@@ -279,6 +282,13 @@ impl VerificationConfig {
     pub fn verify_pow(
         &self, pow: &PowComputer, header: &mut BlockHeader,
     ) -> Result<(), Error> {
+        if header.height()
+            >= self.machine.params().transition_heights.cip_hn_fix
+        {
+            if nonce_has_non_zero_high_128_bits(&header.nonce()) {
+                return Err(From::from(BlockError::InvalidNonce));
+            }
+        }
         let pow_hash = Self::get_or_fill_header_pow_hash(pow, header);
         if header.difficulty().is_zero() {
             return Err(BlockError::InvalidDifficulty(OutOfBounds {

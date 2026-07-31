@@ -222,6 +222,10 @@ pub fn nonce_to_lower_bound(nonce: &U256) -> U256 {
     lower_bound
 }
 
+pub fn nonce_has_non_zero_high_128_bits(nonce: &U256) -> bool {
+    !(*nonce >> 128).is_zero()
+}
+
 pub fn pow_hash_to_quality(hash: &H256, nonce: &U256) -> U256 {
     let hash_as_uint = BigEndianHash::into_uint(hash);
     let lower_bound = nonce_to_lower_bound(nonce);
@@ -338,4 +342,15 @@ fn test_octopus() {
             .unwrap();
     let start_nonce = 0x2333333333u64 & (!0x1f);
     pow.compute(&U256::from(start_nonce), &block_hash, 2);
+}
+
+#[test]
+fn test_nonce_has_non_zero_high_128_bits() {
+    assert!(!nonce_has_non_zero_high_128_bits(&U256::zero()));
+    assert!(!nonce_has_non_zero_high_128_bits(
+        &((U256::one() << 128) - U256::one())
+    ));
+    assert!(nonce_has_non_zero_high_128_bits(&(U256::one() << 128)));
+    assert!(nonce_has_non_zero_high_128_bits(&(U256::one() << 254)));
+    assert!(nonce_has_non_zero_high_128_bits(&(U256::one() << 255)));
 }
