@@ -270,8 +270,15 @@ pub fn call_to_evmcore(
 
     let address = receiver.with_evm_space();
 
-    let code = context.state.code(&address)?;
-    let code_hash = context.state.code_hash(&address)?;
+    let (code, code_hash) = if context.spec.cip175 {
+        // CIP-175: resolve EIP-7702 delegation as an in-space call does.
+        context.state.code_with_hash_on_call(&address)?
+    } else {
+        (
+            context.state.code(&address)?,
+            context.state.code_hash(&address)?,
+        )
+    };
 
     let next_params = ActionParams {
         space: Space::Ethereum,
