@@ -64,6 +64,12 @@ pub trait PosStateConfigTrait {
     // predicate rather than one per effect, so the evidence rule and the
     // penalty rule cannot be evaluated differently.
     fn enforce_dispute_conflict(&self, view: u64) -> bool;
+    // CIP-173 as published covers only evidence validity and the relock
+    // scope, so this one and the offence anchor are both wider than its text.
+    // Sharing its view is deliberate but provisional — it is what the PR asks
+    // the maintainers to ratify, and the alternative is a separate transition
+    // view. Nothing forces the choice yet: no config in this repo ever
+    // changes the queue delay, so this gate is inert wherever it is set.
     fn force_retire_expiry_uses_retire_view(&self, view: u64) -> bool;
 }
 
