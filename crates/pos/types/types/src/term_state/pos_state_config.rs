@@ -55,10 +55,15 @@ pub trait PosStateConfigTrait {
     // Returning None means the stake should be forfeited instead of being
     // locked.
     fn dispute_locked_views(&self, view: u64) -> Option<u64>;
-    // Every gate below activates at the shared CIP-173 transition view; they
+    // Both gates below activate at the shared CIP-173 transition view; they
     // are named separately because they change unrelated code paths.
+    //
+    // `enforce_dispute_conflict` decides the whole dispute rule at once: the
+    // evidence must genuinely conflict, and the event that carries the
+    // offence coordinate is emitted, which is what selects the penalty. One
+    // predicate rather than one per effect, so the evidence rule and the
+    // penalty rule cannot be evaluated differently.
     fn enforce_dispute_conflict(&self, view: u64) -> bool;
-    fn dispute_lock_includes_out_queue(&self, view: u64) -> bool;
     fn force_retire_expiry_uses_retire_view(&self, view: u64) -> bool;
 }
 
@@ -219,10 +224,6 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
     }
 
     fn enforce_dispute_conflict(&self, view: u64) -> bool {
-        view >= self.get().unwrap().cip173_transition_view
-    }
-
-    fn dispute_lock_includes_out_queue(&self, view: u64) -> bool {
         view >= self.get().unwrap().cip173_transition_view
     }
 

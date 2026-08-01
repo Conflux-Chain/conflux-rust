@@ -21,17 +21,14 @@ use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
     mempool_status::MempoolStatus,
-    term_state::{
-        pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
-        PosState,
-    },
+    term_state::PosState,
     transaction::{
         authenticator::TransactionAuthenticator, SignedTransaction,
         TransactionPayload,
     },
     validator_verifier::ValidatorVerifier,
 };
-use executor::vm::verify_dispute;
+use executor::vm::execute_dispute;
 use std::{collections::HashSet, time::Duration};
 
 pub struct Mempool {
@@ -104,23 +101,24 @@ impl Mempool {
                 TransactionPayload::Dispute(dispute_payload) => {
                     // TODO(lpl): Only dispute a node once.
                     //
-                    // The staleness bound below has to match execution
-                    // exactly, with no safety margin: assembly runs against
-                    // the same parent state the block will execute against,
-                    // so a margin cannot buy time — it would only make honest
-                    // proposers drop evidence the chain still considers
-                    // valid, shortening the statute of limitations in
-                    // practice.
-                    pos_state.validate_dispute(dispute_payload).and_then(|_| {
-                        let view = pos_state.current_view();
-                        let offense_epoch =
-                            verify_dispute(dispute_payload, view)
-                                .ok_or(anyhow::anyhow!("invalid dispute"))?;
-                        if POS_STATE_CONFIG.enforce_dispute_conflict(view) {
-                            pos_state.dispute_deadline(offense_epoch)?;
-                        }
-                        Ok(())
-                    })
+                    // Selection runs the execution rule itself rather than a
+                    // copy of it. Dispute validity became time-varying with
+                    // the statute of limitations, and a proposal carrying
+                    // evidence the VM rejects fails the whole block — so the
+                    // two predicates have to agree exactly. Calling the same
+                    // function is the only way to keep them from drifting.
+                    //
+                    // No safety margin, deliberately: assembly fetches the
+                    // parent's `PosState` and execution uses that same
+                    // parent, so a transaction cannot cross a view between
+                    // selection and execution. A margin would buy nothing and
+                    // would make honest proposers drop evidence the chain
+                    // still accepts, shortening the statute in practice.
+                    execute_dispute(dispute_payload, pos_state)
+                        .map(|_| ())
+                        .map_err(|e| {
+                            anyhow::anyhow!("invalid dispute: {:?}", e)
+                        })
                 }
                 _ => {
                     continue;

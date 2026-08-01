@@ -1224,10 +1224,20 @@ impl PosState {
         let offense_term = offense_epoch
             .checked_sub(1)
             .ok_or_else(|| anyhow!("dispute evidence claims epoch 0"))?;
-        // Compared in term space, not view space. The two are equivalent
-        // because `get_starting_view_for_term` is monotone, and staying in
-        // term space keeps an arbitrarily large claimed epoch out of that
-        // helper's arithmetic instead of relying on it to reject one.
+        // Compared in term space, not view space, so an arbitrarily large
+        // claimed epoch never reaches `get_starting_view_for_term`'s
+        // arithmetic — the bound rejects it before the conversion rather
+        // than relying on the conversion to reject it.
+        //
+        // The two spaces are not quite equivalent, and the gap is worth
+        // knowing: `get_term_view` assigns views `[t * round_per_term,
+        // cip136_transition_view)` to the transition term, while
+        // `get_starting_view_for_term` reports that same term as starting at
+        // `cip136_transition_view`. So evidence from the current term, judged
+        // during that window, anchors up to one term *ahead* of the chain.
+        // It over-charges by under a term and stays bounded; what keeps a
+        // past-dated exit view impossible is the explicit `deadline >
+        // current_view` check below, not monotonicity.
         let (current_term, _) =
             POS_STATE_CONFIG.get_term_view(self.current_view);
         ensure!(
@@ -1755,6 +1765,35 @@ mod tests {
                 offence,
             );
         }
+    }
+
+    /// Pins the one place the term-space bound is looser than a view-space
+    /// one would be. `get_term_view` puts the views just below
+    /// `cip136_transition_view` in the transition term, but
+    /// `get_starting_view_for_term` reports that term as starting *at* the
+    /// transition, so current-term evidence judged in that window anchors
+    /// ahead of the chain. Bounded by one term and it over-charges rather
+    /// than under-charges, so it is accepted rather than special-cased —
+    /// but it is asserted here so a future reader finds it stated.
+    #[test]
+    fn dispute_deadline_anchor_may_lead_the_chain_at_the_cip136_boundary() {
+        test_config::install();
+        let transition_term =
+            test_config::CIP136_TRANSITION / crate::term_state::ROUND_PER_TERM;
+        let view = transition_term * crate::term_state::ROUND_PER_TERM;
+        assert!(view < test_config::CIP136_TRANSITION);
+        assert_eq!(POS_STATE_CONFIG.get_term_view(view).0, transition_term);
+
+        let mut state = PosState::new_empty();
+        state.set_current_view_for_test(view);
+        let anchor = POS_STATE_CONFIG
+            .get_starting_view_for_term(transition_term)
+            .expect("term start");
+        assert!(anchor > view, "the boundary case would not be exercised");
+        assert_eq!(
+            state.dispute_deadline(epoch_at(view)).expect("deadline"),
+            anchor + test_config::DISPUTE_LOCKED_VIEWS,
+        );
     }
 
     /// The deadline depends on the evidence and not on when it was submitted,

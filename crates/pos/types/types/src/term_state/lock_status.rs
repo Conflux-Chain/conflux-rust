@@ -473,12 +473,6 @@ mod tests {
     use ForfeitRule::*;
     use Operation::*;
 
-    /// Runs `tasks` against a fresh status, one view per iteration.
-    ///
-    /// The `update_view > view` filter below has no counterpart in
-    /// `PosState::record_update_views`, which inserts every supplied view. So
-    /// this harness cannot show whether an operation strands a past-dated
-    /// hint; assert that at the `PosState` level instead.
     /// The queue delays are tiered, so a test that hard-coded one tier would
     /// silently describe a different scenario once a transition moved.
     fn in_delay(view: View) -> u64 {
@@ -491,6 +485,12 @@ mod tests {
         POS_STATE_CONFIG.out_queue_locked_views(view)
     }
 
+    /// Runs `tasks` against a fresh status, one view per iteration.
+    ///
+    /// The `update_view > view` filter below has no counterpart in
+    /// `PosState::record_update_views`, which inserts every supplied view. So
+    /// this harness cannot show whether an operation strands a past-dated
+    /// hint; assert that at the `PosState` level instead.
     fn run_tasks(tasks: Vec<(Operation, View)>) {
         test_config::install();
         let mut tasks: VecDeque<(Operation, View)> = tasks.into();
@@ -678,6 +678,37 @@ mod tests {
             (AssertUnchangedSinceSnapshot, dispute + 3),
             (Forfeit(RelockAll { deadline }), dispute + 4),
             (AssertUnchangedSinceSnapshot, dispute + 5),
+        ];
+
+        run_tasks(tasks);
+    }
+
+    /// Pieces whose ordinary exits both fall before the deadline are clamped
+    /// onto it and become one entry — the common shape, since the deadline
+    /// usually dominates. Worth its own case because the merge accumulates
+    /// through `Vec::dedup_by`, which hands the closure the later element
+    /// first and drops it, so summing into the wrong side loses votes
+    /// silently while still leaving a single plausible entry.
+    #[test]
+    fn pieces_landing_on_the_deadline_merge_without_losing_votes() {
+        let retire = test_config::CIP173_TRANSITION + 500;
+        let dispute = retire + 500;
+        let deadline = dispute + test_config::DISPUTE_LOCKED_VIEWS;
+        // Both the retiring piece and the still-locked one exit well before
+        // the deadline, so both clamp onto it.
+        assert!(retire + out_delay(retire) < deadline);
+        assert!(dispute + out_delay(dispute) < deadline);
+        let tasks = vec![
+            (NewLock(10), 2),
+            (NewUnlock(4), retire),
+            (
+                AssertOutQueue(vec![(retire + out_delay(retire), 4)]),
+                dispute - 1,
+            ),
+            (AssertLocked(6), dispute - 1),
+            (Forfeit(RelockAll { deadline }), dispute),
+            (AssertOutQueue(vec![(deadline, 10)]), dispute + 1),
+            (AssertUnlocked(10), deadline + 1),
         ];
 
         run_tasks(tasks);
