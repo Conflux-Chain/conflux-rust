@@ -180,8 +180,24 @@ impl NodeLockStatus {
         }
 
         if self.force_retired.map_or(false, |retire_view| {
-            view >= retire_view
-                + POS_STATE_CONFIG.force_retired_locked_views(view)
+            // `force_retire` schedules one callback and nothing reschedules
+            // it, so the delay has to be read at the view that scheduled it.
+            // Reading it here instead means a delay that changed in between
+            // makes the callback fire at a view its own condition rejects,
+            // leaving the flag set with nothing left to clear it.
+            let delay_view = if POS_STATE_CONFIG
+                .force_retire_expiry_uses_retire_view(view)
+            {
+                retire_view
+            } else {
+                view
+            };
+            // Saturating, not checked: this bounds a restriction rather than
+            // an exit view, so an absurd configured delay should mean "never
+            // expires" and not a panic.
+            view >= retire_view.saturating_add(
+                POS_STATE_CONFIG.force_retired_locked_views(delay_view),
+            )
         }) {
             self.force_retired = None;
         }
@@ -538,6 +554,37 @@ mod tests {
                 )]),
                 dispute + 1,
             ),
+        ];
+
+        run_tasks(tasks);
+    }
+
+    /// `force_retire` schedules exactly one callback and nothing reschedules
+    /// it, so the expiry test has to agree with what was scheduled. Here the
+    /// queue delay grows at `CIP136_TRANSITION`, between the retirement and
+    /// its callback: reading today's delay makes the callback fire too early
+    /// to satisfy its own condition, and the flag is then set forever.
+    ///
+    /// The retirement starts before `CIP173_TRANSITION` and the callback
+    /// lands after it, which is the case the gate has to decide: gating on
+    /// the callback view repairs the straddling nodes instead of leaving them
+    /// on the defective rule permanently.
+    #[test]
+    fn force_retire_expiry_uses_the_scheduled_delay() {
+        let retire =
+            test_config::CIP136_TRANSITION - test_config::OUT_QUEUE_VIEWS;
+        assert!(retire < test_config::CIP173_TRANSITION);
+        let expiry = retire + test_config::OUT_QUEUE_VIEWS;
+        assert!(expiry > test_config::CIP173_TRANSITION);
+        let tasks = vec![
+            (NewLock(10), 2),
+            (ForceRetire, retire),
+            (AssertForceRetired(true), expiry - 1),
+            (AssertForceRetired(false), expiry + 1),
+            // The restriction is what routes deposits away from active
+            // stake, so a flag that never expires silently strands them.
+            (NewLock(5), expiry + 1),
+            (AssertAvailable(5), expiry + 2),
         ];
 
         run_tasks(tasks);
