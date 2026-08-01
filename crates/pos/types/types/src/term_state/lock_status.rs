@@ -168,24 +168,13 @@ impl NodeLockStatus {
 }
 
 impl NodeLockStatus {
-    pub(super) fn update(&mut self, view: View) -> bool {
-        let mut new_votes_unlocked = false;
-
-        while let Some(item) = self.in_queue.pop_by_view(view) {
-            self.locked += item.votes;
-        }
-
-        while let Some(item) = self.out_queue.pop_by_view(view) {
-            self.unlocked += item.votes;
-            new_votes_unlocked = true;
-        }
-
-        if self.force_retired.map_or(false, |retire_view| {
-            // `force_retire` schedules one callback and nothing reschedules
-            // it, so the delay has to be read at the view that scheduled it.
-            // Reading it here instead means a delay that changed in between
-            // makes the callback fire at a view its own condition rejects,
-            // leaving the flag set with nothing left to clear it.
+    /// `force_retire` schedules one callback and nothing reschedules it, so
+    /// the delay has to be read at the view that scheduled it. Reading it at
+    /// `view` instead means a delay that changed in between makes the
+    /// callback fire at a view its own condition rejects, leaving the flag
+    /// set with nothing left to clear it.
+    fn force_retirement_expired(&self, view: View) -> bool {
+        self.force_retired.map_or(false, |retire_view| {
             let delay_view = if POS_STATE_CONFIG
                 .force_retire_expiry_uses_retire_view(view)
             {
@@ -199,7 +188,22 @@ impl NodeLockStatus {
             view >= retire_view.saturating_add(
                 POS_STATE_CONFIG.force_retired_locked_views(delay_view),
             )
-        }) {
+        })
+    }
+
+    pub(super) fn update(&mut self, view: View) -> bool {
+        let mut new_votes_unlocked = false;
+
+        while let Some(item) = self.in_queue.pop_by_view(view) {
+            self.locked += item.votes;
+        }
+
+        while let Some(item) = self.out_queue.pop_by_view(view) {
+            self.unlocked += item.votes;
+            new_votes_unlocked = true;
+        }
+
+        if self.force_retirement_expired(view) {
             self.force_retired = None;
         }
 
@@ -222,6 +226,19 @@ impl NodeLockStatus {
             self.available_votes += votes;
             self.locked += votes;
             return;
+        }
+
+        // A retirement whose sole callback was already consumed — the old
+        // predicate refused to clear the flag when it fired, and `next_view`
+        // removes the hint either way — has nothing left to clear it. Nodes
+        // with no other scheduled view would carry the restriction forever,
+        // and this is the one place it is read, so re-check rather than trust
+        // the flag. Gated: pre-activation the check would clear flags at
+        // views production does not.
+        if POS_STATE_CONFIG.force_retire_expiry_uses_retire_view(view)
+            && self.force_retirement_expired(view)
+        {
+            self.force_retired = None;
         }
 
         // If force retired is not none, new locked tokens will be forced
@@ -382,6 +399,21 @@ impl NodeLockStatus {
         if relocked.is_empty() {
             return Ok(());
         }
+        // One sorted entry per exit view, so the result is a function of the
+        // stake and the deadline alone. Left in insertion order, the stored
+        // order and `sorted` — both serialized — would additionally depend on
+        // whether an `update` happened to sort the queue since the previous
+        // dispute, leaving two encodings of one outcome to reason about.
+        // Merging equal views also stops repeated deposit-then-replay cycles
+        // from growing the queue.
+        relocked.sort_unstable();
+        relocked.dedup_by(|(view, votes), (kept_view, kept_votes)| {
+            let same = view == kept_view;
+            if same {
+                *kept_votes += *votes;
+            }
+            same
+        });
 
         self.in_queue.clear();
         self.locked = 0;
@@ -413,6 +445,7 @@ pub(super) enum ForfeitRule {
 mod tests {
     use super::*;
     use crate::term_state::pos_state_config::test_config;
+    use proptest::prelude::*;
     use std::collections::HashSet;
 
     enum Operation {
@@ -427,7 +460,10 @@ mod tests {
         /// serialized — a test that only compared the multiset would not
         /// notice a rule that reshuffles the queue.
         AssertOutQueue(Vec<(View, u64)>),
-        AssertForceRetired(bool),
+        /// The exact view, not just whether the flag is set: a rule that
+        /// re-stamped it with today's view would restart the restriction and
+        /// a boolean could not tell.
+        AssertForceRetired(Option<View>),
         Snapshot,
         /// Whole-status equality, not a projection: idempotence has to hold
         /// for the bytes that get serialized, `StatusList::sorted` included.
@@ -443,6 +479,18 @@ mod tests {
     /// `PosState::record_update_views`, which inserts every supplied view. So
     /// this harness cannot show whether an operation strands a past-dated
     /// hint; assert that at the `PosState` level instead.
+    /// The queue delays are tiered, so a test that hard-coded one tier would
+    /// silently describe a different scenario once a transition moved.
+    fn in_delay(view: View) -> u64 {
+        test_config::install();
+        POS_STATE_CONFIG.in_queue_locked_views(view)
+    }
+
+    fn out_delay(view: View) -> u64 {
+        test_config::install();
+        POS_STATE_CONFIG.out_queue_locked_views(view)
+    }
+
     fn run_tasks(tasks: Vec<(Operation, View)>) {
         test_config::install();
         let mut tasks: VecDeque<(Operation, View)> = tasks.into();
@@ -519,11 +567,9 @@ mod tests {
                     }
                     Operation::AssertForceRetired(expected) => {
                         assert_eq!(
-                            lock_status.force_retired.is_some(),
-                            expected,
+                            lock_status.force_retired, expected,
                             "force_retired at view {}\n {:?}",
-                            view,
-                            lock_status
+                            view, lock_status
                         );
                     }
                 }
@@ -637,6 +683,57 @@ mod tests {
         run_tasks(tasks);
     }
 
+    /// `update` sorts the queue on its way through `pop_by_view`, and both
+    /// the order and the `sorted` flag are serialized. A replay after that
+    /// has run therefore starts from a differently encoded queue than the one
+    /// the first dispute produced, and still has to land on the same state.
+    #[test]
+    fn replay_is_stable_across_an_intervening_update() {
+        let deposit = test_config::CIP173_TRANSITION + 500;
+        let dispute = deposit + 1;
+        // Below the deposit's ordinary exit, so the two pieces land on
+        // different views and ordering is observable at all.
+        let deadline = dispute + out_delay(dispute);
+        let tasks = vec![
+            (NewLock(10), 2),
+            (NewLock(5), deposit),
+            (Forfeit(RelockAll { deadline }), dispute),
+            // Past the first exit, so `update` has drained and re-sorted.
+            (Snapshot, deadline + 1),
+            (Forfeit(RelockAll { deadline }), deadline + 2),
+            (AssertUnchangedSinceSnapshot, deadline + 3),
+        ];
+
+        run_tasks(tasks);
+    }
+
+    /// A retirement whose only callback fired while the old predicate still
+    /// refused to clear the flag has no second callback: `next_view` consumed
+    /// the hint. Nodes left with no other scheduled view cannot be repaired
+    /// by the expiry rule alone, so the check also runs where the flag is
+    /// read.
+    #[test]
+    fn a_consumed_callback_does_not_strand_force_retirement() {
+        let retire = test_config::CIP99_TRANSITION - 5000;
+        let consumed_callback = retire + out_delay(retire);
+        // Both sides of the callback precede the gate, so the flag is still
+        // set when CIP-173 activates and no hint remains to revisit it.
+        assert!(consumed_callback < test_config::CIP173_TRANSITION);
+        assert!(out_delay(consumed_callback) > out_delay(retire));
+        let deposit = test_config::CIP173_TRANSITION + 1;
+        let tasks = vec![
+            // No stake, so the expiry callback is the only view ever
+            // scheduled and nothing revisits the node after it is consumed.
+            (ForceRetire, retire),
+            (AssertForceRetired(Some(retire)), consumed_callback + 1),
+            (NewLock(5), deposit),
+            (AssertForceRetired(None), deposit + 1),
+            (AssertAvailable(5), deposit + 1),
+        ];
+
+        run_tasks(tasks);
+    }
+
     /// Stake deposited after the dispute is swept in by the next replay — the
     /// penalty is not escapable by re-staking — but it keeps its own later
     /// exit and does not drag the older stake along with it. Collapsing the
@@ -648,20 +745,20 @@ mod tests {
         // Short enough that the deposit's ordinary exit is the later of the
         // two; with a dominating deadline both would land on it and the
         // distinction this test exists for would be invisible.
-        let deadline = dispute + test_config::OUT_QUEUE_VIEWS;
+        let deadline = dispute + out_delay(dispute);
         let deposit = dispute + 100;
-        let old_pile_exit = dispute + test_config::OUT_QUEUE_VIEWS;
-        let deposit_exit = deposit
-            + test_config::IN_QUEUE_VIEWS
-            + test_config::OUT_QUEUE_VIEWS;
+        let old_pile_exit = dispute + out_delay(dispute);
+        let deposit_exit = deposit + in_delay(deposit) + out_delay(deposit);
         let tasks = vec![
             (NewLock(10), 2),
             (Forfeit(RelockAll { deadline }), dispute),
             (NewLock(5), deposit),
             (AssertAvailable(5), deposit + 1),
             (Forfeit(RelockAll { deadline }), deposit + 1),
+            // Ascending, though the deposit is enqueued first: the result is
+            // canonical rather than a record of the insertion order.
             (
-                AssertOutQueue(vec![(deposit_exit, 5), (old_pile_exit, 10)]),
+                AssertOutQueue(vec![(old_pile_exit, 10), (deposit_exit, 5)]),
                 deposit + 2,
             ),
             (Snapshot, deposit + 3),
@@ -681,7 +778,7 @@ mod tests {
     fn a_nearly_stale_deadline_does_not_release_locked_stake_early() {
         let dispute = test_config::CIP173_TRANSITION + 1000;
         let deadline = dispute + 1;
-        let ordinary_exit = dispute + test_config::OUT_QUEUE_VIEWS;
+        let ordinary_exit = dispute + out_delay(dispute);
         let tasks = vec![
             (NewLock(10), 2),
             (Forfeit(RelockAll { deadline }), dispute),
@@ -701,9 +798,7 @@ mod tests {
         let deposit = test_config::CIP173_TRANSITION + 500;
         let dispute = deposit + 1;
         let deadline = dispute + 1;
-        let ordinary_exit = deposit
-            + test_config::IN_QUEUE_VIEWS
-            + test_config::OUT_QUEUE_VIEWS;
+        let ordinary_exit = deposit + in_delay(deposit) + out_delay(deposit);
         let tasks = vec![
             (NewLock(10), deposit),
             (Forfeit(RelockAll { deadline }), dispute),
@@ -721,7 +816,7 @@ mod tests {
     #[test]
     fn relock_all_catches_a_fully_retired_node() {
         let retire = test_config::CIP173_TRANSITION + 1000;
-        let exit = retire + test_config::OUT_QUEUE_VIEWS;
+        let exit = retire + out_delay(retire);
         let dispute = retire + 1;
         let deadline = dispute + test_config::DISPUTE_LOCKED_VIEWS;
         let tasks = vec![
@@ -747,16 +842,18 @@ mod tests {
     /// on the defective rule permanently.
     #[test]
     fn force_retire_expiry_uses_the_scheduled_delay() {
-        let retire =
-            test_config::CIP136_TRANSITION - test_config::OUT_QUEUE_VIEWS;
+        let retire = test_config::CIP173_TRANSITION - 6000;
+        let expiry = retire + out_delay(retire);
+        // Retired before the gate, expiring after it, and after the delay
+        // grew — otherwise the two rules agree and prove nothing.
         assert!(retire < test_config::CIP173_TRANSITION);
-        let expiry = retire + test_config::OUT_QUEUE_VIEWS;
         assert!(expiry > test_config::CIP173_TRANSITION);
+        assert!(out_delay(expiry) > out_delay(retire));
         let tasks = vec![
             (NewLock(10), 2),
             (ForceRetire, retire),
-            (AssertForceRetired(true), expiry - 1),
-            (AssertForceRetired(false), expiry + 1),
+            (AssertForceRetired(Some(retire)), expiry - 1),
+            (AssertForceRetired(None), expiry + 1),
             // The restriction is what routes deposits away from active
             // stake, so a flag that never expires silently strands them.
             (NewLock(5), expiry + 1),
@@ -779,9 +876,9 @@ mod tests {
         let tasks = vec![
             (NewLock(10), 2),
             (ForceRetire, retire),
-            (AssertForceRetired(true), retire + 1),
+            (AssertForceRetired(Some(retire)), retire + 1),
             (Forfeit(RelockAll { deadline }), dispute),
-            (AssertForceRetired(true), dispute + 1),
+            (AssertForceRetired(Some(retire)), dispute + 1),
             (AssertOutQueue(vec![(deadline, 10)]), dispute + 1),
             (AssertUnlocked(10), deadline + 1),
         ];
@@ -794,7 +891,7 @@ mod tests {
     #[test]
     fn relock_active_leaves_a_fully_retired_node_alone() {
         let retire = test_config::CIP156_TRANSITION + 5000;
-        let exit = retire + test_config::OUT_QUEUE_VIEWS;
+        let exit = retire + out_delay(retire);
         let dispute = retire + 1000;
         let deadline = dispute + test_config::DISPUTE_LOCKED_VIEWS;
         let tasks = vec![
@@ -806,6 +903,151 @@ mod tests {
         ];
 
         run_tasks(tasks);
+    }
+
+    #[derive(Clone, Debug)]
+    enum Step {
+        /// Move to the next view an earlier operation scheduled, and run the
+        /// update there.
+        Advance,
+        NewLock(u64),
+        NewUnlock(u64),
+        ForceRetire,
+        Forfeit(ForfeitKind, View),
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum ForfeitKind {
+        Freeze,
+        Active,
+        All,
+    }
+
+    fn any_step() -> impl Strategy<Value = Step> {
+        prop_oneof![
+            6 => Just(Step::Advance),
+            3 => (1u64..1000).prop_map(Step::NewLock),
+            3 => (1u64..1000).prop_map(Step::NewUnlock),
+            1 => Just(Step::ForceRetire),
+            2 => (
+                prop_oneof![
+                    Just(ForfeitKind::Freeze),
+                    Just(ForfeitKind::Active),
+                    Just(ForfeitKind::All),
+                ],
+                1u64..60_000,
+            )
+                .prop_map(|(kind, offset)| Step::Forfeit(kind, offset)),
+        ]
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        /// The properties this type has always relied on, none of which it
+        /// states anywhere: they were emergent, which is how a predicate
+        /// written for one abnormal state could quietly rewrite the others.
+        ///
+        /// Sequences are generated from the default state rather than from
+        /// arbitrary states — the derived `Arbitrary` impls produce statuses
+        /// that break the cache and routing invariants by construction, so
+        /// seeding from them would test the assertions against garbage.
+        ///
+        /// The driver visits exactly the views an operation scheduled,
+        /// because that is what `node_map_hint` does. Skipping them would let
+        /// `in_queue` hold matured items, a state production never reaches.
+        #[test]
+        fn invariants_survive_any_operation_sequence(
+            steps in prop::collection::vec(any_step(), 1..32),
+        ) {
+            test_config::install();
+            let mut status = NodeLockStatus::default();
+            let mut pending: std::collections::BTreeSet<View> =
+                Default::default();
+            let mut view: View = 1;
+            let mut prev_unlocked = 0u64;
+            let mut deposited = 0u64;
+
+            for step in steps {
+                let mut pushed = Vec::new();
+                match step {
+                    Step::Advance => {
+                        match pending.range(view..).next().copied() {
+                            Some(next) => {
+                                pending.remove(&next);
+                                view = next;
+                                status.update(view);
+                            }
+                            None => view += 1,
+                        }
+                    }
+                    Step::NewLock(votes) => {
+                        deposited += votes;
+                        status.new_lock(view, votes, false, &mut pushed);
+                    }
+                    Step::NewUnlock(votes) => {
+                        status.new_unlock(view, votes, &mut pushed);
+                    }
+                    Step::ForceRetire => {
+                        status.force_retire(view, &mut pushed);
+                    }
+                    Step::Forfeit(kind, offset) => {
+                        let deadline = view + offset;
+                        let rule = match kind {
+                            ForfeitKind::Freeze => {
+                                ForfeitRule::FreezeWithdrawable
+                            }
+                            ForfeitKind::Active => {
+                                ForfeitRule::RelockActive { deadline }
+                            }
+                            ForfeitKind::All => {
+                                ForfeitRule::RelockAll { deadline }
+                            }
+                        };
+                        status
+                            .forfeit(view, rule, &mut pushed)
+                            .map_err(|e| TestCaseError::fail(e.to_string()))?;
+                    }
+                }
+
+                // Nothing is ever scheduled at a view already passed: such a
+                // key would sit in `node_map_hint` unvisited forever, and the
+                // stake behind it with it.
+                for scheduled in &pushed {
+                    prop_assert!(
+                        *scheduled > view,
+                        "scheduled {} at view {}",
+                        scheduled,
+                        view
+                    );
+                    pending.insert(*scheduled);
+                }
+
+                // The cache agrees with the buckets it summarizes. Everything
+                // that reads `available_votes` instead of recomputing depends
+                // on this.
+                prop_assert_eq!(status.available_votes, status.active_votes());
+                // A force-retired node accumulates no active stake: that is
+                // the whole restriction, and deposit routing is what enforces
+                // it.
+                if status.force_retired.is_some() {
+                    prop_assert_eq!(status.active_votes(), 0);
+                }
+                // Withdrawable only grows; a dispute freezes what may be
+                // taken out but never claws back what already was.
+                prop_assert!(status.unlocked >= prev_unlocked);
+                prev_unlocked = status.unlocked;
+                // No votes are minted or burned. `forfeit` moves stake
+                // between buckets and used to take one total from the cache
+                // and the other from real items.
+                prop_assert_eq!(
+                    status.active_votes()
+                        + status.out_queue.total()
+                        + status.unlocked,
+                    deposited
+                );
+            }
+        }
     }
 
     #[test]

@@ -654,22 +654,31 @@ mod tests {
     fn the_event_key_follows_the_gate(
         signer: &ValidatorSigner, target: &Target,
     ) {
-        let evidence = target.votes(
+        // Both evidence variants: the offence coordinate is read through a
+        // different accessor in each.
+        let votes = target.votes(
             &make_vote(signer, target.address, 1),
             &make_vote(signer, target.address, 2),
         );
+        let proposals = target.blocks(
+            &make_proposal(signer, target.address, 1),
+            &make_proposal(signer, target.address, 2),
+        );
 
-        let before = execute_dispute(&evidence, &pos_state_at(target, BEFORE))
-            .expect("accepted before the gate");
-        assert_eq!(before.len(), 1);
-        assert_eq!(before[0], evidence.to_event());
+        for evidence in [&votes, &proposals] {
+            let before =
+                execute_dispute(evidence, &pos_state_at(target, BEFORE))
+                    .expect("accepted before the gate");
+            assert_eq!(before.len(), 1);
+            assert_eq!(before[0], evidence.to_event());
 
-        let after =
-            execute_dispute(&evidence, &pos_state_at(target, TRANSITION))
-                .expect("accepted after the gate");
-        assert_eq!(after.len(), 1);
-        assert_eq!(after[0], evidence.to_event_v2(EPOCH));
-        assert_ne!(after[0].key(), before[0].key());
+            let after =
+                execute_dispute(evidence, &pos_state_at(target, TRANSITION))
+                    .expect("accepted after the gate");
+            assert_eq!(after.len(), 1);
+            assert_eq!(after[0], evidence.to_event_v2(EPOCH));
+            assert_ne!(after[0].key(), before[0].key());
+        }
     }
 
     /// The statute of limitations is enforced where the evidence is decoded,

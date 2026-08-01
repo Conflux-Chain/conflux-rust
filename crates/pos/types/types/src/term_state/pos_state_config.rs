@@ -242,11 +242,15 @@ pub(crate) mod test_config {
     // test binary is one process. `PosStateConfig::default()` is unusable
     // here because its `cip156_dispute_locked_views` is `u64::MAX`.
     //
-    // The transition views are ordered `cip156 < cip173 < cip136` so a test
-    // can reach every rule, and the queue delays differ across `cip136` so a
-    // delay evaluated at the wrong view is observable at all.
-    pub const IN_QUEUE_VIEWS: u64 = 10080;
-    pub const OUT_QUEUE_VIEWS: u64 = 10080;
+    // The transition views are ordered `cip99 < cip156 < cip173 < cip136` so
+    // a test can reach every rule, and the queue delays grow at both `cip99`
+    // and `cip136` — one before the CIP-173 gate and one after — since a
+    // delay evaluated at the wrong view is only observable across a change,
+    // and the two sides of the gate are different cases.
+    pub const IN_QUEUE_VIEWS: u64 = 10_080;
+    pub const OUT_QUEUE_VIEWS: u64 = 10_080;
+    pub const CIP99_TRANSITION: u64 = 30_000;
+    pub const CIP99_QUEUE_VIEWS: u64 = 15_000;
     pub const CIP156_TRANSITION: u64 = 50_000;
     // Longer than `CIP173_TRANSITION - CIP156_TRANSITION`, so evidence from
     // the CIP-156 era is still live once CIP-173 is reached — otherwise every
@@ -267,9 +271,9 @@ pub(crate) mod test_config {
                     TERM_ELECTED_SIZE,
                     IN_QUEUE_VIEWS,
                     OUT_QUEUE_VIEWS,
-                    u64::MAX,
-                    0,
-                    0,
+                    CIP99_TRANSITION,
+                    CIP99_QUEUE_VIEWS,
+                    CIP99_QUEUE_VIEWS,
                     u64::MAX,
                     u64::MAX,
                     CIP136_TRANSITION,

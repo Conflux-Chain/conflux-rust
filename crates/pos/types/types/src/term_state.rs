@@ -1239,9 +1239,12 @@ impl PosState {
         let offense_view = POS_STATE_CONFIG
             .get_starting_view_for_term(offense_term)
             .ok_or_else(|| anyhow!("dispute offence term has no view"))?;
-        // Read at the offence, not now: a later CIP that changed this value
-        // would otherwise make a replay compute a larger deadline, which is
-        // the defect the offence anchor exists to remove.
+        // Read at the offence term's start, not now: a later CIP that
+        // changed this value would otherwise make a replay compute a larger
+        // deadline, which is the defect the offence anchor exists to remove.
+        // The anchor is term-granular, so a delay transition landing mid-term
+        // selects the tier in force at that term's start — a reason to align
+        // any future transition to a term boundary.
         let locked_views = POS_STATE_CONFIG
             .dispute_locked_views(offense_view)
             .ok_or_else(|| anyhow!("dispute offence predates CIP-156"))?;
@@ -1731,18 +1734,27 @@ mod tests {
     #[test]
     fn dispute_deadline_anchors_at_the_offence_term() {
         test_config::install();
-        let mut state = PosState::new_empty();
-        state.current_view = test_config::CIP173_TRANSITION;
-
-        let epoch = epoch_at(offence_view());
-        let term_start = POS_STATE_CONFIG
-            .get_starting_view_for_term(epoch - 1)
-            .expect("term start");
-        assert!(term_start <= offence_view());
-        assert_eq!(
-            state.dispute_deadline(epoch).expect("deadline"),
-            term_start + test_config::DISPUTE_LOCKED_VIEWS,
-        );
+        // Both branches of `get_starting_view_for_term`, which changes
+        // formula at the CIP-136 transition: an anchor is only as good as
+        // that conversion, and the two sides are different arithmetic.
+        for offence in [
+            test_config::CIP156_TRANSITION + 10_000,
+            test_config::CIP136_TRANSITION + 20_000,
+        ] {
+            let epoch = epoch_at(offence);
+            let term_start = POS_STATE_CONFIG
+                .get_starting_view_for_term(epoch - 1)
+                .expect("term start");
+            assert!(term_start <= offence);
+            let mut state = PosState::new_empty();
+            state.set_current_view_for_test(offence);
+            assert_eq!(
+                state.dispute_deadline(epoch).expect("deadline"),
+                term_start + test_config::DISPUTE_LOCKED_VIEWS,
+                "offence at view {}",
+                offence,
+            );
+        }
     }
 
     /// The deadline depends on the evidence and not on when it was submitted,
@@ -1753,9 +1765,9 @@ mod tests {
         test_config::install();
         let epoch = epoch_at(offence_view());
         let mut early = PosState::new_empty();
-        early.current_view = test_config::CIP173_TRANSITION;
+        early.set_current_view_for_test(test_config::CIP173_TRANSITION);
         let mut late = PosState::new_empty();
-        late.current_view = test_config::CIP173_TRANSITION + 5000;
+        late.set_current_view_for_test(test_config::CIP173_TRANSITION + 5000);
 
         assert_eq!(
             early.dispute_deadline(epoch).expect("deadline"),
@@ -1771,7 +1783,7 @@ mod tests {
     fn dispute_deadline_rejects_a_future_term() {
         test_config::install();
         let mut state = PosState::new_empty();
-        state.current_view = offence_view();
+        state.set_current_view_for_test(offence_view());
         let current_epoch = epoch_at(state.current_view);
 
         assert!(state.dispute_deadline(current_epoch).is_ok());
@@ -1793,9 +1805,9 @@ mod tests {
         let deadline = term_start + test_config::DISPUTE_LOCKED_VIEWS;
 
         let mut state = PosState::new_empty();
-        state.current_view = deadline - 1;
+        state.set_current_view_for_test(deadline - 1);
         assert_eq!(state.dispute_deadline(epoch).expect("deadline"), deadline);
-        state.current_view = deadline;
+        state.set_current_view_for_test(deadline);
         assert!(state.dispute_deadline(epoch).is_err());
 
         // An offence predating CIP-156 has no configured penalty.
@@ -1814,7 +1826,7 @@ mod tests {
         test_config::install();
         let alice = keys_from_seed(1);
         let mut state = state_with_node(&alice);
-        state.current_view = test_config::CIP173_TRANSITION;
+        state.set_current_view_for_test(test_config::CIP173_TRANSITION);
         let mut update_views = Vec::new();
         state
             .node_map
