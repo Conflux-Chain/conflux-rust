@@ -850,7 +850,7 @@ impl PosState {
         &self, dispute_payload: &DisputePayload,
     ) -> Result<()> {
         if let Some(node_status) = self.node_map.get(&dispute_payload.address) {
-            if node_status.lock_status.exempt_from_forfeit().is_none() {
+            if node_status.lock_status.legacy_withdrawable_cap().is_none() {
                 Ok(())
             } else {
                 bail!(

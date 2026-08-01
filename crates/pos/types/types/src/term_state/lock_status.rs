@@ -116,6 +116,8 @@ impl StatusList {
     pub fn is_empty(&self) -> bool { self.inner.is_empty() }
 
     pub fn iter(&self) -> Iter<'_, StatusItem> { self.inner.iter() }
+
+    fn total(&self) -> u64 { self.inner.iter().map(|item| item.votes).sum() }
 }
 
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug, Default)]
@@ -126,19 +128,25 @@ pub struct NodeLockStatus {
     pub out_queue: StatusList,
     unlocked: u64,
 
-    // Equals to the summation of in_queue + locked
+    // Cache of `active_votes()`, kept equal to it by every write below.
     available_votes: u64,
 
     // Record the view being forced retire.
     force_retired: Option<View>,
-    // If the staking is forfeited, the unlocked votes before forfeiting is
-    // exempted.
-    exempt_from_forfeit: Option<u64>,
+    // Set by a pre-CIP-156 dispute, which froze the withdrawable amount
+    // instead of relocking. Everything above the frozen value is forfeited.
+    legacy_withdrawable_cap: Option<u64>,
 }
 
+/// Three different quantities that were all once called "votes":
+/// `active_votes` is the stake that has not started leaving, `available_votes`
+/// is the same masked by a legacy forfeit, and `unlocked_votes` is what the
+/// operator can actually withdraw.
 impl NodeLockStatus {
+    fn active_votes(&self) -> u64 { self.in_queue.total() + self.locked }
+
     pub fn available_votes(&self) -> u64 {
-        if self.exempt_from_forfeit.is_some() {
+        if self.legacy_withdrawable_cap.is_some() {
             0
         } else {
             self.available_votes
@@ -146,15 +154,15 @@ impl NodeLockStatus {
     }
 
     pub fn unlocked_votes(&self) -> u64 {
-        self.exempt_from_forfeit.unwrap_or(self.unlocked)
+        self.legacy_withdrawable_cap.unwrap_or(self.unlocked)
     }
 
     pub fn forfeited(&self) -> u64 { self.unlocked - self.unlocked_votes() }
 
     pub fn force_retired(&self) -> Option<u64> { self.force_retired }
 
-    pub fn exempt_from_forfeit(&self) -> Option<u64> {
-        self.exempt_from_forfeit
+    pub fn legacy_withdrawable_cap(&self) -> Option<u64> {
+        self.legacy_withdrawable_cap
     }
 }
 
@@ -178,7 +186,7 @@ impl NodeLockStatus {
             self.force_retired = None;
         }
 
-        if self.exempt_from_forfeit.is_some() {
+        if self.legacy_withdrawable_cap.is_some() {
             new_votes_unlocked = false
         }
 
@@ -264,32 +272,38 @@ impl NodeLockStatus {
     pub(super) fn force_retire(
         &mut self, view: View, callback_views: &mut Vec<View>,
     ) {
-        if self.force_retired.is_none() {
-            self.force_retired = Some(view);
-            callback_views
-                .push(view + POS_STATE_CONFIG.force_retired_locked_views(view));
-            self.new_unlock(view, self.available_votes, callback_views);
+        if self.force_retired.is_some() {
+            return;
         }
+        // Drain first: `new_unlock` must see the pre-retirement status, and
+        // draining before the flag is set keeps `available_votes` consistent
+        // at every point rather than only on return. The unmasked
+        // `active_votes()` — a legacy-forfeited node still has stake to
+        // retire, and the masked accessor would report none.
+        self.new_unlock(view, self.active_votes(), callback_views);
+        self.force_retired = Some(view);
+        callback_views
+            .push(view + POS_STATE_CONFIG.force_retired_locked_views(view));
     }
 
     pub(super) fn forfeit(
         &mut self, view: View, updated_views: &mut Vec<View>,
     ) {
-        if self.exempt_from_forfeit.is_some() {
+        if self.legacy_withdrawable_cap.is_some() {
             return;
         }
         match POS_STATE_CONFIG.dispute_locked_views(view) {
-            None => self.exempt_from_forfeit = Some(self.unlocked),
+            None => self.legacy_withdrawable_cap = Some(self.unlocked),
             Some(dispute_locked_views) => {
-                // available_votes excludes out_queue, so a fully-retired node
+                // Active stake excludes out_queue, so a fully-retired node
                 // (stake only in out_queue) escaped the lock before the fix.
-                let relock = self.available_votes > 0
+                let relock = self.active_votes() > 0
                     || (POS_STATE_CONFIG.dispute_lock_includes_out_queue(view)
                         && !self.out_queue.is_empty());
                 if relock {
                     // We will lock all votes in `in_queue`, `locked`, and
                     // `out_queue`.
-                    let mut to_lock_votes = self.available_votes;
+                    let mut to_lock_votes = self.active_votes();
                     self.in_queue.clear();
                     self.locked = 0;
                     self.available_votes = 0;
