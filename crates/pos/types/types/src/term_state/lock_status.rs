@@ -312,11 +312,11 @@ impl NodeLockStatus {
                     {
                         to_lock_votes += item.votes;
                     }
-                    // `out_queue` is cleared, so we also clear force_retired in
-                    // case it will not be updated in the
-                    // future.
-                    self.force_retired = None;
-
+                    // `force_retired` is deliberately preserved: a dispute is
+                    // a stronger accusation than the inactivity that triggers
+                    // force retirement and must not lift the no-new-active-
+                    // deposit restriction. Expiry now rests entirely on the
+                    // callback `force_retire` scheduled.
                     self.out_queue.push(
                         view.saturating_add(dispute_locked_views),
                         to_lock_votes,
@@ -346,6 +346,7 @@ mod tests {
         /// serialized — a test that only compared the multiset would not
         /// notice a rule that reshuffles the queue.
         AssertOutQueue(Vec<(View, u64)>),
+        AssertForceRetired(bool),
     }
 
     use Operation::*;
@@ -416,6 +417,15 @@ mod tests {
                             actual, expected,
                             "out_queue at view {}\n {:?}",
                             view, lock_status
+                        );
+                    }
+                    Operation::AssertForceRetired(expected) => {
+                        assert_eq!(
+                            lock_status.force_retired.is_some(),
+                            expected,
+                            "force_retired at view {}\n {:?}",
+                            view,
+                            lock_status
                         );
                     }
                 }
@@ -528,6 +538,29 @@ mod tests {
                 )]),
                 dispute + 1,
             ),
+        ];
+
+        run_tasks(tasks);
+    }
+
+    /// A dispute is a stronger accusation than the inactivity that triggers
+    /// force retirement, so it must not lift the restriction. `force_retired`
+    /// is the only reachable abnormal state to combine with a dispute:
+    /// deposits made while it is set are routed straight to `out_queue`, so
+    /// the node has no active stake to hold.
+    #[test]
+    fn forfeit_preserves_force_retired() {
+        let retire = test_config::CIP173_TRANSITION + 500;
+        let dispute = retire + 100;
+        let deadline = dispute + test_config::DISPUTE_LOCKED_VIEWS;
+        let tasks = vec![
+            (NewLock(10), 2),
+            (ForceRetire, retire),
+            (AssertForceRetired(true), retire + 1),
+            (Forfeit, dispute),
+            (AssertForceRetired(true), dispute + 1),
+            (AssertOutQueue(vec![(deadline, 10)]), dispute + 1),
+            (AssertUnlocked(10), deadline + 1),
         ];
 
         run_tasks(tasks);
