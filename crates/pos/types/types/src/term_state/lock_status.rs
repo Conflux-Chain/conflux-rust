@@ -314,9 +314,10 @@ impl NodeLockStatus {
     }
 }
 
-#[allow(dead_code)]
-pub mod tests {
+#[cfg(test)]
+mod tests {
     use super::*;
+    use crate::term_state::pos_state_config::test_config;
     use std::collections::HashSet;
 
     enum Operation {
@@ -327,11 +328,22 @@ pub mod tests {
         AssertAvailable(u64),
         AssertLocked(u64),
         AssertUnlocked(u64),
+        /// `(exit view, votes)` in stored order, which is what gets
+        /// serialized — a test that only compared the multiset would not
+        /// notice a rule that reshuffles the queue.
+        AssertOutQueue(Vec<(View, u64)>),
     }
 
     use Operation::*;
 
+    /// Runs `tasks` against a fresh status, one view per iteration.
+    ///
+    /// The `update_view > view` filter below has no counterpart in
+    /// `PosState::record_update_views`, which inserts every supplied view. So
+    /// this harness cannot show whether an operation strands a past-dated
+    /// hint; assert that at the `PosState` level instead.
     fn run_tasks(tasks: Vec<(Operation, View)>) {
+        test_config::install();
         let mut tasks: VecDeque<(Operation, View)> = tasks.into();
 
         let mut lock_status = NodeLockStatus::default();
@@ -380,6 +392,18 @@ pub mod tests {
                             panic!("View {}\n {:?}", view, lock_status);
                         }
                     }
+                    Operation::AssertOutQueue(expected) => {
+                        let actual: Vec<(View, u64)> = lock_status
+                            .out_queue
+                            .iter()
+                            .map(|item| (item.view, item.votes))
+                            .collect();
+                        assert_eq!(
+                            actual, expected,
+                            "out_queue at view {}\n {:?}",
+                            view, lock_status
+                        );
+                    }
                 }
             }
 
@@ -392,7 +416,7 @@ pub mod tests {
         }
     }
 
-    // #[test]
+    #[test]
     fn basic() {
         let one_vote = vec![
             (NewLock(1), 2),
@@ -419,7 +443,7 @@ pub mod tests {
         run_tasks(multi_vote);
     }
 
-    // #[test]
+    #[test]
     fn increase_during_exit() {
         let tasks = vec![
             (NewLock(10), 2),
@@ -444,7 +468,7 @@ pub mod tests {
         run_tasks(tasks);
     }
 
-    // #[test]
+    #[test]
     fn force_retire() {
         let tasks = vec![
             (NewLock(6), 2),
@@ -470,6 +494,50 @@ pub mod tests {
         run_tasks(tasks);
     }
 
+    /// Characterization of #3524, which this branch builds on: a node whose
+    /// stake sits entirely in `out_queue` has `available_votes == 0`, and
+    /// before CIP-173 that alone let it escape the dispute lock.
+    #[test]
+    fn forfeit_relocks_fully_retired_after_cip173() {
+        let retire = test_config::CIP173_TRANSITION + 1000;
+        let exit = retire + test_config::OUT_QUEUE_VIEWS;
+        let dispute = retire + 1;
+        let tasks = vec![
+            (NewLock(10), 2),
+            (NewUnlock(10), retire),
+            (AssertOutQueue(vec![(exit, 10)]), retire + 1),
+            (Forfeit, dispute),
+            (
+                AssertOutQueue(vec![(
+                    dispute + test_config::DISPUTE_LOCKED_VIEWS,
+                    10,
+                )]),
+                dispute + 1,
+            ),
+        ];
+
+        run_tasks(tasks);
+    }
+
+    /// The same state one gate earlier: CIP-156 is active, so the dispute is
+    /// not a legacy forfeit, but the relock still skips `out_queue`.
+    #[test]
+    fn forfeit_noop_on_fully_retired_before_cip173() {
+        let retire = test_config::CIP156_TRANSITION + 5000;
+        let exit = retire + test_config::OUT_QUEUE_VIEWS;
+        let dispute = retire + 1000;
+        let tasks = vec![
+            (NewLock(10), 2),
+            (NewUnlock(10), retire),
+            (Forfeit, dispute),
+            (AssertOutQueue(vec![(exit, 10)]), dispute + 1),
+            (AssertAvailable(0), dispute + 1),
+        ];
+
+        run_tasks(tasks);
+    }
+
+    #[test]
     fn resolve_retired() {
         let tasks = vec![
             (NewLock(6), 2),
@@ -480,12 +548,5 @@ pub mod tests {
         ];
 
         run_tasks(tasks);
-    }
-
-    pub fn run_all() {
-        basic();
-        increase_during_exit();
-        force_retire();
-        resolve_retired();
     }
 }

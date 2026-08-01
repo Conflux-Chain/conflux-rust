@@ -227,6 +227,55 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
 
 pub static POS_STATE_CONFIG: OnceCell<PosStateConfig> = OnceCell::new();
 
+#[cfg(test)]
+pub(crate) mod test_config {
+    use super::*;
+    use crate::term_state::{TERM_ELECTED_SIZE, TERM_MAX_SIZE};
+
+    // One config for the whole crate: `POS_STATE_CONFIG` is set-once and a
+    // test binary is one process. `PosStateConfig::default()` is unusable
+    // here because its `cip156_dispute_locked_views` is `u64::MAX`.
+    //
+    // The transition views are ordered `cip156 < cip173 < cip136` so a test
+    // can reach every rule, and the queue delays differ across `cip136` so a
+    // delay evaluated at the wrong view is observable at all.
+    pub const IN_QUEUE_VIEWS: u64 = 10080;
+    pub const OUT_QUEUE_VIEWS: u64 = 10080;
+    pub const CIP156_TRANSITION: u64 = 50_000;
+    pub const DISPUTE_LOCKED_VIEWS: u64 = 30_000;
+    pub const CIP173_TRANSITION: u64 = 95_000;
+    pub const CIP136_TRANSITION: u64 = 100_000;
+    pub const CIP136_IN_QUEUE_VIEWS: u64 = 20_000;
+    pub const CIP136_OUT_QUEUE_VIEWS: u64 = 20_000;
+
+    pub fn install() {
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| {
+            POS_STATE_CONFIG
+                .set(PosStateConfig::new(
+                    ROUND_PER_TERM,
+                    TERM_MAX_SIZE,
+                    TERM_ELECTED_SIZE,
+                    IN_QUEUE_VIEWS,
+                    OUT_QUEUE_VIEWS,
+                    u64::MAX,
+                    0,
+                    0,
+                    u64::MAX,
+                    u64::MAX,
+                    CIP136_TRANSITION,
+                    CIP136_IN_QUEUE_VIEWS,
+                    CIP136_OUT_QUEUE_VIEWS,
+                    2 * ROUND_PER_TERM,
+                    CIP156_TRANSITION,
+                    DISPUTE_LOCKED_VIEWS,
+                    CIP173_TRANSITION,
+                ))
+                .expect("POS_STATE_CONFIG set outside install()");
+        });
+    }
+}
+
 impl Default for PosStateConfig {
     fn default() -> Self {
         Self {
