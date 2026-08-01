@@ -8,7 +8,10 @@ use diem_types::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     on_chain_config::new_epoch_event_key,
-    term_state::pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
+    term_state::{
+        pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
+        PosState,
+    },
     transaction::{
         authenticator::TransactionAuthenticator, ConflictSignature,
         DisputePayload, ElectionPayload, RegisterPayload, RetirePayload,
@@ -193,16 +196,34 @@ impl ExecutableBuiltinTx for DisputePayload {
         &self, state_view: &dyn StateView, _tx: &SignatureCheckedTransaction,
         _spec: &Spec,
     ) -> Result<Vec<ContractEvent>, VMStatus> {
-        state_view.pos_state().validate_dispute(self).map_err(|e| {
-            diem_error!("dispute tx error: {:?}", e);
-            VMStatus::Error(StatusCode::CFX_INVALID_TX)
-        })?;
-        let view = state_view.pos_state().current_view();
-        if !verify_dispute(self, view) {
-            return Err(VMStatus::Error(StatusCode::CFX_INVALID_TX));
-        }
-        Ok(vec![self.to_event()])
+        execute_dispute(self, state_view.pos_state())
     }
+}
+
+/// Which event a dispute produces is consensus-visible, because the key
+/// decides which penalty `forfeit_node` applies — and `process_vm_outputs`
+/// ignores keys it does not know, so emitting the newer one before the gate
+/// would silently void the penalty rather than fail.
+pub fn execute_dispute(
+    dispute: &DisputePayload, pos_state: &PosState,
+) -> Result<Vec<ContractEvent>, VMStatus> {
+    pos_state.validate_dispute(dispute).map_err(|e| {
+        diem_error!("dispute tx error: {:?}", e);
+        VMStatus::Error(StatusCode::CFX_INVALID_TX)
+    })?;
+    let view = pos_state.current_view();
+    let offense_epoch = verify_dispute(dispute, view)
+        .ok_or(VMStatus::Error(StatusCode::CFX_INVALID_TX))?;
+    if !POS_STATE_CONFIG.enforce_dispute_conflict(view) {
+        return Ok(vec![dispute.to_event()]);
+    }
+    // Rejecting here rather than at `forfeit_node` keeps an unusable offence
+    // coordinate out of the block instead of failing the block holding it.
+    pos_state.dispute_deadline(offense_epoch).map_err(|e| {
+        diem_error!("dispute offence out of range: {:?}", e);
+        VMStatus::Error(StatusCode::CFX_INVALID_TX)
+    })?;
+    Ok(vec![dispute.to_event_v2(offense_epoch)])
 }
 
 macro_rules! impl_builtin_tx_by_gen_events {
@@ -251,25 +272,30 @@ fn verify_dispute_proposal(
     }
 }
 
-/// Return true if the dispute is valid.
-/// Return false if the encoding is invalid or the provided signatures are
-/// not from the same round.
-pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
+/// Return the consensus epoch the evidence is from, or `None` if the encoding
+/// is invalid or the two pieces are not from the same round.
+///
+/// The epoch is returned rather than checked here because `DisputePayload`
+/// carries its evidence as raw bytes — `diem-types` cannot depend on
+/// `consensus-types` — so this is the only place that can decode it.
+pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> Option<u64> {
     let computed_address =
         from_consensus_public_key(&dispute.bls_pub_key, &dispute.vrf_pub_key);
     if dispute.address != computed_address {
         diem_trace!("Incorrect address and public keys");
-        return false;
+        return None;
     }
     let enforce_conflict = POS_STATE_CONFIG.enforce_dispute_conflict(view);
-    match &dispute.conflicting_votes {
+    // Both arms already require the two pieces to agree on epoch and round,
+    // so either one names the offence unambiguously.
+    let offense_epoch = match &dispute.conflicting_votes {
         ConflictSignature::Proposal((proposal_byte1, proposal_byte2)) => {
             let proposal1: Block =
                 match bcs::from_bytes(proposal_byte1.as_slice()) {
                     Ok(proposal) => proposal,
                     Err(e) => {
                         diem_trace!("1st proposal encoding error: {:?}", e);
-                        return false;
+                        return None;
                     }
                 };
             let proposal2: Block =
@@ -277,7 +303,7 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                     Ok(proposal) => proposal,
                     Err(e) => {
                         diem_trace!("2nd proposal encoding error: {:?}", e);
-                        return false;
+                        return None;
                     }
                 };
             if (proposal1.block_data().epoch()
@@ -286,7 +312,7 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                     != proposal2.block_data().round())
             {
                 diem_trace!("Two proposals are from different rounds");
-                return false;
+                return None;
             }
             let temp_verifier = ValidatorVerifier::new_single(
                 dispute.address,
@@ -303,33 +329,34 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                     dispute.address,
                     &temp_verifier,
                 ) {
-                    return false;
+                    return None;
                 }
                 // `id()` is the hash of `block_data` only (excludes
                 // signature/vrf).
                 if proposal1.id() == proposal2.id() {
                     diem_trace!("Two proposals are identical");
-                    return false;
+                    return None;
                 }
             } else if proposal1.validate_signature(&temp_verifier).is_err()
                 || proposal2.validate_signature(&temp_verifier).is_err()
             {
-                return false;
+                return None;
             }
+            proposal1.block_data().epoch()
         }
         ConflictSignature::Vote((vote_byte1, vote_byte2)) => {
             let vote1: Vote = match bcs::from_bytes(vote_byte1.as_slice()) {
                 Ok(vote) => vote,
                 Err(e) => {
                     diem_trace!("1st vote encoding error: {:?}", e);
-                    return false;
+                    return None;
                 }
             };
             let vote2: Vote = match bcs::from_bytes(vote_byte2.as_slice()) {
                 Ok(vote) => vote,
                 Err(e) => {
                     diem_trace!("2nd vote encoding error: {:?}", e);
-                    return false;
+                    return None;
                 }
             };
             if (vote1.vote_data().proposed().epoch()
@@ -338,7 +365,7 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                     != vote2.vote_data().proposed().round())
             {
                 diem_trace!("Two votes are from different rounds");
-                return false;
+                return None;
             }
             let temp_verifier = ValidatorVerifier::new_single(
                 dispute.address,
@@ -349,7 +376,7 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                 || vote2.verify(&temp_verifier).is_err()
             {
                 diem_trace!("dispute vote verification error: vote1_r={:?} vote2_r={:?}", vote1.verify(&temp_verifier), vote2.verify(&temp_verifier));
-                return false;
+                return None;
             }
             // Compare `LedgerInfo` by hash, not serialized bytes: the optional
             // `timeout_signature` is not part of the `LedgerInfo`.
@@ -357,11 +384,12 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                 && vote1.ledger_info().hash() == vote2.ledger_info().hash()
             {
                 diem_trace!("Two votes share the same ledger info");
-                return false;
+                return None;
             }
+            vote1.vote_data().proposed().epoch()
         }
-    }
-    true
+    };
+    Some(offense_epoch)
 }
 
 #[cfg(test)]
@@ -375,9 +403,12 @@ mod tests {
     //! fixtures are valid; identity cases put the bad item in either operand
     //! slot, since a bad first item short-circuits the second; dedup cases
     //! pair items whose bytes differ while the statement the target signed
-    //! stays the same, or is merely re-encoded.
+    //! stays the same, or is merely re-encoded. The last two cases cover
+    //! execution rather than verification: which event key is emitted, and
+    //! the offence bound that only exists once the deadline comes from the
+    //! evidence.
 
-    use super::verify_dispute;
+    use super::{execute_dispute, verify_dispute};
     use consensus_types::{
         block::Block, block_data::BlockData, quorum_cert::QuorumCert,
         vote::Vote, vote_data::VoteData,
@@ -387,7 +418,10 @@ mod tests {
         account_address::{from_consensus_public_key, AccountAddress},
         block_info::BlockInfo,
         ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
-        term_state::pos_state_config::{PosStateConfig, POS_STATE_CONFIG},
+        term_state::{
+            pos_state_config::{PosStateConfig, POS_STATE_CONFIG},
+            NodeID, PosState,
+        },
         transaction::{ConflictSignature, DisputePayload},
         validator_config::{
             ConsensusPublicKey, ConsensusSignature, ConsensusVRFProof,
@@ -406,34 +440,55 @@ mod tests {
     const ROUND: u64 = 2;
     const TIMESTAMP: u64 = 1000;
 
+    /// Accepted evidence also has to name the offence, since the lock
+    /// deadline is derived from it.
     #[track_caller]
     fn accepted(evidence: &DisputePayload) {
-        assert!(verify_dispute(evidence, BEFORE));
-        assert!(verify_dispute(evidence, TRANSITION));
+        assert_eq!(verify_dispute(evidence, BEFORE), Some(EPOCH));
+        assert_eq!(verify_dispute(evidence, TRANSITION), Some(EPOCH));
     }
 
     #[track_caller]
     fn gated(evidence: &DisputePayload) {
-        assert!(verify_dispute(evidence, BEFORE));
-        assert!(!verify_dispute(evidence, TRANSITION));
+        assert_eq!(verify_dispute(evidence, BEFORE), Some(EPOCH));
+        assert_eq!(verify_dispute(evidence, TRANSITION), None);
     }
 
     #[track_caller]
     fn rejected(evidence: &DisputePayload) {
-        assert!(!verify_dispute(evidence, BEFORE));
-        assert!(!verify_dispute(evidence, TRANSITION));
+        assert_eq!(verify_dispute(evidence, BEFORE), None);
+        assert_eq!(verify_dispute(evidence, TRANSITION), None);
     }
 
-    /// The last argument is `cip173_transition_view`; `M` leaves every other
-    /// transition inert.
+    /// CIP-156 is active from view 0 so a dispute has a configured penalty
+    /// and the offence bound is reachable; the last argument is
+    /// `cip173_transition_view`, and `M` leaves every other transition inert.
     fn install_config() {
         const M: u64 = u64::MAX;
         POS_STATE_CONFIG
             .set(PosStateConfig::new(
-                60, 1, 1, 0, 0, M, 0, 0, M, M, M, 0, 0, 60, M, M, TRANSITION,
+                60,
+                1,
+                1,
+                0,
+                0,
+                M,
+                0,
+                0,
+                M,
+                M,
+                M,
+                0,
+                0,
+                60,
+                0,
+                DISPUTE_LOCKED_VIEWS,
+                TRANSITION,
             ))
             .expect("POS_STATE_CONFIG already set");
     }
+
+    const DISPUTE_LOCKED_VIEWS: u64 = 1000;
 
     /// The validator a dispute accuses. `address` stays derived from the two
     /// public keys because `verify_dispute` recomputes and compares it.
@@ -566,7 +621,7 @@ mod tests {
     }
 
     #[test]
-    fn verify_dispute_conflict_gating() {
+    fn dispute_evidence_and_event_gating() {
         install_config();
 
         let signer = ValidatorSigner::random([7u8; 32]);
@@ -579,6 +634,62 @@ mod tests {
         proposal_identity_is_bound_to_the_accused(&signer, &other, &target);
         unsigned_proposal_is_not_evidence(&signer, &target);
         fields_outside_block_data_cannot_forge_a_conflict(&signer, &target);
+        the_event_key_follows_the_gate(&signer, &target);
+        a_stale_offence_is_refused_at_execution(&signer, &target);
+    }
+
+    fn pos_state_at(target: &Target, view: u64) -> PosState {
+        let mut state = PosState::new_empty();
+        state
+            .register_node(NodeID::new(target.bls.clone(), target.vrf.clone()))
+            .expect("register");
+        state.set_current_view_for_test(view);
+        state
+    }
+
+    /// `process_vm_outputs` silently ignores event keys it does not know, so
+    /// emitting the CIP-173 key before the gate would void the penalty
+    /// instead of failing loudly. Pre-gate emission also has to stay
+    /// byte-identical to what an old binary produces.
+    fn the_event_key_follows_the_gate(
+        signer: &ValidatorSigner, target: &Target,
+    ) {
+        let evidence = target.votes(
+            &make_vote(signer, target.address, 1),
+            &make_vote(signer, target.address, 2),
+        );
+
+        let before = execute_dispute(&evidence, &pos_state_at(target, BEFORE))
+            .expect("accepted before the gate");
+        assert_eq!(before.len(), 1);
+        assert_eq!(before[0], evidence.to_event());
+
+        let after =
+            execute_dispute(&evidence, &pos_state_at(target, TRANSITION))
+                .expect("accepted after the gate");
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0], evidence.to_event_v2(EPOCH));
+        assert_ne!(after[0].key(), before[0].key());
+    }
+
+    /// The statute of limitations is enforced where the evidence is decoded,
+    /// since `validate_dispute` only sees opaque bytes.
+    fn a_stale_offence_is_refused_at_execution(
+        signer: &ValidatorSigner, target: &Target,
+    ) {
+        let evidence = target.votes(
+            &make_vote(signer, target.address, 1),
+            &make_vote(signer, target.address, 2),
+        );
+        // `EPOCH` is term `EPOCH - 1`, which starts at view 0 here.
+        let deadline = DISPUTE_LOCKED_VIEWS;
+        assert!(execute_dispute(
+            &evidence,
+            &pos_state_at(target, deadline - 1)
+        )
+        .is_ok());
+        assert!(execute_dispute(&evidence, &pos_state_at(target, deadline))
+            .is_err());
     }
 
     fn vote_conflict_gating(signer: &ValidatorSigner, target: &Target) {

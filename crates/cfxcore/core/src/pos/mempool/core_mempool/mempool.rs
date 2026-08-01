@@ -21,7 +21,10 @@ use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
     mempool_status::MempoolStatus,
-    term_state::PosState,
+    term_state::{
+        pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
+        PosState,
+    },
     transaction::{
         authenticator::TransactionAuthenticator, SignedTransaction,
         TransactionPayload,
@@ -100,14 +103,24 @@ impl Mempool {
                 }
                 TransactionPayload::Dispute(dispute_payload) => {
                     // TODO(lpl): Only dispute a node once.
-                    pos_state.validate_dispute(dispute_payload).and(
-                        verify_dispute(
-                            dispute_payload,
-                            pos_state.current_view(),
-                        )
-                        .then_some(())
-                        .ok_or(anyhow::anyhow!("invalid dispute")),
-                    )
+                    //
+                    // The staleness bound below has to match execution
+                    // exactly, with no safety margin: assembly runs against
+                    // the same parent state the block will execute against,
+                    // so a margin cannot buy time — it would only make honest
+                    // proposers drop evidence the chain still considers
+                    // valid, shortening the statute of limitations in
+                    // practice.
+                    pos_state.validate_dispute(dispute_payload).and_then(|_| {
+                        let view = pos_state.current_view();
+                        let offense_epoch =
+                            verify_dispute(dispute_payload, view)
+                                .ok_or(anyhow::anyhow!("invalid dispute"))?;
+                        if POS_STATE_CONFIG.enforce_dispute_conflict(view) {
+                            pos_state.dispute_deadline(offense_epoch)?;
+                        }
+                        Ok(())
+                    })
                 }
                 _ => {
                     continue;

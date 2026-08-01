@@ -3,6 +3,7 @@ use std::{
     fmt::Debug,
 };
 
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
 #[cfg(any(test, feature = "fuzzing"))]
@@ -303,22 +304,19 @@ impl NodeLockStatus {
     }
 
     pub(super) fn forfeit(
-        &mut self, view: View, updated_views: &mut Vec<View>,
-    ) {
+        &mut self, view: View, rule: ForfeitRule, updated_views: &mut Vec<View>,
+    ) -> Result<()> {
         if self.legacy_withdrawable_cap.is_some() {
-            return;
+            return Ok(());
         }
-        match POS_STATE_CONFIG.dispute_locked_views(view) {
-            None => self.legacy_withdrawable_cap = Some(self.unlocked),
-            Some(dispute_locked_views) => {
-                // Active stake excludes out_queue, so a fully-retired node
-                // (stake only in out_queue) escaped the lock before the fix.
-                let relock = self.active_votes() > 0
-                    || (POS_STATE_CONFIG.dispute_lock_includes_out_queue(view)
-                        && !self.out_queue.is_empty());
-                if relock {
-                    // We will lock all votes in `in_queue`, `locked`, and
-                    // `out_queue`.
+        match rule {
+            ForfeitRule::FreezeWithdrawable => {
+                self.legacy_withdrawable_cap = Some(self.unlocked);
+            }
+            ForfeitRule::RelockActive { deadline } => {
+                // Active stake excludes out_queue, so a node whose stake is
+                // entirely on its way out escapes this rule.
+                if self.active_votes() > 0 {
                     let mut to_lock_votes = self.active_votes();
                     self.in_queue.clear();
                     self.locked = 0;
@@ -331,17 +329,84 @@ impl NodeLockStatus {
                     // `force_retired` is deliberately preserved: a dispute is
                     // a stronger accusation than the inactivity that triggers
                     // force retirement and must not lift the no-new-active-
-                    // deposit restriction. Expiry now rests entirely on the
+                    // deposit restriction. Expiry rests entirely on the
                     // callback `force_retire` scheduled.
-                    self.out_queue.push(
-                        view.saturating_add(dispute_locked_views),
-                        to_lock_votes,
-                        updated_views,
-                    );
+                    self.out_queue.push(deadline, to_lock_votes, updated_views);
                 }
             }
+            ForfeitRule::RelockAll { deadline } => {
+                self.relock_all(view, deadline, updated_views)?;
+            }
         }
+        Ok(())
     }
+
+    /// Hold every piece of stake until `deadline`, or until its own ordinary
+    /// exit if that falls later.
+    ///
+    /// Per item rather than one collapsed entry, because collapsing gets it
+    /// wrong in opposite directions: collapsing onto `deadline` alone lets
+    /// nearly-stale evidence *shorten* the wait on stake that had not started
+    /// leaving, making the penalty a way around the withdrawal delay, while
+    /// collapsing onto the latest floor drags the older stake out to a later
+    /// deposit's exit.
+    ///
+    /// It is also what makes resubmitting the same evidence a no-op: every
+    /// item already sits at or after `deadline`, so the `max` reproduces the
+    /// list unchanged.
+    fn relock_all(
+        &mut self, view: View, deadline: View, updated_views: &mut Vec<View>,
+    ) -> Result<()> {
+        let out_delay = POS_STATE_CONFIG.out_queue_locked_views(view);
+        // Every fallible exit is computed before anything is drained, so a
+        // rejected relock leaves the status untouched rather than half-empty.
+        let mut relocked =
+            Vec::with_capacity(self.in_queue.len() + self.out_queue.len() + 1);
+        for item in self.in_queue.iter() {
+            let ordinary_exit =
+                item.view.checked_add(out_delay).ok_or_else(|| {
+                    anyhow!("in_queue ordinary exit view overflows")
+                })?;
+            relocked.push((ordinary_exit.max(deadline), item.votes));
+        }
+        if self.locked > 0 {
+            let ordinary_exit =
+                view.checked_add(out_delay).ok_or_else(|| {
+                    anyhow!("locked ordinary exit view overflows")
+                })?;
+            relocked.push((ordinary_exit.max(deadline), self.locked));
+        }
+        for item in self.out_queue.iter() {
+            relocked.push((item.view.max(deadline), item.votes));
+        }
+        if relocked.is_empty() {
+            return Ok(());
+        }
+
+        self.in_queue.clear();
+        self.locked = 0;
+        self.available_votes = 0;
+        self.out_queue.clear();
+        for (exit_view, votes) in relocked {
+            self.out_queue.push(exit_view, votes, updated_views);
+        }
+        Ok(())
+    }
+}
+
+/// The three penalties a dispute has carried, kept apart because they share
+/// the same fields and a predicate written for one silently rewrites the
+/// others. `PosState` picks exactly one, so the rule and the deadline it was
+/// derived from cannot disagree.
+pub(super) enum ForfeitRule {
+    /// Pre-CIP-156: freeze what is withdrawable and forfeit the rest.
+    FreezeWithdrawable,
+    /// CIP-156: collapse the active stake into a single entry at `deadline`,
+    /// measured from the submission.
+    RelockActive { deadline: View },
+    /// CIP-173: hold every piece, `out_queue` included, until at least
+    /// `deadline`, which is measured from the offence.
+    RelockAll { deadline: View },
 }
 
 #[cfg(test)]
@@ -354,7 +419,7 @@ mod tests {
         NewLock(u64),
         NewUnlock(u64),
         ForceRetire,
-        Forfeit,
+        Forfeit(ForfeitRule),
         AssertAvailable(u64),
         AssertLocked(u64),
         AssertUnlocked(u64),
@@ -363,8 +428,13 @@ mod tests {
         /// notice a rule that reshuffles the queue.
         AssertOutQueue(Vec<(View, u64)>),
         AssertForceRetired(bool),
+        Snapshot,
+        /// Whole-status equality, not a projection: idempotence has to hold
+        /// for the bytes that get serialized, `StatusList::sorted` included.
+        AssertUnchangedSinceSnapshot,
     }
 
+    use ForfeitRule::*;
     use Operation::*;
 
     /// Runs `tasks` against a fresh status, one view per iteration.
@@ -378,6 +448,7 @@ mod tests {
         let mut tasks: VecDeque<(Operation, View)> = tasks.into();
 
         let mut lock_status = NodeLockStatus::default();
+        let mut snapshot: Option<NodeLockStatus> = None;
         let mut hint_views = HashSet::<View>::new();
         let mut view = 0;
 
@@ -405,9 +476,9 @@ mod tests {
                     Operation::ForceRetire => {
                         lock_status.force_retire(view, &mut update_views);
                     }
-                    Operation::Forfeit => {
-                        lock_status.forfeit(view, &mut update_views)
-                    }
+                    Operation::Forfeit(rule) => lock_status
+                        .forfeit(view, rule, &mut update_views)
+                        .expect("forfeit"),
                     Operation::AssertAvailable(votes) => {
                         if lock_status.available_votes != votes {
                             panic!("View {}\n {:?}", view, lock_status);
@@ -433,6 +504,17 @@ mod tests {
                             actual, expected,
                             "out_queue at view {}\n {:?}",
                             view, lock_status
+                        );
+                    }
+                    Operation::Snapshot => {
+                        snapshot = Some(lock_status.clone());
+                    }
+                    Operation::AssertUnchangedSinceSnapshot => {
+                        assert_eq!(
+                            Some(&lock_status),
+                            snapshot.as_ref(),
+                            "changed since the snapshot, at view {}",
+                            view
                         );
                     }
                     Operation::AssertForceRetired(expected) => {
@@ -534,26 +616,120 @@ mod tests {
         run_tasks(tasks);
     }
 
-    /// Characterization of #3524, which this branch builds on: a node whose
-    /// stake sits entirely in `out_queue` has `available_votes == 0`, and
-    /// before CIP-173 that alone let it escape the dispute lock.
+    /// Nothing detects a repeated dispute, so the same evidence stays valid
+    /// forever and can be resubmitted by anyone. What keeps that from being a
+    /// way to extend the lock indefinitely is that a second application at
+    /// the same deadline leaves the status byte-identical.
     #[test]
-    fn forfeit_relocks_fully_retired_after_cip173() {
+    fn replay_at_the_same_deadline_changes_nothing() {
+        let dispute = test_config::CIP173_TRANSITION + 1000;
+        let deadline = dispute + test_config::DISPUTE_LOCKED_VIEWS;
+        let tasks = vec![
+            (NewLock(10), 2),
+            (Forfeit(RelockAll { deadline }), dispute),
+            (Snapshot, dispute + 1),
+            (Forfeit(RelockAll { deadline }), dispute + 2),
+            (AssertUnchangedSinceSnapshot, dispute + 3),
+            (Forfeit(RelockAll { deadline }), dispute + 4),
+            (AssertUnchangedSinceSnapshot, dispute + 5),
+        ];
+
+        run_tasks(tasks);
+    }
+
+    /// Stake deposited after the dispute is swept in by the next replay — the
+    /// penalty is not escapable by re-staking — but it keeps its own later
+    /// exit and does not drag the older stake along with it. Collapsing the
+    /// two into one entry would extend a penalty the deadline had already
+    /// fixed.
+    #[test]
+    fn a_later_deposit_gets_its_own_exit() {
+        let dispute = test_config::CIP173_TRANSITION + 1000;
+        // Short enough that the deposit's ordinary exit is the later of the
+        // two; with a dominating deadline both would land on it and the
+        // distinction this test exists for would be invisible.
+        let deadline = dispute + test_config::OUT_QUEUE_VIEWS;
+        let deposit = dispute + 100;
+        let old_pile_exit = dispute + test_config::OUT_QUEUE_VIEWS;
+        let deposit_exit = deposit
+            + test_config::IN_QUEUE_VIEWS
+            + test_config::OUT_QUEUE_VIEWS;
+        let tasks = vec![
+            (NewLock(10), 2),
+            (Forfeit(RelockAll { deadline }), dispute),
+            (NewLock(5), deposit),
+            (AssertAvailable(5), deposit + 1),
+            (Forfeit(RelockAll { deadline }), deposit + 1),
+            (
+                AssertOutQueue(vec![(deposit_exit, 5), (old_pile_exit, 10)]),
+                deposit + 2,
+            ),
+            (Snapshot, deposit + 3),
+            (Forfeit(RelockAll { deadline }), deposit + 4),
+            (AssertUnchangedSinceSnapshot, deposit + 5),
+        ];
+
+        run_tasks(tasks);
+    }
+
+    /// A floor, never a ceiling. Evidence submitted just before it goes stale
+    /// leaves almost no penalty, and stake that had not started leaving must
+    /// still serve its ordinary withdrawal delay — otherwise a validator
+    /// could arrange to be disputed on nearly-stale evidence and use the
+    /// penalty to skip the queue.
+    #[test]
+    fn a_nearly_stale_deadline_does_not_release_locked_stake_early() {
+        let dispute = test_config::CIP173_TRANSITION + 1000;
+        let deadline = dispute + 1;
+        let ordinary_exit = dispute + test_config::OUT_QUEUE_VIEWS;
+        let tasks = vec![
+            (NewLock(10), 2),
+            (Forfeit(RelockAll { deadline }), dispute),
+            (AssertOutQueue(vec![(ordinary_exit, 10)]), dispute + 1),
+            (AssertUnlocked(0), ordinary_exit - 1),
+            (AssertUnlocked(10), ordinary_exit + 1),
+        ];
+
+        run_tasks(tasks);
+    }
+
+    /// The same floor rule for stake still maturing: its ordinary exit is
+    /// measured from where it sits in `in_queue`, so a dispute cannot turn a
+    /// fresh deposit into an early withdrawal either.
+    #[test]
+    fn a_nearly_stale_deadline_does_not_release_in_queue_stake_early() {
+        let deposit = test_config::CIP173_TRANSITION + 500;
+        let dispute = deposit + 1;
+        let deadline = dispute + 1;
+        let ordinary_exit = deposit
+            + test_config::IN_QUEUE_VIEWS
+            + test_config::OUT_QUEUE_VIEWS;
+        let tasks = vec![
+            (NewLock(10), deposit),
+            (Forfeit(RelockAll { deadline }), dispute),
+            (AssertOutQueue(vec![(ordinary_exit, 10)]), dispute + 1),
+            (AssertUnlocked(0), ordinary_exit - 1),
+            (AssertUnlocked(10), ordinary_exit + 1),
+        ];
+
+        run_tasks(tasks);
+    }
+
+    /// Characterization of #3524, which this branch builds on: a node whose
+    /// stake sits entirely in `out_queue` has no active stake, and under
+    /// `RelockActive` that alone let it escape the dispute lock.
+    #[test]
+    fn relock_all_catches_a_fully_retired_node() {
         let retire = test_config::CIP173_TRANSITION + 1000;
         let exit = retire + test_config::OUT_QUEUE_VIEWS;
         let dispute = retire + 1;
+        let deadline = dispute + test_config::DISPUTE_LOCKED_VIEWS;
         let tasks = vec![
             (NewLock(10), 2),
             (NewUnlock(10), retire),
             (AssertOutQueue(vec![(exit, 10)]), retire + 1),
-            (Forfeit, dispute),
-            (
-                AssertOutQueue(vec![(
-                    dispute + test_config::DISPUTE_LOCKED_VIEWS,
-                    10,
-                )]),
-                dispute + 1,
-            ),
+            (Forfeit(RelockAll { deadline }), dispute),
+            (AssertOutQueue(vec![(deadline, 10)]), dispute + 1),
         ];
 
         run_tasks(tasks);
@@ -604,7 +780,7 @@ mod tests {
             (NewLock(10), 2),
             (ForceRetire, retire),
             (AssertForceRetired(true), retire + 1),
-            (Forfeit, dispute),
+            (Forfeit(RelockAll { deadline }), dispute),
             (AssertForceRetired(true), dispute + 1),
             (AssertOutQueue(vec![(deadline, 10)]), dispute + 1),
             (AssertUnlocked(10), deadline + 1),
@@ -613,17 +789,18 @@ mod tests {
         run_tasks(tasks);
     }
 
-    /// The same state one gate earlier: CIP-156 is active, so the dispute is
-    /// not a legacy forfeit, but the relock still skips `out_queue`.
+    /// The same state under the rule one gate earlier, which is still live
+    /// for replay of the CIP-156 era.
     #[test]
-    fn forfeit_noop_on_fully_retired_before_cip173() {
+    fn relock_active_leaves_a_fully_retired_node_alone() {
         let retire = test_config::CIP156_TRANSITION + 5000;
         let exit = retire + test_config::OUT_QUEUE_VIEWS;
         let dispute = retire + 1000;
+        let deadline = dispute + test_config::DISPUTE_LOCKED_VIEWS;
         let tasks = vec![
             (NewLock(10), 2),
             (NewUnlock(10), retire),
-            (Forfeit, dispute),
+            (Forfeit(RelockActive { deadline }), dispute),
             (AssertOutQueue(vec![(exit, 10)]), dispute + 1),
             (AssertAvailable(0), dispute + 1),
         ];

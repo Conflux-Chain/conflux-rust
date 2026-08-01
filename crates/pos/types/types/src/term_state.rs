@@ -21,7 +21,7 @@ use diem_crypto::{
 };
 use diem_logger::prelude::*;
 pub use incentives::*;
-use lock_status::NodeLockStatus;
+use lock_status::{ForfeitRule, NodeLockStatus};
 use move_core_types::vm_status::DiscardedVMStatus;
 use pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG};
 use pow_types::StakingEvent;
@@ -983,6 +983,13 @@ impl PosState {
 
     pub fn current_view(&self) -> u64 { self.current_view }
 
+    /// Reaching a given view honestly means replaying the term list, which no
+    /// test of a view-gated rule wants to do.
+    #[cfg(any(test, feature = "testonly_code"))]
+    pub fn set_current_view_for_test(&mut self, view: View) {
+        self.current_view = view;
+    }
+
     pub fn skipped(&self) -> bool { self.skipped }
 
     pub fn next_evicted_term(&mut self) -> BTreeMap<H256, u64> {
@@ -1159,17 +1166,95 @@ impl PosState {
         Ok(())
     }
 
-    pub fn forfeit_node(&mut self, addr: &AccountAddress) -> Result<()> {
-        diem_trace!("forfeit_node: {:?}", addr);
+    /// `offense_epoch` is present exactly when the CIP-173 event was emitted,
+    /// so the penalty rule and the deadline's provenance cannot disagree.
+    pub fn forfeit_node(
+        &mut self, addr: &AccountAddress, offense_epoch: Option<u64>,
+    ) -> Result<()> {
+        diem_trace!("forfeit_node: {:?} {:?}", addr, offense_epoch);
+        let rule = self.forfeit_rule(offense_epoch)?;
         let mut update_views = Vec::new();
         match self.node_map.get_mut(&addr) {
-            Some(node) => node
-                .lock_status
-                .forfeit(self.current_view, &mut update_views),
+            Some(node) => node.lock_status.forfeit(
+                self.current_view,
+                rule,
+                &mut update_views,
+            )?,
             None => bail!("Forfeiting node does not exist"),
         }
         self.record_update_views(addr, update_views);
         Ok(())
+    }
+
+    fn forfeit_rule(&self, offense_epoch: Option<u64>) -> Result<ForfeitRule> {
+        let epoch = match offense_epoch {
+            Some(epoch) => epoch,
+            None => {
+                return Ok(
+                    match POS_STATE_CONFIG
+                        .dispute_locked_views(self.current_view)
+                    {
+                        None => ForfeitRule::FreezeWithdrawable,
+                        Some(locked_views) => ForfeitRule::RelockActive {
+                            deadline: self
+                                .current_view
+                                .saturating_add(locked_views),
+                        },
+                    },
+                )
+            }
+        };
+        Ok(ForfeitRule::RelockAll {
+            deadline: self.dispute_deadline(epoch)?,
+        })
+    }
+
+    /// The view a CIP-173 dispute lock runs to: a total function of the
+    /// evidence, so resubmitting it recomputes the same deadline instead of
+    /// moving it, and a lock cannot be extended by anyone willing to resend.
+    ///
+    /// Both bounds matter. Without the future bound, evidence for an epoch
+    /// the chain has not reached locks the stake essentially forever from a
+    /// single submission — worse than the submission anchor it replaces.
+    /// Without the past bound, the anchor could fall so far back that the
+    /// deadline is already behind us, scheduling an exit that never fires.
+    pub fn dispute_deadline(&self, offense_epoch: u64) -> Result<View> {
+        // Consensus epoch `E` is term `E - 1`: `next_view` installs
+        // `EpochState::new(new_term + 1, ..)`.
+        let offense_term = offense_epoch
+            .checked_sub(1)
+            .ok_or_else(|| anyhow!("dispute evidence claims epoch 0"))?;
+        // Compared in term space, not view space. The two are equivalent
+        // because `get_starting_view_for_term` is monotone, and staying in
+        // term space keeps an arbitrarily large claimed epoch out of that
+        // helper's arithmetic instead of relying on it to reject one.
+        let (current_term, _) =
+            POS_STATE_CONFIG.get_term_view(self.current_view);
+        ensure!(
+            offense_term <= current_term,
+            "dispute evidence from a future term: {} > {}",
+            offense_term,
+            current_term
+        );
+        let offense_view = POS_STATE_CONFIG
+            .get_starting_view_for_term(offense_term)
+            .ok_or_else(|| anyhow!("dispute offence term has no view"))?;
+        // Read at the offence, not now: a later CIP that changed this value
+        // would otherwise make a replay compute a larger deadline, which is
+        // the defect the offence anchor exists to remove.
+        let locked_views = POS_STATE_CONFIG
+            .dispute_locked_views(offense_view)
+            .ok_or_else(|| anyhow!("dispute offence predates CIP-156"))?;
+        let deadline = offense_view
+            .checked_add(locked_views)
+            .ok_or_else(|| anyhow!("dispute deadline overflows"))?;
+        ensure!(
+            deadline > self.current_view,
+            "dispute evidence is stale: deadline {} <= view {}",
+            deadline,
+            self.current_view
+        );
+        Ok(deadline)
     }
 }
 
@@ -1423,12 +1508,36 @@ impl DisputeEvent {
     }
 }
 
+/// A separate key rather than a field on `DisputeEvent`: what a node emits
+/// before activation has to stay byte-identical to what nodes running the old
+/// binary emit, and one BCS struct cannot carry two encodings.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct DisputeEventV2 {
+    /// The node id to dispute.
+    pub node_id: AccountAddress,
+    /// The consensus epoch the evidence is from. The lock deadline is derived
+    /// from it rather than from the submission, which is what makes a
+    /// resubmission unable to move the deadline.
+    pub offense_epoch: u64,
+}
+
+impl DisputeEventV2 {
+    pub fn event_key() -> EventKey {
+        EventKey::new_from_address(&account_config::dispute_address(), 7)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
+        bcs::from_bytes(bytes).map_err(Into::into)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        block_info::PivotBlockDecision, transaction::ElectionPayload,
-        validator_config::ConsensusVRFProof,
+        block_info::PivotBlockDecision,
+        term_state::pos_state_config::test_config,
+        transaction::ElectionPayload, validator_config::ConsensusVRFProof,
     };
     use diem_crypto::{
         bls::BLSPrivateKey,
@@ -1605,6 +1714,130 @@ mod tests {
             ),
             Some(DiscardedVMStatus::AUTHENTICATOR_KEY_MISMATCH),
         );
+    }
+
+    /// The consensus epoch whose term contains `view`.
+    fn epoch_at(view: View) -> u64 {
+        POS_STATE_CONFIG.get_term_view(view).0 + 1
+    }
+
+    /// An offence late enough to carry a CIP-156 penalty at all.
+    fn offence_view() -> View { test_config::CIP156_TRANSITION + 10_000 }
+
+    /// Anchoring to the offence is the whole point, and the mapping from a
+    /// consensus epoch to the view its term started at is the easiest thing
+    /// in the change to get off by one: `next_view` installs `new_term + 1`
+    /// as the epoch, so epoch `E` is term `E - 1`.
+    #[test]
+    fn dispute_deadline_anchors_at_the_offence_term() {
+        test_config::install();
+        let mut state = PosState::new_empty();
+        state.current_view = test_config::CIP173_TRANSITION;
+
+        let epoch = epoch_at(offence_view());
+        let term_start = POS_STATE_CONFIG
+            .get_starting_view_for_term(epoch - 1)
+            .expect("term start");
+        assert!(term_start <= offence_view());
+        assert_eq!(
+            state.dispute_deadline(epoch).expect("deadline"),
+            term_start + test_config::DISPUTE_LOCKED_VIEWS,
+        );
+    }
+
+    /// The deadline depends on the evidence and not on when it was submitted,
+    /// which is what stops a resubmission from moving it. Without this the
+    /// penalty is extendable by anyone, since nothing detects a repeat.
+    #[test]
+    fn dispute_deadline_ignores_the_submission_view() {
+        test_config::install();
+        let epoch = epoch_at(offence_view());
+        let mut early = PosState::new_empty();
+        early.current_view = test_config::CIP173_TRANSITION;
+        let mut late = PosState::new_empty();
+        late.current_view = test_config::CIP173_TRANSITION + 5000;
+
+        assert_eq!(
+            early.dispute_deadline(epoch).expect("deadline"),
+            late.dispute_deadline(epoch).expect("deadline"),
+        );
+    }
+
+    /// Evidence for an epoch the chain has not reached would otherwise lock
+    /// the stake essentially forever from a single submission — strictly
+    /// worse than the submission anchor it replaces, since that at least
+    /// bounded each submission at `view + D`.
+    #[test]
+    fn dispute_deadline_rejects_a_future_term() {
+        test_config::install();
+        let mut state = PosState::new_empty();
+        state.current_view = offence_view();
+        let current_epoch = epoch_at(state.current_view);
+
+        assert!(state.dispute_deadline(current_epoch).is_ok());
+        assert!(state.dispute_deadline(current_epoch + 1).is_err());
+        // The bound is expressed in term space, so an epoch large enough to
+        // overflow the term-to-view arithmetic is refused before reaching it.
+        assert!(state.dispute_deadline(u64::MAX).is_err());
+    }
+
+    /// The statute of limitations: once the deadline it implies has passed,
+    /// the evidence is unusable rather than scheduling an exit in the past.
+    #[test]
+    fn dispute_deadline_rejects_stale_evidence() {
+        test_config::install();
+        let epoch = epoch_at(offence_view());
+        let term_start = POS_STATE_CONFIG
+            .get_starting_view_for_term(epoch - 1)
+            .expect("term start");
+        let deadline = term_start + test_config::DISPUTE_LOCKED_VIEWS;
+
+        let mut state = PosState::new_empty();
+        state.current_view = deadline - 1;
+        assert_eq!(state.dispute_deadline(epoch).expect("deadline"), deadline);
+        state.current_view = deadline;
+        assert!(state.dispute_deadline(epoch).is_err());
+
+        // An offence predating CIP-156 has no configured penalty.
+        assert!(state.dispute_deadline(1).is_err());
+        // Epoch 0 has no term before it.
+        assert!(state.dispute_deadline(0).is_err());
+    }
+
+    /// `PosState::record_update_views` inserts every view it is handed, with
+    /// no filter for views already past — so a rule that scheduled an exit
+    /// behind the current view would leave a key nothing ever visits, and the
+    /// stake with it. The local `NodeLockStatus` harness filters, and so
+    /// structurally cannot show this.
+    #[test]
+    fn forfeit_node_schedules_nothing_in_the_past() {
+        test_config::install();
+        let alice = keys_from_seed(1);
+        let mut state = state_with_node(&alice);
+        state.current_view = test_config::CIP173_TRANSITION;
+        let mut update_views = Vec::new();
+        state
+            .node_map
+            .get_mut(&alice.addr)
+            .expect("registered")
+            .lock_status
+            .new_lock(state.current_view, 10, false, &mut update_views);
+
+        let epoch = epoch_at(offence_view());
+        let deadline = state.dispute_deadline(epoch).expect("deadline");
+        state
+            .forfeit_node(&alice.addr, Some(epoch))
+            .expect("forfeit");
+
+        assert!(state.node_map_hint.contains_key(&deadline));
+        for view in state.node_map_hint.keys() {
+            assert!(
+                *view > state.current_view,
+                "hint at view {} is not ahead of {}",
+                view,
+                state.current_view
+            );
+        }
     }
 
     #[test]

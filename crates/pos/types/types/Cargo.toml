@@ -44,6 +44,8 @@ move-core-types = { workspace = true, features = ["fuzzing"] }
 
 [features]
 default = []
+# Lets other crates' tests drive a `PosState` to a chosen view.
+testonly_code = []
 fuzzing = [
     "proptest",
     "proptest-derive",

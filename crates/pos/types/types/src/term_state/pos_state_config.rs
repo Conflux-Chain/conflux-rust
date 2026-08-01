@@ -248,7 +248,10 @@ pub(crate) mod test_config {
     pub const IN_QUEUE_VIEWS: u64 = 10080;
     pub const OUT_QUEUE_VIEWS: u64 = 10080;
     pub const CIP156_TRANSITION: u64 = 50_000;
-    pub const DISPUTE_LOCKED_VIEWS: u64 = 30_000;
+    // Longer than `CIP173_TRANSITION - CIP156_TRANSITION`, so evidence from
+    // the CIP-156 era is still live once CIP-173 is reached — otherwise every
+    // offence anchored before the second gate is simply stale.
+    pub const DISPUTE_LOCKED_VIEWS: u64 = 200_000;
     pub const CIP173_TRANSITION: u64 = 95_000;
     pub const CIP136_TRANSITION: u64 = 100_000;
     pub const CIP136_IN_QUEUE_VIEWS: u64 = 20_000;

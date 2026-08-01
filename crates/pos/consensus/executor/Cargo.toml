@@ -29,6 +29,7 @@ pow-types = { workspace = true }
 cfx-types = { workspace = true }
 
 [dev-dependencies]
+diem-types = { workspace = true, features = ["testonly_code"] }
 
 [features]
 default = []
