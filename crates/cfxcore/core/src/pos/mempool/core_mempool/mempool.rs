@@ -101,19 +101,11 @@ impl Mempool {
                 TransactionPayload::Dispute(dispute_payload) => {
                     // TODO(lpl): Only dispute a node once.
                     //
-                    // Selection runs the execution rule itself rather than a
-                    // copy of it. Dispute validity became time-varying with
-                    // the statute of limitations, and a proposal carrying
-                    // evidence the VM rejects fails the whole block — so the
-                    // two predicates have to agree exactly. Calling the same
-                    // function is the only way to keep them from drifting.
-                    //
-                    // No safety margin, deliberately: assembly fetches the
-                    // parent's `PosState` and execution uses that same
-                    // parent, so a transaction cannot cross a view between
-                    // selection and execution. A margin would buy nothing and
-                    // would make honest proposers drop evidence the chain
-                    // still accepts, shortening the statute in practice.
+                    // The execution rule itself, not a copy: evidence the VM
+                    // rejects fails the whole block, and dispute validity is
+                    // now time-varying. No margin — selection and execution
+                    // read the same parent state, so one would only make
+                    // proposers drop evidence the chain still accepts.
                     execute_dispute(dispute_payload, pos_state)
                         .map(|_| ())
                         .map_err(|e| {

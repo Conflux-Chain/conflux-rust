@@ -983,8 +983,7 @@ impl PosState {
 
     pub fn current_view(&self) -> u64 { self.current_view }
 
-    /// Reaching a given view honestly means replaying the term list, which no
-    /// test of a view-gated rule wants to do.
+    /// Reaching a view honestly means replaying the term list.
     #[cfg(any(test, feature = "testonly_code"))]
     pub fn set_current_view_for_test(&mut self, view: View) {
         self.current_view = view;
@@ -1210,34 +1209,30 @@ impl PosState {
     }
 
     /// The view a CIP-173 dispute lock runs to: a total function of the
-    /// evidence, so resubmitting it recomputes the same deadline instead of
-    /// moving it, and a lock cannot be extended by anyone willing to resend.
+    /// evidence, so resubmitting recomputes the same deadline instead of
+    /// moving it.
     ///
-    /// Both bounds matter. Without the future bound, evidence for an epoch
-    /// the chain has not reached locks the stake essentially forever from a
-    /// single submission — worse than the submission anchor it replaces.
-    /// Without the past bound, the anchor could fall so far back that the
-    /// deadline is already behind us, scheduling an exit that never fires.
+    /// Both bounds matter. Without the future one, evidence for an epoch the
+    /// chain has not reached locks the stake essentially forever from a single
+    /// submission. Without the past one, the anchor could fall far enough back
+    /// that the deadline is already behind us, scheduling an exit that never
+    /// fires.
     pub fn dispute_deadline(&self, offense_epoch: u64) -> Result<View> {
         // Consensus epoch `E` is term `E - 1`: `next_view` installs
         // `EpochState::new(new_term + 1, ..)`.
         let offense_term = offense_epoch
             .checked_sub(1)
             .ok_or_else(|| anyhow!("dispute evidence claims epoch 0"))?;
-        // Compared in term space, not view space, so an arbitrarily large
-        // claimed epoch never reaches `get_starting_view_for_term`'s
-        // arithmetic — the bound rejects it before the conversion rather
-        // than relying on the conversion to reject it.
+        // In term space, so an arbitrarily large claimed epoch never reaches
+        // `get_starting_view_for_term`'s arithmetic.
         //
-        // The two spaces are not quite equivalent, and the gap is worth
-        // knowing: `get_term_view` assigns views `[t * round_per_term,
-        // cip136_transition_view)` to the transition term, while
-        // `get_starting_view_for_term` reports that same term as starting at
-        // `cip136_transition_view`. So evidence from the current term, judged
-        // during that window, anchors up to one term *ahead* of the chain.
-        // It over-charges by under a term and stays bounded; what keeps a
-        // past-dated exit view impossible is the explicit `deadline >
-        // current_view` check below, not monotonicity.
+        // Not quite equivalent to a view-space bound: `get_term_view` assigns
+        // the views just below `cip136_transition_view` to the transition
+        // term, which `get_starting_view_for_term` reports as starting *at*
+        // the transition. Evidence from the current term judged in that window
+        // therefore anchors up to a term ahead of the chain — bounded, and it
+        // over-charges. A past-dated exit view is ruled out by the explicit
+        // staleness check below, not by monotonicity.
         let (current_term, _) =
             POS_STATE_CONFIG.get_term_view(self.current_view);
         ensure!(
@@ -1249,12 +1244,11 @@ impl PosState {
         let offense_view = POS_STATE_CONFIG
             .get_starting_view_for_term(offense_term)
             .ok_or_else(|| anyhow!("dispute offence term has no view"))?;
-        // Read at the offence term's start, not now: a later CIP that
-        // changed this value would otherwise make a replay compute a larger
-        // deadline, which is the defect the offence anchor exists to remove.
-        // The anchor is term-granular, so a delay transition landing mid-term
-        // selects the tier in force at that term's start — a reason to align
-        // any future transition to a term boundary.
+        // Read at the offence term's start, not now: otherwise a later CIP
+        // changing this value would let a replay compute a larger deadline,
+        // the defect the anchor exists to remove. A transition landing
+        // mid-term selects the tier at that term's start, so future ones
+        // should be term-aligned.
         let locked_views = POS_STATE_CONFIG
             .dispute_locked_views(offense_view)
             .ok_or_else(|| anyhow!("dispute offence predates CIP-156"))?;
@@ -1521,9 +1515,9 @@ impl DisputeEvent {
     }
 }
 
-/// A separate key rather than a field on `DisputeEvent`: what a node emits
-/// before activation has to stay byte-identical to what nodes running the old
-/// binary emit, and one BCS struct cannot carry two encodings.
+/// A separate key rather than a field on `DisputeEvent`: pre-activation
+/// emission must stay byte-identical to what an old binary produces, and one
+/// BCS struct cannot carry two encodings.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DisputeEventV2 {
     /// The node id to dispute.
@@ -1737,16 +1731,13 @@ mod tests {
     /// An offence late enough to carry a CIP-156 penalty at all.
     fn offence_view() -> View { test_config::CIP156_TRANSITION + 10_000 }
 
-    /// Anchoring to the offence is the whole point, and the mapping from a
-    /// consensus epoch to the view its term started at is the easiest thing
-    /// in the change to get off by one: `next_view` installs `new_term + 1`
-    /// as the epoch, so epoch `E` is term `E - 1`.
+    /// The easiest thing in the change to get off by one: `next_view`
+    /// installs `new_term + 1` as the epoch, so epoch `E` is term `E - 1`.
     #[test]
     fn dispute_deadline_anchors_at_the_offence_term() {
         test_config::install();
         // Both branches of `get_starting_view_for_term`, which changes
-        // formula at the CIP-136 transition: an anchor is only as good as
-        // that conversion, and the two sides are different arithmetic.
+        // formula at the CIP-136 transition.
         for offence in [
             test_config::CIP156_TRANSITION + 10_000,
             test_config::CIP136_TRANSITION + 20_000,
@@ -1767,14 +1758,9 @@ mod tests {
         }
     }
 
-    /// Pins the one place the term-space bound is looser than a view-space
-    /// one would be. `get_term_view` puts the views just below
-    /// `cip136_transition_view` in the transition term, but
-    /// `get_starting_view_for_term` reports that term as starting *at* the
-    /// transition, so current-term evidence judged in that window anchors
-    /// ahead of the chain. Bounded by one term and it over-charges rather
-    /// than under-charges, so it is accepted rather than special-cased —
-    /// but it is asserted here so a future reader finds it stated.
+    /// The one place the term-space bound is looser than a view-space one.
+    /// Bounded by a term and it over-charges, so it is accepted rather than
+    /// special-cased — asserted here so it stays a known property.
     #[test]
     fn dispute_deadline_anchor_may_lead_the_chain_at_the_cip136_boundary() {
         test_config::install();
@@ -1796,9 +1782,8 @@ mod tests {
         );
     }
 
-    /// The deadline depends on the evidence and not on when it was submitted,
-    /// which is what stops a resubmission from moving it. Without this the
-    /// penalty is extendable by anyone, since nothing detects a repeat.
+    /// What stops a resubmission moving the deadline. Without it the penalty
+    /// is extendable by anyone, since nothing detects a repeat.
     #[test]
     fn dispute_deadline_ignores_the_submission_view() {
         test_config::install();
@@ -1815,9 +1800,8 @@ mod tests {
     }
 
     /// Evidence for an epoch the chain has not reached would otherwise lock
-    /// the stake essentially forever from a single submission — strictly
-    /// worse than the submission anchor it replaces, since that at least
-    /// bounded each submission at `view + D`.
+    /// the stake essentially forever from one submission — worse than the
+    /// submission anchor, which at least bounded each one at `view + D`.
     #[test]
     fn dispute_deadline_rejects_a_future_term() {
         test_config::install();
@@ -1832,8 +1816,8 @@ mod tests {
         assert!(state.dispute_deadline(u64::MAX).is_err());
     }
 
-    /// The statute of limitations: once the deadline it implies has passed,
-    /// the evidence is unusable rather than scheduling an exit in the past.
+    /// The statute of limitations: past its deadline the evidence is unusable
+    /// rather than scheduling an exit in the past.
     #[test]
     fn dispute_deadline_rejects_stale_evidence() {
         test_config::install();
@@ -1855,11 +1839,9 @@ mod tests {
         assert!(state.dispute_deadline(0).is_err());
     }
 
-    /// `PosState::record_update_views` inserts every view it is handed, with
-    /// no filter for views already past — so a rule that scheduled an exit
-    /// behind the current view would leave a key nothing ever visits, and the
-    /// stake with it. The local `NodeLockStatus` harness filters, and so
-    /// structurally cannot show this.
+    /// `record_update_views` inserts every view it is handed, so an exit
+    /// scheduled behind the current view leaves a key nothing ever visits.
+    /// The `NodeLockStatus` harness filters, so it cannot show this.
     #[test]
     fn forfeit_node_schedules_nothing_in_the_past() {
         test_config::install();

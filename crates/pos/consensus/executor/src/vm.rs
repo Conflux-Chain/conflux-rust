@@ -200,10 +200,9 @@ impl ExecutableBuiltinTx for DisputePayload {
     }
 }
 
-/// Which event a dispute produces is consensus-visible, because the key
-/// decides which penalty `forfeit_node` applies — and `process_vm_outputs`
-/// ignores keys it does not know, so emitting the newer one before the gate
-/// would silently void the penalty rather than fail.
+/// The event key is consensus-visible: it decides which penalty
+/// `forfeit_node` applies, and `process_vm_outputs` ignores keys it does not
+/// know — so emitting the newer one early voids the penalty silently.
 pub fn execute_dispute(
     dispute: &DisputePayload, pos_state: &PosState,
 ) -> Result<Vec<ContractEvent>, VMStatus> {
@@ -217,8 +216,8 @@ pub fn execute_dispute(
     if !POS_STATE_CONFIG.enforce_dispute_conflict(view) {
         return Ok(vec![dispute.to_event()]);
     }
-    // Rejecting here rather than at `forfeit_node` keeps an unusable offence
-    // coordinate out of the block instead of failing the block holding it.
+    // Rejecting here keeps an unusable offence coordinate out of the block
+    // rather than failing the block that holds it.
     pos_state.dispute_deadline(offense_epoch).map_err(|e| {
         diem_error!("dispute offence out of range: {:?}", e);
         VMStatus::Error(StatusCode::CFX_INVALID_TX)
@@ -272,12 +271,12 @@ fn verify_dispute_proposal(
     }
 }
 
-/// Return the consensus epoch the evidence is from, or `None` if the encoding
-/// is invalid or the two pieces are not from the same round.
+/// Return the consensus epoch the evidence is from, or `None` if it does not
+/// decode or the two pieces are not from the same round.
 ///
-/// The epoch is returned rather than checked here because `DisputePayload`
-/// carries its evidence as raw bytes — `diem-types` cannot depend on
-/// `consensus-types` — so this is the only place that can decode it.
+/// Returned rather than checked here: `DisputePayload` carries raw bytes
+/// because `diem-types` cannot depend on `consensus-types`, so this is the
+/// only place that can decode them.
 pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> Option<u64> {
     let computed_address =
         from_consensus_public_key(&dispute.bls_pub_key, &dispute.vrf_pub_key);
@@ -440,8 +439,8 @@ mod tests {
     const ROUND: u64 = 2;
     const TIMESTAMP: u64 = 1000;
 
-    /// Accepted evidence also has to name the offence, since the lock
-    /// deadline is derived from it.
+    /// Accepted evidence must also name the offence: the deadline derives
+    /// from it.
     #[track_caller]
     fn accepted(evidence: &DisputePayload) {
         assert_eq!(verify_dispute(evidence, BEFORE), Some(EPOCH));
@@ -647,10 +646,8 @@ mod tests {
         state
     }
 
-    /// `process_vm_outputs` silently ignores event keys it does not know, so
-    /// emitting the CIP-173 key before the gate would void the penalty
-    /// instead of failing loudly. Pre-gate emission also has to stay
-    /// byte-identical to what an old binary produces.
+    /// Pre-gate emission has to stay byte-identical to what an old binary
+    /// produces, and an unknown key is ignored rather than rejected.
     fn the_event_key_follows_the_gate(
         signer: &ValidatorSigner, target: &Target,
     ) {

@@ -55,21 +55,16 @@ pub trait PosStateConfigTrait {
     // Returning None means the stake should be forfeited instead of being
     // locked.
     fn dispute_locked_views(&self, view: u64) -> Option<u64>;
-    // Both gates below activate at the shared CIP-173 transition view; they
-    // are named separately because they change unrelated code paths.
+    // Both gates below activate at the shared CIP-173 transition view.
     //
-    // `enforce_dispute_conflict` decides the whole dispute rule at once: the
-    // evidence must genuinely conflict, and the event that carries the
-    // offence coordinate is emitted, which is what selects the penalty. One
-    // predicate rather than one per effect, so the evidence rule and the
-    // penalty rule cannot be evaluated differently.
+    // One predicate decides the whole dispute rule — evidence must conflict,
+    // and the event carrying the offence coordinate is emitted, which selects
+    // the penalty — so the two halves cannot be evaluated differently.
     fn enforce_dispute_conflict(&self, view: u64) -> bool;
-    // CIP-173 as published covers only evidence validity and the relock
-    // scope, so this one and the offence anchor are both wider than its text.
-    // Sharing its view is deliberate but provisional — it is what the PR asks
-    // the maintainers to ratify, and the alternative is a separate transition
-    // view. Nothing forces the choice yet: no config in this repo ever
-    // changes the queue delay, so this gate is inert wherever it is set.
+    // Wider than CIP-173's published text, which covers only evidence
+    // validity and the relock scope; sharing its view is what the PR asks the
+    // maintainers to ratify. Inert either way today: no config in this repo
+    // ever changes the queue delay.
     fn force_retire_expiry_uses_retire_view(&self, view: u64) -> bool;
 }
 
@@ -246,14 +241,13 @@ pub(crate) mod test_config {
     use crate::term_state::{TERM_ELECTED_SIZE, TERM_MAX_SIZE};
 
     // One config for the whole crate: `POS_STATE_CONFIG` is set-once and a
-    // test binary is one process. `PosStateConfig::default()` is unusable
-    // here because its `cip156_dispute_locked_views` is `u64::MAX`.
+    // test binary is one process. Not `PosStateConfig::default()`, whose
+    // `cip156_dispute_locked_views` is `u64::MAX`.
     //
-    // The transition views are ordered `cip99 < cip156 < cip173 < cip136` so
-    // a test can reach every rule, and the queue delays grow at both `cip99`
-    // and `cip136` — one before the CIP-173 gate and one after — since a
-    // delay evaluated at the wrong view is only observable across a change,
-    // and the two sides of the gate are different cases.
+    // Transition views ordered `cip99 < cip156 < cip173 < cip136` so every
+    // rule is reachable, with the queue delay growing on each side of the
+    // CIP-173 gate: a delay read at the wrong view only shows up across a
+    // change, and the two sides are different cases.
     pub const IN_QUEUE_VIEWS: u64 = 10_080;
     pub const OUT_QUEUE_VIEWS: u64 = 10_080;
     pub const CIP99_TRANSITION: u64 = 30_000;
