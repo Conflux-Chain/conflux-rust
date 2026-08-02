@@ -21,7 +21,7 @@ use diem_crypto::{
 };
 use diem_logger::prelude::*;
 pub use incentives::*;
-use lock_status::NodeLockStatus;
+use lock_status::{ForfeitRule, NodeLockStatus};
 use move_core_types::vm_status::DiscardedVMStatus;
 use pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG};
 use pow_types::StakingEvent;
@@ -467,6 +467,16 @@ impl TermList {
     }
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+pub struct DisputeRecord {
+    /// Outlives `lock_until`: it is what stops the same evidence being filed
+    /// again once the lock expires. Accepting `n` consumes every epoch below.
+    last_offense_epoch: u64,
+    /// Absolute, so a lost callback loses the bookkeeping but not the penalty.
+    lock_until: View,
+}
+
 #[derive(Clone, Serialize, Eq, PartialEq, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct PosState {
@@ -496,6 +506,119 @@ pub struct PosState {
     /// PosState is the same as its parent. These skipped blocks have the
     /// same view as their parents and should not be saved as `CommittedBlock`.
     skipped: bool,
+
+    /// Must stay last: BCS is a non-backtracking prefix parser, so a tail
+    /// field is unambiguously absent from an older encoding, while one added
+    /// earlier could be absorbed by a following length-prefixed field and
+    /// decode as garbage.
+    dispute_records: BTreeMap<AccountAddress, DisputeRecord>,
+}
+
+/// The layout before CIP-173 appended `dispute_records`. Must reuse the same
+/// inner types: `NodeData`'s unchecked BLS deserializer accepts keys the
+/// checked one rejects.
+#[derive(Deserialize)]
+struct PosStateV1 {
+    node_map: HashMap<AccountAddress, NodeData>,
+    current_view: Round,
+    epoch_state: EpochState,
+    term_list: TermList,
+    retiring_nodes: VecDeque<AccountAddress>,
+    pivot_decision: PivotBlockDecision,
+    node_map_hint: HashMap<View, HashSet<AccountAddress>>,
+    unlock_event_hint: HashSet<AccountAddress>,
+    skipped: bool,
+}
+
+/// Encoding twin of [`PosStateV1`]; borrows to avoid cloning `node_map`.
+#[derive(Serialize)]
+struct PosStateV1Ref<'a> {
+    node_map: &'a HashMap<AccountAddress, NodeData>,
+    current_view: &'a Round,
+    epoch_state: &'a EpochState,
+    term_list: &'a TermList,
+    retiring_nodes: &'a VecDeque<AccountAddress>,
+    pivot_decision: &'a PivotBlockDecision,
+    node_map_hint: &'a HashMap<View, HashSet<AccountAddress>>,
+    unlock_event_hint: &'a HashSet<AccountAddress>,
+    skipped: &'a bool,
+}
+
+impl From<PosStateV1> for PosState {
+    fn from(v1: PosStateV1) -> Self {
+        Self {
+            node_map: v1.node_map,
+            current_view: v1.current_view,
+            epoch_state: v1.epoch_state,
+            term_list: v1.term_list,
+            retiring_nodes: v1.retiring_nodes,
+            pivot_decision: v1.pivot_decision,
+            node_map_hint: v1.node_map_hint,
+            unlock_event_hint: v1.unlock_event_hint,
+            skipped: v1.skipped,
+            // The only reachable answer: a CIP-156 lock is indistinguishable
+            // from an ordinary withdrawal, so locks already running cannot be
+            // reconstructed and keep the pre-CIP-173 rules until they expire.
+            dispute_records: BTreeMap::new(),
+        }
+    }
+}
+
+/// The on-disk encoding. Kept off the `Serialize`/`Deserialize` impls so a
+/// future in-memory use of `PosState` cannot inherit the format fork.
+impl PosState {
+    pub fn encode_persisted(&self) -> Result<Vec<u8>> {
+        // Past the gate the new layout goes out even when the map is empty, so
+        // that a binary without CIP-173 fails to read the row instead of
+        // booting and executing disputes under rules the chain has left.
+        if self.dispute_records.is_empty()
+            && !POS_STATE_CONFIG.cip173_active(self.current_view)
+        {
+            bcs::to_bytes(&PosStateV1Ref {
+                node_map: &self.node_map,
+                current_view: &self.current_view,
+                epoch_state: &self.epoch_state,
+                term_list: &self.term_list,
+                retiring_nodes: &self.retiring_nodes,
+                pivot_decision: &self.pivot_decision,
+                node_map_hint: &self.node_map_hint,
+                unlock_event_hint: &self.unlock_event_hint,
+                skipped: &self.skipped,
+            })
+            .map_err(Into::into)
+        } else {
+            bcs::to_bytes(self).map_err(Into::into)
+        }
+    }
+
+    pub fn decode_persisted(data: &[u8]) -> Result<Self> {
+        // Complete BCS encodings are prefix-free, so the trial order is safe:
+        // old bytes hit `Eof` under the current layout, and current bytes
+        // leave a trailing map that `from_bytes` rejects as `RemainingInput`.
+        let current_err = match bcs::from_bytes::<PosState>(data) {
+            Ok(state) => return Ok(state),
+            Err(e) => e,
+        };
+        let legacy: PosStateV1 =
+            bcs::from_bytes(data).map_err(|legacy_err| {
+                anyhow!(
+                "PoS state decodes in neither layout: current={}, legacy={}",
+                current_err,
+                legacy_err
+            )
+            })?;
+        // A state *at* the transition view came from a block whose parent was
+        // still pre-CIP-173, so an older binary that stopped here was in the
+        // right. One view further and it executed a block it should not have.
+        ensure!(
+            legacy.current_view <= POS_STATE_CONFIG.cip173_transition_view(),
+            "PoS state at view {} is stored in the pre-CIP-173 layout, so it \
+             was written past the transition view by a binary without \
+             CIP-173; its dispute state is missing and cannot be recovered",
+            legacy.current_view
+        );
+        Ok(legacy.into())
+    }
 }
 
 impl Debug for PosState {
@@ -522,7 +645,13 @@ impl PosState {
         for (node_id, total_voting_power) in initial_nodes {
             let mut lock_status = NodeLockStatus::default();
             // The genesis block should not have updates for lock status.
-            lock_status.new_lock(0, total_voting_power, true, &mut Vec::new());
+            lock_status.new_lock(
+                0,
+                total_voting_power,
+                true,
+                None,
+                &mut Vec::new(),
+            );
             node_map.insert(
                 node_id.addr.clone(),
                 NodeData {
@@ -570,6 +699,7 @@ impl PosState {
             node_map_hint: Default::default(),
             unlock_event_hint: Default::default(),
             skipped: false,
+            dispute_records: Default::default(),
         };
         let (verifier, vrf_seed) = pos_state.get_committee_at(0).unwrap();
         pos_state.epoch_state = EpochState::new(0, verifier, vrf_seed);
@@ -595,6 +725,7 @@ impl PosState {
                 height: 0,
             },
             skipped: false,
+            dispute_records: Default::default(),
         }
     }
 
@@ -847,20 +978,58 @@ impl PosState {
     }
 
     pub fn validate_dispute(
-        &self, dispute_payload: &DisputePayload,
+        &self, dispute_payload: &DisputePayload, offense_epoch: u64,
     ) -> Result<()> {
-        if let Some(node_status) = self.node_map.get(&dispute_payload.address) {
-            if node_status.lock_status.exempt_from_forfeit().is_none() {
-                Ok(())
-            } else {
-                bail!(
-                    "Dispute a forfeited node: {:?}",
-                    dispute_payload.address
-                );
-            }
-        } else {
-            bail!("Unknown dispute node: {:?}", dispute_payload.address);
+        let node =
+            self.node_map.get(&dispute_payload.address).ok_or_else(|| {
+                anyhow!("Unknown dispute node: {:?}", dispute_payload.address)
+            })?;
+        ensure!(
+            node.lock_status.exempt_from_forfeit().is_none(),
+            "Dispute a forfeited node: {:?}",
+            dispute_payload.address
+        );
+        if POS_STATE_CONFIG.cip173_active(self.current_view) {
+            self.check_dispute_admissible(
+                &dispute_payload.address,
+                offense_epoch,
+            )?;
         }
+        Ok(())
+    }
+
+    fn check_dispute_admissible(
+        &self, address: &AccountAddress, offense_epoch: u64,
+    ) -> Result<()> {
+        let first_admissible = POS_STATE_CONFIG
+            .dispute_first_admissible_epoch()
+            .ok_or_else(|| {
+                anyhow!("CIP-173 active with no scheduled transition view")
+            })?;
+        ensure!(
+            offense_epoch >= first_admissible,
+            "Dispute evidence predates CIP-173: offence epoch {}, first \
+             admissible {}",
+            offense_epoch,
+            first_admissible
+        );
+        ensure!(
+            offense_epoch <= self.epoch_state.epoch,
+            "Dispute evidence claims an unreached epoch: offence epoch {}, \
+             current epoch {}",
+            offense_epoch,
+            self.epoch_state.epoch
+        );
+        if let Some(record) = self.dispute_records.get(address) {
+            ensure!(
+                offense_epoch > record.last_offense_epoch,
+                "Dispute evidence already punished: offence epoch {}, \
+                 watermark {}",
+                offense_epoch,
+                record.last_offense_epoch
+            );
+        }
+        Ok(())
     }
 
     /// Return `(validator_set, term_seed)`.
@@ -1022,12 +1191,19 @@ impl PosState {
             addr,
             increased_voting_power
         );
+        let view = self.current_view;
+        let dispute_lock_until = self
+            .dispute_records
+            .get(addr)
+            .map(|record| record.lock_until)
+            .filter(|lock_until| view < *lock_until);
         let mut update_views = Vec::new();
         match self.node_map.get_mut(addr) {
             Some(node_status) => node_status.lock_status.new_lock(
-                self.current_view,
+                view,
                 increased_voting_power,
                 false,
+                dispute_lock_until,
                 &mut update_views,
             ),
             None => bail!("increase voting power of a non-existent node!"),
@@ -1159,14 +1335,55 @@ impl PosState {
         Ok(())
     }
 
-    pub fn forfeit_node(&mut self, addr: &AccountAddress) -> Result<()> {
-        diem_trace!("forfeit_node: {:?}", addr);
+    /// `None` for the pre-CIP-173 event, which carries no offence epoch.
+    pub fn forfeit_node(
+        &mut self, addr: &AccountAddress, offense_epoch: Option<u64>,
+    ) -> Result<()> {
+        diem_trace!("forfeit_node: {:?} {:?}", addr, offense_epoch);
+        let view = self.current_view;
+        let previous = self.dispute_records.get(addr).copied();
+
+        let (rule, record) = match POS_STATE_CONFIG.dispute_locked_views(view) {
+            None => (ForfeitRule::FreezeWithdrawable, None),
+            Some(locked_views) if !POS_STATE_CONFIG.cip173_active(view) => (
+                ForfeitRule::RelockOnActive {
+                    deadline: view.saturating_add(locked_views),
+                },
+                None,
+            ),
+            Some(locked_views) => {
+                let offense_epoch = offense_epoch.ok_or_else(|| {
+                    anyhow!("CIP-173 dispute event without an offence epoch")
+                })?;
+                if previous
+                    .map_or(false, |r| offense_epoch <= r.last_offense_epoch)
+                {
+                    // Both copies of a duplicated dispute are validated
+                    // against the same parent state, so both reach here.
+                    // Rejecting the second would invalidate the whole block an
+                    // honest proposer built.
+                    return Ok(());
+                }
+                let deadline = view
+                    .saturating_add(locked_views)
+                    .max(previous.map_or(0, |r| r.lock_until));
+                (
+                    ForfeitRule::RelockAll { deadline },
+                    Some(DisputeRecord {
+                        last_offense_epoch: offense_epoch,
+                        lock_until: deadline,
+                    }),
+                )
+            }
+        };
+
         let mut update_views = Vec::new();
         match self.node_map.get_mut(&addr) {
-            Some(node) => node
-                .lock_status
-                .forfeit(self.current_view, &mut update_views),
+            Some(node) => node.lock_status.forfeit(rule, &mut update_views),
             None => bail!("Forfeiting node does not exist"),
+        }
+        if let Some(record) = record {
+            self.dispute_records.insert(*addr, record);
         }
         self.record_update_views(addr, update_views);
         Ok(())
@@ -1423,12 +1640,52 @@ impl DisputeEvent {
     }
 }
 
+/// A separate event key rather than a field on `DisputeEvent`, so the
+/// pre-activation encoding stays byte-identical for replay.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct DisputeEventV2 {
+    pub node_id: AccountAddress,
+    pub offense_epoch: u64,
+}
+
+impl DisputeEventV2 {
+    pub fn event_key() -> EventKey {
+        EventKey::new_from_address(&account_config::dispute_address(), 7)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
+        bcs::from_bytes(bytes).map_err(Into::into)
+    }
+}
+
+/// Decode either dispute event, `None` for any other key. Both versions are
+/// recognised in one place so a third consumer cannot support one and silently
+/// drop the other.
+pub fn decode_dispute_event(
+    event: &ContractEvent,
+) -> Option<anyhow::Result<(AccountAddress, Option<u64>)>> {
+    if *event.key() == DisputeEvent::event_key() {
+        Some(
+            DisputeEvent::from_bytes(event.event_data())
+                .map(|e| (e.node_id, None)),
+        )
+    } else if *event.key() == DisputeEventV2::event_key() {
+        Some(
+            DisputeEventV2::from_bytes(event.event_data())
+                .map(|e| (e.node_id, Some(e.offense_epoch))),
+        )
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        block_info::PivotBlockDecision, transaction::ElectionPayload,
-        validator_config::ConsensusVRFProof,
+        block_info::PivotBlockDecision,
+        term_state::pos_state_config::PosStateConfig,
+        transaction::ElectionPayload, validator_config::ConsensusVRFProof,
     };
     use diem_crypto::{
         bls::BLSPrivateKey,
@@ -1562,6 +1819,318 @@ mod tests {
             state.validate_dispute_simple(&alice.addr, &alice.bls_pk),
             None,
         );
+    }
+
+    /// Two whole terms in, so the transition view starts one.
+    const TRANSITION: View = 2 * ROUND_PER_TERM;
+    /// Epoch `n` is term `n - 1`, so this is the first epoch CIP-173 admits.
+    const FIRST_EPOCH: u64 = 3;
+    const DISPUTE_LOCK: u64 = 1000;
+
+    fn install_config() {
+        const M: u64 = u64::MAX;
+        POS_STATE_CONFIG.get_or_init(|| {
+            PosStateConfig::new(
+                ROUND_PER_TERM,
+                TERM_MAX_SIZE,
+                TERM_ELECTED_SIZE,
+                IN_QUEUE_LOCKED_VIEWS,
+                OUT_QUEUE_LOCKED_VIEWS,
+                M,
+                0,
+                0,
+                M,
+                M,
+                M,
+                0,
+                0,
+                ROUND_PER_TERM,
+                0,
+                DISPUTE_LOCK,
+                TRANSITION,
+            )
+        });
+    }
+
+    fn staked_state(k: &Keys, view: View, epoch: u64, votes: u64) -> PosState {
+        install_config();
+        let mut state = state_with_node(k);
+        state.current_view = view;
+        state.epoch_state.epoch = epoch;
+        state.update_voting_power(&k.addr, votes).expect("staked");
+        state
+    }
+
+    fn dispute_of(k: &Keys) -> DisputePayload {
+        DisputePayload {
+            address: k.addr,
+            bls_pub_key: k.bls_pk.clone(),
+            vrf_pub_key: k.vrf_pk.clone(),
+            conflicting_votes: crate::transaction::ConflictSignature::Vote((
+                vec![],
+                vec![],
+            )),
+        }
+    }
+
+    fn lock_status_of<'a>(
+        state: &'a PosState, k: &Keys,
+    ) -> &'a lock_status::NodeLockStatus {
+        &state.node_map.get(&k.addr).expect("registered").lock_status
+    }
+
+    fn exits_of(state: &PosState, k: &Keys) -> Vec<View> {
+        lock_status_of(state, k)
+            .out_queue
+            .iter()
+            .map(|item| item.view)
+            .collect()
+    }
+
+    #[test]
+    fn dispute_locks_stake_and_records_the_offence() {
+        let alice = keys_from_seed(1);
+        let mut state = staked_state(&alice, TRANSITION, FIRST_EPOCH, 10);
+        assert_eq!(lock_status_of(&state, &alice).available_votes(), 10);
+
+        state
+            .forfeit_node(&alice.addr, Some(FIRST_EPOCH))
+            .expect("forfeit");
+
+        assert_eq!(lock_status_of(&state, &alice).available_votes(), 0);
+        assert_eq!(exits_of(&state, &alice), vec![TRANSITION + DISPUTE_LOCK]);
+        let record = *state.dispute_records.get(&alice.addr).expect("recorded");
+        assert_eq!(record.last_offense_epoch, FIRST_EPOCH);
+        assert_eq!(record.lock_until, TRANSITION + DISPUTE_LOCK);
+    }
+
+    /// Wider than CIP-156 as published, which lets a disputed voter "stake
+    /// more votes to become active votes again"; the penalty is on the
+    /// validator, so it matches force retirement instead.
+    #[test]
+    fn a_deposit_during_the_lock_buys_no_voting_power() {
+        let alice = keys_from_seed(1);
+        let mut state = staked_state(&alice, TRANSITION, FIRST_EPOCH, 10);
+        state
+            .forfeit_node(&alice.addr, Some(FIRST_EPOCH))
+            .expect("forfeit");
+        let lock_until = state.dispute_records[&alice.addr].lock_until;
+
+        state.current_view = TRANSITION + 1;
+        state.update_voting_power(&alice.addr, 50).expect("deposit");
+
+        assert_eq!(lock_status_of(&state, &alice).available_votes(), 0);
+        assert!(exits_of(&state, &alice)
+            .iter()
+            .all(|exit| *exit >= lock_until));
+
+        state.current_view = lock_until;
+        state.update_voting_power(&alice.addr, 7).expect("deposit");
+        assert_eq!(lock_status_of(&state, &alice).available_votes(), 7);
+    }
+
+    /// Locks already running at activation cannot be reconstructed, so those
+    /// validators keep the old rule until they expire.
+    #[test]
+    fn a_lock_that_predates_the_gate_is_not_retrofitted() {
+        let alice = keys_from_seed(1);
+        let mut state = staked_state(&alice, TRANSITION - 1, FIRST_EPOCH, 10);
+        state.forfeit_node(&alice.addr, None).expect("forfeit");
+        assert_eq!(lock_status_of(&state, &alice).available_votes(), 0);
+
+        state.current_view = TRANSITION;
+        state.update_voting_power(&alice.addr, 50).expect("deposit");
+        assert_eq!(lock_status_of(&state, &alice).available_votes(), 50);
+    }
+
+    #[test]
+    fn replayed_evidence_neither_errors_nor_extends_the_lock() {
+        let alice = keys_from_seed(1);
+        let mut state = staked_state(&alice, TRANSITION, FIRST_EPOCH, 10);
+        state
+            .forfeit_node(&alice.addr, Some(FIRST_EPOCH))
+            .expect("forfeit");
+        let exits = exits_of(&state, &alice);
+
+        state.current_view = TRANSITION + 10;
+        assert!(state
+            .validate_dispute(&dispute_of(&alice), FIRST_EPOCH)
+            .is_err());
+
+        // A duplicate inside an already-validated block must pass through as
+        // a no-op, or it would invalidate the whole block.
+        state
+            .forfeit_node(&alice.addr, Some(FIRST_EPOCH))
+            .expect("duplicate is a no-op");
+        assert_eq!(exits_of(&state, &alice), exits);
+    }
+
+    #[test]
+    fn a_later_offence_postpones_the_deadline() {
+        let alice = keys_from_seed(1);
+        let mut state = staked_state(&alice, TRANSITION, FIRST_EPOCH, 10);
+        state
+            .forfeit_node(&alice.addr, Some(FIRST_EPOCH))
+            .expect("forfeit");
+
+        state.current_view = TRANSITION + 10;
+        state.epoch_state.epoch = FIRST_EPOCH + 1;
+        state
+            .validate_dispute(&dispute_of(&alice), FIRST_EPOCH + 1)
+            .expect("a fresh offence is admissible");
+        state
+            .forfeit_node(&alice.addr, Some(FIRST_EPOCH + 1))
+            .expect("forfeit");
+
+        let record = *state.dispute_records.get(&alice.addr).unwrap();
+        assert_eq!(record.last_offense_epoch, FIRST_EPOCH + 1);
+        assert_eq!(record.lock_until, TRANSITION + 10 + DISPUTE_LOCK);
+        assert_eq!(
+            exits_of(&state, &alice),
+            vec![TRANSITION + 10 + DISPUTE_LOCK]
+        );
+    }
+
+    #[test]
+    fn a_dispute_never_shortens_a_withdrawal_already_in_flight() {
+        let alice = keys_from_seed(1);
+        let mut state = staked_state(&alice, TRANSITION, FIRST_EPOCH, 10);
+        // Retire, so the stake leaves at a view well past the dispute lock.
+        state.retire_node(&alice.addr, 10).expect("retire");
+        let exits = exits_of(&state, &alice);
+        assert!(exits.iter().all(|view| *view > TRANSITION + DISPUTE_LOCK));
+
+        state
+            .forfeit_node(&alice.addr, Some(FIRST_EPOCH))
+            .expect("forfeit");
+
+        assert_eq!(exits_of(&state, &alice), exits);
+    }
+
+    #[test]
+    fn evidence_outside_the_admissible_epochs_is_refused() {
+        let alice = keys_from_seed(1);
+        let state = staked_state(&alice, TRANSITION, FIRST_EPOCH, 10);
+
+        assert!(state
+            .validate_dispute(&dispute_of(&alice), FIRST_EPOCH - 1)
+            .is_err());
+        assert!(state
+            .validate_dispute(&dispute_of(&alice), FIRST_EPOCH + 1)
+            .is_err());
+        assert!(state
+            .validate_dispute(&dispute_of(&alice), FIRST_EPOCH)
+            .is_ok());
+    }
+
+    #[test]
+    fn a_pre_activation_dispute_leaves_no_record() {
+        let alice = keys_from_seed(1);
+        let mut state = staked_state(&alice, TRANSITION - 1, FIRST_EPOCH, 10);
+
+        state.forfeit_node(&alice.addr, None).expect("forfeit");
+
+        assert!(state.dispute_records.get(&alice.addr).is_none());
+        assert_eq!(lock_status_of(&state, &alice).available_votes(), 0);
+    }
+
+    #[test]
+    fn persisted_layout_follows_the_transition_view() {
+        let alice = keys_from_seed(1);
+
+        let before = staked_state(&alice, TRANSITION - 1, FIRST_EPOCH, 10);
+        let legacy = before.encode_persisted().expect("encode");
+        assert!(
+            bcs::from_bytes::<PosState>(&legacy).is_err(),
+            "a legacy row must not decode as the current layout, or the \
+             fallback would be reached by states that do not need it"
+        );
+        let decoded = PosState::decode_persisted(&legacy).expect("decode");
+        assert!(decoded.dispute_records.is_empty());
+        assert_eq!(decoded, before);
+
+        let mut after = staked_state(&alice, TRANSITION, FIRST_EPOCH, 10);
+        let empty_but_gated = after.encode_persisted().expect("encode");
+        assert_eq!(
+            PosState::decode_persisted(&empty_but_gated).expect("decode"),
+            after
+        );
+        after
+            .forfeit_node(&alice.addr, Some(FIRST_EPOCH))
+            .expect("forfeit");
+        let with_record = after.encode_persisted().expect("encode");
+        assert_eq!(
+            PosState::decode_persisted(&with_record).expect("decode"),
+            after
+        );
+    }
+
+    #[test]
+    fn the_legacy_layout_is_the_current_one_without_its_last_field() {
+        let alice = keys_from_seed(1);
+        let state = staked_state(&alice, TRANSITION - 1, FIRST_EPOCH, 10);
+        assert!(state.dispute_records.is_empty());
+
+        // Pins the hand-written mirror to the real field order; a round-trip
+        // through the mirror alone would agree with itself however wrong.
+        assert_eq!(
+            bcs::to_bytes(&state).expect("encode"),
+            [state.encode_persisted().expect("encode").as_slice(), &[0u8]]
+                .concat()
+        );
+    }
+
+    /// A migration that dropped the watermark would surface here as evidence
+    /// that can be replayed after the restart.
+    #[test]
+    fn a_dispute_survives_a_restart_on_each_side_of_the_gate() {
+        let alice = keys_from_seed(1);
+        let before = staked_state(&alice, TRANSITION - 1, FIRST_EPOCH, 10);
+
+        let mut state =
+            PosState::decode_persisted(&before.encode_persisted().unwrap())
+                .expect("legacy row still readable");
+        state.current_view = TRANSITION;
+        state
+            .forfeit_node(&alice.addr, Some(FIRST_EPOCH))
+            .expect("forfeit");
+
+        let restarted =
+            PosState::decode_persisted(&state.encode_persisted().unwrap())
+                .expect("current row readable");
+        assert_eq!(restarted, state);
+        assert_eq!(
+            restarted.dispute_records[&alice.addr].last_offense_epoch,
+            FIRST_EPOCH
+        );
+        assert!(restarted
+            .validate_dispute(&dispute_of(&alice), FIRST_EPOCH)
+            .is_err());
+    }
+
+    #[test]
+    fn a_legacy_row_is_readable_up_to_the_transition_view_and_no_further() {
+        let alice = keys_from_seed(1);
+        let state = staked_state(&alice, 0, FIRST_EPOCH, 10);
+
+        let legacy_at = |view: View| {
+            bcs::to_bytes(&PosStateV1Ref {
+                node_map: &state.node_map,
+                current_view: &view,
+                epoch_state: &state.epoch_state,
+                term_list: &state.term_list,
+                retiring_nodes: &state.retiring_nodes,
+                pivot_decision: &state.pivot_decision,
+                node_map_hint: &state.node_map_hint,
+                unlock_event_hint: &state.unlock_event_hint,
+                skipped: &state.skipped,
+            })
+            .unwrap()
+        };
+
+        assert!(PosState::decode_persisted(&legacy_at(TRANSITION - 1)).is_ok());
+        assert!(PosState::decode_persisted(&legacy_at(TRANSITION)).is_ok());
+        assert!(PosState::decode_persisted(&legacy_at(TRANSITION + 1)).is_err());
     }
 
     fn election_payload_for(k: &Keys) -> ElectionPayload {

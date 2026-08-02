@@ -10,7 +10,7 @@ use diem_types::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     reward_distribution_event::RewardDistributionEventV2,
-    term_state::{DisputeEvent, UnlockEvent},
+    term_state::{decode_dispute_event, UnlockEvent},
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use keccak_hash::keccak;
@@ -330,15 +330,11 @@ impl PosHandler {
     pub fn get_disputed_nodes(
         &self, h: &PosBlockId, parent_pos_ref: &PosBlockId,
     ) -> Vec<NodeId> {
-        let dispute_event_key = DisputeEvent::event_key();
         let mut disputed_nodes = Vec::new();
         for event in self.pos().get_events(parent_pos_ref, h) {
-            if *event.key() == dispute_event_key {
-                let dispute_event =
-                    DisputeEvent::from_bytes(event.event_data())
-                        .expect("key checked");
-                disputed_nodes
-                    .push(H256::from_slice(dispute_event.node_id.as_ref()));
+            if let Some(dispute) = decode_dispute_event(&event) {
+                let (node_id, _) = dispute.expect("key checked");
+                disputed_nodes.push(H256::from_slice(node_id.as_ref()));
             }
         }
         disputed_nodes
