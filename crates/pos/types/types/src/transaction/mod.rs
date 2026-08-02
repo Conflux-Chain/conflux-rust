@@ -33,8 +33,8 @@ use crate::{
     ledger_info::LedgerInfo,
     proof::{accumulator::InMemoryAccumulator, TransactionInfoWithProof},
     term_state::{
-        DisputeEvent, ElectionEvent, NodeID, RegisterEvent, RetireEvent,
-        UpdateVotingPowerEvent,
+        DisputeEvent, DisputeEventV2, ElectionEvent, NodeID, RegisterEvent,
+        RetireEvent, UpdateVotingPowerEvent,
     },
     transaction::authenticator::{
         TransactionAuthenticator, TransactionAuthenticatorUnchecked,
@@ -369,6 +369,17 @@ impl DisputePayload {
         };
         ContractEvent::new(
             DisputeEvent::event_key(),
+            bcs::to_bytes(&event).unwrap(),
+        )
+    }
+
+    pub fn to_event_v2(&self, offense_epoch: u64) -> ContractEvent {
+        let event = DisputeEventV2 {
+            node_id: self.address,
+            offense_epoch,
+        };
+        ContractEvent::new(
+            DisputeEventV2::event_key(),
             bcs::to_bytes(&event).unwrap(),
         )
     }

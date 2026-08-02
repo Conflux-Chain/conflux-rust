@@ -53,7 +53,7 @@ use crate::{
 };
 use diem_types::term_state::{
     pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
-    DisputeEvent,
+    DisputeEvent, DisputeEventV2,
 };
 
 pub mod db_bootstrapper;
@@ -110,6 +110,7 @@ impl Executor {
         let register_event_key = RegisterEvent::event_key();
         let update_voting_power_event_key = UpdateVotingPowerEvent::event_key();
         let dispute_event_key = DisputeEvent::event_key();
+        let dispute_event_v2_key = DisputeEventV2::event_key();
 
         // Find the next pivot block.
         let mut pivot_decision = None;
@@ -132,7 +133,14 @@ impl Executor {
                 } else if *event.key() == dispute_event_key {
                     let dispute_event =
                         DisputeEvent::from_bytes(event.event_data())?;
-                    new_pos_state.forfeit_node(&dispute_event.node_id)?;
+                    new_pos_state.forfeit_node(&dispute_event.node_id, None)?;
+                } else if *event.key() == dispute_event_v2_key {
+                    let dispute_event =
+                        DisputeEventV2::from_bytes(event.event_data())?;
+                    new_pos_state.forfeit_node(
+                        &dispute_event.node_id,
+                        Some(dispute_event.offense_epoch),
+                    )?;
                 }
             }
         }
