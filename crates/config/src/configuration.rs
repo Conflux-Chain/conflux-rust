@@ -205,7 +205,7 @@ build_config! {
         (align_evm_transition_height, (u64), u64::MAX)
 
         // V3.1
-        (osaka_opcode_transition_height, (Option<u64>), None)
+        (osaka_opcode_transition_height, (Option<u64>), Some(155140000))
         (cip166_transition_height, (Option<u64>), None)
         (cip167_transition_height, (Option<u64>), None)
         (cip172_transition_height, (Option<u64>), None)
@@ -408,7 +408,7 @@ build_config! {
         (pos_cip156_transition_view, (u64), 2754720)
         // 6 months with 30s rounds
         (pos_cip156_dispute_locked_views, (u64), 6 * 30 * 24 * 60 * 2)
-        (pos_cip173_transition_view, (u64), u64::MAX)
+        (pos_cip173_transition_view, (u64), 3749400)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
         (pos_started_as_voter, (bool), true)
 
