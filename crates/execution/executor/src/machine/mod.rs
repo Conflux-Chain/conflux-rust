@@ -9,7 +9,7 @@ use crate::{
         build_bls12_builtin_map, builtin_factory,
         secp256r1::{P256VERIFY_ADDRESS, P256VERIFY_BASE_GAS_FEE_OSAKA},
         ActivateAt, AltBn128PairingPricer, Blake2FPricer, Builtin, ConstPricer,
-        IfPricer, Linear, ModexpPricer, StaticPlan,
+        IfPricer, Linear, ModexpPricePlan, ModexpPricer, StaticPlan,
     },
     internal_contract::InternalContractMap,
     spec::{CommonParams, TransitionsBlockNumber, TransitionsEpochHeight},
@@ -186,9 +186,9 @@ fn new_builtin_map(
         ),
     );
 
-    // CIP-645e: EIP-2565
-    let mod_exp_pricer = IfPricer::new(
-        |spec| spec.cip645.eip2565,
+    // CIP-645e: EIP-2565; CIP-174: EIP-7823 + EIP-7883
+    let mod_exp_pricer = ModexpPricePlan::new(
+        ModexpPricer::new_osaka(500),
         ModexpPricer::new_berlin(200),
         ModexpPricer::new_byzantium(20),
     );

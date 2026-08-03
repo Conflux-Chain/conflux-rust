@@ -12,6 +12,10 @@ cfx-types = { path = "../../crates/cfx_types" }
 log4rs = { version = "1.4.0", features = ["background_rotation", "gzip"] }
 log = "0.4"
 
+[features]
+# portable RocksDB/titan build — see kvdb-rocksdb/Cargo.toml. Used by consensus-bench-test.
+portable = ["cfxcore/portable"]
+
 [workspace]
 
 [patch.crates-io]

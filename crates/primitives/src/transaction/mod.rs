@@ -944,10 +944,14 @@ impl TransactionWithSignature {
         }
     }
 
-    /// Used to compute hash of created transactions
+    /// keccak of the canonical RLP re-encoding — unlike `hash`, which is over
+    /// the (possibly non-canonical) bytes the tx was decoded from.
+    pub fn canonical_hash(&self) -> H256 {
+        keccak(&*self.transaction.rlp_bytes())
+    }
+
     fn compute_hash(mut self) -> TransactionWithSignature {
-        let hash = keccak(&*self.transaction.rlp_bytes());
-        self.hash = hash;
+        self.hash = self.canonical_hash();
         self
     }
 
@@ -981,6 +985,12 @@ impl TransactionWithSignature {
     }
 
     pub fn hash(&self) -> H256 { self.hash }
+
+    /// False when the lenient decoder accepted a non-canonical encoding (e.g. a
+    /// trailing partial item): same fields, different cached hash.
+    pub fn is_canonical_rlp(&self) -> bool {
+        self.hash == self.canonical_hash()
+    }
 
     /// Recovers the public key of the sender.
     pub fn recover_public(&self) -> Result<Public, keylib::Error> {
@@ -1160,5 +1170,118 @@ impl SignedTransaction {
 impl MallocSizeOf for SignedTransaction {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.transaction.size_of(ops)
+    }
+}
+
+#[cfg(test)]
+mod canonical_rlp_tests {
+    use super::*;
+    use EthereumTransaction::*;
+    use TypedNativeTransaction::*;
+
+    fn part(unsigned: Transaction) -> TransactionWithSignatureSerializePart {
+        TransactionWithSignatureSerializePart {
+            unsigned,
+            v: 1,
+            r: U256::from(0x1234u64),
+            s: U256::from(0x5678u64),
+        }
+    }
+
+    fn is_list_form(p: &TransactionWithSignatureSerializePart) -> bool {
+        matches!(
+            p.unsigned,
+            Transaction::Native(Cip155(_)) | Transaction::Ethereum(Eip155(_))
+        )
+    }
+
+    // `decode` takes a bare list (legacy) or an RLP-string-wrapped
+    // `type||list` (typed).
+    fn wire(p: &TransactionWithSignatureSerializePart) -> Vec<u8> {
+        let s = rlp::encode(p).to_vec();
+        if is_list_form(p) {
+            s
+        } else {
+            rlp::encode(&s).to_vec()
+        }
+    }
+
+    // Non-canonical, same fields: a trailing partial item (0xb8) the decoder
+    // tolerates; for a list, bump the header length so it stays inside.
+    fn malleate(p: &TransactionWithSignatureSerializePart) -> Vec<u8> {
+        let mut s = rlp::encode(p).to_vec();
+        if is_list_form(p) {
+            // Only short-form list headers (payload <= 55 bytes) — the
+            // single-byte length can be bumped. Keep test variants small.
+            assert!(
+                (0xc0..=0xf7).contains(&s[0]),
+                "malleate: long-form list header not supported"
+            );
+            s[0] += 1;
+            s.push(0xb8);
+            s
+        } else {
+            s.push(0xb8);
+            rlp::encode(&s).to_vec()
+        }
+    }
+
+    fn assert_predicate(p: TransactionWithSignatureSerializePart) {
+        let canon: TransactionWithSignature = rlp::decode(&wire(&p)).unwrap();
+        assert_eq!(canon.transaction, p);
+        assert!(canon.is_canonical_rlp());
+
+        let mall: TransactionWithSignature =
+            rlp::decode(&malleate(&p)).unwrap();
+        assert_eq!(mall.transaction, p);
+        assert!(!mall.is_canonical_rlp());
+
+        let raw = rlp::encode(&p).to_vec();
+        assert!(TransactionWithSignature::from_raw(&raw)
+            .unwrap()
+            .is_canonical_rlp());
+    }
+
+    // One case per encoded form: list vs typed-string, Ethereum vs native.
+    #[test]
+    fn is_canonical_rlp_all_variants() {
+        let variants = [
+            Transaction::Ethereum(Eip155(Eip155Transaction {
+                chain_id: Some(1),
+                ..Default::default()
+            })),
+            // pre-155: chain_id None -> v = 27/28.
+            Transaction::Ethereum(Eip155(Eip155Transaction {
+                chain_id: None,
+                ..Default::default()
+            })),
+            Transaction::Native(Cip155(NativeTransaction {
+                chain_id: 1,
+                ..Default::default()
+            })),
+            Transaction::Ethereum(Eip2930(Eip2930Transaction {
+                chain_id: 1,
+                ..Default::default()
+            })),
+            Transaction::Ethereum(Eip1559(Eip1559Transaction {
+                chain_id: 1,
+                ..Default::default()
+            })),
+            Transaction::Ethereum(Eip7702(Eip7702Transaction {
+                chain_id: 1,
+                ..Default::default()
+            })),
+            Transaction::Native(Cip2930(Cip2930Transaction {
+                chain_id: 1,
+                ..Default::default()
+            })),
+            Transaction::Native(Cip1559(Cip1559Transaction {
+                chain_id: 1,
+                ..Default::default()
+            })),
+        ];
+        for unsigned in variants {
+            assert_predicate(part(unsigned));
+        }
     }
 }

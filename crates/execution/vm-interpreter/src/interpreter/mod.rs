@@ -571,7 +571,7 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
 
         let info = instruction.info::<CANCUN>(
             context.spec().cip645.opcode_update,
-            context.spec().eip7939,
+            context.spec().cip166,
         );
         self.last_stack_ret_len = info.ret;
         if let Err(e) = self.verify_instruction(context, instruction, info) {

@@ -7,3 +7,6 @@ license-file.workspace = true
 [dependencies]
 log = { workspace = true }
 kvdb-rocksdb = { workspace = true }
+
+[features]
+portable = ["kvdb-rocksdb/portable"]

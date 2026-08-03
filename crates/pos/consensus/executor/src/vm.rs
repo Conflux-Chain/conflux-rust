@@ -385,14 +385,14 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> Option<u64> {
 mod tests {
     //! One `#[test]` runs every case, since `POS_STATE_CONFIG` is set-once and
     //! a second `install_config()` would panic; its body lists them in order.
-    //! Cases state their expectation as `accepted`, `rejected`, or `gated`,
-    //! the last meaning accepted before `cip173_transition_view` and refused
-    //! after — what the fix exists for. All three assert on both sides of the
-    //! transition. A genuine equivocation per branch controls that the
-    //! fixtures are valid; identity cases put the bad item in either operand
-    //! slot, since a bad first item short-circuits the second; dedup cases
-    //! pair items whose bytes differ while the statement the target signed
-    //! stays the same, or is merely re-encoded.
+    //! Cases state their expectation as `accepted`, `rejected`, `gated`
+    //! (accepted before `cip173_transition_view` and refused after — what the
+    //! fix exists for) or `enabled` (the reverse). All four assert on both
+    //! sides of the transition. A genuine equivocation per branch controls that
+    //! the fixtures are valid; identity cases put the bad item in either
+    //! operand slot, since a bad first item short-circuits the second;
+    //! dedup cases pair items whose bytes differ while the statement the
+    //! target signed stays the same, or is merely re-encoded.
 
     use super::verify_dispute;
     use consensus_types::{
@@ -434,6 +434,14 @@ mod tests {
     fn gated(evidence: &DisputePayload) {
         assert_eq!(verify_dispute(evidence, BEFORE), Some(EPOCH));
         assert_eq!(verify_dispute(evidence, TRANSITION), None);
+    }
+
+    /// Evidence the legacy path rejected and CIP-173 accepts: real proposal
+    /// equivocation, which the QC check made unusable before the gate.
+    #[track_caller]
+    fn enabled(evidence: &DisputePayload) {
+        assert!(!verify_dispute(evidence, BEFORE));
+        assert!(verify_dispute(evidence, TRANSITION));
     }
 
     #[track_caller]
@@ -513,6 +521,22 @@ mod tests {
         )
     }
 
+    /// A QC certifying a live round and signed by someone outside the dispute's
+    /// single-target verifier — the shape real evidence carries. Unlike
+    /// [`genesis_qc`] this one makes `QuorumCert::verify` check signatures.
+    fn live_qc(signer: &ValidatorSigner, parent: u8) -> QuorumCert {
+        let certified = block_info(ROUND - 1, HashValue::new([parent; 32]));
+        let vote_data =
+            VoteData::new(certified.clone(), block_info(0, HashValue::zero()));
+        let li = LedgerInfo::new(certified, vote_data.hash());
+        let mut signatures = BTreeMap::new();
+        signatures.insert(Target::of(signer).address, signer.sign(&li));
+        QuorumCert::new(
+            vote_data,
+            LedgerInfoWithSignatures::new(li, signatures),
+        )
+    }
+
     /// Evidence varies only in the parent it builds on — never in the proposed
     /// block or the timestamp — so a dedup keyed on either of those instead of
     /// on the whole signed statement cannot survive the positive controls.
@@ -528,13 +552,13 @@ mod tests {
     }
 
     fn proposal_data(author: AccountAddress, parent: u8) -> BlockData {
-        BlockData::new_proposal(
-            vec![],
-            author,
-            ROUND,
-            TIMESTAMP,
-            genesis_qc(parent),
-        )
+        proposal_data_with_qc(author, genesis_qc(parent))
+    }
+
+    fn proposal_data_with_qc(
+        author: AccountAddress, qc: QuorumCert,
+    ) -> BlockData {
+        BlockData::new_proposal(vec![], author, ROUND, TIMESTAMP, qc)
     }
 
     fn make_proposal(
@@ -597,6 +621,7 @@ mod tests {
         proposal_identity_is_bound_to_the_accused(&signer, &other, &target);
         unsigned_proposal_is_not_evidence(&signer, &target);
         fields_outside_block_data_cannot_forge_a_conflict(&signer, &target);
+        live_qc_evidence_only_works_after_the_gate(&signer, &other, &target);
     }
 
     fn vote_conflict_gating(signer: &ValidatorSigner, target: &Target) {
@@ -742,5 +767,26 @@ mod tests {
         let decoded: Block = bcs::from_bytes(&alternative).unwrap();
         assert_eq!(decoded.id(), plain.id());
         gated(&target.raw_blocks(uncompressed, alternative));
+    }
+
+    /// Real proposal evidence carries a committee-signed QC, and the legacy
+    /// path verified it against the single-target verifier, so genuine
+    /// proposal equivocation was unusable until the gate stopped looking at
+    /// the QC. Every other proposal case keeps a round-0 QC, which
+    /// `QuorumCert::verify` short-circuits, precisely so that their own checks
+    /// stay the operative ones on both sides of the transition.
+    fn live_qc_evidence_only_works_after_the_gate(
+        signer: &ValidatorSigner, other: &ValidatorSigner, target: &Target,
+    ) {
+        let proposal = |parent: u8| {
+            Block::new_proposal_from_block_data(
+                proposal_data_with_qc(target.address, live_qc(other, parent)),
+                signer,
+            )
+        };
+        let pa = proposal(1);
+        let pb = proposal(2);
+        assert_ne!(pa.id(), pb.id());
+        enabled(&target.blocks(&pa, &pb));
     }
 }

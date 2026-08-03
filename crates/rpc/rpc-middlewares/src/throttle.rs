@@ -21,14 +21,22 @@ pub struct Throttle<S> {
     manager: TokenBucketManager,
 }
 
-impl<S> Throttle<S> {
-    pub fn new(file: Option<&str>, section: &str, s: S) -> Self {
-        let manager = match file {
-            Some(file) => TokenBucketManager::load(file, Some(section))
-                .expect("invalid throttling configuration file"),
-            None => TokenBucketManager::default(),
-        };
+/// jsonrpsee re-runs the rpc middleware factory per HTTP request / WS
+/// connection, so build the manager once here and clone it into each
+/// `Throttle` (clones share the token buckets); building it inside `layer_fn`
+/// would reset the buckets every request.
+pub fn load_throttling_manager(
+    file: Option<&str>, section: &str,
+) -> TokenBucketManager {
+    match file {
+        Some(file) => TokenBucketManager::load(file, Some(section))
+            .expect("invalid throttling configuration file"),
+        None => TokenBucketManager::default(),
+    }
+}
 
+impl<S> Throttle<S> {
+    pub fn new(manager: TokenBucketManager, s: S) -> Self {
         Throttle {
             service: s,
             manager,

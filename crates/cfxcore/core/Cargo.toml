@@ -126,6 +126,7 @@ default = []
 testonly_code = []
 consensus_bench = []
 fuzzing = ["proptest", "proptest-derive"]
+portable = ["db/portable"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }

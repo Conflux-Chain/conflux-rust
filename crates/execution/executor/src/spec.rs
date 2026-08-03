@@ -162,6 +162,16 @@ pub struct TransitionsEpochHeight {
     pub cip166: BlockHeight,
     /// EIP-7212 / RIP-7212: precompile secp256r1 activation height
     pub cip167: BlockHeight,
+    /// CIP-172: Canonical Transaction RLP Encoding. Height at/after which a
+    /// block with a non-canonically-encoded tx is invalid.
+    pub cip172: BlockHeight,
+    /// CIP-174: EIP-7823 (ModExp input upper bounds) and EIP-7883 (ModExp
+    /// gas cost increase)
+    pub cip174: BlockHeight,
+    /// CIP-175: Resolve EIP-7702 Delegation in Cross-Space Calls
+    pub cip175: BlockHeight,
+    /// CIP-176: Merge Storage Keys of Repeated Addresses in an Access List
+    pub cip176: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -233,7 +243,10 @@ impl CommonParams {
         spec.cip_c2_fix = height >= self.transition_heights.cip_c2_fix;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
         spec.align_evm = height >= self.transition_heights.align_evm && cip645;
-        spec.eip7939 = height >= self.transition_heights.cip166;
+        spec.cip166 = height >= self.transition_heights.cip166;
+        spec.cip174 = height >= self.transition_heights.cip174;
+        spec.cip175 = height >= self.transition_heights.cip175;
+        spec.cip176 = height >= self.transition_heights.cip176;
 
         spec.overwrite_gas_plan_by_cip();
 

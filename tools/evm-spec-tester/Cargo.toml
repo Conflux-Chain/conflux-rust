@@ -37,6 +37,8 @@ clap-verbosity-flag = "3"
 
 [features]
 default = ["cfx-executor/align_evm", "cfx-statedb/testonly_code"]
+# portable RocksDB/titan build — see kvdb-rocksdb/Cargo.toml. Used by evm-spec-tests.
+portable = ["cfxcore/portable"]
 
 [workspace]
 

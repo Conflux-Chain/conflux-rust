@@ -657,6 +657,16 @@ impl TransactionPool {
         &self, inner: &mut TransactionPoolInner, state: &StateProvider,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), TransactionPoolError> {
+        // `verify_transaction_common` already rejects non-canonical txs in
+        // Local mode, but the recycle path (`recycle_transactions`,
+        // basic_check=false) bypasses it. This chokepoint is the single funnel
+        // every insertion passes through, so packing a tx whose canonical
+        // re-encoding won't reproduce the `transactions_root` is impossible.
+        if !transaction.is_canonical_rlp() {
+            return Err(TransactionPoolError::RlpDecodeError(
+                "non-canonical transaction RLP encoding".into(),
+            ));
+        }
         inner.insert_transaction_with_readiness_check(
             state,
             transaction,
