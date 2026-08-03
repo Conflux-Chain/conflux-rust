@@ -128,13 +128,8 @@ pub fn cfx_addr_decode(
 
     // Do some sanity checks on the payload string
     let payload_str = parts[parts.len() - 1];
-    if payload_str.len() == 0 {
+    if payload_str.is_empty() {
         return Err(DecodingError::InvalidLength(0));
-    }
-    let has_lowercase = payload_str.chars().any(|c| c.is_lowercase());
-    let has_uppercase = payload_str.chars().any(|c| c.is_uppercase());
-    if has_lowercase && has_uppercase {
-        return Err(DecodingError::MixedCase);
     }
 
     // Decode payload to 5 bit array
@@ -143,7 +138,7 @@ pub fn cfx_addr_decode(
         .map(|c| {
             let i = c as usize;
             if let Some(Some(d)) = CHAR_INDEX.get(i) {
-                Ok(*d as u8)
+                Ok(*d)
             } else {
                 Err(DecodingError::InvalidChar(c))
             }
@@ -161,10 +156,18 @@ pub fn cfx_addr_decode(
         return Err(DecodingError::ChecksumFailed(checksum));
     }
 
-    // Convert from 5 bit array to byte array
+    // The last 8 symbols are the checksum, so we need strictly more than 8
+    // symbols to have a non-empty body after stripping the checksum.
     let len_5_bit = payload_5_bits.len();
+    if len_5_bit <= 8 {
+        return Err(DecodingError::InvalidLength(len_5_bit));
+    }
+    // Convert from 5 bit array to byte array.
     let payload =
         convert_bits(&payload_5_bits[..(len_5_bit - 8)], 5, 8, false)?;
+    if payload.is_empty() {
+        return Err(DecodingError::InvalidLength(0));
+    }
 
     // Verify the version byte
     let version = payload[0];
@@ -195,18 +198,14 @@ pub fn cfx_addr_decode(
     // Check address type for parsed H160 address.
     if version_size == consts::SIZE_160 {
         hex_address = Some(Address::from_slice(body));
-        match address_type {
-            Some(expected) => {
-                let got =
-                    AddressType::from_address(hex_address.as_ref().unwrap())
-                        .or(Err(()));
-                if got.as_ref() != Ok(&expected) {
-                    return Err(DecodingError::InvalidOption(
-                        OptionError::AddressTypeMismatch { expected, got },
-                    ));
-                }
+        if let Some(expected) = address_type {
+            let got = AddressType::from_address(hex_address.as_ref().unwrap())
+                .or(Err(()));
+            if got.as_ref() != Ok(&expected) {
+                return Err(DecodingError::InvalidOption(
+                    OptionError::AddressTypeMismatch { expected, got },
+                ));
             }
-            None => {}
         }
     } else {
         hex_address = None;

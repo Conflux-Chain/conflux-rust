@@ -6,7 +6,6 @@
 // See http://www.gnu.org/licenses/
 
 use std::{
-    collections::HashMap,
     convert::TryFrom,
     fmt::{self, Display, Formatter},
     ops::Deref,
@@ -17,39 +16,25 @@ use anyhow::{ensure, format_err, Error, Result};
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 
-pub use change_set::ChangeSet;
 use diem_crypto::{
     hash::{CryptoHash, EventAccumulatorHasher},
     traits::SigningKey,
     HashValue, PrivateKey, VRFProof,
 };
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
-pub use module::Module;
-use move_core_types::transaction_argument::convert_txn_args;
 use pow_types::StakingEvent;
-pub use script::{
-    ArgumentABI, Script, ScriptABI, ScriptFunction, ScriptFunctionABI,
-    TransactionScriptABI, TypeArgumentABI,
-};
-pub use transaction_argument::{
-    parse_transaction_argument, TransactionArgument,
-};
 
 use crate::{
     account_address::AccountAddress,
-    account_state_blob::AccountStateBlob,
     block_info::PivotBlockDecision,
     block_metadata::BlockMetadata,
     chain_id::ChainId,
     contract_event::ContractEvent,
     ledger_info::LedgerInfo,
-    proof::{
-        accumulator::InMemoryAccumulator, TransactionInfoWithProof,
-        TransactionListProof,
-    },
+    proof::{accumulator::InMemoryAccumulator, TransactionInfoWithProof},
     term_state::{
-        DisputeEvent, ElectionEvent, NodeID, RegisterEvent, RetireEvent,
-        UpdateVotingPowerEvent,
+        DisputeEvent, DisputeEventV2, ElectionEvent, NodeID, RegisterEvent,
+        RetireEvent, UpdateVotingPowerEvent,
     },
     transaction::authenticator::{
         TransactionAuthenticator, TransactionAuthenticatorUnchecked,
@@ -58,19 +43,10 @@ use crate::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
         ConsensusVRFProof, ConsensusVRFPublicKey, MultiConsensusSignature,
     },
-    vm_status::{
-        DiscardedVMStatus, KeptVMStatus, StatusCode, StatusType, VMStatus,
-    },
-    write_set::WriteSet,
+    vm_status::{DiscardedVMStatus, KeptVMStatus, StatusCode, VMStatus},
 };
 
 pub mod authenticator;
-mod change_set;
-pub mod helpers;
-pub mod metadata;
-mod module;
-mod script;
-mod transaction_argument;
 
 pub type Version = u64; // Height - also used for MVCC in StateDB
 
@@ -117,96 +93,6 @@ impl RawTransaction {
             sender,
             payload,
             expiration_timestamp_secs,
-            chain_id,
-        }
-    }
-
-    /// Create a new `RawTransaction` with a script.
-    ///
-    /// A script transaction contains only code to execute. No publishing is
-    /// allowed in scripts.
-    pub fn new_script(
-        sender: AccountAddress, script: Script, expiration_timestamp_secs: u64,
-        chain_id: ChainId,
-    ) -> Self {
-        RawTransaction {
-            sender,
-            payload: TransactionPayload::Script(script),
-            expiration_timestamp_secs,
-            chain_id,
-        }
-    }
-
-    /// Create a new `RawTransaction` with a script function.
-    ///
-    /// A script transaction contains only code to execute. No publishing is
-    /// allowed in scripts.
-    pub fn new_script_function(
-        sender: AccountAddress, script_function: ScriptFunction,
-        expiration_timestamp_secs: u64, chain_id: ChainId,
-    ) -> Self {
-        RawTransaction {
-            sender,
-            payload: TransactionPayload::ScriptFunction(script_function),
-            expiration_timestamp_secs,
-            chain_id,
-        }
-    }
-
-    /// Create a new `RawTransaction` with a module to publish.
-    ///
-    /// A module transaction is the only way to publish code. Only one module
-    /// per transaction can be published.
-    pub fn new_module(
-        sender: AccountAddress, module: Module, expiration_timestamp_secs: u64,
-        chain_id: ChainId,
-    ) -> Self {
-        RawTransaction {
-            sender,
-            payload: TransactionPayload::Module(module),
-            expiration_timestamp_secs,
-            chain_id,
-        }
-    }
-
-    pub fn new_write_set(
-        sender: AccountAddress, write_set: WriteSet, chain_id: ChainId,
-    ) -> Self {
-        Self::new_change_set(
-            sender,
-            ChangeSet::new(write_set, vec![]),
-            chain_id,
-        )
-    }
-
-    pub fn new_change_set(
-        sender: AccountAddress, change_set: ChangeSet, chain_id: ChainId,
-    ) -> Self {
-        RawTransaction {
-            sender,
-            payload: TransactionPayload::WriteSet(WriteSetPayload::Direct(
-                change_set,
-            )),
-            // Write-set transactions are special and important and shouldn't
-            // expire.
-            expiration_timestamp_secs: u64::max_value(),
-            chain_id,
-        }
-    }
-
-    pub fn new_writeset_script(
-        sender: AccountAddress, script: Script, signer: AccountAddress,
-        chain_id: ChainId,
-    ) -> Self {
-        RawTransaction {
-            sender,
-            payload: TransactionPayload::WriteSet(WriteSetPayload::Script {
-                execute_as: signer,
-                script,
-            }),
-            // Write-set transactions are special and important and shouldn't
-            // expire.
-            expiration_timestamp_secs: u64::max_value(),
             chain_id,
         }
     }
@@ -339,72 +225,29 @@ impl RawTransaction {
 
     pub fn into_payload(self) -> TransactionPayload { self.payload }
 
-    pub fn format_for_client(
-        &self, get_transaction_name: impl Fn(&[u8]) -> String,
-    ) -> String {
-        let (code, args) = match &self.payload {
-            TransactionPayload::WriteSet(_) => ("genesis".to_string(), vec![]),
-            TransactionPayload::Script(script) => (
-                get_transaction_name(script.code()),
-                convert_txn_args(script.args()),
-            ),
-            TransactionPayload::ScriptFunction(script_fn) => (
-                format!("{}::{}", script_fn.module(), script_fn.function()),
-                script_fn.args().to_vec(),
-            ),
-            TransactionPayload::Module(_) => {
-                ("module publishing".to_string(), vec![])
-            }
-            TransactionPayload::Election(_) => ("election".to_string(), vec![]),
-            TransactionPayload::Retire(_) => ("retire".to_string(), vec![]),
-            TransactionPayload::PivotDecision(_) => {
-                ("pivot_decision".to_string(), vec![])
-            }
-            TransactionPayload::Register(_) => ("register".to_string(), vec![]),
-            TransactionPayload::UpdateVotingPower(_) => {
-                ("update_voting_power".to_string(), vec![])
-            }
-            TransactionPayload::Dispute(_) => ("dispute".to_string(), vec![]),
-        };
-        let mut f_args: String = "".to_string();
-        for arg in args {
-            f_args = format!("{}\n\t\t\t{:02X?},", f_args, arg);
-        }
-        format!(
-            "RawTransaction {{ \n\
-             \tsender: {}, \n\
-             \tpayload: {{, \n\
-             \t\ttransaction: {}, \n\
-             \t\targs: [ {} \n\
-             \t\t]\n\
-             \t}}, \n\
-             \texpiration_timestamp_secs: {:#?}, \n\
-             \tchain_id: {},
-             }}",
-            self.sender,
-            code,
-            f_args,
-            self.expiration_timestamp_secs,
-            self.chain_id,
-        )
-    }
-
     /// Return the sender of this transaction.
     pub fn sender(&self) -> AccountAddress { self.sender }
 }
 
 /// Different kinds of transactions.
+///
+/// **BCS serialization note:** Variant indices must remain stable for
+/// database compatibility. Indices 1-3 are legacy Diem Move variants that
+/// were never used in Conflux PoS but must be preserved as placeholders.
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TransactionPayload {
-    /// A system maintenance transaction.
-    WriteSet(WriteSetPayload),
-    /// A transaction that executes code.
-    Script(Script),
-    /// A transaction that publishes code.
-    Module(Module),
-    /// A transaction that executes an existing script function published
-    /// on-chain.
-    ScriptFunction(ScriptFunction),
+    /// Legacy Diem variant (index 0). Never used in Conflux PoS.
+    #[doc(hidden)]
+    _LegacyWriteSet,
+    /// Legacy Diem variant (index 1). Never used in Conflux PoS.
+    #[doc(hidden)]
+    _LegacyScript,
+    /// Legacy Diem variant (index 2). Never used in Conflux PoS.
+    #[doc(hidden)]
+    _LegacyModule,
+    /// Legacy Diem variant (index 3). Never used in Conflux PoS.
+    #[doc(hidden)]
+    _LegacyScriptFunction,
 
     /// A transaction that add a node to committee candidates.
     Election(ElectionPayload),
@@ -420,27 +263,6 @@ pub enum TransactionPayload {
     PivotDecision(PivotBlockDecision),
 
     Dispute(DisputePayload),
-}
-
-impl TransactionPayload {
-    pub fn should_trigger_reconfiguration_by_default(&self) -> bool {
-        match self {
-            Self::WriteSet(ws) => {
-                ws.should_trigger_reconfiguration_by_default()
-            }
-            _ => false,
-        }
-    }
-
-    pub fn into_script_function(self) -> ScriptFunction {
-        match self {
-            Self::ScriptFunction(f) => f,
-            payload => panic!(
-                "Expected ScriptFunction(_) payload, found: {:#?}",
-                payload
-            ),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
@@ -550,28 +372,16 @@ impl DisputePayload {
             bcs::to_bytes(&event).unwrap(),
         )
     }
-}
 
-/// Two different kinds of WriteSet transactions.
-#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub enum WriteSetPayload {
-    /// Directly passing in the WriteSet.
-    Direct(ChangeSet),
-    /// Generate the WriteSet by running a script.
-    Script {
-        /// Execute the script as the designated signer.
-        execute_as: AccountAddress,
-        /// Script body that gets executed.
-        script: Script,
-    },
-}
-
-impl WriteSetPayload {
-    pub fn should_trigger_reconfiguration_by_default(&self) -> bool {
-        match self {
-            Self::Direct(_) => true,
-            Self::Script { .. } => false,
-        }
+    pub fn to_event_v2(&self, offense_epoch: u64) -> ContractEvent {
+        let event = DisputeEventV2 {
+            node_id: self.address,
+            offense_epoch,
+        };
+        ContractEvent::new(
+            DisputeEventV2::event_key(),
+            bcs::to_bytes(&event).unwrap(),
+        )
     }
 }
 
@@ -693,29 +503,23 @@ impl SignedTransaction {
             .len()
     }
 
-    /// Checks that the signature of given transaction. Returns
-    /// `Ok(SignatureCheckedTransaction)` if the signature is valid.
-    pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
+    /// Verifies the authenticator's signature against the appropriate
+    /// signed message without consuming `self`. Returns `Ok(())` on a
+    /// valid signature.
+    pub fn verify_signature(&self) -> Result<()> {
         match self.payload() {
             TransactionPayload::PivotDecision(pivot_decision) => {
-                self.authenticator.verify(pivot_decision)?
+                self.authenticator.verify(pivot_decision)
             }
-            _ => self.authenticator.verify(&self.raw_txn)?,
+            _ => self.authenticator.verify(&self.raw_txn),
         }
-        Ok(SignatureCheckedTransaction(self))
     }
 
-    pub fn format_for_client(
-        &self, get_transaction_name: impl Fn(&[u8]) -> String,
-    ) -> String {
-        format!(
-            "SignedTransaction {{ \n \
-             raw_txn: {}, \n \
-             authenticator: {:#?}, \n \
-             }}",
-            self.raw_txn.format_for_client(get_transaction_name),
-            self.authenticator
-        )
+    /// Same as `verify_signature`, but consumes `self` and returns a
+    /// `SignatureCheckedTransaction` newtype that proves the check ran.
+    pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
+        self.verify_signature()?;
+        Ok(SignatureCheckedTransaction(self))
     }
 }
 
@@ -843,103 +647,9 @@ impl From<VMStatus> for TransactionStatus {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum GovernanceRole {
-    DiemRoot,
-    TreasuryCompliance,
-    Validator,
-    ValidatorOperator,
-    DesignatedDealer,
-    NonGovernanceRole,
-}
-
-impl GovernanceRole {
-    pub fn from_role_id(role_id: u64) -> Self {
-        use GovernanceRole::*;
-        match role_id {
-            0 => DiemRoot,
-            1 => TreasuryCompliance,
-            2 => DesignatedDealer,
-            3 => Validator,
-            4 => ValidatorOperator,
-            _ => NonGovernanceRole,
-        }
-    }
-
-    /// The higher the number that is returned, the greater priority assigned to
-    /// a transaction sent from an account with that role in mempool. All
-    /// transactions sent from an account with role priority N are ranked
-    /// higher than all transactions sent from accounts with role priorities <
-    /// N. Transactions from accounts with equal priority are ranked base on
-    /// other characteristics (e.g., gas price).
-    pub fn priority(&self) -> u64 {
-        use GovernanceRole::*;
-        match self {
-            DiemRoot => 3,
-            TreasuryCompliance => 2,
-            Validator | ValidatorOperator | DesignatedDealer => 1,
-            NonGovernanceRole => 0,
-        }
-    }
-}
-
-/// The result of running the transaction through the VM validator.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VMValidatorResult {
-    /// Result of the validation: `None` if the transaction was successfully
-    /// validated or `Some(DiscardedVMStatus)` if the transaction should be
-    /// discarded.
-    status: Option<DiscardedVMStatus>,
-
-    /// Score for ranking the transaction priority (e.g., based on the gas
-    /// price). Only used when the status is `None`. Higher values indicate
-    /// a higher priority.
-    score: u64,
-
-    /// The account role for the transaction sender, so that certain
-    /// governance transactions can be prioritized above normal transactions.
-    /// Only used when the status is `None`.
-    governance_role: GovernanceRole,
-}
-
-impl VMValidatorResult {
-    pub fn new(
-        vm_status: Option<DiscardedVMStatus>, score: u64,
-        governance_role: GovernanceRole,
-    ) -> Self {
-        debug_assert!(
-            match vm_status {
-                None => true,
-                Some(status) => {
-                    status.status_type() == StatusType::Unknown
-                        || status.status_type() == StatusType::Validation
-                        || status.status_type()
-                            == StatusType::InvariantViolation
-                }
-            },
-            "Unexpected discarded status: {:?}",
-            vm_status
-        );
-        Self {
-            status: vm_status,
-            score,
-            governance_role,
-        }
-    }
-
-    pub fn status(&self) -> Option<DiscardedVMStatus> { self.status }
-
-    pub fn score(&self) -> u64 { self.score }
-
-    pub fn governance_role(&self) -> GovernanceRole { self.governance_role }
-}
-
 /// The output of executing a transaction.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TransactionOutput {
-    /// The list of writes this transaction intends to do.
-    write_set: WriteSet,
-
     /// The list of events emitted during this transaction.
     events: Vec<ContractEvent>,
 
@@ -952,22 +662,14 @@ pub struct TransactionOutput {
 
 impl TransactionOutput {
     pub fn new(
-        write_set: WriteSet, events: Vec<ContractEvent>, gas_used: u64,
-        status: TransactionStatus,
+        events: Vec<ContractEvent>, gas_used: u64, status: TransactionStatus,
     ) -> Self {
         TransactionOutput {
-            write_set,
             events,
             gas_used,
             status,
         }
     }
-
-    pub fn into(self) -> (WriteSet, Vec<ContractEvent>) {
-        (self.write_set, self.events)
-    }
-
-    pub fn write_set(&self) -> &WriteSet { &self.write_set }
 
     pub fn events(&self) -> &[ContractEvent] { &self.events }
 
@@ -1058,7 +760,6 @@ impl Display for TransactionInfo {
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct TransactionToCommit {
     transaction: Transaction,
-    account_states: HashMap<AccountAddress, AccountStateBlob>,
     events: Vec<ContractEvent>,
     gas_used: u64,
     status: KeptVMStatus,
@@ -1066,13 +767,11 @@ pub struct TransactionToCommit {
 
 impl TransactionToCommit {
     pub fn new(
-        transaction: Transaction,
-        account_states: HashMap<AccountAddress, AccountStateBlob>,
-        events: Vec<ContractEvent>, gas_used: u64, status: KeptVMStatus,
+        transaction: Transaction, events: Vec<ContractEvent>, gas_used: u64,
+        status: KeptVMStatus,
     ) -> Self {
         TransactionToCommit {
             transaction,
-            account_states,
             events,
             gas_used,
             status,
@@ -1081,115 +780,11 @@ impl TransactionToCommit {
 
     pub fn transaction(&self) -> &Transaction { &self.transaction }
 
-    pub fn account_states(&self) -> &HashMap<AccountAddress, AccountStateBlob> {
-        &self.account_states
-    }
-
     pub fn events(&self) -> &[ContractEvent] { &self.events }
 
     pub fn gas_used(&self) -> u64 { self.gas_used }
 
     pub fn status(&self) -> &KeptVMStatus { &self.status }
-}
-
-/// The list may have three states:
-/// 1. The list is empty. Both proofs must be `None`.
-/// 2. The list has only 1 transaction/transaction_info. Then
-/// `proof_of_first_transaction` must exist and `proof_of_last_transaction` must
-/// be `None`. 3. The list has 2+ transactions/transaction_infos. The both
-/// proofs must exist.
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
-pub struct TransactionListWithProof {
-    pub transactions: Vec<Transaction>,
-    pub events: Option<Vec<Vec<ContractEvent>>>,
-    pub first_transaction_version: Option<Version>,
-    pub proof: TransactionListProof,
-}
-
-impl TransactionListWithProof {
-    /// Constructor.
-    pub fn new(
-        transactions: Vec<Transaction>,
-        events: Option<Vec<Vec<ContractEvent>>>,
-        first_transaction_version: Option<Version>,
-        proof: TransactionListProof,
-    ) -> Self {
-        Self {
-            transactions,
-            events,
-            first_transaction_version,
-            proof,
-        }
-    }
-
-    /// Creates an empty transaction list.
-    pub fn new_empty() -> Self {
-        Self::new(vec![], None, None, TransactionListProof::new_empty())
-    }
-
-    /// Verifies the transaction list with the proofs, both carried on `self`.
-    ///
-    /// Two things are ensured if no error is raised:
-    ///   1. All the transactions exist on the ledger represented by
-    /// `ledger_info`.   2. And the transactions in the list has consecutive
-    /// versions starting from `first_transaction_version`. When
-    /// `first_transaction_version` is None, ensures the list is empty.
-    pub fn verify(
-        &self, ledger_info: &LedgerInfo,
-        first_transaction_version: Option<Version>,
-    ) -> Result<()> {
-        ensure!(
-            self.first_transaction_version == first_transaction_version,
-            "First transaction version ({}) not expected ({}).",
-            Self::display_option_version(self.first_transaction_version),
-            Self::display_option_version(first_transaction_version),
-        );
-
-        let txn_hashes: Vec<_> =
-            self.transactions.iter().map(CryptoHash::hash).collect();
-        self.proof.verify(
-            ledger_info,
-            self.first_transaction_version,
-            &txn_hashes,
-        )?;
-
-        // Verify the events if they exist.
-        if let Some(event_lists) = &self.events {
-            ensure!(
-                event_lists.len() == self.transactions.len(),
-                "The length of event_lists ({}) does not match the number of transactions ({}).",
-                event_lists.len(),
-                self.transactions.len(),
-            );
-            itertools::zip_eq(event_lists, self.proof.transaction_infos())
-                .map(|(events, txn_info)| {
-                    let event_hashes: Vec<_> = events.iter().map(ContractEvent::hash).collect();
-                    let event_root_hash =
-                        InMemoryAccumulator::<EventAccumulatorHasher>::from_leaves(&event_hashes)
-                            .root_hash();
-                    ensure!(
-                        event_root_hash == txn_info.event_root_hash(),
-                        "Some event root hash calculated doesn't match that carried on the \
-                         transaction info.",
-                    );
-                    Ok(())
-                })
-                .collect::<Result<Vec<_>>>()?;
-        }
-
-        Ok(())
-    }
-
-    pub fn is_empty(&self) -> bool { self.transactions.is_empty() }
-
-    pub fn len(&self) -> usize { self.transactions.len() }
-
-    fn display_option_version(version: Option<Version>) -> String {
-        match version {
-            Some(v) => format!("{}", v),
-            None => String::from("absent"),
-        }
-    }
 }
 
 /// `Transaction` will be the transaction type used internally in the diem node
@@ -1217,19 +812,19 @@ pub enum Transaction {
     /// codebase.
     UserTransaction(SignedTransaction),
 
-    /// Transaction that applies a WriteSet to the current storage, it's
-    /// applied manually via db-bootstrapper.
-    GenesisTransaction(WriteSetPayload),
+    /// Genesis transaction carrying the epoch-change event for the
+    /// initial validator set.
+    GenesisTransaction(Vec<ContractEvent>),
 
-    /// Transaction to update the block metadata resource at the beginning of a
-    /// block.
+    /// Transaction to update the block metadata resource at the beginning
+    /// of a block.
     BlockMetadata(BlockMetadata),
 }
 
 #[derive(Deserialize)]
 pub enum TransactionUnchecked {
     UserTransaction(SignedTransactionUnchecked),
-    GenesisTransaction(WriteSetPayload),
+    GenesisTransaction(Vec<ContractEvent>),
     BlockMetadata(BlockMetadata),
 }
 
@@ -1252,24 +847,6 @@ impl Transaction {
         match self {
             Transaction::UserTransaction(txn) => Ok(txn),
             _ => Err(format_err!("Not a user transaction.")),
-        }
-    }
-
-    pub fn format_for_client(
-        &self, get_transaction_name: impl Fn(&[u8]) -> String,
-    ) -> String {
-        match self {
-            Transaction::UserTransaction(user_txn) => {
-                user_txn.format_for_client(get_transaction_name)
-            }
-            // TODO: display proper information for client
-            Transaction::GenesisTransaction(_write_set) => {
-                String::from("genesis")
-            }
-            // TODO: display proper information for client
-            Transaction::BlockMetadata(_block_metadata) => {
-                String::from("block_metadata")
-            }
         }
     }
 }

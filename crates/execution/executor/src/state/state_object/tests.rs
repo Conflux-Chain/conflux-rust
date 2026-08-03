@@ -11,10 +11,11 @@ use cfx_parameters::{
 };
 use cfx_statedb::StateDb;
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressSpaceUtil, BigEndianHash, U256,
+    address_util::AddressUtil, Address, AddressSpaceUtil, BigEndianHash, Space,
+    U256,
 };
 use keccak_hash::{keccak, KECCAK_EMPTY};
-use primitives::{EpochId, StorageKey, StorageLayout};
+use primitives::{AccessListItem, EpochId, StorageKey, StorageLayout};
 
 pub fn get_state_by_epoch_id(epoch_id: &EpochId) -> State {
     State::new(StateDb::new_for_unit_test_with_epoch(epoch_id)).unwrap()
@@ -39,11 +40,7 @@ pub fn get_state_for_genesis_write() -> State {
     state
 }
 
-fn u256_to_vec(val: &U256) -> Vec<u8> {
-    let mut key = vec![0; 32];
-    val.to_big_endian(key.as_mut());
-    key
-}
+fn u256_to_vec(val: &U256) -> Vec<u8> { val.to_big_endian().to_vec() }
 
 #[test]
 fn checkpoint_basic() {
@@ -1425,3 +1422,89 @@ fn test_automatic_collateral_normal_account() {
 
 //     // TODO(69): checking
 // }
+
+/// CIP-176: an access list may repeat the same address in several entries.
+/// EIP-2930 warms the union of the storage keys of all such entries, while
+/// the pre-CIP-176 implementation kept only the keys of the last one.
+#[test]
+fn access_list_with_repeated_address() {
+    let address = Address::from_low_u64_be(0x1000);
+    let slot0 = BigEndianHash::from_uint(&U256::from(0));
+    let slot1 = BigEndianHash::from_uint(&U256::from(1));
+
+    let access_list = vec![
+        AccessListItem {
+            address,
+            storage_keys: vec![slot0],
+        },
+        AccessListItem {
+            address,
+            storage_keys: vec![slot1],
+        },
+    ];
+
+    let address_with_space = address.with_evm_space();
+    let mut state = get_state_for_genesis_write();
+
+    // Before CIP-176 the second entry replaces the first one, so the slot
+    // listed by the first entry stays cold even though it was paid for.
+    state.set_tx_access_list(Space::Ethereum, &access_list, false);
+    assert!(state.is_warm_account(&address_with_space));
+    assert!(!state
+        .is_warm_storage_entry(&address_with_space, &slot0)
+        .unwrap());
+    assert!(state
+        .is_warm_storage_entry(&address_with_space, &slot1)
+        .unwrap());
+
+    // After CIP-176 both entries contribute to the warmed key set.
+    state.set_tx_access_list(Space::Ethereum, &access_list, true);
+    assert!(state.is_warm_account(&address_with_space));
+    assert!(state
+        .is_warm_storage_entry(&address_with_space, &slot0)
+        .unwrap());
+    assert!(state
+        .is_warm_storage_entry(&address_with_space, &slot1)
+        .unwrap());
+}
+
+/// Without repeated addresses CIP-176 must not change anything.
+#[test]
+fn access_list_without_repeated_address_is_unaffected() {
+    let first = Address::from_low_u64_be(0x1000);
+    let second = Address::from_low_u64_be(0x2000);
+    let slot0 = BigEndianHash::from_uint(&U256::from(0));
+    let slot1 = BigEndianHash::from_uint(&U256::from(1));
+
+    let access_list = vec![
+        AccessListItem {
+            address: first,
+            storage_keys: vec![slot0, slot1],
+        },
+        AccessListItem {
+            address: second,
+            storage_keys: vec![slot0],
+        },
+    ];
+
+    for cip176 in [false, true] {
+        let mut state = get_state_for_genesis_write();
+        state.set_tx_access_list(Space::Ethereum, &access_list, cip176);
+
+        for (address, warm_slots) in
+            [(first, vec![slot0, slot1]), (second, vec![slot0])]
+        {
+            let address_with_space = address.with_evm_space();
+            assert!(state.is_warm_account(&address_with_space));
+            for slot in [slot0, slot1] {
+                assert_eq!(
+                    state
+                        .is_warm_storage_entry(&address_with_space, &slot)
+                        .unwrap(),
+                    warm_slots.contains(&slot),
+                    "cip176={cip176} address={address:?} slot={slot:?}"
+                );
+            }
+        }
+    }
+}

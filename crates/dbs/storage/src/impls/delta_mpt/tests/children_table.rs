@@ -70,8 +70,7 @@ fn test_no_alloc_in_empty_children_table() {
 
     let rlp_bytes = empty_children_table.to_ref().rlp_bytes();
     let rlp_parsed =
-        ChildrenTableManagedDeltaMpt::decode(&Rlp::new(rlp_bytes.as_slice()))
-            .unwrap();
+        ChildrenTableManagedDeltaMpt::decode(&Rlp::new(&rlp_bytes)).unwrap();
     let decoded_table = ChildrenTableDeltaMpt::from(rlp_parsed);
     decoded_table.assert_no_alloc_in_empty_children_table();
 

@@ -6,7 +6,7 @@ use super::Decision;
 use cfx_types::{H256, U64};
 use serde_derive::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     ///

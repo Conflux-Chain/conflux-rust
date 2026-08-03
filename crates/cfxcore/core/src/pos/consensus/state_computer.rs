@@ -5,15 +5,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::pos::state_sync::client::StateSyncClient;
-
-use super::{error::StateSyncError, state_replication::StateComputer};
+use super::state_replication::StateComputer;
+use crate::pos::mempool::{CommitNotification, CommittedTransaction};
 use anyhow::Result;
 use consensus_types::block::Block;
 use diem_crypto::HashValue;
-use diem_infallible::Mutex;
 use diem_logger::prelude::*;
-use diem_metrics::monitor;
 use diem_types::{
     ledger_info::LedgerInfoWithSignatures, transaction::Transaction,
 };
@@ -21,28 +18,95 @@ use executor_types::{
     BlockExecutor, Error as ExecutionError, StateComputeResult,
 };
 use fail::fail_point;
+use futures::channel::{mpsc, oneshot};
+use parking_lot::Mutex;
 use std::boxed::Box;
 
 /// Basic communication with the Execution module;
 /// implements StateComputer traits.
 pub struct ExecutionProxy {
-    //execution_correctness_client:
-    //    Mutex<Box<dyn ExecutionCorrectness + Send + Sync>>,
-    synchronizer: StateSyncClient,
-    // TODO(lpl): Use Mutex or Arc?
     executor: Mutex<Box<dyn BlockExecutor>>,
+    mempool_commit_sender: mpsc::Sender<CommitNotification>,
+    mempool_commit_timeout_ms: u64,
 }
 
 impl ExecutionProxy {
     pub fn new(
-        executor: Box<dyn BlockExecutor>, synchronizer: StateSyncClient,
+        executor: Box<dyn BlockExecutor>,
+        mempool_commit_sender: mpsc::Sender<CommitNotification>,
+        mempool_commit_timeout_ms: u64,
     ) -> Self {
         Self {
-            /*execution_correctness_client: Mutex::new(
-                execution_correctness_client,
-            ),*/
-            synchronizer,
             executor: Mutex::new(executor),
+            mempool_commit_sender,
+            mempool_commit_timeout_ms,
+        }
+    }
+
+    /// Notify mempool of committed transactions so it can prune them.
+    async fn notify_mempool(&self, committed_txns: Vec<Transaction>) {
+        let user_txns: Vec<CommittedTransaction> = committed_txns
+            .iter()
+            .filter_map(|txn| match txn {
+                Transaction::UserTransaction(signed_txn) => {
+                    Some(CommittedTransaction {
+                        sender: signed_txn.sender(),
+                        hash: signed_txn.hash(),
+                    })
+                }
+                _ => None,
+            })
+            .collect();
+
+        if user_txns.is_empty() {
+            return;
+        }
+
+        let (callback, cb_receiver) = oneshot::channel();
+        let notification = CommitNotification {
+            transactions: user_txns,
+            callback,
+        };
+
+        if let Err(e) =
+            self.mempool_commit_sender.clone().try_send(notification)
+        {
+            diem_error!(
+                error = ?e,
+                "Failed to send commit notification to mempool"
+            );
+            return;
+        }
+
+        match tokio::time::timeout(
+            std::time::Duration::from_millis(self.mempool_commit_timeout_ms),
+            cb_receiver,
+        )
+        .await
+        {
+            Ok(Ok(Ok(response))) => {
+                if !response.success {
+                    diem_error!(
+                        "Mempool commit failed: {:?}",
+                        response.error_message
+                    );
+                }
+            }
+            Ok(Ok(Err(e))) => {
+                diem_error!(
+                    error = ?e,
+                    "Mempool commit returned error"
+                );
+            }
+            Ok(Err(_)) => {
+                diem_error!("Mempool commit callback dropped");
+            }
+            Err(_) => {
+                diem_error!(
+                    "Mempool commit notification timed out after {} ms",
+                    self.mempool_commit_timeout_ms
+                );
+            }
         }
     }
 }
@@ -68,64 +132,22 @@ impl StateComputer for ExecutionProxy {
             "Executing block",
         );
 
-        // TODO: figure out error handling for the prologue txn
-        monitor!(
-            "execute_block",
-            self.executor.lock().execute_block(
-                id_and_transactions_from_block(block),
-                parent_block_id,
-                catch_up_mode
-            )
+        self.executor.lock().execute_block(
+            id_and_transactions_from_block(block),
+            parent_block_id,
+            catch_up_mode,
         )
     }
 
-    /// Send a successful commit. A future is fulfilled when the state is
-    /// finalized.
     async fn commit(
         &self, block_ids: Vec<HashValue>,
         finality_proof: LedgerInfoWithSignatures,
     ) -> Result<(), ExecutionError> {
-        let (committed_txns, reconfig_events) = monitor!(
-            "commit_block",
-            self.executor
-                .lock()
-                .commit_blocks(block_ids, finality_proof)?
-        );
-        if let Err(e) = monitor!(
-            "notify_state_sync",
-            self.synchronizer
-                .commit(committed_txns, reconfig_events)
-                .await
-        ) {
-            diem_error!(error = ?e, "Failed to notify state synchronizer");
-        }
-        Ok(())
-    }
-
-    /// Synchronize to a commit that not present locally.
-    async fn sync_to(
-        &self, _target: LedgerInfoWithSignatures,
-    ) -> Result<(), StateSyncError> {
-        fail_point!("consensus::sync_to", |_| {
-            Err(anyhow::anyhow!("Injected error in sync_to").into())
-        });
-        // Here to start to do state synchronization where ChunkExecutor inside
-        // will process chunks and commit to Storage. However, after
-        // block execution and commitments, the sync state of
-        // ChunkExecutor may be not up to date so it is required to
-        // reset the cache of ChunkExecutor in State Sync when requested
-        // to sync.
-        //let res = monitor!("sync_to",
-        // self.synchronizer.sync_to(target).await); Similarily, after
-        // the state synchronization, we have to reset the
-        // cache of BlockExecutor to guarantee the latest committed
-        // state is up to date.
-        // self.executor.reset()?;
-
-        /*res.map_err(|error| {
-            let anyhow_error: anyhow::Error = error.into();
-            anyhow_error.into()
-        })*/
+        let committed_txns = self
+            .executor
+            .lock()
+            .commit_blocks(block_ids, finality_proof)?;
+        self.notify_mempool(committed_txns).await;
         Ok(())
     }
 }
@@ -134,7 +156,6 @@ fn id_and_transactions_from_block(
     block: &Block,
 ) -> (HashValue, Vec<Transaction>) {
     let id = block.id();
-    // TODO(lpl): Do we need BlockMetadata?
     let mut transactions = vec![Transaction::BlockMetadata(block.into())];
     transactions.extend(
         block

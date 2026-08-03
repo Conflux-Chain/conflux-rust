@@ -11,9 +11,7 @@ use cfx_rpc_eth_api::EthFilterApiServer;
 use cfx_rpc_eth_types::{
     BlockId, EthRpcLogFilter as Filter, FilterChanges, Log,
 };
-use cfx_rpc_utils::error::jsonrpsee_error_helpers::{
-    invalid_request_msg, jsonrpc_error_to_error_object_owned,
-};
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_request_msg;
 use cfx_tasks::TaskExecutor;
 use cfx_types::{H128 as FilterId, H256};
 use cfx_util_macros::bail;
@@ -58,10 +56,7 @@ impl EthFilterApiServer for EthFilterApi {
             ))
         }
 
-        let filter: LogFilter = self
-            .inner
-            .into_primitive_filter(filter)
-            .map_err(|e| jsonrpc_error_to_error_object_owned(e.into()))?;
+        let filter: LogFilter = self.inner.into_primitive_filter(filter)?;
 
         let id = polls.create_poll(SyncPollFilter::new(PollFilter::Logs {
             last_epoch_number: if epoch_number == 0 {
@@ -116,13 +111,11 @@ impl EthFilterApiServer for EthFilterApi {
                 ref mut last_epoch_number,
                 ref mut recent_reported_epochs,
             } => {
-                let (reorg_len, epochs) = self
-                    .inner
-                    .epochs_since_last_request(
+                let (reorg_len, epochs) =
+                    self.inner.epochs_since_last_request(
                         *last_epoch_number,
                         recent_reported_epochs,
-                    )
-                    .map_err(|e| jsonrpc_error_to_error_object_owned(e))?;
+                    )?;
 
                 // rewind block to last valid
                 for _ in 0..reorg_len {
@@ -173,13 +166,11 @@ impl EthFilterApiServer for EthFilterApi {
                 ref filter,
                 include_pending: _,
             } => {
-                let (reorg_len, epochs) = self
-                    .inner
-                    .epochs_since_last_request(
+                let (reorg_len, epochs) =
+                    self.inner.epochs_since_last_request(
                         *last_epoch_number,
                         recent_reported_epochs,
-                    )
-                    .map_err(|e| jsonrpc_error_to_error_object_owned(e))?;
+                    )?;
 
                 let mut logs = vec![];
 
@@ -250,9 +241,7 @@ impl EthFilterApiServer for EthFilterApi {
 
         // retrieve logs
         Ok(limit_logs(
-            self.inner
-                .logs(filter)
-                .map_err(|e| jsonrpc_error_to_error_object_owned(e))?,
+            self.inner.logs(filter)?,
             self.inner.get_logs_filter_max_limit(),
         ))
     }

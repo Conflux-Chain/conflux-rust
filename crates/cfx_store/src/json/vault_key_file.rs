@@ -104,7 +104,7 @@ impl VaultKeyFile {
 
 impl VaultKeyMeta {
     pub fn load(bytes: &[u8]) -> Result<Self, serde_json::Error> {
-        serde_json::from_slice(&bytes)
+        serde_json::from_slice(bytes)
     }
 
     pub fn write(&self) -> Result<Vec<u8>, serde_json::Error> {

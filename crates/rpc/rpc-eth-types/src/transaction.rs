@@ -19,10 +19,8 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Bytes, SignedAuthorization};
-use cfx_types::{
-    cal_contract_address, CreateContractAddressType, H160, H256, H512, U256,
-    U64,
-};
+use cfx_rpc_cfx_types::Transaction as CfxTransaction;
+use cfx_types::{H160, H256, H512, U256, U64};
 use primitives::{
     transaction::eth_transaction::eip155_signature, AccessList, Action,
     SignedTransaction,
@@ -44,7 +42,7 @@ pub struct Transaction {
     /// Block hash
     pub block_hash: Option<H256>,
     /// Block number
-    pub block_number: Option<U256>,
+    pub block_number: Option<U64>,
     /// Transaction Index
     pub transaction_index: Option<U256>,
     /// Sender
@@ -101,7 +99,7 @@ impl Transaction {
     /// Convert `SignedTransaction` into RPC Transaction.
     pub fn from_signed(
         t: &SignedTransaction,
-        block_info: (Option<H256>, Option<U256>, Option<U256>),
+        block_info: (Option<H256>, Option<U64>, Option<U256>),
         exec_info: (Option<U64>, Option<H160>),
     ) -> Transaction {
         let signature = t.signature();
@@ -123,8 +121,8 @@ impl Transaction {
         // for phantom tx, it's r and s are set to 'tx.from', which lead some
         // txs r and s to 0 which is not valid in some ethereum tools,
         // so we set them to chain_id
-        let mut r: U256 = signature.r().into();
-        let mut s: U256 = signature.s().into();
+        let mut r: U256 = U256::from_big_endian(signature.r());
+        let mut s: U256 = U256::from_big_endian(signature.s());
         if r == U256::zero() || s == U256::zero() {
             let chain_id = t
                 .chain_id()
@@ -150,7 +148,9 @@ impl Transaction {
             gas: *t.gas(),
             input: Bytes::new(t.data().clone()),
             creates: exec_info.1,
-            raw: Some(Bytes::new(t.transaction.transaction.rlp_bytes())),
+            raw: Some(Bytes::new(
+                t.transaction.transaction.rlp_bytes().to_vec(),
+            )),
             public_key: t.public().map(Into::into),
             chain_id: t.chain_id().map(|x| U64::from(x as u64)),
             standard_v: Some(signature.v().into()),
@@ -174,18 +174,13 @@ impl Transaction {
     }
 
     pub fn deployed_contract_address(t: &SignedTransaction) -> Option<H160> {
-        match t.action() {
-            Action::Create => {
-                let (new_contract_address, _) = cal_contract_address(
-                    CreateContractAddressType::FromSenderNonce,
-                    0,
-                    &t.sender().address,
-                    t.nonce(),
-                    t.data(),
-                );
-                Some(new_contract_address)
-            }
-            Action::Call(_) => None,
-        }
+        t.cal_created_address().map(|t| t.address)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WrapTransaction {
+    NativeTransaction(CfxTransaction),
+    EthTransaction(Transaction),
 }

@@ -18,20 +18,10 @@
 //! the user needs to use the [`define_schema!`] macro to define the schema
 //! name, the types of key and value, and name of the column family.
 
-mod metrics;
 #[macro_use]
 pub mod schema;
 
-use crate::{
-    metrics::{
-        DIEM_SCHEMADB_BATCH_COMMIT_BYTES,
-        DIEM_SCHEMADB_BATCH_COMMIT_LATENCY_SECONDS, DIEM_SCHEMADB_DELETES,
-        DIEM_SCHEMADB_GET_BYTES, DIEM_SCHEMADB_GET_LATENCY_SECONDS,
-        DIEM_SCHEMADB_ITER_BYTES, DIEM_SCHEMADB_ITER_LATENCY_SECONDS,
-        DIEM_SCHEMADB_PUT_BYTES,
-    },
-    schema::{KeyCodec, Schema, SeekKeyCodec, ValueCodec},
-};
+use crate::schema::{KeyCodec, Schema, SeekKeyCodec, ValueCodec};
 use anyhow::{ensure, format_err, Result};
 use diem_logger::prelude::*;
 use rocksdb::Writable;
@@ -158,19 +148,12 @@ where S: Schema
     }
 
     fn next_impl(&mut self) -> Result<Option<(S::Key, S::Value)>> {
-        let _timer = DIEM_SCHEMADB_ITER_LATENCY_SECONDS
-            .with_label_values(&[S::COLUMN_FAMILY_NAME])
-            .start_timer();
-
         if !self.db_iter.valid().unwrap() {
             return Ok(None);
         }
 
         let raw_key = self.db_iter.key();
         let raw_value = self.db_iter.value();
-        DIEM_SCHEMADB_ITER_BYTES
-            .with_label_values(&[S::COLUMN_FAMILY_NAME])
-            .observe((raw_key.len() + raw_value.len()) as f64);
 
         let key = <S::Key as KeyCodec<S>>::decode_key(raw_key)?;
         let value = <S::Value as ValueCodec<S>>::decode_value(raw_value)?;
@@ -202,7 +185,6 @@ fn convert_rocksdb_err(msg: String) -> anyhow::Error {
 /// are typed according to [`Schema`]s.
 #[derive(Debug)]
 pub struct DB {
-    name: &'static str, // for logging
     inner: rocksdb::DB,
 }
 
@@ -296,17 +278,13 @@ impl DB {
 
     fn log_construct(name: &'static str, inner: rocksdb::DB) -> DB {
         diem_info!(rocksdb_name = name, "Opened RocksDB.");
-        DB { name, inner }
+        DB { inner }
     }
 
     /// Reads single record by key.
     pub fn get<S: Schema>(
         &self, schema_key: &S::Key,
     ) -> Result<Option<S::Value>> {
-        let _timer = DIEM_SCHEMADB_GET_LATENCY_SECONDS
-            .with_label_values(&[S::COLUMN_FAMILY_NAME])
-            .start_timer();
-
         let k = <S::Key as KeyCodec<S>>::encode_key(&schema_key)?;
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
 
@@ -314,9 +292,6 @@ impl DB {
             .inner
             .get_cf(cf_handle, &k)
             .map_err(convert_rocksdb_err)?;
-        DIEM_SCHEMADB_GET_BYTES
-            .with_label_values(&[S::COLUMN_FAMILY_NAME])
-            .observe(result.as_ref().map_or(0.0, |v| v.len() as f64));
 
         result
             .map(|raw_value| {
@@ -380,10 +355,6 @@ impl DB {
     pub fn write_schemas(
         &self, batch: SchemaBatch, fast_write: bool,
     ) -> Result<()> {
-        let _timer = DIEM_SCHEMADB_BATCH_COMMIT_LATENCY_SECONDS
-            .with_label_values(&[self.name])
-            .start_timer();
-
         let db_batch = rocksdb::WriteBatch::default();
         for (cf_name, rows) in &batch.rows {
             let cf_handle = self.get_cf_handle(cf_name)?;
@@ -398,7 +369,6 @@ impl DB {
                 }
             }
         }
-        let serialized_size = db_batch.data_size();
 
         let write_options = if fast_write {
             fast_write_options()
@@ -408,27 +378,6 @@ impl DB {
         self.inner
             .write_opt(&db_batch, &write_options)
             .map_err(convert_rocksdb_err)?;
-
-        // Bump counters only after DB write succeeds.
-        for (cf_name, rows) in &batch.rows {
-            for (key, write_op) in rows {
-                match write_op {
-                    WriteOp::Value(value) => {
-                        DIEM_SCHEMADB_PUT_BYTES
-                            .with_label_values(&[cf_name])
-                            .observe((key.len() + value.len()) as f64);
-                    }
-                    WriteOp::Deletion => {
-                        DIEM_SCHEMADB_DELETES
-                            .with_label_values(&[cf_name])
-                            .inc();
-                    }
-                }
-            }
-        }
-        DIEM_SCHEMADB_BATCH_COMMIT_BYTES
-            .with_label_values(&[self.name])
-            .observe(serialized_size as f64);
 
         Ok(())
     }

@@ -108,18 +108,28 @@ pub fn get_vote_power(
         block_number = current_block_number;
     }
 
-    let three_months_locked = state.locked_staking_balance_at_block_number(
-        &address,
-        block_number + MINED_BLOCK_COUNT_PER_QUARTER,
-    )?;
-    let six_months_locked = state.locked_staking_balance_at_block_number(
-        &address,
-        block_number + 2 * MINED_BLOCK_COUNT_PER_QUARTER,
-    )?;
-    let one_year_locked = state.locked_staking_balance_at_block_number(
-        &address,
-        block_number + 4 * MINED_BLOCK_COUNT_PER_QUARTER,
-    )?;
+    let three_months_block = block_number
+        .checked_add(MINED_BLOCK_COUNT_PER_QUARTER)
+        .ok_or_else(|| {
+            vm::Error::InternalContract("block number overflow".into())
+        })?;
+    let six_months_block = block_number
+        .checked_add(2 * MINED_BLOCK_COUNT_PER_QUARTER)
+        .ok_or_else(|| {
+            vm::Error::InternalContract("block number overflow".into())
+        })?;
+    let one_year_block = block_number
+        .checked_add(4 * MINED_BLOCK_COUNT_PER_QUARTER)
+        .ok_or_else(|| {
+            vm::Error::InternalContract("block number overflow".into())
+        })?;
+
+    let three_months_locked = state
+        .locked_staking_balance_at_block_number(&address, three_months_block)?;
+    let six_months_locked = state
+        .locked_staking_balance_at_block_number(&address, six_months_block)?;
+    let one_year_locked = state
+        .locked_staking_balance_at_block_number(&address, one_year_block)?;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━
     //              Remaining Committed Staking Time             ┃  Voting Power

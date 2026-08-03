@@ -10,7 +10,6 @@ use anyhow::ensure;
 use diem_crypto::hash::HashValue;
 use diem_types::validator_verifier::ValidatorVerifier;
 use serde::{Deserialize, Serialize};
-use short_hex_str::AsShortHexStr;
 use std::fmt;
 
 pub const MAX_BLOCKS_PER_REQUEST: u64 = 10;
@@ -113,7 +112,11 @@ impl fmt::Display for BlockRetrievalResponse {
                 )?;
 
                 f.debug_list()
-                    .entries(self.blocks.iter().map(|b| b.id().short_str()))
+                    .entries(
+                        self.blocks
+                            .iter()
+                            .map(|b| hex::encode(&b.id().as_ref()[..4])),
+                    )
                     .finish()?;
 
                 write!(f, "]")

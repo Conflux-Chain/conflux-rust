@@ -16,9 +16,7 @@ thiserror = "1.0.24"
 
 bcs = "0.1.2"
 diem-crypto = { workspace = true }
-diem-secure-net = { workspace = true }
 diem-types = { workspace = true }
-scratchpad = { workspace = true }
 storage-interface = { workspace = true }
 
 [features]

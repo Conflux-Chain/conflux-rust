@@ -230,7 +230,10 @@ impl ConsensusDB {
         self.commit(batch, true)
     }
 
-    /// Save staking events between two pivot decisions.
+    /// Read the cached staking events for the range `(parent_decision,
+    /// me_decision]`. Rows are written only by canonical (local-pivot)
+    /// execution, so saved rows are trusted; only the endpoints are checked
+    /// against the requested decisions.
     pub fn get_staking_events(
         &self, parent_decision: PivotBlockDecision,
         me_decision: PivotBlockDecision,
@@ -301,19 +304,6 @@ impl ConsensusDB {
             staking_events.len()
         );
         Ok(staking_events)
-    }
-
-    /// Delete all staking events before an PoW epoch number after we have
-    /// committed a PoS block that processes this PoW pivot decision.
-    pub fn delete_staking_events_before(
-        &self, committed_pow_epoch_number: u64,
-    ) -> Result<(), DbError> {
-        self.db
-            .range_delete::<StakingEventsSchema, u64>(
-                &0,
-                &committed_pow_epoch_number,
-            )
-            .map_err(|e| e.into())
     }
 }
 

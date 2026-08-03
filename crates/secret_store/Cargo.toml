@@ -11,3 +11,6 @@ parking_lot = { workspace = true }
 cfxkey = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 malloc_size_of= { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["malloc_size_of"]

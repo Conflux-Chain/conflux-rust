@@ -278,8 +278,7 @@ class TestNode:
         # Check that stderr is as expected
         self.stderr.seek(0)
         stderr = self.stderr.read().decode('utf-8').strip()
-        # TODO: Check how to avoid `pthread lock: Invalid argument`.
-        if stderr != expected_stderr and stderr != "pthread lock: Invalid argument" and "pthread_mutex_lock" not in stderr:
+        if stderr != expected_stderr:
             if self.return_code is None:
                 self.log.info("Process is still running")
             else:

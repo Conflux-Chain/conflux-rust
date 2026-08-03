@@ -5,10 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    persistent_safety_storage::PersistentSafetyStorage,
-    serializer::SerializerService, SafetyRules, TSafetyRules,
-};
+use crate::{persistent_safety_storage::PersistentSafetyStorage, SafetyRules};
 use consensus_types::{
     block::Block,
     common::{Payload, Round},
@@ -23,28 +20,27 @@ use diem_crypto::{
     hash::{CryptoHash, TransactionAccumulatorHasher},
     traits::SigningKey,
 };
-use diem_infallible::duration_since_epoch;
-use diem_secure_storage::{InMemoryStorage, Storage};
+use diem_secure_storage::OnDiskStorage;
 use diem_types::{
     block_info::BlockInfo,
-    epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
     on_chain_config::ValidatorSet,
     proof::AccumulatorExtensionProof,
     validator_info::ValidatorInfo,
     validator_signer::ValidatorSigner,
-    waypoint::Waypoint,
 };
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
+use tempfile::TempDir;
 
 pub type Proof = AccumulatorExtensionProof<TransactionAccumulatorHasher>;
 
 pub fn empty_proof() -> Proof { Proof::new(vec![], 0, vec![]) }
 
-pub fn make_genesis(
-    signer: &ValidatorSigner,
-) -> (EpochChangeProof, QuorumCert) {
+pub fn make_genesis(signer: &ValidatorSigner) -> (EpochState, QuorumCert) {
     let validator_info = ValidatorInfo::new_with_test_network_keys(
         signer.author(),
         signer.public_key(),
@@ -56,9 +52,11 @@ pub fn make_genesis(
     let block = Block::make_genesis_block_from_ledger_info(&li);
     let qc =
         QuorumCert::certificate_for_genesis_from_ledger_info(&li, block.id());
-    let lis = LedgerInfoWithSignatures::new(li, BTreeMap::new());
-    let proof = EpochChangeProof::new(vec![lis], false);
-    (proof, qc)
+    let epoch_state = li
+        .next_epoch_state()
+        .cloned()
+        .expect("Genesis LI must carry next_epoch_state");
+    (epoch_state, qc)
 }
 
 pub fn make_proposal_with_qc_and_proof(
@@ -70,7 +68,10 @@ pub fn make_proposal_with_qc_and_proof(
         Block::new_proposal(
             payload,
             round,
-            duration_since_epoch().as_secs(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("System time is before UNIX_EPOCH")
+                .as_secs(),
             qc,
             validator_signer,
         ),
@@ -228,45 +229,42 @@ pub fn validator_signers_to_ledger_info(
     LedgerInfo::mock_genesis(Some(validator_set))
 }
 
-pub fn validator_signers_to_waypoint(signers: &[&ValidatorSigner]) -> Waypoint {
-    let li = validator_signers_to_ledger_info(signers);
-    Waypoint::new_epoch_boundary(&li).unwrap()
-}
-
-pub fn test_storage(signer: &ValidatorSigner) -> PersistentSafetyStorage {
-    let waypoint = validator_signers_to_waypoint(&[signer]);
-    let storage = Storage::from(InMemoryStorage::new());
-    PersistentSafetyStorage::initialize(
-        storage,
+/// Returns a freshly initialized `PersistentSafetyStorage` plus the `TempDir`
+/// backing it. Callers must keep the `TempDir` alive for the storage's
+/// lifetime — when it drops, the on-disk file is removed.
+pub fn test_storage(
+    signer: &ValidatorSigner,
+) -> (TempDir, PersistentSafetyStorage) {
+    let dir = TempDir::new().unwrap();
+    let file_path = dir.path().join("storage.json");
+    let storage = PersistentSafetyStorage::initialize(
+        OnDiskStorage::new(file_path),
         signer.author(),
         signer.private_key().clone(),
-        waypoint,
         true,
-    )
+    );
+    (dir, storage)
 }
 
 /// Returns a safety rules instance for testing purposes.
-pub fn test_safety_rules() -> SafetyRules {
+pub fn test_safety_rules() -> (TempDir, SafetyRules) {
     let signer = ValidatorSigner::from_int(0);
-    let storage = test_storage(&signer);
-    let (epoch_change_proof, _) = make_genesis(&signer);
+    let (dir, storage) = test_storage(&signer);
+    let (epoch_state, _) = make_genesis(&signer);
 
     let mut safety_rules =
-        SafetyRules::new(storage, true, false, None, Default::default());
-    safety_rules.initialize(&epoch_change_proof).unwrap();
-    safety_rules
+        SafetyRules::new(storage, false, None, Default::default());
+    safety_rules.initialize(&epoch_state).unwrap();
+    (dir, safety_rules)
 }
 
 /// Returns a safety rules instance that has not been initialized for testing
 /// purposes.
-pub fn test_safety_rules_uninitialized() -> SafetyRules {
+pub fn test_safety_rules_uninitialized() -> (TempDir, SafetyRules) {
     let signer = ValidatorSigner::from_int(0);
-    let storage = test_storage(&signer);
-    SafetyRules::new(storage, true, false, None, Default::default())
-}
-
-/// Returns a simple serializer for testing purposes.
-pub fn test_serializer() -> SerializerService {
-    let safety_rules = test_safety_rules();
-    SerializerService::new(safety_rules)
+    let (dir, storage) = test_storage(&signer);
+    (
+        dir,
+        SafetyRules::new(storage, false, None, Default::default()),
+    )
 }

@@ -1,5 +1,5 @@
 use crate::{
-    executive::{contract_address, gas_required_for},
+    executive::gas_required_for,
     executive_observer::AddressPocket,
     internal_bail,
     stack::{
@@ -11,12 +11,13 @@ use crate::{
 use cfx_parameters::block::CROSS_SPACE_GAS_RATIO;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressSpaceUtil, Space, H256, U256,
+    address_util::AddressUtil, cal_contract_address_with_space, Address,
+    AddressSpaceUtil, CreateContractAddressType, Space, H256, U256,
 };
 use cfx_vm_interpreter::Finalize;
 use cfx_vm_types::{
-    self as vm, ActionParams, ActionValue, CallType, Context as _,
-    CreateContractAddress, CreateType, GasLeft, ParamsType, Spec,
+    self as vm, ActionParams, ActionValue, CallType, Context as _, CreateType,
+    GasLeft, ParamsType, Spec,
 };
 use solidity_abi::ABIEncodable;
 use std::{marker::PhantomData, sync::Arc};
@@ -269,8 +270,15 @@ pub fn call_to_evmcore(
 
     let address = receiver.with_evm_space();
 
-    let code = context.state.code(&address)?;
-    let code_hash = context.state.code_hash(&address)?;
+    let (code, code_hash) = if context.spec.cip175 {
+        // CIP-175: resolve EIP-7702 delegation as an in-space call does.
+        context.state.code_with_hash_on_call(&address)?
+    } else {
+        (
+            context.state.code(&address)?,
+            context.state.code_hash(&address)?,
+        )
+    };
 
     let next_params = ActionParams {
         space: Space::Ethereum,
@@ -347,15 +355,17 @@ pub fn create_to_evmcore(
     );
 
     let (address_scheme, create_type) = match salt {
-        None => (CreateContractAddress::FromSenderNonce, CreateType::CREATE),
+        None => (
+            CreateContractAddressType::FromSenderNonce,
+            CreateType::CREATE,
+        ),
         Some(salt) => (
-            CreateContractAddress::FromSenderSaltAndCodeHash(salt),
+            CreateContractAddressType::FromSenderSaltAndCodeHash(salt),
             CreateType::CREATE2,
         ),
     };
-    let (address_with_space, code_hash) = contract_address(
+    let (address_with_space, code_hash) = cal_contract_address_with_space(
         address_scheme,
-        context.env.number.into(),
         &mapped_sender,
         &context.state.nonce(&mapped_sender)?,
         &init,

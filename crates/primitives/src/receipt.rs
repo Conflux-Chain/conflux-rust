@@ -6,6 +6,7 @@ use crate::log_entry::LogEntry;
 use cfx_types::{Address, Bloom, Space, U256, U64};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_compat::StrictBool;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 pub const TRANSACTION_OUTCOME_SUCCESS: u8 = 0;
@@ -16,15 +17,16 @@ pub const EVM_SPACE_FAIL: u8 = 0;
 pub const EVM_SPACE_SUCCESS: u8 = 1;
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TransactionStatus {
+    #[default]
     Success = 0,
     Failure = 1,
     Skipped = 2,
 }
 
 impl TransactionStatus {
-    fn into_u8(&self) -> u8 {
+    fn as_u8(&self) -> u8 {
         match self {
             TransactionStatus::Success => 0,
             TransactionStatus::Failure => 1,
@@ -35,7 +37,7 @@ impl TransactionStatus {
 
 impl Encodable for TransactionStatus {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.append_internal(&self.into_u8());
+        s.append_internal(&self.as_u8());
     }
 }
 
@@ -48,10 +50,6 @@ impl Decodable for TransactionStatus {
             _ => Err(DecoderError::Custom("Unrecognized outcome status")),
         }
     }
-}
-
-impl Default for TransactionStatus {
-    fn default() -> Self { TransactionStatus::Success }
 }
 
 impl TransactionStatus {
@@ -119,11 +117,11 @@ impl Encodable for Receipt {
         s.begin_list(length)
             .append(&self.accumulated_gas_used)
             .append(&self.gas_fee)
-            .append(&self.gas_sponsor_paid)
+            .append(&StrictBool(self.gas_sponsor_paid))
             .append(&self.log_bloom)
             .append_list(&self.logs)
             .append(&self.outcome_status)
-            .append(&self.storage_sponsor_paid)
+            .append(&StrictBool(self.storage_sponsor_paid))
             .append_list(&self.storage_collateralized)
             .append_list(&self.storage_released);
         if let Some(burnt_gas_fee) = self.burnt_gas_fee {
@@ -141,11 +139,11 @@ impl Decodable for Receipt {
         Ok(Receipt {
             accumulated_gas_used: rlp.val_at(0)?,
             gas_fee: rlp.val_at(1)?,
-            gas_sponsor_paid: rlp.val_at(2)?,
+            gas_sponsor_paid: rlp.val_at::<StrictBool>(2)?.0,
             log_bloom: rlp.val_at(3)?,
             logs: rlp.list_at(4)?,
             outcome_status: rlp.val_at(5)?,
-            storage_sponsor_paid: rlp.val_at(6)?,
+            storage_sponsor_paid: rlp.val_at::<StrictBool>(6)?.0,
             storage_collateralized: rlp.list_at(7)?,
             storage_released: rlp.list_at(8)?,
             burnt_gas_fee: if item_count == 9 {
@@ -158,6 +156,7 @@ impl Decodable for Receipt {
 }
 
 impl Receipt {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         outcome: TransactionStatus, accumulated_gas_used: U256, gas_fee: U256,
         gas_sponsor_paid: bool, logs: Vec<LogEntry>, log_bloom: Bloom,

@@ -72,7 +72,7 @@ impl StateTestCmd {
             }
 
             let (success_cnt, skipped_cnt, transact_cnt, errors) =
-                match SuiteTester::load(&path, self.config.clone()) {
+                match SuiteTester::load(&path, self.config.clone(), self.json) {
                     Ok(tester) => tester.run(self.matches.as_deref()),
                     Err(err_msg) => {
                         warn!(
@@ -119,11 +119,12 @@ struct SuiteTester {
     path: String,
     suite: StateTestSuite,
     config: Arc<Configuration>,
+    print_trace: bool,
 }
 
 impl SuiteTester {
     pub fn load(
-        path: &PathBuf, config: Arc<Configuration>,
+        path: &PathBuf, config: Arc<Configuration>, print_trace: bool,
     ) -> Result<Self, String> {
         let s = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
         let suite: StateTestSuite =
@@ -134,6 +135,7 @@ impl SuiteTester {
             path,
             suite,
             config,
+            print_trace,
         })
     }
 
@@ -151,8 +153,13 @@ impl SuiteTester {
         let mut skipped_cnt = 0;
         let mut transact_cnt = 0;
         for (name, unit) in self.suite.0 {
-            let unit_tester =
-                UnitTester::new(&self.path, name, unit, self.config.clone());
+            let unit_tester = UnitTester::new(
+                &self.path,
+                name,
+                unit,
+                self.config.clone(),
+                self.print_trace,
+            );
             match unit_tester.run(matches) {
                 Ok(cnt) => {
                     transact_cnt += cnt;

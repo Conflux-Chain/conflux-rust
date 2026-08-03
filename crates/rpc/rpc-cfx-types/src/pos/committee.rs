@@ -5,14 +5,14 @@ use diem_types::{
 };
 use serde::Serialize;
 
-#[derive(Debug, Serialize, Default)]
+#[derive(Debug, Serialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CommitteeState {
     pub current_committee: RpcCommittee,
     pub elections: Vec<RpcTermData>,
 }
 
-#[derive(Debug, Serialize, Default)]
+#[derive(Debug, Serialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcCommittee {
     pub epoch_number: U64,
@@ -41,7 +41,7 @@ impl RpcCommittee {
     }
 }
 
-#[derive(Debug, Serialize, Default)]
+#[derive(Debug, Serialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcTermData {
     pub start_block_number: U64,
@@ -78,7 +78,7 @@ impl From<&TermData> for RpcTermData {
     }
 }
 
-#[derive(Debug, Serialize, Default)]
+#[derive(Debug, Serialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeVotingPower {
     pub address: H256,

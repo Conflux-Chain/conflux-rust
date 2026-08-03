@@ -6,7 +6,7 @@ use super::super::RpcAddress;
 use cfx_types::{H256, U256};
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Reward {
     //
@@ -17,7 +17,7 @@ pub struct Reward {
     pub reward: U256,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PoSEpochReward {
     //

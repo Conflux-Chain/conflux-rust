@@ -3,6 +3,7 @@ use cfx_statedb::Result as DbResult;
 use cfx_types::{AddressSpaceUtil, AddressWithSpace, Space, H256};
 use cfx_vm_types::ActionParams;
 use primitives::AccessListItem;
+use std::collections::{HashMap, HashSet};
 
 use super::State;
 
@@ -41,18 +42,38 @@ impl State {
         account.contains(key)
     }
 
+    /// Pre-warms the addresses and storage keys carried by the transaction's
+    /// access list.
+    ///
+    /// EIP-2930 permits the same address to appear in more than one entry, in
+    /// which case the warmed storage keys are the union over all of its
+    /// entries. Before CIP-176 a later entry replaced the storage keys
+    /// recorded by an earlier one, leaving the earlier keys cold even though
+    /// the transaction was charged for them.
     pub fn set_tx_access_list(
-        &mut self, space: Space, access_list: &[AccessListItem],
+        &mut self, space: Space, access_list: &[AccessListItem], cip176: bool,
     ) {
-        let access_list = access_list
-            .iter()
-            .map(|x| {
-                (
-                    x.address.with_space(space),
-                    x.storage_keys.iter().cloned().collect(),
-                )
-            })
-            .collect();
+        let access_list = if cip176 {
+            let mut warmed: HashMap<AddressWithSpace, HashSet<H256>> =
+                HashMap::new();
+            for x in access_list {
+                warmed
+                    .entry(x.address.with_space(space))
+                    .or_default()
+                    .extend(x.storage_keys.iter().cloned());
+            }
+            warmed
+        } else {
+            access_list
+                .iter()
+                .map(|x| {
+                    (
+                        x.address.with_space(space),
+                        x.storage_keys.iter().cloned().collect(),
+                    )
+                })
+                .collect()
+        };
 
         self.tx_access_list = Some(access_list);
     }

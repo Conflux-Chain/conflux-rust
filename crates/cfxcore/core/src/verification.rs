@@ -22,7 +22,6 @@ use cfx_types::{
     H256, U256,
 };
 use cfx_vm_types::{ConsensusGasSpec, Spec};
-use log::debug;
 use primitives::{
     block::BlockHeight,
     block_header::compute_next_price_tuple,
@@ -85,7 +84,7 @@ fn block_receipts_trie(block_receipts: &Vec<Receipt>) -> SimpleMpt {
     make_simple_mpt(
         block_receipts
             .iter()
-            .map(|receipt| receipt.rlp_bytes().into_boxed_slice())
+            .map(|receipt| receipt.rlp_bytes().to_vec().into_boxed_slice())
             .collect(),
     )
 }
@@ -342,7 +341,7 @@ impl VerificationConfig {
         &self, pow: &PowComputer, header: &mut BlockHeader,
     ) -> Result<(), Error> {
         // Check header custom data length
-        let custom_len = header.custom().iter().fold(0, |acc, x| acc + x.len());
+        let custom_len = header.custom_data_len();
         if custom_len > HEADER_CUSTOM_LENGTH_BOUND {
             return Err(From::from(BlockError::TooLongCustomInHeader(
                 OutOfBounds {
@@ -383,16 +382,17 @@ impl VerificationConfig {
         {
             for (i, expected_bytes) in expected_custom_prefix.iter().enumerate()
             {
-                let header_custum = header.custom();
-                // Header custom is too short.
-                let b =
-                    header_custum.get(i).ok_or(BlockError::InvalidCustom(
-                        header_custum.clone(),
-                        expected_custom_prefix.clone(),
-                    ))?;
-                if b != expected_bytes {
+                // `None` => header custom too short; else prefix mismatch.
+                let matches =
+                    header.custom_item(i).is_some_and(|b| &b == expected_bytes);
+                if !matches {
+                    // Bound the error to the compared prefix; the header may
+                    // carry a huge number of items.
+                    let header_prefix = (0..expected_custom_prefix.len())
+                        .filter_map(|j| header.custom_item(j))
+                        .collect();
                     return Err(BlockError::InvalidCustom(
-                        header_custum.clone(),
+                        header_prefix,
                         expected_custom_prefix.clone(),
                     )
                     .into());
@@ -498,7 +498,16 @@ impl VerificationConfig {
     ) -> Result<(), Error> {
         let mut total_gas: SpaceMap<U256> = SpaceMap::default();
         for t in &block.transactions {
-            total_gas[t.space()] += *t.gas_limit();
+            // gas_limit is unbounded on this path, so the per-space sum can
+            // exceed U256; a bare `+=` would panic instead of rejecting.
+            let acc = &mut total_gas[t.space()];
+            *acc = acc.checked_add(*t.gas_limit()).ok_or_else(|| {
+                BlockError::InvalidPackedGasLimit(OutOfBounds {
+                    min: None,
+                    max: Some(*block.block_header.gas_limit()),
+                    found: U256::MAX,
+                })
+            })?;
         }
 
         if block.block_header.height()
@@ -525,7 +534,17 @@ impl VerificationConfig {
             };
 
         let evm_total_gas = total_gas[Space::Ethereum];
-        let block_total_gas = total_gas.map_sum(|x| *x);
+        // native + evm can exceed U256 even when each fits; avoid a
+        // panicking sum.
+        let block_total_gas = total_gas[Space::Native]
+            .checked_add(total_gas[Space::Ethereum])
+            .ok_or_else(|| {
+                BlockError::InvalidPackedGasLimit(OutOfBounds {
+                    min: None,
+                    max: Some(*block.block_header.gas_limit()),
+                    found: U256::MAX,
+                })
+            })?;
 
         if evm_total_gas > evm_space_gas_limit {
             return Err(From::from(BlockError::InvalidPackedGasLimit(
@@ -675,7 +694,7 @@ impl VerificationConfig {
             spec,
             |mode: &VerifyTxMode| {
                 if !Self::check_eip1559_transaction(tx, cip1559, mode) {
-                    debug!(
+                    trace!(
                         "fast_recheck: EIP-1559 transaction check failed at height {} txhash={:?}",
                         height,
                         tx.hash()
@@ -684,7 +703,7 @@ impl VerificationConfig {
                 }
 
                 if !Self::check_eip7702_transaction(tx, cip7702, mode) {
-                    debug!(
+                    trace!(
                         "fast_recheck: EIP-7702 transaction check failed at height {} txhash={:?}",
                         height,
                         tx.hash()
@@ -693,7 +712,7 @@ impl VerificationConfig {
                 }
 
                 if !Self::check_eip3860(tx, cip645) {
-                    debug!(
+                    trace!(
                         "fast_recheck: EIP-3860 transaction check failed at height {} txhash={:?}",
                         height,
                         tx.hash()
@@ -785,6 +804,7 @@ impl VerificationConfig {
         let cip7702 = height >= transitions.cip7702;
         let cip645 = height >= transitions.cip645;
         let eip7623 = height >= transitions.eip7623;
+        let cip172 = height >= transitions.cip172;
 
         if let Transaction::Native(ref tx) = tx.unsigned {
             Self::verify_transaction_epoch_height(
@@ -828,7 +848,30 @@ impl VerificationConfig {
 
         Self::check_gas_limit(tx, cip76, eip7623, &mode)?;
         Self::check_gas_limit_with_calldata(tx, cip130)?;
+        Self::check_canonical_rlp(tx, cip172, &mode)?;
 
+        Ok(())
+    }
+
+    /// A non-canonical encoding hashes to a value the canonical re-encoding
+    /// won't reproduce, so packing one orphans the block. Local (mempool /
+    /// packing / RPC) rejects it outright; as a block-validity rule this is a
+    /// consensus change, so Remote only rejects at/after the gate height.
+    fn check_canonical_rlp(
+        tx: &TransactionWithSignature, cip172: bool, mode: &VerifyTxMode,
+    ) -> Result<(), TransactionError> {
+        if tx.is_canonical_rlp() {
+            return Ok(());
+        }
+        let rejected = match mode {
+            VerifyTxMode::Local(..) => true,
+            VerifyTxMode::Remote(_) => cip172,
+        };
+        if rejected {
+            bail!(TransactionError::InvalidRlp(
+                "non-canonical transaction RLP encoding".into()
+            ));
+        }
         Ok(())
     }
 
@@ -1087,5 +1130,78 @@ mod tests {
         let deserialized: EpochReceiptProof =
             serde_json::from_str(&serialized).unwrap();
         assert_eq!(epoch_proof, deserialized);
+    }
+
+    // A miner can pack transactions whose gas_limit values sum past U256; the
+    // summation used to panic instead of rejecting the block.
+    #[test]
+    fn packed_gas_sum_overflow_is_rejected() {
+        use crate::{
+            core_error::{BlockError, CoreError as Error},
+            verification::{compute_transaction_root, VerificationConfig},
+        };
+        use cfx_executor::{
+            machine::{Machine, VmFactory},
+            spec::CommonParams,
+        };
+        use cfx_types::U256;
+        use cfxkey::{Generator, Random};
+        use primitives::{
+            transaction::native_transaction::{
+                NativeTransaction, TypedNativeTransaction,
+            },
+            Action, Block, BlockHeaderBuilder, Transaction,
+        };
+        use std::sync::Arc;
+
+        let params = CommonParams::default();
+        let chain_id = params.chain_id.read().get_chain_id(1);
+        let machine =
+            Arc::new(Machine::new_with_builtin(params, VmFactory::new(1024)));
+        let config = VerificationConfig::new(
+            false,
+            200,
+            200 * 1024,
+            100_000,
+            128,
+            u64::MAX,
+            machine,
+        );
+
+        let keypair = Random.generate().unwrap();
+        let tx = |nonce: u64| {
+            Arc::new(
+                Transaction::Native(TypedNativeTransaction::Cip155(
+                    NativeTransaction {
+                        nonce: nonce.into(),
+                        gas_price: U256::one(),
+                        // 2^255; two of these sum to 2^256.
+                        gas: U256::one() << 255,
+                        action: Action::Create,
+                        value: U256::zero(),
+                        storage_limit: 0,
+                        epoch_height: 1,
+                        chain_id: chain_id.in_native_space(),
+                        data: vec![],
+                    },
+                ))
+                .sign(keypair.secret()),
+            )
+        };
+        let txs = vec![tx(0), tx(1)];
+
+        let parent = BlockHeaderBuilder::new().with_height(0).build();
+        let header = BlockHeaderBuilder::new()
+            .with_height(1)
+            .with_parent_hash(parent.hash())
+            .with_transactions_root(compute_transaction_root(&txs))
+            .with_gas_limit(30_000_000.into())
+            .build();
+        let block = Block::new(header, txs);
+
+        assert!(matches!(
+            config.verify_sync_graph_ready_block(&block, &parent),
+            Err(Error::Block(BlockError::InvalidPackedGasLimit(_))),
+        ));
     }
 }

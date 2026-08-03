@@ -41,6 +41,7 @@ pub struct BlockGenerator {
 }
 
 impl BlockGenerator {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         graph: SharedSynchronizationGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService,
@@ -98,7 +99,7 @@ impl BlockGenerator {
 
         let (miner, solution_rx) = miner::spawn(self.clone(), miner_type);
 
-        MiningSession::new(&*self, &*miner, solution_rx).run();
+        MiningSession::new(self, &*miner, solution_rx).run();
     }
 }
 

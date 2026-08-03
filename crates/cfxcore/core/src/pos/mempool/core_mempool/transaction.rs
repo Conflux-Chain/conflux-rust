@@ -7,8 +7,7 @@
 
 use diem_crypto::HashValue;
 use diem_types::{
-    account_address::AccountAddress,
-    transaction::{GovernanceRole, SignedTransaction},
+    account_address::AccountAddress, transaction::SignedTransaction,
 };
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -19,22 +18,18 @@ pub struct MempoolTransaction {
     // System expiration time of the transaction. It should be removed from
     // mempool by that time.
     pub expiration_time: Duration,
-    pub ranking_score: u64,
     pub timeline_state: TimelineState,
-    pub governance_role: GovernanceRole,
 }
 
 impl MempoolTransaction {
     pub(crate) fn new(
-        txn: SignedTransaction, expiration_time: Duration, ranking_score: u64,
-        timeline_state: TimelineState, governance_role: GovernanceRole,
+        txn: SignedTransaction, expiration_time: Duration,
+        timeline_state: TimelineState,
     ) -> Self {
         Self {
             txn,
-            ranking_score,
             expiration_time,
             timeline_state,
-            governance_role,
         }
     }
 

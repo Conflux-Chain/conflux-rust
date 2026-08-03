@@ -1,70 +1,65 @@
 use diem_types::{
     term_state::PosState,
     transaction::{
-        authenticator::TransactionAuthenticator, GovernanceRole,
-        SignedTransaction, TransactionPayload, VMValidatorResult,
+        authenticator::TransactionAuthenticator, SignedTransaction,
+        TransactionPayload,
     },
 };
 use move_core_types::vm_status::DiscardedVMStatus;
-use std::sync::Arc;
 
 pub struct TransactionValidator {}
 
 impl TransactionValidator {
     pub fn new() -> Self { Self {} }
 
-    // TODO: `score` and `governance_role` in `VMValidatorResult` are not
-    // needed now.
+    /// Returns `None` if the transaction is accepted, or a
+    /// `DiscardedVMStatus` describing why it should be rejected.
     pub fn validate_transaction(
-        &self, tx: &SignedTransaction, pos_state: Arc<PosState>,
-    ) -> Option<VMValidatorResult> {
-        // This check is cheaper than signature verification, so we do not
-        // need to verify signatures for old transactions.
+        &self, tx: &SignedTransaction, pos_state: &PosState,
+    ) -> Option<DiscardedVMStatus> {
+        let authenticator = tx.authenticator();
+        let auth_pk = match &authenticator {
+            TransactionAuthenticator::BLS { public_key, .. } => public_key,
+            _ => return Some(DiscardedVMStatus::INVALID_SIGNATURE),
+        };
+
+        let sender = tx.sender();
         let result = match tx.payload() {
-            TransactionPayload::Election(election_payload) => {
-                pos_state.validate_election_simple(election_payload)
+            TransactionPayload::Election(election_payload) => pos_state
+                .validate_election_simple(&sender, auth_pk, election_payload),
+            TransactionPayload::PivotDecision(pivot_decision) => pos_state
+                .validate_pivot_decision_simple(
+                    &sender,
+                    auth_pk,
+                    pivot_decision,
+                ),
+            TransactionPayload::Dispute(_) => {
+                pos_state.validate_dispute_simple(&sender, auth_pk)
             }
-            TransactionPayload::PivotDecision(pivot_decision) => {
-                pos_state.validate_pivot_decision_simple(pivot_decision)
+            TransactionPayload::Register(_)
+            | TransactionPayload::Retire(_)
+            | TransactionPayload::UpdateVotingPower(_) => {
+                return Some(
+                    DiscardedVMStatus::PAYLOAD_NOT_ALLOWED_VIA_MEMPOOL,
+                );
             }
             _ => None,
         };
         if result.is_some() {
-            return Some(VMValidatorResult::new(
-                result,
-                0,
-                GovernanceRole::Validator,
-            ));
+            return result;
         }
 
-        match tx.authenticator() {
-            TransactionAuthenticator::BLS { .. } => {}
-            _ => {
-                return Some(VMValidatorResult::new(
-                    Some(DiscardedVMStatus::INVALID_SIGNATURE),
-                    0,
-                    GovernanceRole::Validator,
-                ));
-            }
-        }
-
-        // check signature
-        if tx.clone().check_signature().is_err() {
-            return Some(VMValidatorResult::new(
-                Some(DiscardedVMStatus::INVALID_SIGNATURE),
-                0,
-                GovernanceRole::Validator,
-            ));
-        }
-
+        // PoS transactions never expire; `expiration_timestamp_secs` must be
+        // u64::MAX. Reject any other value before paying for signature
+        // verification.
         if tx.expiration_timestamp_secs() != u64::MAX {
-            return Some(VMValidatorResult::new(
-                Some(DiscardedVMStatus::INVALID_EXPIRATION_TIME),
-                0,
-                GovernanceRole::Validator,
-            ))
+            return Some(DiscardedVMStatus::INVALID_EXPIRATION_TIME);
         }
 
-        Some(VMValidatorResult::new(result, 0, GovernanceRole::Validator))
+        if tx.verify_signature().is_err() {
+            return Some(DiscardedVMStatus::INVALID_SIGNATURE);
+        }
+
+        None
     }
 }

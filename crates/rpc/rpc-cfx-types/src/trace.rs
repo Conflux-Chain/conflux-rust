@@ -274,7 +274,7 @@ impl SelfDestructAction {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalizedBlockTrace {
     pub transaction_traces: Vec<LocalizedTransactionTrace>,
@@ -286,7 +286,7 @@ pub struct LocalizedBlockTrace {
     pub block_hash: H256,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalizedTransactionTrace {
     pub traces: Vec<Trace>,
@@ -296,7 +296,7 @@ pub struct LocalizedTransactionTrace {
     pub transaction_hash: H256,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Trace {
     pub action: Action,
     pub valid: bool,
@@ -343,7 +343,7 @@ impl Serialize for Trace {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalizedTrace {
     #[serde(flatten)]

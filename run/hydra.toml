@@ -594,3 +594,5 @@ hydra_transition_number = 92060600
 hydra_transition_height = 36935000
 cip43_init_end_number = 92751800
 pos_reference_enable_height = 37400000
+
+use_isolated_db_for_mpt_table = true

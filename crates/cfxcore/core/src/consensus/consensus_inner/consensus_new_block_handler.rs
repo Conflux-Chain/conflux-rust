@@ -537,8 +537,9 @@ impl ConsensusNewBlockHandler {
         {
             candidate = blockset.clone();
             let mut p = parent;
-            while p != NULL && inner.arena[p].data.partial_invalid
-                || inner.arena[p].data.pending
+            while p != NULL
+                && (inner.arena[p].data.partial_invalid
+                    || inner.arena[p].data.pending)
             {
                 let blockset_p = inner
                     .exchange_or_compute_blockset_in_own_view_of_epoch(p, None);
@@ -1617,8 +1618,8 @@ impl ConsensusNewBlockHandler {
             } else {
                 confirmed_height -= DEFERRED_STATE_EPOCH_COUNT;
             }
-            // We can not assume that confirmed epoch are already executed,
-            // but we can assume that the deferred block are executed.
+            confirmed_height =
+                inner.confirmed_height_for_state_maintenance(confirmed_height);
             self.data_man
                 .storage_manager
                 .get_storage_manager()
@@ -2095,6 +2096,10 @@ impl ConsensusNewBlockHandler {
                     } else {
                         confirmed_height -= DEFERRED_STATE_EPOCH_COUNT;
                     }
+                    confirmed_height = inner
+                        .confirmed_height_for_state_maintenance(
+                            confirmed_height,
+                        );
 
                     self.data_man
                         .storage_manager

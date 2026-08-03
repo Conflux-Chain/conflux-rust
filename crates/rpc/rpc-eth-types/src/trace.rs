@@ -1,3 +1,5 @@
+pub use alloy_rpc_types_trace::parity::TraceType;
+use alloy_rpc_types_trace::parity::{StateDiff, VmTrace};
 use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
 use cfx_parity_trace_types::{
     Action as VmAction, Outcome, SetAuth as VmSetAuth,
@@ -8,15 +10,16 @@ use cfx_rpc_cfx_types::{
     RpcAddress,
 };
 use cfx_rpc_primitives::Bytes;
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::internal_error;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use cfx_util_macros::bail;
 use cfx_vm_types::{CallType, CreateType};
-use jsonrpc_core::Error as JsonRpcError;
+use jsonrpsee::types::ErrorObjectOwned;
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use std::{collections::HashMap, convert::TryFrom, fmt};
 
 /// Create response
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Create {
     /// Sender
@@ -32,7 +35,7 @@ pub struct Create {
 }
 
 /// Call response
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Call {
     /// Sender
@@ -50,7 +53,9 @@ pub struct Call {
 }
 
 /// Represents a _selfdestruct_ action fka `suicide`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct SelfDestructAction {
     /// destroyed/suicided address.
@@ -62,7 +67,7 @@ pub struct SelfDestructAction {
 }
 
 /// Action
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     /// Call
     Call(Call),
@@ -71,6 +76,10 @@ pub enum Action {
     /// SelfDestruct
     SelfDestruct(SelfDestructAction),
     /* TODO: Support Reward */
+}
+
+impl Default for Action {
+    fn default() -> Self { Action::Call(Default::default()) }
 }
 
 impl Action {
@@ -118,7 +127,7 @@ impl TryFrom<VmAction> for Action {
 }
 
 /// Call Result
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CallResult {
     /// Gas used
@@ -128,7 +137,7 @@ pub struct CallResult {
 }
 
 /// Craete Result
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateResult {
     /// Gas used
@@ -140,13 +149,14 @@ pub struct CreateResult {
 }
 
 /// Response
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum ActionResult {
     /// Call
     Call(CallResult),
     /// Create
     Create(CreateResult),
     /// None
+    #[default]
     None,
 }
 
@@ -228,10 +238,10 @@ impl Serialize for LocalizedTrace {
 impl LocalizedTrace {
     pub fn set_result(
         &mut self, result: Option<VmAction>,
-    ) -> Result<(), JsonRpcError> {
+    ) -> Result<(), ErrorObjectOwned> {
         if !matches!(self.result, ActionResult::None) {
             // One action matches exactly one result.
-            bail!(JsonRpcError::internal_error());
+            bail!(internal_error());
         }
         if result.is_none() {
             // If the result is None, it means the action has no result.
@@ -242,7 +252,7 @@ impl LocalizedTrace {
         match result {
             VmAction::CallResult(call_result) => {
                 if !matches!(self.action, Action::Call(_)) {
-                    bail!(JsonRpcError::internal_error());
+                    bail!(internal_error());
                 }
                 let gas =
                     self.action.gas().expect("call action should have gas");
@@ -266,7 +276,7 @@ impl LocalizedTrace {
             }
             VmAction::CreateResult(create_result) => {
                 if !matches!(self.action, Action::Create(_)) {
-                    bail!(JsonRpcError::internal_error());
+                    bail!(internal_error());
                 }
                 // FIXME(lpl): Check if `return_data` is `code`.
                 let gas =
@@ -290,15 +300,15 @@ impl LocalizedTrace {
                     _ => {}
                 }
             }
-            _ => bail!(JsonRpcError::internal_error()),
+            _ => bail!(internal_error()),
         }
         Ok(())
     }
 }
 
 /// Trace
-#[derive(Debug)]
-pub struct Trace {
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TransactionTrace {
     /// Trace address
     trace_address: Vec<usize>,
     /// Subtraces
@@ -311,7 +321,31 @@ pub struct Trace {
     error: Option<String>,
 }
 
-impl Serialize for Trace {
+impl From<LocalizedTrace> for TransactionTrace {
+    fn from(local_trace: LocalizedTrace) -> Self {
+        let LocalizedTrace {
+            action,
+            result,
+            error,
+            trace_address,
+            subtraces,
+            transaction_position: _,
+            transaction_hash: _,
+            block_number: _,
+            block_hash: _,
+            valid: _,
+        } = local_trace;
+        TransactionTrace {
+            action,
+            result,
+            error,
+            subtraces,
+            trace_address,
+        }
+    }
+}
+
+impl Serialize for TransactionTrace {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         let mut struc = serializer.serialize_struct("Trace", 4)?;
@@ -351,6 +385,21 @@ impl Serialize for Trace {
 
         struc.end()
     }
+}
+
+/// The Outcome of a traced transaction with optional settings
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TraceResults {
+    /// Output of the trace
+    pub output: Bytes,
+    /// Enabled if [TraceType::StateDiff] is provided
+    pub state_diff: Option<StateDiff>,
+    /// Enabled if [TraceType::Trace] is provided, otherwise an empty vec
+    #[serde(default)]
+    pub trace: Vec<TransactionTrace>,
+    /// Enabled if [TraceType::VmTrace] is provided
+    pub vm_trace: Option<VmTrace>,
 }
 
 #[derive(Debug, Clone)]
@@ -425,7 +474,7 @@ impl LocalizedSetAuthTrace {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct EpochTrace {
     cfx_traces: Vec<CfxLocalizedTrace>,

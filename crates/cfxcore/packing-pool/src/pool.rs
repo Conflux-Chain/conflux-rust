@@ -11,7 +11,7 @@ use super::{
     transaction::PackingPoolTransaction, treapmap_config::PackingPoolMap,
 };
 use cfx_types::U256;
-use log::debug;
+use log::trace;
 use malloc_size_of::MallocSizeOf;
 use primitives::block_header::{compute_next_price, estimate_max_possible_gas};
 use rand::RngCore;
@@ -77,17 +77,18 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             self.treap_map.update(&sender, update, insert).unwrap();
         match &outcome {
             Ok(()) => {
-                debug!("packing_pool::insert success hash={:?}", tx_hash);
+                trace!("packing_pool::insert success hash={:?}", tx_hash);
             }
             Err(e) => {
-                debug!(
+                trace!(
                     "packing_pool::insert failed hash={:?} err={:?}",
-                    tx_hash, e
+                    tx_hash,
+                    e
                 );
             }
         }
         for tx in &replaced {
-            debug!("packing_pool::insert evicted hash={:?}", tx.hash());
+            trace!("packing_pool::insert evicted hash={:?}", tx.hash());
         }
         (replaced, outcome)
     }
@@ -97,7 +98,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
         let sender = packing_batch.sender();
         let packing_batch_clone = packing_batch.clone();
         for tx in &packing_batch_clone.txs {
-            debug!("packing_pool::replace incoming hash={:?}", tx.hash());
+            trace!("packing_pool::replace incoming hash={:?}", tx.hash());
         }
 
         let update = move |node: &mut Node<PackingPoolMap<TX>>| -> Result<_, Infallible> {
@@ -116,13 +117,13 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
 
         let evicted = self.treap_map.update(&sender, update, insert).unwrap();
         for tx in &evicted {
-            debug!("packing_pool::replace evicted hash={:?}", tx.hash());
+            trace!("packing_pool::replace evicted hash={:?}", tx.hash());
         }
         evicted
     }
 
     pub fn remove(&mut self, sender: TX::Sender) -> Vec<TX> {
-        debug!("packing_pool::remove sender={:?}", sender);
+        trace!("packing_pool::remove sender={:?}", sender);
         self.split_off_suffix(sender, &U256::zero())
     }
 
@@ -142,9 +143,11 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
         &mut self, sender: TX::Sender, start_nonce: &U256, keep_prefix: bool,
     ) -> Vec<TX> {
         let config = &self.config;
-        debug!(
+        trace!(
             "packing_pool::split_off sender={:?} start_nonce={} keep_prefix={}",
-            sender, start_nonce, keep_prefix
+            sender,
+            start_nonce,
+            keep_prefix
         );
         let update = move |node: &mut Node<PackingPoolMap<TX>>| {
             let old_info = node.value.pack_info();
@@ -166,7 +169,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             .update(&sender, update, |_| Err(()))
             .unwrap_or(vec![]);
         if removed.is_empty() {
-            debug!(
+            trace!(
                 "packing_pool::split_off sender={:?} start_nonce={} keep_prefix={} nothing removed",
                 sender,
                 start_nonce,
@@ -174,7 +177,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             );
         } else {
             for tx in &removed {
-                debug!("packing_pool::split_off removed hash={:?}", tx.hash());
+                trace!("packing_pool::split_off removed hash={:?}", tx.hash());
             }
         }
         removed

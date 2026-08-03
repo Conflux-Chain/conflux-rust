@@ -9,29 +9,20 @@ use cfxcore::{
     },
 };
 use cfxkey::{Error as EthkeyError, Generator, KeyPair, Random};
-use clap;
 use diem_crypto::{
     key_file::save_pri_key, HashValue, Uniform, ValidCryptoMaterialStringExt,
 };
 use diem_types::{
     account_address::AccountAddress,
-    contract_event::ContractEvent,
-    on_chain_config::{new_epoch_event_key, ValidatorSet},
     term_state::{
         pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
         NodeID, TERM_LIST_LEN,
     },
-    transaction::{ChangeSet, Transaction, WriteSetPayload},
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
-        ConsensusVRFPublicKey, ValidatorConfig,
+        ConsensusVRFPublicKey,
     },
-    validator_info::ValidatorInfo,
-    waypoint::Waypoint,
-    write_set::WriteSet,
 };
-use executor::{db_bootstrapper::generate_waypoint, vm::PosVM};
-use pos_ledger_db::PosLedgerDB;
 use rand_08::{rngs::StdRng, SeedableRng};
 use rustc_hex::FromHexError;
 use std::{
@@ -44,8 +35,6 @@ use std::{
     process,
     result::Result,
 };
-use storage_interface::DbReaderWriter;
-use tempfile::Builder;
 
 #[derive(Debug)]
 enum Error {
@@ -138,56 +127,6 @@ fn main() {
     }
 }
 
-fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
-    let tmp_dir = Builder::new().prefix("example").tempdir().unwrap();
-    let (_, db) = DbReaderWriter::wrap(
-        PosLedgerDB::open(
-            tmp_dir.path(),
-            false, /* readonly */
-            Some(1_000_000),
-            Default::default(),
-        )
-        .expect("DB should open."),
-    );
-    generate_waypoint::<PosVM>(&db, &genesis_txn).unwrap()
-}
-
-fn generate_genesis_from_public_keys(public_keys: Vec<(NodeID, u64)>) {
-    let genesis_path = PathBuf::from("./genesis_file");
-    let waypoint_path = PathBuf::from("./waypoint_config");
-    let mut genesis_file = File::create(&genesis_path).unwrap();
-    let mut waypoint_file = File::create(&waypoint_path).unwrap();
-
-    let mut validators = Vec::new();
-    for (node_id, voting_power) in public_keys {
-        let validator_config = ValidatorConfig::new(
-            node_id.public_key,
-            Some(node_id.vrf_public_key),
-            vec![],
-            vec![],
-        );
-        validators.push(ValidatorInfo::new(
-            node_id.addr,
-            voting_power,
-            validator_config,
-        ));
-    }
-    let validator_set = ValidatorSet::new(validators);
-    let validator_set_bytes = bcs::to_bytes(&validator_set).unwrap();
-    let contract_event =
-        ContractEvent::new(new_epoch_event_key(), validator_set_bytes);
-    let change_set = ChangeSet::new(WriteSet::default(), vec![contract_event]);
-    let write_set_paylod = WriteSetPayload::Direct(change_set);
-    let genesis_transaction = Transaction::GenesisTransaction(write_set_paylod);
-    let genesis_bytes = bcs::to_bytes(&genesis_transaction).unwrap();
-    genesis_file.write_all(&genesis_bytes).unwrap();
-
-    let waypoint = execute_genesis_transaction(genesis_transaction);
-    waypoint_file
-        .write_all(waypoint.to_string().as_bytes())
-        .unwrap();
-}
-
 fn elect_genesis_committee(
     initial_nodes: &Vec<GenesisPosNodeInfo>, initial_seed: &[u8],
 ) -> Vec<(NodeID, u64)> {
@@ -226,7 +165,7 @@ fn elect_genesis_committee(
 
 fn execute(command: clap::Command) -> Result<String, Error> {
     let matches = command.get_matches();
-    return match matches.subcommand() {
+    match matches.subcommand() {
         Some(("random", sub_matches)) => {
             let initial_seed: H256 = sub_matches
                 .get_one::<String>("initial-seed")
@@ -234,16 +173,13 @@ fn execute(command: clap::Command) -> Result<String, Error> {
                 .clone()
                 .parse()
                 .expect("invalid initial seed");
-            let num_validator = sub_matches
-                .get_one::<usize>("num-validator")
-                .unwrap_or(&1)
-                .clone();
-            let num_genesis_validator = sub_matches
+            let num_validator =
+                *sub_matches.get_one::<usize>("num-validator").unwrap_or(&1);
+            let num_genesis_validator = *sub_matches
                 .get_one::<usize>("num-genesis-validator")
-                .unwrap_or(&1)
-                .clone();
+                .unwrap_or(&1);
             let chain_id =
-                sub_matches.get_one::<u32>("chain-id").unwrap_or(&0).clone();
+                *sub_matches.get_one::<u32>("chain-id").unwrap_or(&0);
 
             if num_genesis_validator > num_validator {
                 panic!("The number of genesis validators cannot be more than the total number of \
@@ -265,7 +201,7 @@ fn execute(command: clap::Command) -> Result<String, Error> {
                     ConsensusVRFPrivateKey::generate(&mut rng);
                 save_pri_key(
                     private_key_dir.join(PathBuf::from(i.to_string())),
-                    &[],
+                    [],
                     &(&private_key, &vrf_private_key),
                 )
                 .expect("Error saving private keys");
@@ -318,7 +254,6 @@ fn execute(command: clap::Command) -> Result<String, Error> {
                     initial_seed,
                 },
             );
-            generate_genesis_from_public_keys(initial_committee);
             Ok("Ok".into())
         }
 
@@ -337,11 +272,11 @@ fn execute(command: clap::Command) -> Result<String, Error> {
             let mut public_key_file = File::open(&public_key_path)?;
             let mut contents = String::new();
             public_key_file.read_to_string(&mut contents)?;
-            let mut lines = contents.as_str().lines();
+            let lines = contents.as_str().lines();
 
             let mut public_keys = Vec::new();
             let mut genesis_nodes = Vec::new();
-            while let Some(key_str) = lines.next() {
+            for key_str in lines {
                 let key_array: Vec<_> = key_str.split(",").collect();
                 let public_key =
                     ConsensusPublicKey::from_encoded_string(key_array[0])
@@ -382,10 +317,9 @@ fn execute(command: clap::Command) -> Result<String, Error> {
                     initial_seed,
                 },
             );
-            generate_genesis_from_public_keys(initial_committee);
             Ok("Ok".into())
         }
 
         _ => unreachable!("clap should ensure we don't get here"),
-    };
+    }
 }

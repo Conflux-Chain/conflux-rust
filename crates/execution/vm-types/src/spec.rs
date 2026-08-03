@@ -22,8 +22,6 @@
 use cfx_types::{address_util::AddressUtil, Address};
 use primitives::{block::BlockHeight, BlockNumber};
 
-pub const CODE_PREFIX_7702: &'static [u8] = b"\xef\x01\x00";
-
 /// Definition of the cost spec and other parameterisations for the VM.
 #[derive(Debug, Clone)]
 pub struct Spec {
@@ -204,8 +202,15 @@ pub struct Spec {
     pub eip7623: bool,
     pub align_evm: bool,
     pub cip_c2_fix: bool,
-    /// EIP-7939: Count Leading Zeros Instruction
-    pub eip7939: bool,
+    /// CIP-166: EIP-7939 Count Leading Zeros Instruction
+    pub cip166: bool,
+    /// CIP-174: EIP-7823 (ModExp input upper bounds) and EIP-7883 (ModExp
+    /// gas cost increase)
+    pub cip174: bool,
+    /// CIP-175: Resolve EIP-7702 Delegation in Cross-Space Calls
+    pub cip175: bool,
+    /// CIP-176: Merge Storage Keys of Repeated Addresses in an Access List
+    pub cip176: bool,
 }
 
 /// Represents the feature flags for CIP-645 implementation.
@@ -417,7 +422,10 @@ impl Spec {
             eip7623: false,
             cip_c2_fix: false,
             align_evm: false,
-            eip7939: false,
+            cip166: false,
+            cip174: false,
+            cip175: false,
+            cip176: false,
         }
     }
 
@@ -508,17 +516,4 @@ impl ConsensusGasSpec {
 #[cfg(any(test, feature = "testonly_code"))]
 impl Default for Spec {
     fn default() -> Self { Spec::new_spec_for_test() }
-}
-
-pub fn extract_7702_payload(code: &[u8]) -> Option<Address> {
-    if code.starts_with(CODE_PREFIX_7702) {
-        let (_prefix, payload) = code.split_at(CODE_PREFIX_7702.len());
-        if payload.len() == Address::len_bytes() {
-            Some(Address::from_slice(payload))
-        } else {
-            None
-        }
-    } else {
-        None
-    }
 }

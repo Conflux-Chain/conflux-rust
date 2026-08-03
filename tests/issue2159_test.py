@@ -61,7 +61,7 @@ class Issue2159Test(ConfluxTestFramework):
                 assert False, "cfx_getEpochReceipts request should have failed"
             else:
                 self.log.info(resp)
-                assert resp.data.startswith("\"Oversized payload")
+                assert resp.data.startswith("Oversized payload")
         except Exception as e:
             assert False, f"unexpected error: {e}"
 

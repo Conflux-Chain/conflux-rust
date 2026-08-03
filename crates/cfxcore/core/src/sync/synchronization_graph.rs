@@ -15,8 +15,7 @@ use std::{
 };
 
 use cfx_parameters::consensus_internal::ELASTICITY_MULTIPLIER;
-use futures::executor::block_on;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use slab::Slab;
 use tokio::sync::mpsc::error::TryRecvError;
 use unexpected::{Mismatch, OutOfBounds};
@@ -985,6 +984,30 @@ impl SynchronizationGraphInner {
     }
 }
 
+/// Manages the lifecycle of the consensus worker thread.
+/// On drop, unsubscribes from the channel (closing the sender) so the worker's
+/// `recv_blocking()` returns `None` and the loop exits naturally, then joins.
+struct ConsensusWorkerHandle {
+    thread: Mutex<Option<thread::JoinHandle<()>>>,
+    /// Channel + subscription ID for unsubscribe-based shutdown.
+    new_block_hashes: Arc<Channel<H256>>,
+    worker_subscription_id: u64,
+}
+
+impl ConsensusWorkerHandle {
+    fn stop(&self) {
+        self.new_block_hashes
+            .unsubscribe(self.worker_subscription_id);
+        if let Some(handle) = self.thread.lock().take() {
+            handle.join().expect("Consensus Worker should not panic");
+        }
+    }
+}
+
+impl Drop for ConsensusWorkerHandle {
+    fn drop(&mut self) { self.stop(); }
+}
+
 pub struct SynchronizationGraph {
     pub inner: Arc<RwLock<SynchronizationGraphInner>>,
     pub consensus: SharedConsensusGraph,
@@ -1007,6 +1030,10 @@ pub struct SynchronizationGraph {
     pub future_blocks: FutureBlockContainer,
 
     machine: Arc<Machine>,
+
+    /// Handle to the consensus worker thread; joined on drop.
+    #[allow(unused)]
+    consensus_worker_handle: ConsensusWorkerHandle,
 }
 
 impl MallocSizeOf for SynchronizationGraph {
@@ -1055,26 +1082,18 @@ impl SynchronizationGraph {
                 pos_verifier.clone(),
             ),
         ));
-        let sync_graph = SynchronizationGraph {
-            inner: inner.clone(),
-            future_blocks: FutureBlockContainer::new(
-                sync_config.future_block_buffer_capacity,
-            ),
-            data_man: data_man.clone(),
-            pow: pow.clone(),
-            verification_config,
-            sync_config,
-            consensus: consensus.clone(),
-            statistics: statistics.clone(),
-            consensus_unprocessed_count: consensus_unprocessed_count.clone(),
-            new_block_hashes: notifications.new_block_hashes.clone(),
-            machine,
-        };
+        let worker_subscription_id = consensus_receiver.id;
+
+        // Clone Arcs before moving them into the worker thread closure.
+        let worker_data_man = data_man.clone();
+        let worker_consensus = consensus.clone();
+        let worker_unprocessed_count = consensus_unprocessed_count.clone();
 
         // It receives `BLOCK_GRAPH_READY` blocks in order and handles them in
         // `ConsensusGraph`
-        thread::Builder::new()
+        let handle = thread::Builder::new()
             .name("Consensus Worker".into())
+            // TODO: extract it in a seperated file
             .spawn(move || {
                 // The Consensus Worker will prioritize blocks based on its parent epoch number while respecting the topological order. This has the following two benefits:
                 //
@@ -1090,13 +1109,13 @@ impl SynchronizationGraph {
                     // Only block when we have processed all received blocks.
                     let mut blocking = priority_queue.is_empty();
                     'inner: loop {
-                        // Use blocking `recv` for the first element, and then drain the receiver
-                        // with non-blocking `try_recv`.
+                        // Use blocking `recv_blocking` for the first element, and then
+                        // drain the receiver with non-blocking `try_recv`.
                         let maybe_item = if blocking {
                             blocking = false;
-                            match block_on(consensus_receiver.recv()) {
+                            match consensus_receiver.recv_blocking() {
                                 Some(item) => Ok(item),
-                                None => break 'outer,
+                                None => break 'outer, // channel closed (unsubscribed)
                             }
                         } else {
                             consensus_receiver.try_recv()
@@ -1106,11 +1125,11 @@ impl SynchronizationGraph {
                             // FIXME: We need to investigate why duplicate hash may send to the consensus worker
                             Ok(hash) => if !reverse_map.contains_key(&hash) {
                                 debug!("Worker thread receive: block = {}", hash);
-                                let header = data_man.block_header_by_hash(&hash).expect("Header must exist before sending to the consensus worker!");
+                                let header = worker_data_man.block_header_by_hash(&hash).expect("Header must exist before sending to the consensus worker!");
 
                                 // start pos with an era advance.
-                                if !pos_started && pos_verifier.is_enabled_at_height(header.height() + consensus.config().inner_conf.era_epoch_count) {
-                                    if let Err(e) = pos_verifier.initialize(consensus.clone()) {
+                                if !pos_started && pos_verifier.is_enabled_at_height(header.height() + worker_consensus.config().inner_conf.era_epoch_count) {
+                                    if let Err(e) = pos_verifier.initialize(worker_consensus.clone()) {
                                         info!("PoS cannot be started at the expected height: e={}", e);
                                     } else {
                                         pos_started = true;
@@ -1137,7 +1156,7 @@ impl SynchronizationGraph {
                                 }
                                 reverse_map.insert(hash.clone(), Vec::new());
                                 if cnt == 0 {
-                                    let epoch_number = consensus.get_block_epoch_number(parent_hash).unwrap_or(0);
+                                    let epoch_number = worker_consensus.get_block_epoch_number(parent_hash).unwrap_or(0);
                                     priority_queue.push((epoch_number, hash));
                                 } else {
                                     counter_map.insert(hash, cnt);
@@ -1157,20 +1176,43 @@ impl SynchronizationGraph {
                             *cnt_tuple -= 1;
                             if *cnt_tuple == 0 {
                                 counter_map.remove(&succ);
-                                let header_succ = data_man.block_header_by_hash(&succ).expect("Header must exist before sending to the consensus worker!");
+                                let header_succ = worker_data_man.block_header_by_hash(&succ).expect("Header must exist before sending to the consensus worker!");
                                 let parent_succ = header_succ.parent_hash();
-                                let epoch_number = consensus.get_block_epoch_number(parent_succ).unwrap_or(0);
+                                let epoch_number = worker_consensus.get_block_epoch_number(parent_succ).unwrap_or(0);
                                 priority_queue.push((epoch_number, succ));
                             }
                         }
-                        consensus.on_new_block(
+                        worker_consensus.on_new_block(
                             &hash,
                         );
-                        consensus_unprocessed_count.fetch_sub(1, Ordering::SeqCst);
+                        worker_unprocessed_count.fetch_sub(1, Ordering::SeqCst);
                     }
                 }
             })
             .expect("Cannot fail");
+
+        let consensus_worker_handle = ConsensusWorkerHandle {
+            thread: Mutex::new(Some(handle)),
+            new_block_hashes: notifications.new_block_hashes.clone(),
+            worker_subscription_id,
+        };
+
+        let sync_graph = SynchronizationGraph {
+            inner: inner.clone(),
+            future_blocks: FutureBlockContainer::new(
+                sync_config.future_block_buffer_capacity,
+            ),
+            data_man: data_man.clone(),
+            pow: pow.clone(),
+            verification_config,
+            sync_config,
+            consensus: consensus.clone(),
+            statistics: statistics.clone(),
+            consensus_unprocessed_count: consensus_unprocessed_count.clone(),
+            new_block_hashes: notifications.new_block_hashes.clone(),
+            machine,
+            consensus_worker_handle,
+        };
         sync_graph
     }
 

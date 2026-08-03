@@ -13,9 +13,7 @@ pub struct LinkedBytes {
 }
 
 pub fn padded_big_endian(length: usize) -> Vec<u8> {
-    let mut bytes = [0u8; 32];
-    U256::from(length).to_big_endian(&mut bytes);
-    bytes.to_vec()
+    U256::from(length).to_big_endian().to_vec()
 }
 
 impl LinkedBytes {

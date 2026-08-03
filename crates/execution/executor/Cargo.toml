@@ -39,13 +39,12 @@ impl-trait-for-tuples = { workspace = true }
 impl-tools = { workspace = true }
 typemap = { workspace = true }
 hex-literal = { workspace = true }
-derive_more = { workspace = true }
 c-kzg = { workspace = true, features = ["ethereum_kzg_settings"]}
-once_cell = { workspace = true }
 rayon = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 blst = { workspace = true }
+revm-precompile = { workspace = true }
 
 [dev-dependencies]
 cfx-statedb = { workspace = true, features = ["testonly_code"]}

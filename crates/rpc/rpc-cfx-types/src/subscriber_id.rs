@@ -18,14 +18,9 @@ impl str::FromStr for SubId {
 impl SubId {
     pub fn new(data: H64) -> Self { SubId(data) }
 
+    /// Generate a new random subscription id.
+    pub fn next() -> Self { SubId(H64(rand::random::<[u8; 8]>())) }
+
     // TODO: replace `format!` see [#10412](https://github.com/paritytech/parity-ethereum/issues/10412)
     pub fn as_string(&self) -> String { format!("{:?}", self.0) }
-}
-
-pub mod random {
-    use rand_07;
-
-    pub type Rng = rand_07::rngs::OsRng;
-
-    pub fn new() -> Rng { rand_07::rngs::OsRng }
 }

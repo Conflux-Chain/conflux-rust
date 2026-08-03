@@ -15,7 +15,6 @@ use cfx_types::{
     AddressWithSpace, AllChainID, Space, SpaceMap, H160, H256, H512, U256, U512,
 };
 use hashbrown::HashMap as FastHashMap;
-use parking_lot;
 use slab::Slab;
 use std::{
     cmp::Reverse,

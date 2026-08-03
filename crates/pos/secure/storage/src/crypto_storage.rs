@@ -9,12 +9,10 @@ use crate::Error;
 use diem_types::validator_config::{
     ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
 };
-use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 
 /// CryptoStorage provides an abstraction for secure generation and handling of
 /// cryptographic keys.
-#[enum_dispatch]
 pub trait CryptoStorage {
     /// Securely generates a new named Consensus private key. The behavior for
     /// calling this interface multiple times with the same name is

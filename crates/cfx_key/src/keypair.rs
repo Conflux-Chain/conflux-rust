@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::{Address, Error, Public, Secret, SECP256K1};
+use super::{math::pubkey_to_public, Address, Error, Public, Secret};
 use cfx_crypto::crypto::keccak::Keccak256;
 use cfx_types::address_util::AddressUtil;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use secp256k1::key;
+use secp256k1::{PublicKey, SecretKey, SECP256K1};
 use std::fmt;
 
 pub fn public_to_address(public: &Public, type_nibble: bool) -> Address {
@@ -44,16 +44,25 @@ pub fn is_compatible_public(public: &Public) -> bool {
     result.is_user_account_address()
 }
 
-#[derive(Debug, Clone, PartialEq, DeriveMallocSizeOf)]
+#[derive(Clone, PartialEq, DeriveMallocSizeOf)]
 /// secp256k1 key pair
 pub struct KeyPair {
     secret: Secret,
     public: Public,
 }
 
+impl fmt::Debug for KeyPair {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("KeyPair")
+            .field("secret", &self.secret)
+            .field("public", &self.public)
+            .finish()
+    }
+}
+
 impl fmt::Display for KeyPair {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        writeln!(f, "secret:  {:x}", self.secret)?;
+        writeln!(f, "secret:  {}", self.secret)?;
         writeln!(f, "public:  {:x}", self.public)?;
         write!(f, "address: {:x}", self.address())
     }
@@ -62,32 +71,21 @@ impl fmt::Display for KeyPair {
 impl KeyPair {
     /// Create a pair from secret key
     pub fn from_secret(secret: Secret) -> Result<KeyPair, Error> {
-        let context = &SECP256K1;
-        let s: key::SecretKey =
-            key::SecretKey::from_slice(context, &secret[..])?;
-        let pub_key = key::PublicKey::from_secret_key(context, &s)?;
-        let serialized = pub_key.serialize_vec(context, false);
-
-        let mut public = Public::default();
-        public.as_bytes_mut().copy_from_slice(&serialized[1..65]);
-
-        let keypair = KeyPair { secret, public };
-
-        Ok(keypair)
+        let s = SecretKey::from_slice(&secret[..])?;
+        let public =
+            pubkey_to_public(&PublicKey::from_secret_key(SECP256K1, &s));
+        Ok(KeyPair { secret, public })
     }
 
     pub fn from_secret_slice(slice: &[u8]) -> Result<KeyPair, Error> {
         Self::from_secret(Secret::from_unsafe_slice(slice)?)
     }
 
-    pub fn from_keypair(sec: key::SecretKey, publ: key::PublicKey) -> Self {
-        let context = &SECP256K1;
-        let serialized = publ.serialize_vec(context, false);
-        let secret = Secret::from(sec);
-        let mut public = Public::default();
-        public.as_bytes_mut().copy_from_slice(&serialized[1..65]);
-
-        KeyPair { secret, public }
+    pub fn from_keypair(sec: SecretKey, publ: PublicKey) -> Self {
+        KeyPair {
+            secret: Secret::from(sec),
+            public: pubkey_to_public(&publ),
+        }
     }
 
     pub fn secret(&self) -> &Secret { &self.secret }
@@ -118,7 +116,7 @@ mod tests {
     #[test]
     fn keypair_display() {
         let expected =
-"secret:  a100df7a048e50ed308ea696dc600215098141cb391e9527329df289f9383f65
+"secret:  0xa100..3f65
 public:  8ce0db0b0359ffc5866ba61903cc2518c3675ef2cf380a7e54bde7ea20e6fa1ab45b7617346cd11b7610001ee6ae5b0155c41cad9527cbcdff44ec67848943a4
 address: 1b073e9233944b5e729e46d618f0d8edf3d9c34a".to_owned();
         let secret = Secret::from_str(

@@ -5,7 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::error::{MempoolError, StateSyncError};
+use super::error::MempoolError;
 use anyhow::Result;
 use consensus_types::{block::Block, common::Payload};
 use diem_crypto::HashValue;
@@ -26,12 +26,6 @@ pub trait TxnManager: Send + Sync {
         &self, max_size: u64, exclude: Vec<&Payload>, hash: HashValue,
         validators: ValidatorVerifier,
     ) -> Result<Payload, MempoolError>;
-
-    /// Notifies TxnManager about the executed result of the block,
-    /// which includes the specifics of what transactions succeeded and failed.
-    async fn notify(
-        &self, block: &Block, compute_result: &StateComputeResult,
-    ) -> Result<(), MempoolError>;
 }
 
 /// While Consensus is managing proposed blocks, `StateComputer` is managing the
@@ -52,19 +46,10 @@ pub trait StateComputer: Send + Sync {
         catch_up_mode: bool,
     ) -> Result<StateComputeResult, ExecutionError>;
 
-    /// Send a successful commit. A future is fulfilled when the state is
-    /// finalized.
+    /// Commit the given blocks and notify mempool to prune committed
+    /// transactions.
     async fn commit(
         &self, block_ids: Vec<HashValue>,
         finality_proof: LedgerInfoWithSignatures,
     ) -> Result<(), ExecutionError>;
-
-    /// Best effort state synchronization to the given target LedgerInfo.
-    /// In case of success (`Result::Ok`) the LI of storage is at the given
-    /// target. In case of failure (`Result::Error`) the LI of storage
-    /// remains unchanged, and the validator can assume there were no
-    /// modifications to the storage made.
-    async fn sync_to(
-        &self, target: LedgerInfoWithSignatures,
-    ) -> Result<(), StateSyncError>;
 }

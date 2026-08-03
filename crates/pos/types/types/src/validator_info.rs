@@ -5,13 +5,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#[cfg(any(test, feature = "fuzzing"))]
-use crate::network_address::{
-    encrypted::{
-        TEST_SHARED_VAL_NETADDR_KEY, TEST_SHARED_VAL_NETADDR_KEY_VERSION,
-    },
-    NetworkAddress,
-};
 use crate::{
     account_address::AccountAddress,
     validator_config::{
@@ -75,19 +68,11 @@ impl ValidatorInfo {
         vrf_public_key: Option<ConsensusVRFPublicKey>,
         consensus_voting_power: u64,
     ) -> Self {
-        let addr = NetworkAddress::mock();
-        let enc_addr = addr.clone().encrypt(
-            &TEST_SHARED_VAL_NETADDR_KEY,
-            TEST_SHARED_VAL_NETADDR_KEY_VERSION,
-            &account_address,
-            0,
-            0,
-        );
         let config = ValidatorConfig::new(
             consensus_public_key,
             vrf_public_key,
-            bcs::to_bytes(&vec![enc_addr.unwrap()]).unwrap(),
-            bcs::to_bytes(&vec![addr]).unwrap(),
+            vec![],
+            vec![],
         );
 
         Self {

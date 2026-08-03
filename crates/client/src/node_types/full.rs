@@ -2,10 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use jsonrpc_http_server::Server as HttpServer;
-use jsonrpc_tcp_server::Server as TcpServer;
-use jsonrpc_ws_server::Server as WsServer;
-
 use crate::{
     common::{initialize_not_light_node_modules, ClientComponents},
     configuration::Configuration,
@@ -24,18 +20,19 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 pub struct FullClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
-    pub debug_rpc_http_server: Option<HttpServer>,
-    pub rpc_http_server: Option<HttpServer>,
-    pub debug_rpc_tcp_server: Option<TcpServer>,
-    pub rpc_tcp_server: Option<TcpServer>,
-    pub debug_rpc_ws_server: Option<WsServer>,
-    pub rpc_ws_server: Option<WsServer>,
     pub sync: Arc<SynchronizationService>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
     /// Handle to the started ETH RPC server. This is version 2 of the ETH RPC.
     /// Which use Rust async I/O
     pub eth_rpc_server_handle: Option<RpcServerHandle>,
+    /// Handle to the started CFX RPC server. This is version 2 of the core
+    /// space RPC. Which use Rust async I/O. Only active when
+    /// `core_space_rpc_use_old_impl` is false.
+    pub cfx_rpc_server_handle: Option<RpcServerHandle>,
+    /// Debug handle for CFX RPC server with all APIs enabled when using the
+    /// new core space RPC implementation.
+    pub debug_cfx_rpc_server_handle: Option<RpcServerHandle>,
     pub tokio_runtime: Arc<TokioRuntime>,
     pub task_manager: TaskManager,
 }
@@ -61,15 +58,11 @@ impl FullClient {
             consensus,
             sync,
             blockgen,
-            debug_rpc_http_server,
-            rpc_http_server,
-            debug_rpc_tcp_server,
-            rpc_tcp_server,
-            debug_rpc_ws_server,
-            rpc_ws_server,
             pos_handler,
             tokio_runtime,
             eth_rpc_server_handle,
+            cfx_rpc_server_handle,
+            debug_cfx_rpc_server_handle,
             task_manager,
         ) = initialize_not_light_node_modules(&mut conf, exit, NodeType::Full)?;
         Ok(Box::new(ClientComponents {
@@ -78,16 +71,12 @@ impl FullClient {
             pos_handler: Some(pos_handler),
             other_components: FullClientExtraComponents {
                 consensus,
-                debug_rpc_http_server,
-                rpc_http_server,
-                debug_rpc_tcp_server,
-                rpc_tcp_server,
-                debug_rpc_ws_server,
-                rpc_ws_server,
                 sync,
                 txpool,
                 pow,
                 eth_rpc_server_handle,
+                cfx_rpc_server_handle,
+                debug_cfx_rpc_server_handle,
                 tokio_runtime,
                 task_manager,
             },

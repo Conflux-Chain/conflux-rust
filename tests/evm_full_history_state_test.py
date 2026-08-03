@@ -30,6 +30,10 @@ class EvmFullHistoryStateTest(ConfluxTestFramework):
         self.conf_parameters["hydra_transition_height"] = 50
         self.conf_parameters["hydra_transition_number"] = 50
         self.conf_parameters["log_level"] = '"trace"'
+        self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(
+            int_to_hex(int(2**256 - 1))
+        )
+        self.rpc_timewait = 120
 
     def after_options_parsed(self):
         genesis_account_file = os.path.join(self.options.tmpdir, "genesis_account")
@@ -41,19 +45,108 @@ class EvmFullHistoryStateTest(ConfluxTestFramework):
 
     def run_test(self):
         client = RpcClient(self.nodes[0])
-        client.generate_empty_blocks(500)
-        # This should not raise error if the state is available.
-        assert_raises_rpc_error(None, None, client.call, "0x0000000000000000000000000000000000000000", "0x00", None, "0x33")
-        self.nodes[0].eth_call({"to": "0x0000000000000000000000000000000000000000", "data": "0x00"}, "0x33")
-        assert_raises_rpc_error(None, None, self.nodes[0].eth_call, {"to": "0x0000000000000000000000000000000000000000", "data": "0x00"}, "0x31")
+        client.generate_empty_blocks(100)
 
+        zero_address = "0x0000000000000000000000000000000000000000"
         evm_random_account = Web3().eth.account.create().address
         # value = default_config["TOTAL_COIN"]
         value = 10 ** 18
-        self.cross_space_transfer(evm_random_account, value)
-        client.generate_empty_blocks(500)
-        assert_equal(int(self.nodes[0].eth_getBalance(evm_random_account, int_to_hex(505)), 0), value)
-        assert_raises_rpc_error(None, None, client.get_balance, evm_random_account, int_to_hex(505))
+        tx_hash = self.cross_space_transfer(evm_random_account, value)
+        transfer_epoch = client.get_transaction_receipt(tx_hash)["epochNumber"]
+
+        assert_equal(
+            int(
+                self.nodes[0].eth_getBalance(
+                    evm_random_account, transfer_epoch
+                ),
+                0,
+            ),
+            value,
+        )
+        client.get_balance(evm_random_account, transfer_epoch)
+
+        self._advance_until_core_state_pruned(
+            client, evm_random_account, transfer_epoch
+        )
+
+        assert_raises_rpc_error(
+            -32016,
+            "out-of-bound",
+            client.get_balance,
+            evm_random_account,
+            transfer_epoch,
+        )
+        assert_equal(
+            int(
+                self.nodes[0].eth_getBalance(
+                    evm_random_account, transfer_epoch
+                ),
+                0,
+            ),
+            value,
+        )
+        assert_raises_rpc_error(
+            -32016,
+            "state is not ready",
+            client.call,
+            zero_address,
+            "0x00",
+            None,
+            int_to_hex(51),
+        )
+        self.nodes[0].eth_call(
+            {"to": zero_address, "data": "0x00"}, int_to_hex(51)
+        )
+        assert_raises_rpc_error(
+            -32016,
+            "state is not ready",
+            self.nodes[0].eth_call,
+            {"to": zero_address, "data": "0x00"},
+            int_to_hex(49),
+        )
+
+    def _advance_until_core_state_pruned(self, client, account, epoch):
+        batch_size = 5
+        max_generated_blocks = 1000
+        generated_blocks = 0
+        rpc_check_failed = False
+
+        def core_state_is_pruned():
+            nonlocal generated_blocks, rpc_check_failed
+            try:
+                if try_rpc(
+                    -32016,
+                    "out-of-bound",
+                    client.get_balance,
+                    None,
+                    account,
+                    epoch,
+                ):
+                    return True
+            except AssertionError:
+                rpc_check_failed = True
+                raise
+
+            if generated_blocks >= max_generated_blocks:
+                return False
+
+            client.generate_empty_blocks(batch_size)
+            generated_blocks += batch_size
+            return False
+
+        try:
+            wait_until(core_state_is_pruned, attempts=201, timeout=120)
+        except AssertionError as error:
+            if rpc_check_failed:
+                raise
+            raise AssertionError(
+                "Core state was not pruned after generating "
+                f"{generated_blocks} blocks: epoch={epoch}, "
+                f"latest_state={client.epoch_number('latest_state')}, "
+                "latest_checkpoint="
+                f"{client.epoch_number('latest_checkpoint')}, "
+                f"pos_status={client.pos_status()}"
+            ) from error
 
     def cross_space_transfer(self, to, value):
         if to.startswith("0x"):
@@ -65,7 +158,7 @@ class EvmFullHistoryStateTest(ConfluxTestFramework):
         data = decode_hex(f"0xda8d5daf{to}000000000000000000000000")
         tx = client.new_tx(value=value, receiver=cross_space, data=data,
                            gas=1000000)
-        client.send_tx(tx, True)
+        return client.send_tx(tx, True)
 
 
 if __name__ == "__main__":

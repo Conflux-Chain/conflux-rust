@@ -293,7 +293,7 @@ fn test_merkle_root() {
     for _i in 0..5 {
         let keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
             .iter()
-            .filter(|_| rng.gen_bool(0.1))
+            .filter(|_| rng.random_bool(0.1))
             .cloned()
             .collect();
         let mpt_kv_iter = DumpedMptKvIterator {
@@ -309,7 +309,7 @@ fn test_delete_all() {
     let mut rng = get_rng_for_test();
     let keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
-        .filter(|_| rng.gen_bool(0.5))
+        .filter(|_| rng.random_bool(0.5))
         .cloned()
         .collect();
     let mpt_kv_iter = DumpedMptKvIterator {

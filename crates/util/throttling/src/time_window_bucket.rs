@@ -100,15 +100,15 @@ mod tests {
         let interval = Duration::from_millis(10);
         let mut bucket = TimeWindowBucket::new(interval, 2);
 
-        assert_eq!(bucket.try_acquire(3), true);
-        assert_eq!(bucket.try_acquire(3), true);
-        assert_eq!(bucket.try_acquire(3), false);
-        assert_eq!(bucket.try_acquire(4), true);
+        assert!(bucket.try_acquire(3));
+        assert!(bucket.try_acquire(3));
+        assert!(!bucket.try_acquire(3));
+        assert!(bucket.try_acquire(4));
 
         sleep(interval + Duration::from_millis(1));
 
-        assert_eq!(bucket.try_acquire(3), true);
-        assert_eq!(bucket.try_acquire(3), true);
-        assert_eq!(bucket.try_acquire(3), false);
+        assert!(bucket.try_acquire(3));
+        assert!(bucket.try_acquire(3));
+        assert!(!bucket.try_acquire(3));
     }
 }

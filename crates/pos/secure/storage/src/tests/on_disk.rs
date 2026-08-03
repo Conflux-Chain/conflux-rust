@@ -5,12 +5,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{tests::suite, OnDiskStorage, Storage};
-use diem_temppath::TempPath;
+use crate::{tests::suite, OnDiskStorage};
+use tempfile::TempDir;
 
 #[test]
 fn on_disk() {
-    let path_buf = TempPath::new().path().to_path_buf();
-    let mut storage = Storage::from(OnDiskStorage::new(path_buf));
+    let dir = TempDir::new().unwrap();
+    let mut storage = OnDiskStorage::new(dir.path().join("storage.json"));
     suite::execute_all_storage_tests(&mut storage);
 }

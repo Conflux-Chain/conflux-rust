@@ -36,8 +36,13 @@ use cfx_crypto::{
     RandomKeyPairGenerator as CryptoRandomKeyPairGenerator,
 };
 
+use cfx_types::H256;
 use lazy_static::lazy_static;
+use secp256k1::SecretKey;
+
+pub use cfx_types::{Address, Public};
 pub use parity_wordlist::Error as WordlistError;
+pub type Message = H256;
 
 pub use self::{
     brain::Brain,
@@ -57,14 +62,17 @@ pub use self::{
     KeyPairGenerator as Generator,
 };
 
-use cfx_types::H256;
-
-pub use cfx_types::{Address, Public};
-pub type Message = H256;
-
 lazy_static! {
-    pub static ref SECP256K1: secp256k1::Secp256k1 =
-        secp256k1::Secp256k1::new();
+    /// The scalar `1` as a `SecretKey`.
+    pub(crate) static ref ONE_KEY: SecretKey = SecretKey::from_slice(&[
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 1,
+    ]).expect("1 is a valid secret key");
+
+    /// The scalar `n - 1` (i.e. `-1 mod n`) as a `SecretKey`.
+    pub(crate) static ref MINUS_ONE_KEY: SecretKey = ONE_KEY.negate();
 }
 
 /// Uninstantiatable error type for infallible generators.

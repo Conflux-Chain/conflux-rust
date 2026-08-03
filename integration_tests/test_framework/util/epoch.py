@@ -14,35 +14,41 @@ class EpochErrorInfo:
     epoch: any
     error_code: int
     error_msg: str
+    error_data: str
 
 
 epoch_invalid_epoch_type_error = EpochErrorInfo(
     epoch=1,
     error_code=-32602,
-    error_msg="Invalid params: invalid type: integer `1`, expected an epoch number or 'latest_mined', 'latest_state', 'latest_checkpoint', 'latest_finalized', 'latest_confirmed' or 'earliest'.",
+    error_msg="Invalid params",
+    error_data="invalid type: integer `1`, expected an epoch number or 'latest_mined', 'latest_state', 'latest_checkpoint', 'latest_finalized', 'latest_confirmed' or 'earliest'."
 )
 
 
 epoch_epoch_number_too_large_error = EpochErrorInfo(
     epoch=hex(sys.maxsize),
     error_code=-32602,
-    error_msg="Invalid params: expected a numbers with less than largest epoch number.",
+    error_msg="Invalid params",
+    error_data="expected a numbers with less than largest epoch number."
 )
 
 epoch_empty_epoch_string_error = EpochErrorInfo(
     epoch="0x",
     error_code=-32602,
-    error_msg="Invalid params: Invalid epoch number: cannot parse integer from empty string.",
+    error_msg="Invalid params",
+    error_data="Invalid epoch number: cannot parse integer from empty string."
 )
 
 epoch_invalid_digit_epoch_error = EpochErrorInfo(
     epoch="0xZZZ",
     error_code=-32602,
-    error_msg="Invalid params: Invalid epoch number: invalid digit found in string.",
+    error_msg="Invalid params",
+    error_data="Invalid epoch number: invalid digit found in string."
 )
 
 epoch_missing_hex_prefix_error = EpochErrorInfo(
     epoch="-1",
     error_code=-32602,
-    error_msg="Invalid params: Invalid epoch number: missing 0x prefix.",
+    error_msg="Invalid params",
+    error_data="Invalid epoch number: missing 0x prefix."
 )
