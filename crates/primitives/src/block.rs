@@ -164,7 +164,7 @@ impl Block {
         stream
             .begin_list(2)
             .append(&self.block_header)
-            .append_raw(&*self.encode_body_with_tx_public(), 1);
+            .append_raw(&self.encode_body_with_tx_public(), 1);
         stream.out().to_vec()
     }
 
@@ -262,6 +262,8 @@ impl CompactBlock {
         self.tx_short_ids.len() / CompactBlock::SHORT_ID_SIZE_IN_BYTES
     }
 
+    pub fn is_empty(&self) -> bool { self.tx_short_ids.is_empty() }
+
     pub fn hash(&self) -> H256 { self.block_header.hash() }
 
     pub fn get_shortid_key(header: &BlockHeader, nonce: &u64) -> (u64, u64) {
@@ -347,7 +349,10 @@ impl Encodable for CompactBlock {
 impl Decodable for CompactBlock {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let short_ids: Vec<u8> = rlp.val_at(2)?;
-        if short_ids.len() % CompactBlock::SHORT_ID_SIZE_IN_BYTES != 0 {
+        if !short_ids
+            .len()
+            .is_multiple_of(CompactBlock::SHORT_ID_SIZE_IN_BYTES)
+        {
             return Err(DecoderError::Custom("Compact Block length Error!"));
         }
         Ok(CompactBlock {

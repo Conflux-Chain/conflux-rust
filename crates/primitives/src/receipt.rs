@@ -17,15 +17,16 @@ pub const EVM_SPACE_FAIL: u8 = 0;
 pub const EVM_SPACE_SUCCESS: u8 = 1;
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TransactionStatus {
+    #[default]
     Success = 0,
     Failure = 1,
     Skipped = 2,
 }
 
 impl TransactionStatus {
-    fn into_u8(&self) -> u8 {
+    fn as_u8(&self) -> u8 {
         match self {
             TransactionStatus::Success => 0,
             TransactionStatus::Failure => 1,
@@ -36,7 +37,7 @@ impl TransactionStatus {
 
 impl Encodable for TransactionStatus {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.append_internal(&self.into_u8());
+        s.append_internal(&self.as_u8());
     }
 }
 
@@ -49,10 +50,6 @@ impl Decodable for TransactionStatus {
             _ => Err(DecoderError::Custom("Unrecognized outcome status")),
         }
     }
-}
-
-impl Default for TransactionStatus {
-    fn default() -> Self { TransactionStatus::Success }
 }
 
 impl TransactionStatus {
@@ -159,6 +156,7 @@ impl Decodable for Receipt {
 }
 
 impl Receipt {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         outcome: TransactionStatus, accumulated_gas_used: U256, gas_fee: U256,
         gas_sponsor_paid: bool, logs: Vec<LogEntry>, log_bloom: Bloom,

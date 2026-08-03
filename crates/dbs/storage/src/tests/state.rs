@@ -31,7 +31,7 @@ fn test_set_get() {
     let mut state = state_manager.get_state_for_genesis_write();
     let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
-        .filter(|_| rng.gen_bool(0.5))
+        .filter(|_| rng.random_bool(0.5))
         .cloned()
         .collect();
 
@@ -573,7 +573,7 @@ fn test_set_order() {
     let state_manager = new_state_manager_for_unit_test();
     let keys: Vec<Vec<u8>> = generate_keys(500000)
         .iter()
-        .filter(|_| rng.gen_bool(0.5))
+        .filter(|_| rng.random_bool(0.5))
         .cloned()
         .collect();
 
@@ -639,7 +639,7 @@ fn test_set_order_concurrent() {
     let keys = Arc::new(
         generate_keys(TEST_NUMBER_OF_KEYS / 10)
             .iter()
-            .filter(|_| rng.gen_bool(0.5))
+            .filter(|_| rng.random_bool(0.5))
             .cloned()
             .collect::<Vec<_>>(),
     );
@@ -696,7 +696,7 @@ fn test_set_order_concurrent() {
     };
     let mut threads = Vec::with_capacity(thread_count);
     for thread_id in 0..thread_count {
-        thread::sleep_ms(30);
+        thread::sleep(Duration::from_millis(30));
         let keys = keys.clone();
         let state_manager = state_manager.clone();
         let merkle_1 = merkle_1.clone();

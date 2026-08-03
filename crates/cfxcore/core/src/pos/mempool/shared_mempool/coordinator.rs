@@ -69,7 +69,7 @@ pub(crate) async fn coordinator(
                 tasks::process_consensus_request(smp.db_with_cache.clone(), &smp.mempool, msg).await;
             }
             msg = commit_notifications.select_next_some() => {
-                handle_commit_notification(&mut smp, msg);
+                handle_commit_notification(&smp, msg);
             }
             (peer, backoff) = scheduled_broadcasts.select_next_some() => {
                 // diem_debug!("scheduled_broadcasts");
@@ -119,10 +119,7 @@ async fn handle_client_event(
         .await;
 }
 
-fn handle_commit_notification(
-    smp: &mut SharedMempool, msg: CommitNotification,
-) {
-    smp.update_pos_state();
+fn handle_commit_notification(smp: &SharedMempool, msg: CommitNotification) {
     tokio::spawn(tasks::process_committed_transactions(
         smp.mempool.clone(),
         msg,

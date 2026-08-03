@@ -23,6 +23,7 @@ use rlp::{Rlp, RlpStream};
 use serde::Deserialize;
 use serde_derive::Serialize;
 use std::{
+    collections::HashSet,
     convert::TryFrom,
     fmt,
     net::SocketAddr,
@@ -51,7 +52,7 @@ pub struct Session {
     sent_hello: Instant,
     /// Session ready flag that set after successful Hello packet received.
     had_hello: Option<Instant>,
-    /// Session is no longer active flag.
+    /// Set once when a kill path expires the session.
     expired: Option<Instant>,
 
     // statistics for read/write
@@ -92,6 +93,9 @@ pub struct SessionDataWithDisconnectInfo {
 
 // id for Hello packet
 const PACKET_HELLO: u8 = 0x80;
+// A HELLO packet can be ~16MB; cap the advertised protocol count so a peer
+// can't pack it with millions of entries (real peers send a handful).
+const MAX_PEER_PROTOCOLS_IN_HELLO: usize = 64;
 // id for Disconnect packet
 const PACKET_DISCONNECT: u8 = 0x01;
 // id for protocol packet
@@ -105,6 +109,7 @@ const HEADER_VERSION_WITH_EXTENSION: u8 = 0;
 impl Session {
     /// Create a new instance of `Session`, which starts to handshake with
     /// remote peer.
+    #[allow(clippy::too_many_arguments)]
     pub fn new<Message: Send + Sync + Clone + 'static>(
         io: &IoContext<Message>, socket: TcpStream, address: SocketAddr,
         id: Option<&NodeId>, peer_header_version: u8, token: StreamToken,
@@ -217,7 +222,7 @@ impl Session {
 
         // update node id for ingress session
         if self.metadata.id.is_none() {
-            let id = wrapper.get().id.clone();
+            let id = wrapper.get().id;
 
             // refuse incoming session if the node is blacklisted
             if host.node_db.write().evaluate_blacklisted(&id) {
@@ -294,7 +299,7 @@ impl Session {
             && packet.id != PACKET_DISCONNECT
             && self.had_hello.is_none()
         {
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
 
         match packet.id {
@@ -304,13 +309,16 @@ impl Session {
                 // For ingress session, update the node id in `SessionManager`
                 let token_to_disconnect = self.update_ingress_node_id(host)?;
 
-                let token_to_disconnect = match token_to_disconnect {
-                    Some(token) => Some((
-                        token,
-                        String::from("Remove old session from the same node"),
-                    )),
-                    None => None,
-                };
+                // Dropped by the tie-break: stop before `Ready` so the loser
+                // never reaches `on_peer_connected`; the caller kills it.
+                if token_to_disconnect.as_ref().map(|(t, _)| *t)
+                    == Some(self.token())
+                {
+                    return Ok(SessionDataWithDisconnectInfo {
+                        session_data: SessionData::None,
+                        token_to_disconnect,
+                    });
+                }
 
                 // Handle Hello packet to exchange protocols
                 let rlp = Rlp::new(&packet.data);
@@ -327,7 +335,7 @@ impl Session {
                     "read packet DISCONNECT, reason = {}, session = {:?}",
                     reason, self
                 );
-                Err(Error::Disconnect(reason).into())
+                Err(Error::Disconnect(reason))
             }
             PACKET_USER => Ok(SessionDataWithDisconnectInfo {
                 session_data: SessionData::Message {
@@ -343,15 +351,17 @@ impl Session {
                     "read packet UNKNOWN, packet_id = {:?}, session = {:?}",
                     packet.id, self
                 );
-                Err(Error::BadProtocol.into())
+                Err(Error::BadProtocol)
             }
         }
     }
 
-    /// Update node Id in `SessionManager` for ingress session.
+    /// Apply the simultaneous-dial tie-breaker for this ingress. Returns the
+    /// `(token, reason)` to kill — the old session if this ingress wins, our
+    /// own token if it loses — or `None` if no kill is needed.
     fn update_ingress_node_id(
         &mut self, host: &NetworkServiceInner,
-    ) -> Result<Option<usize>, Error> {
+    ) -> Result<Option<(usize, String)>, Error> {
         // ignore egress session
         if self.metadata.originated {
             return Ok(None);
@@ -363,15 +373,41 @@ impl Session {
             .id
             .expect("should have node id after handshake");
 
-        host.sessions.update_ingress_node_id(token, &node_id)
+        let result = host
+            .sessions
+            .update_ingress_node_id(token, &node_id)
             .map_err(|reason| {
                 debug!(
                     "failed to update node id of ingress session, reason = {:?}, session = {:?}",
                     reason, self
                 );
-
                 self.send_disconnect(DisconnectReason::UpdateNodeIdFailed)
-            })
+            })?;
+
+        match result {
+            crate::session_manager::UpdateIngressResult::Inserted => Ok(None),
+            crate::session_manager::UpdateIngressResult::Replaced(old) => {
+                Ok(Some((
+                    old,
+                    String::from("Remove old session from the same node"),
+                )))
+            }
+            crate::session_manager::UpdateIngressResult::DropNew => {
+                // Lost the tie-break: tell the remote, then return our own
+                // token so the caller kills us via the non-failure path.
+                debug!(
+                    "lost simultaneous-dial tie-break, dropping new ingress session = {:?}",
+                    self
+                );
+                let _ = self.send_disconnect(DisconnectReason::Custom(
+                    "simultaneous dial: drop new connection".into(),
+                ));
+                Ok(Some((
+                    token,
+                    String::from("simultaneous dial: drop new connection"),
+                )))
+            }
+        }
     }
 
     /// Read Hello packet to exchange the supported protocols, and set the
@@ -394,19 +430,36 @@ impl Session {
             )));
         }
 
+        // `take(N + 1)` parses at most N+1 item headers (the rlp offset cache
+        // makes each O(1)), so an oversized list is rejected without walking
+        // it.
+        let peer_caps_count = rlp
+            .at(1)?
+            .iter()
+            .take(MAX_PEER_PROTOCOLS_IN_HELLO + 1)
+            .count();
+        if peer_caps_count > MAX_PEER_PROTOCOLS_IN_HELLO {
+            debug!(
+                "Too many protocols in hello: {}, remote = {}",
+                peer_caps_count, remote_network_id
+            );
+            return Err(self.send_disconnect(DisconnectReason::Custom(
+                "Invalid protocol list: too many protocols.".into(),
+            )));
+        }
+
         let mut peer_caps: Vec<ProtocolInfo> = rlp.list_at(1)?;
-        for i in 1..peer_caps.len() {
-            for j in 0..i {
-                if peer_caps[j].protocol == peer_caps[i].protocol {
-                    debug!(
-                        "Invalid protocol list from hello. Duplication: {:?},\
-                         remote = {}",
-                        peer_caps[i].protocol, remote_network_id
-                    );
-                    bail!(self.send_disconnect(DisconnectReason::Custom(
-                        "Invalid protocol list: duplication.".into()
-                    )))
-                }
+        let mut seen_protocols = HashSet::with_capacity(peer_caps.len());
+        for cap in &peer_caps {
+            if !seen_protocols.insert(cap.protocol) {
+                debug!(
+                    "Invalid protocol list from hello. Duplication: {:?}, \
+                     remote = {}",
+                    cap.protocol, remote_network_id
+                );
+                return Err(self.send_disconnect(DisconnectReason::Custom(
+                    "Invalid protocol list: duplication.".into(),
+                )));
             }
         }
 
@@ -484,8 +537,7 @@ impl Session {
             length => Err(Error::Decoder(format!(
                 "Hello has incorrect rlp length: {:?}",
                 length
-            ))
-            .into()),
+            ))),
         }
     }
 
@@ -508,7 +560,7 @@ impl Session {
         }
 
         if self.expired() {
-            return Err(Error::Expired.into());
+            return Err(Error::Expired);
         }
 
         Ok(SessionPacket::assemble(
@@ -536,7 +588,10 @@ impl Session {
                             protocol,
                             msg_id: parse_msg_id_leb128_2_bytes_at_most(
                                 &mut msg
-                            ),
+                            )
+                            .map_err(|_| Error::Msg(
+                                "msg_id parse failed when checking protocol version".into()
+                            ))?,
                             peer_protocol_version: Some(peer_protocol.version),
                             min_supported_version: None,
                         });
@@ -555,7 +610,7 @@ impl Session {
         priority: SendQueuePriority,
     ) -> Result<SendQueueStatus, Error> {
         self.check_message_protocol_version(
-            protocol.clone(),
+            protocol,
             min_proto_version,
             &data,
         )?;
@@ -569,7 +624,7 @@ impl Session {
         min_proto_version: ProtocolVersion, packet_id: u8, data: Vec<u8>,
     ) -> Result<usize, Error> {
         self.check_message_protocol_version(
-            protocol.clone(),
+            protocol,
             min_proto_version,
             &data,
         )?;
@@ -586,7 +641,7 @@ impl Session {
             PACKET_DISCONNECT,
             packet,
         );
-        Error::Disconnect(reason).into()
+        Error::Disconnect(reason)
     }
 
     /// Send Hello packet to remote peer.
@@ -596,7 +651,7 @@ impl Session {
         debug!("Sending Hello, session = {:?}", self);
         let mut rlp = RlpStream::new_list(4);
         rlp.append(&host.metadata.network_id);
-        rlp.append_list(&*host.metadata.protocols.read());
+        rlp.append_list(&host.metadata.protocols.read());
         host.metadata.public_endpoint.to_rlp_list(&mut rlp);
         let mut key_bytes =
             self.pos_public_key.as_ref().unwrap().0.to_bytes().to_vec();
@@ -673,7 +728,7 @@ impl Session {
 impl fmt::Debug for Session {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Session {{ token: {}, id: {:?}, originated: {}, address: {:?}, had_hello: {}, expired: {} }}",
-               self.token(), self.id(), self.metadata.originated, self.address, self.had_hello.is_some(), self.expired.is_some())
+               self.token(), self.id(), self.metadata.originated, self.address, self.had_hello.is_some(), self.expired())
     }
 }
 
@@ -775,7 +830,7 @@ impl SessionPacket {
         // packet id
         if data.is_empty() {
             debug!("failed to parse session packet, packet id missed");
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
 
         let packet_id = data.split_off(data.len() - 1)[0];
@@ -783,7 +838,7 @@ impl SessionPacket {
         // protocol flag
         if data.is_empty() {
             debug!("failed to parse session packet, protocol flag missed");
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
 
         let header_byte = data.split_off(data.len() - 1)[0];
@@ -791,7 +846,7 @@ impl SessionPacket {
         let header_version = (header_byte & 0x0f) >> 1;
         if header_version > HEADER_VERSION_WITH_EXTENSION {
             debug!("unsupported header_version {}", header_version);
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
         let has_extension = (header_byte & 0x10) >> 4;
 
@@ -799,7 +854,7 @@ impl SessionPacket {
         if protocol_flag == 0 {
             if packet_id == PACKET_USER {
                 debug!("failed to parse session packet, no protocol for user packet");
-                return Err(Error::BadProtocol.into());
+                return Err(Error::BadProtocol);
             }
 
             let (data, extensions) =
@@ -816,13 +871,13 @@ impl SessionPacket {
 
         if packet_id != PACKET_USER {
             debug!("failed to parse session packet, invalid packet id");
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
 
         // protocol
         if data.len() < PROTOCOL_ID_SIZE {
             debug!("failed to parse session packet, protocol missed");
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
 
         let protocol_bytes = data.split_off(data.len() - PROTOCOL_ID_SIZE);

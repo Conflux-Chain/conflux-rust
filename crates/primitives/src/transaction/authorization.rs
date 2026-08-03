@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 pub const AUTH_MAGIC: u8 = 0x05;
 
-pub const CODE_PREFIX_7702: &'static [u8] = b"\xef\x01\x00";
+pub const CODE_PREFIX_7702: &[u8] = b"\xef\x01\x00";
 
 #[derive(
     Debug,

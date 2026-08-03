@@ -13,7 +13,6 @@ edition = "2018"
 anyhow = { workspace = true }
 fail = { workspace = true }
 itertools = { workspace = true }
-once_cell = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 
 consensus-types = { workspace = true }
@@ -24,7 +23,6 @@ diem-logger = { workspace = true }
 diem-state-view = { workspace = true }
 cached-pos-ledger-db = { workspace = true }
 diem-types = { workspace = true }
-move-core-types = { workspace = true }
 storage-interface = { workspace = true }
 
 pow-types = { workspace = true }

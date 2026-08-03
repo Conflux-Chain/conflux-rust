@@ -7,6 +7,8 @@
 
 #![forbid(unsafe_code)]
 
+extern crate rand_08 as rand;
+
 mod configurable_validator_signer;
 mod consensus_state;
 mod error;

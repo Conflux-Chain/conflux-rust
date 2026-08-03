@@ -1,5 +1,6 @@
 use cfx_types::{Address, U256, U64};
 use primitives::transaction::AuthorizationListItem;
+use serde::{Deserialize, Deserializer};
 
 #[derive(
     Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize, Clone,
@@ -22,9 +23,8 @@ pub struct SignedAuthorization {
     /// Inner authorization.
     #[serde(flatten)]
     inner: Authorization,
-    /// Signature parity value. We allow any [`U64`] here, however, the only
-    /// valid values are `0` and `1` and anything else will result in error
-    /// during recovery.
+    /// Signature parity value. Must be `0` or `1`.
+    #[serde(deserialize_with = "parse_and_validate_y_parity")]
     pub y_parity: U64,
     /// Signature `r` value.
     pub r: U256,
@@ -59,6 +59,20 @@ impl From<AuthorizationListItem> for SignedAuthorization {
             s: item.s,
         }
     }
+}
+
+fn parse_and_validate_y_parity<'de, D>(
+    deserializer: D,
+) -> Result<U64, D::Error>
+where D: Deserializer<'de> {
+    let v = U64::deserialize(deserializer)?;
+    if v.as_u64() > 1 {
+        return Err(serde::de::Error::custom(format!(
+            "invalid yParity: expected 0 or 1, got {}",
+            v
+        )));
+    }
+    Ok(v)
 }
 
 impl Into<AuthorizationListItem> for SignedAuthorization {

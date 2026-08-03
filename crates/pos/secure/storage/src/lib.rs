@@ -7,6 +7,8 @@
 
 #![forbid(unsafe_code)]
 
+extern crate rand_08 as rand;
+
 mod crypto_kv_storage;
 mod crypto_storage;
 mod error;

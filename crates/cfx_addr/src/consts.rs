@@ -43,11 +43,11 @@ pub const TESTNET_PREFIX: &str = "cfxtest";
 pub const NETWORK_ID_PREFIX: &str = "net";
 
 // address types
-pub const ADDRESS_TYPE_BUILTIN: &'static str = "builtin";
-pub const ADDRESS_TYPE_CONTRACT: &'static str = "contract";
-pub const ADDRESS_TYPE_NULL: &'static str = "null";
-pub const ADDRESS_TYPE_UNKNOWN: &'static str = "unknown";
-pub const ADDRESS_TYPE_USER: &'static str = "user";
+pub const ADDRESS_TYPE_BUILTIN: &str = "builtin";
+pub const ADDRESS_TYPE_CONTRACT: &str = "contract";
+pub const ADDRESS_TYPE_NULL: &str = "null";
+pub const ADDRESS_TYPE_UNKNOWN: &str = "unknown";
+pub const ADDRESS_TYPE_USER: &str = "user";
 
 // These two network_ids are reserved.
 pub const RESERVED_NETWORK_IDS: [u64; 2] = [1, 1029];
@@ -68,7 +68,7 @@ lazy_static! {
         BASE32_CHARS.replace(&EXCLUDE_CHARS[..], "").into_bytes();
 
     // For decoding.
-    pub static ref CHAR_INDEX: [Option<u8>; 128] = (|| {
+    pub static ref CHAR_INDEX: [Option<u8>; 128] = {
         let mut index = [None; 128];
         assert_eq!(CHARSET.len(), CHARSET_SIZE);
         for i in 0..CHARSET_SIZE {
@@ -80,6 +80,6 @@ lazy_static! {
                 index[u] = Some(i as u8);
             }
         }
-        return index;
-    }) ();
+        index
+    };
 }

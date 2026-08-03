@@ -23,8 +23,6 @@ pprof = { workspace = true }
 jemalloc_pprof = { workspace = true }
 tikv-jemallocator = { workspace = true, optional = true }
 snmalloc-rs = { workspace = true, optional = true }
-libc = "0.2"
-
 [features]
 jemalloc = ["dep:tikv-jemallocator"]
 

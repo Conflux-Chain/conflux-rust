@@ -41,7 +41,7 @@
 
 use std::{future::Future, net::SocketAddr};
 
-use cfx_rpc_middlewares::{Metrics, Throttle};
+use cfx_rpc_middlewares::{load_throttling_manager, Metrics, Throttle};
 use jsonrpsee::{
     core::client::ClientT,
     rpc_params,
@@ -118,10 +118,10 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
     debug!("throttling config path: {:?}", config_path);
 
+    let throttle_manager =
+        load_throttling_manager(Some(config_path.to_str().unwrap()), "test");
     let rpc_middleware = RpcServiceBuilder::new()
-        .layer_fn(move |s| {
-            Throttle::new(Some(config_path.to_str().unwrap()), "test", s)
-        })
+        .layer_fn(move |s| Throttle::new(throttle_manager.clone(), s))
         .layer_fn(|s| Metrics::new(s, true));
 
     let server = Server::builder()

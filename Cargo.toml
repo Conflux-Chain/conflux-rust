@@ -256,27 +256,23 @@ atom = "0.3"
 # alloy & revm
 alloy-sol-types = "1.4.1"
 alloy-primitives = "1.4.1"
-alloy-rpc-types = "~1.0.41"
-alloy-rpc-types-trace = "~1.0.41"
-revm = { version = "33.1", default-features = false }
-revm-primitives = "21.0"
-revm-interpreter = "31.1"
-revm-context-interface = "13.1"
+alloy-rpc-types = "2.0.5"
+alloy-rpc-types-trace = "2.0.5"
+revm = { version = "33.1.0", default-features = false }
+revm-primitives = "21.0.1"
+revm-interpreter = "31.1.0"
+revm-context-interface = "13.1.0"
 revm-bytecode = "7.1"
+revm-precompile = "31.0.0"
 alloy-primitives-wrapper = { git = "https://github.com/Conflux-Chain/alloy-primitives-wrapper.git", rev = "2683b5d133ebd1035afb98285fb8a50209a5dc19" }
 
-# jsonrpc framework(old)
-jsonrpc-core = "18.0.0"
-jsonrpc-tcp-server = "18.0.0"
-jsonrpc-http-server = "18.0.0"
-jsonrpc-derive = "18.0.0"
-jsonrpc-pubsub = "18.0.0"
-jsonrpc-ws-server = "18.0.0"
-
-# jsonrpc framework(new)
 jsonrpsee = "0.26"
 jsonrpsee-core = "0.26"
 jsonrpsee-types = "0.26"
+
+http = "1.0"
+tower = "0.5"
+tower-http = "0.6"
 
 # async
 tokio = "1.48"
@@ -300,8 +296,10 @@ tikv-jemallocator = { version = "0.6", features = ["profiling", "unprefixed_mall
 # tikv-jemalloc-ctl = { version = "0.6", features = ["use_std", "stats"] }
 # tikv-jemalloc-sys = { version = "0.6", features = ["profiling"] }
 jemalloc_pprof = { version = "0.8", features = ["symbolize", "flamegraph"] }
-# CPU profiling
-pprof = { version = "0.15", features = ["flamegraph", "protobuf-codec"] }
+# CPU profiling. No "flamegraph" feature: CPU profiles are served as pprof
+# protobuf only, and the feature would pull inferno -> quick-xml
+# (RustSec-flagged, see deny.toml).
+pprof = { version = "0.15", features = ["protobuf-codec"] }
 tracy-client = "0.18.0"
 snmalloc-rs = { version = "0.3.7", features = ["build_cc"] }
 
@@ -340,8 +338,7 @@ rand_xorshift = "0.4"
 rand_chacha = "0.9"
 
 # old rand
-rand_07 = { package = "rand", version = "0.7" }
-rand_08 = { package = "rand", version = "0.8" }
+rand_08 = { package = "rand", version = "0.8.6" }
 
 # misc
 log = "0.4"

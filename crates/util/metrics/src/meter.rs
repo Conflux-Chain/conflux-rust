@@ -70,7 +70,7 @@ pub fn register_meter_with_group(group: &str, name: &str) -> Arc<dyn Meter> {
     );
 
     let mut meters = ARBITER.meters.lock();
-    assert_eq!(meters.contains_key(&full_meter_name), false);
+    assert!(!meters.contains_key(&full_meter_name));
     meters.insert(full_meter_name, meter.clone());
 
     meter

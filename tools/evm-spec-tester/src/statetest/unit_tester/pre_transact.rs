@@ -1,6 +1,10 @@
 use super::super::error::TestErrorKind;
 use crate::util::set_cips_according_to_spec;
+use alloy_rpc_types_trace::geth::{
+    GethDebugTracingOptions, GethDefaultTracingOptions,
+};
 use cfx_config::Configuration;
+use cfx_execute_helper::observer::Observer;
 use cfx_executor::{
     executive::{ChargeCollateral, TransactOptions, TransactSettings},
     machine::{Machine, VmFactory},
@@ -21,6 +25,7 @@ use eest_types::{
     AccountInfo, Env as StateTestEnv, SignedAuthorization, SpecName,
     TransactionParts, TransactionType, TxPartIndices,
 };
+use geth_tracer::TxExecContext;
 use primitives::{
     transaction::{
         Action, AuthorizationListItem, Eip1559Transaction, Eip155Transaction,
@@ -164,7 +169,10 @@ pub fn make_tx(
     Some(Transaction::Ethereum(tx).sign(&secret))
 }
 
-pub fn make_transact_options(check_base_price: bool) -> TransactOptions<()> {
+pub fn make_transact_options(
+    check_base_price: bool, trace: bool, machine: Option<Arc<Machine>>,
+    tx_exec_context: Option<TxExecContext>,
+) -> TransactOptions<Observer> {
     let settings = TransactSettings {
         charge_collateral: ChargeCollateral::Normal,
         charge_gas: true,
@@ -172,10 +180,20 @@ pub fn make_transact_options(check_base_price: bool) -> TransactOptions<()> {
         check_epoch_bound: false,
         forbid_eoa_with_code: true,
     };
-    TransactOptions {
-        observer: (),
-        settings,
-    }
+    let observer = if trace {
+        let mut opts = GethDebugTracingOptions::default();
+        let mut config = GethDefaultTracingOptions::default();
+        config.disable_storage = Some(true);
+        opts.config = config;
+        Observer::geth_tracer(
+            tx_exec_context.expect("exist"),
+            machine.expect("exist"),
+            opts,
+        )
+    } else {
+        Observer::with_no_tracing()
+    };
+    TransactOptions { observer, settings }
 }
 
 pub fn make_state(pre_state: &HashMap<Address, AccountInfo>) -> State {

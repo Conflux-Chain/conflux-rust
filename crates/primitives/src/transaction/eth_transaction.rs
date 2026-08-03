@@ -320,16 +320,16 @@ pub mod eip155_signature {
     /// invalid.
     pub fn extract_standard_v(v: u64) -> u8 {
         match v {
-            v if v == 27 => 0,
-            v if v == 28 => 1,
-            v if v >= 35 => ((v - 1) % 2) as u8,
+            27 => 0,
+            28 => 1,
+            35.. => ((v - 1) % 2) as u8,
             _ => 4,
         }
     }
 
     pub fn extract_chain_id_from_legacy_v(v: u64) -> Option<u64> {
         if v >= 35 {
-            Some((v - 35) / 2 as u64)
+            Some((v - 35) / 2_u64)
         } else {
             None
         }

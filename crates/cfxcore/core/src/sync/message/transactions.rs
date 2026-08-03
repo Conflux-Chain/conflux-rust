@@ -622,7 +622,7 @@ impl Handleable for GetTransactionsResponse {
                         self.tx_hashes,
                         req.window_index,
                         &req.tx_hashes_indices,
-                    );
+                    )?;
             }
             Ok(())
         } else {

@@ -13,3 +13,6 @@ malloc_size_of_derive = { workspace = true }
 # Compared against in tests. The main `rlp` dep is 0.6 now; this dev-dep
 # pins 0.4 for side-by-side coverage of both wire formats.
 rlp_04 = { package = "rlp", version = "0.4" }
+
+[package.metadata.cargo-machete]
+ignored = ["malloc_size_of"]

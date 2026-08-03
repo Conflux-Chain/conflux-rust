@@ -92,6 +92,16 @@ macro_rules! build_config{
                 )*
                 Ok(config)
             }
+            // The hyphenated keys `parse` looks up (one per config field). A
+            // CLI option whose clap `id` is not in this set is silently
+            // ignored — the bug class exercised by the exhaustiveness test in
+            // the `conflux` binary.
+            pub fn cli_lookup_keys() -> Vec<String> {
+                let mut keys = Vec::new();
+                $( keys.push(underscore_to_hyphen!(stringify!($name))); )*
+                $( keys.push(underscore_to_hyphen!(stringify!($c_name))); )*
+                keys
+            }
             pub fn from_file(config_path: &str) ->  Result<RawConfiguration, String> {
 
                 let mut config = RawConfiguration::default();

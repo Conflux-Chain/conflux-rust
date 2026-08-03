@@ -73,8 +73,8 @@ pub fn password_from_file(path: String) -> Result<Password, String> {
     let passwords = passwords_from_files(&[path])?;
     // use only first password from the file
     passwords
-        .get(0)
-        .map(Password::clone)
+        .first()
+        .cloned()
         .ok_or_else(|| "Password file seems to be empty.".to_owned())
 }
 
@@ -84,7 +84,7 @@ pub fn passwords_from_files(files: &[String]) -> Result<Vec<Password>, String> {
 		let file = File::open(filename).map_err(|_| format!("{} Unable to read password file. Ensure it exists and permissions are correct.", filename))?;
 		let reader = BufReader::new(&file);
 		let lines = reader.lines()
-			.filter_map(|l| l.ok())
+			.map_while(Result::ok)
 			.map(|pwd| pwd.trim().to_owned().into())
 			.collect::<Vec<Password>>();
 		Ok(lines)

@@ -382,7 +382,7 @@ impl Instruction {
         if instruction == Some(BASEFEE) && !spec.cip1559 {
             instruction = None;
         }
-        if instruction == Some(CLZ) && !spec.eip7939 {
+        if instruction == Some(CLZ) && !spec.cip166 {
             instruction = None;
         }
         return instruction;
@@ -432,16 +432,16 @@ impl Instruction {
 
     /// Returns the instruction info.
     pub fn info<const CANCUN: bool>(
-        &self, cip645: bool, eip7939: bool,
+        &self, cip645: bool, cip166: bool,
     ) -> &InstructionInfo {
         let instrs = if !CANCUN {
             &*INSTRUCTIONS
         } else if !cip645 {
             &*INSTRUCTIONS_CANCUN
-        } else if !eip7939 {
+        } else if !cip166 {
             &*INSTRUCTIONS_CIP645
         } else {
-            &*INSTRUCTIONS_EIP7939
+            &*INSTRUCTIONS_CIP166
         };
 
         instrs[*self as usize].as_ref().expect("A instruction is defined in Instruction enum, but it is not found in InstructionInfo struct; this indicates a logic failure in the code.")
@@ -682,7 +682,7 @@ lazy_static! {
         arr
     };
 
-    pub static ref INSTRUCTIONS_EIP7939: [Option<InstructionInfo>; 0x100] = {
+    pub static ref INSTRUCTIONS_CIP166: [Option<InstructionInfo>; 0x100] = {
         let mut arr = *INSTRUCTIONS_CIP645;
         arr[CLZ as usize] = Some(InstructionInfo::new("CLZ", 1, 1, GasPriceTier::Low));
 

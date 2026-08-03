@@ -99,12 +99,16 @@ impl Mempool {
                     continue;
                 }
                 TransactionPayload::Dispute(dispute_payload) => {
-                    // TODO(lpl): Only dispute a node once.
-                    pos_state.validate_dispute(dispute_payload).and(
-                        verify_dispute(dispute_payload)
-                            .then_some(())
-                            .ok_or(anyhow::anyhow!("invalid dispute")),
-                    )
+                    // Every candidate sees the same unchanged state, so this
+                    // thins duplicates out without ruling them out.
+                    verify_dispute(dispute_payload, pos_state.current_view())
+                        .ok_or(anyhow::anyhow!("invalid dispute"))
+                        .and_then(|offense_epoch| {
+                            pos_state.validate_dispute(
+                                dispute_payload,
+                                offense_epoch,
+                            )
+                        })
                 }
                 _ => {
                     continue;

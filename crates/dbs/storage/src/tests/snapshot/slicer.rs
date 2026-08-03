@@ -28,7 +28,7 @@ fn test_slicing_position() {
     let mut rng = get_rng_for_test();
     let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
-        .filter(|_| rng.gen_bool(0.5))
+        .filter(|_| rng.random_bool(0.5))
         .cloned()
         .collect();
     keys.sort();

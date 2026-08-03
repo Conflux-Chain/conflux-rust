@@ -3,7 +3,9 @@ mod module;
 pub use crate::{
     error::*, id_provider::SubscriptionIdProvider, RpcServerHandle,
 };
-use cfx_rpc_middlewares::{Logger, Metrics, Throttle};
+use cfx_rpc_middlewares::{
+    load_throttling_manager, maybe_cors_layer, Logger, Metrics, Throttle,
+};
 pub use module::{CfxRpcModule, RpcModuleSelection};
 
 use blockgen::BlockGeneratorTestApi;
@@ -423,15 +425,22 @@ impl RpcServerConfig {
         throttling_conf_file: Option<String>, throttling_section: &str,
         enable_metrics: bool,
     ) -> Result<RpcServerHandle, RpcError<CfxRpcModule>> {
-        let throttling_section = throttling_section.to_string();
+        // No server to build: skip loading (and maybe panicking on) the conf.
+        if !self.has_server() {
+            return Ok(RpcServerHandle {
+                http_local_addr: None,
+                ws_local_addr: None,
+                http: None,
+                ws: None,
+            });
+        }
+
+        let throttle_manager = load_throttling_manager(
+            throttling_conf_file.as_deref(),
+            throttling_section,
+        );
         let rpc_middleware = RpcServiceBuilder::new()
-            .layer_fn(move |s| {
-                Throttle::new(
-                    throttling_conf_file.as_ref().map(|s| s.as_str()),
-                    throttling_section.as_str(),
-                    s,
-                )
-            })
+            .layer_fn(move |s| Throttle::new(throttle_manager.clone(), s))
             .layer_fn(move |s| Metrics::new(s, enable_metrics))
             .layer_fn(|s| Logger::new(s));
 
@@ -449,8 +458,32 @@ impl RpcServerConfig {
         {
             modules.config.ensure_ws_http_identical()?;
 
+            let cors = match (
+                self.ws_cors_domains.as_ref(),
+                self.http_cors_domains.as_ref(),
+            ) {
+                (Some(ws_cors), Some(http_cors)) => {
+                    if ws_cors.trim() != http_cors.trim() {
+                        return Err(
+                            WsHttpSamePortError::ConflictingCorsDomains {
+                                http_cors_domains: Some(http_cors.clone()),
+                                ws_cors_domains: Some(ws_cors.clone()),
+                            }
+                            .into(),
+                        );
+                    }
+                    Some(ws_cors)
+                }
+                (a, b) => a.or(b),
+            }
+            .cloned();
+
             if let Some(config) = self.http_server_config {
                 let server = ServerBuilder::new()
+                    .set_http_middleware(
+                        tower::ServiceBuilder::new()
+                            .option_layer(maybe_cors_layer(cors)?),
+                    )
                     .set_rpc_middleware(rpc_middleware)
                     .set_config(config.build())
                     .build(http_socket_addr)
@@ -495,6 +528,9 @@ impl RpcServerConfig {
         if let Some(config) = self.ws_server_config {
             let server = ServerBuilder::new()
                 .set_config(config.ws_only().build())
+                .set_http_middleware(tower::ServiceBuilder::new().option_layer(
+                    maybe_cors_layer(self.ws_cors_domains.clone())?,
+                ))
                 .set_rpc_middleware(rpc_middleware.clone())
                 .build(ws_socket_addr)
                 .await
@@ -518,6 +554,9 @@ impl RpcServerConfig {
         if let Some(config) = self.http_server_config {
             let server = ServerBuilder::new()
                 .set_config(config.http_only().build())
+                .set_http_middleware(tower::ServiceBuilder::new().option_layer(
+                    maybe_cors_layer(self.http_cors_domains.clone())?,
+                ))
                 .set_rpc_middleware(rpc_middleware)
                 .build(http_socket_addr)
                 .await

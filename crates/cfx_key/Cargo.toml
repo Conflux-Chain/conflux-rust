@@ -16,10 +16,11 @@ log = { workspace = true }
 parity-wordlist = { workspace = true }
 rustc-hex = { workspace = true }
 serde = { workspace = true }
-tiny-keccak = { workspace = true }
 zeroize = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 malloc_size_of = { workspace = true }
-thiserror = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["malloc_size_of"]

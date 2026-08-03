@@ -48,6 +48,8 @@ pub async fn launch_async_rpc_servers(
                 let server_config =
                     RpcServerConfig::http(conf.jsonrpsee_server_builder())
                         .with_ws(conf.jsonrpsee_server_builder())
+                        .with_cors(http_config.cors.clone())
+                        .with_ws_cors(ws_config.cors.clone())
                         .with_http_address(http_config.address)
                         .with_ws_address(ws_config.address);
                 (transport_rpc_module_config, server_config)
@@ -57,7 +59,8 @@ pub async fn launch_async_rpc_servers(
                     TransportRpcModuleConfig::set_http(apis.clone());
                 let server_config =
                     RpcServerConfig::http(conf.jsonrpsee_server_builder())
-                        .with_http_address(http_config.address);
+                        .with_http_address(http_config.address)
+                        .with_cors(http_config.cors.clone());
                 (transport_rpc_module_config, server_config)
             }
             (false, true) => {
@@ -65,7 +68,8 @@ pub async fn launch_async_rpc_servers(
                     TransportRpcModuleConfig::set_ws(apis.clone());
                 let server_config =
                     RpcServerConfig::ws(conf.jsonrpsee_server_builder())
-                        .with_ws_address(ws_config.address);
+                        .with_ws_address(ws_config.address)
+                        .with_ws_cors(ws_config.cors.clone());
                 (transport_rpc_module_config, server_config)
             }
             _ => return Ok(None),
@@ -125,6 +129,8 @@ pub async fn launch_cfx_async_rpc_servers(
                 let server_config =
                     CfxRpcServerConfig::http(conf.jsonrpsee_server_builder())
                         .with_ws(conf.jsonrpsee_server_builder())
+                        .with_cors(http_config.cors.clone())
+                        .with_ws_cors(ws_config.cors.clone())
                         .with_http_address(http_config.address)
                         .with_ws_address(ws_config.address);
                 (transport_rpc_module_config, server_config)
@@ -134,7 +140,8 @@ pub async fn launch_cfx_async_rpc_servers(
                     CfxTransportRpcModuleConfig::set_http(apis.clone());
                 let server_config =
                     CfxRpcServerConfig::http(conf.jsonrpsee_server_builder())
-                        .with_http_address(http_config.address);
+                        .with_http_address(http_config.address)
+                        .with_cors(http_config.cors.clone());
                 (transport_rpc_module_config, server_config)
             }
             (false, true) => {
@@ -142,7 +149,8 @@ pub async fn launch_cfx_async_rpc_servers(
                     CfxTransportRpcModuleConfig::set_ws(apis.clone());
                 let server_config =
                     CfxRpcServerConfig::ws(conf.jsonrpsee_server_builder())
-                        .with_ws_address(ws_config.address);
+                        .with_ws_address(ws_config.address)
+                        .with_ws_cors(ws_config.cors.clone());
                 (transport_rpc_module_config, server_config)
             }
             _ => return Ok(None),
@@ -221,15 +229,19 @@ pub async fn launch_cfx_light_async_rpc_servers(
         (true, true) => {
             CfxRpcServerConfig::http(conf.jsonrpsee_server_builder())
                 .with_ws(conf.jsonrpsee_server_builder())
+                .with_cors(http_config.cors.clone())
+                .with_ws_cors(ws_config.cors.clone())
                 .with_http_address(http_config.address)
                 .with_ws_address(ws_config.address)
         }
         (true, false) => {
             CfxRpcServerConfig::http(conf.jsonrpsee_server_builder())
+                .with_cors(http_config.cors.clone())
                 .with_http_address(http_config.address)
         }
         (false, true) => {
             CfxRpcServerConfig::ws(conf.jsonrpsee_server_builder())
+                .with_ws_cors(ws_config.cors.clone())
                 .with_ws_address(ws_config.address)
         }
         _ => return Ok(None),

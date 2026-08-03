@@ -195,7 +195,7 @@ fn parse_attributes<'a>(
 ) -> (Vec<&'a syn::Attribute>, Option<syn::Ident>, bool) {
     let mut name: Option<syn::Ident> = None;
     let mut into: Option<bool> = None;
-    let mut map: HashMap<&str, Box<dyn FnMut(TokenStream2) -> ()>> =
+    let mut map: HashMap<&str, Box<dyn FnMut(TokenStream2)>> =
         Default::default();
     map.insert(
         "call",
@@ -269,7 +269,7 @@ pub fn delegate(tokens: TokenStream) -> TokenStream {
             let signature = &input.sig;
             let inputs = &input.sig.inputs;
 
-            let (attrs, name, into) = parse_attributes(&method.attributes, &input);
+            let (attrs, name, into) = parse_attributes(&method.attributes, input);
 
             if input.default.is_some() {
                 panic!(
@@ -298,7 +298,7 @@ pub fn delegate(tokens: TokenStream) -> TokenStream {
                 .collect();
 
             let name = match &name {
-                Some(n) => &n,
+                Some(n) => n,
                 None => &input.sig.ident
             };
             let inline = if has_inline_attribute(&attrs) {

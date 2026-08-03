@@ -22,9 +22,9 @@
 use crate::json;
 pub use cfxkey::*;
 
-impl Into<json::H160> for Address {
-    fn into(self) -> json::H160 {
-        let a: [u8; 20] = self.into();
+impl From<Address> for json::H160 {
+    fn from(val: Address) -> Self {
+        let a: [u8; 20] = val.into();
         From::from(a)
     }
 }

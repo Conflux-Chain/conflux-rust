@@ -3,8 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 // TODO: check them again and reason about the safety of each usage.
-#![allow(clippy::mut_from_ref, clippy::cast_ref_to_mut, clippy::drop_ref)]
-#![allow(deprecated)]
+#![allow(clippy::mut_from_ref)]
 
 #[macro_use]
 extern crate cfx_util_macros;

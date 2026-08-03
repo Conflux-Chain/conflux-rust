@@ -19,7 +19,6 @@ use serde::{
     de::{DeserializeOwned, Error, MapAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use serde_json;
 use std::{
     fmt,
     io::{Read, Write},
@@ -107,7 +106,7 @@ impl<'a> Deserialize<'a> for KeyFile {
     }
 }
 
-fn none_if_empty<'a, T>(v: Option<serde_json::Value>) -> Option<T>
+fn none_if_empty<T>(v: Option<serde_json::Value>) -> Option<T>
 where T: DeserializeOwned {
     v.and_then(|v| {
         if v.is_null() {

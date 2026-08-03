@@ -5,27 +5,20 @@ edition = "2021"
 license-file.workspace = true
 
 [dependencies]
-bigdecimal = { workspace = true }
-num-bigint = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-serde_derive = { workspace = true }
 parking_lot = { workspace = true }
 cfxkey = { workspace = true }
 cfxcore-accounts = { workspace = true }
 cfxstore = { workspace = true }
 cfx-executor = { workspace = true }
-cfx-execute-helper = { workspace = true }
 cfx-statedb = { workspace = true }
 cfx-storage = { workspace = true }
 cfx-vm-types = { workspace = true }
 app_dirs = { workspace = true }
 dir = { workspace = true }
 ctrlc = { workspace = true }
-lazy_static = { workspace = true }
 log = { workspace = true }
 cfx-types = { workspace = true }
-cfx-addr = { workspace = true }
 cfx-bytes = { workspace = true }
 cfxcore = { workspace = true }
 network = { workspace = true }
@@ -36,45 +29,26 @@ secret-store = { workspace = true }
 primitives = { workspace = true }
 rlp = { workspace = true }
 keccak-hash = { workspace = true }
-rand = { workspace = true }
 rand_08 = { workspace = true }
-tempfile = { workspace = true }
-rustc-hex = { workspace = true }
 threadpool = { workspace = true }
 metrics = { workspace = true }
-delegate = { workspace = true }
-itertools = { workspace = true }
-order-stat = { workspace = true }
-futures = { workspace = true, features = ["compat"] }
-throttling = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 malloc_size_of = { workspace = true }
-random-crash = { workspace = true }
 cfx-parameters = { workspace = true }
 diem-config = { workspace = true }
 diem-crypto = { workspace = true }
 diem-types = { workspace = true }
-storage-interface = { workspace = true }
-consensus-types = { workspace = true }
 rpassword = { workspace = true }
-parity-version = { workspace = true }
-alloy-rpc-types-trace = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-cfx-impl = { workspace = true }
 cfx-rpc-cfx-api = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 cfx-util-macros = { workspace = true }
-cfx-rpc-eth-impl = { workspace = true }
-cfx-rpc-utils = { workspace = true }
 cfx-rpc-builder = { workspace = true }
 jsonrpsee = { workspace = true }
-cfx-rpc-common-impl = { workspace = true }
-cfx-parity-trace-types = { workspace = true }
 cfx-tasks = { workspace = true }
 cfx-config = { workspace = true }
-cfxcore-types = { workspace = true }
-fallible-iterator = { workspace = true }
 chrono = { workspace = true }
 cfx-mallocator-utils = { workspace = true }
 

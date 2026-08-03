@@ -33,8 +33,8 @@ use crate::{
     ledger_info::LedgerInfo,
     proof::{accumulator::InMemoryAccumulator, TransactionInfoWithProof},
     term_state::{
-        DisputeEvent, ElectionEvent, NodeID, RegisterEvent, RetireEvent,
-        UpdateVotingPowerEvent,
+        DisputeEvent, DisputeEventV2, ElectionEvent, NodeID, RegisterEvent,
+        RetireEvent, UpdateVotingPowerEvent,
     },
     transaction::authenticator::{
         TransactionAuthenticator, TransactionAuthenticatorUnchecked,
@@ -372,6 +372,17 @@ impl DisputePayload {
             bcs::to_bytes(&event).unwrap(),
         )
     }
+
+    pub fn to_event_v2(&self, offense_epoch: u64) -> ContractEvent {
+        let event = DisputeEventV2 {
+            node_id: self.address,
+            offense_epoch,
+        };
+        ContractEvent::new(
+            DisputeEventV2::event_key(),
+            bcs::to_bytes(&event).unwrap(),
+        )
+    }
 }
 
 /// A transaction that has been signed.
@@ -492,15 +503,22 @@ impl SignedTransaction {
             .len()
     }
 
-    /// Checks that the signature of given transaction. Returns
-    /// `Ok(SignatureCheckedTransaction)` if the signature is valid.
-    pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
+    /// Verifies the authenticator's signature against the appropriate
+    /// signed message without consuming `self`. Returns `Ok(())` on a
+    /// valid signature.
+    pub fn verify_signature(&self) -> Result<()> {
         match self.payload() {
             TransactionPayload::PivotDecision(pivot_decision) => {
-                self.authenticator.verify(pivot_decision)?
+                self.authenticator.verify(pivot_decision)
             }
-            _ => self.authenticator.verify(&self.raw_txn)?,
+            _ => self.authenticator.verify(&self.raw_txn),
         }
+    }
+
+    /// Same as `verify_signature`, but consumes `self` and returns a
+    /// `SignatureCheckedTransaction` newtype that proves the check ran.
+    pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
+        self.verify_signature()?;
         Ok(SignatureCheckedTransaction(self))
     }
 }

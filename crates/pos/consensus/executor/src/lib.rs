@@ -52,8 +52,8 @@ use crate::{
     vm::PosVM,
 };
 use diem_types::term_state::{
+    decode_dispute_event,
     pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
-    DisputeEvent,
 };
 
 pub mod db_bootstrapper;
@@ -109,7 +109,6 @@ impl Executor {
         let retire_event_key = RetireEvent::event_key();
         let register_event_key = RegisterEvent::event_key();
         let update_voting_power_event_key = UpdateVotingPowerEvent::event_key();
-        let dispute_event_key = DisputeEvent::event_key();
 
         // Find the next pivot block.
         let mut pivot_decision = None;
@@ -129,10 +128,9 @@ impl Executor {
                     let election_event =
                         ElectionEvent::from_bytes(event.event_data())?;
                     new_pos_state.new_node_elected(&election_event)?;
-                } else if *event.key() == dispute_event_key {
-                    let dispute_event =
-                        DisputeEvent::from_bytes(event.event_data())?;
-                    new_pos_state.forfeit_node(&dispute_event.node_id)?;
+                } else if let Some(dispute) = decode_dispute_event(event) {
+                    let (node_id, offense_epoch) = dispute?;
+                    new_pos_state.forfeit_node(&node_id, offense_epoch)?;
                 }
             }
         }

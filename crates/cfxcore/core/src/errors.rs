@@ -3,22 +3,15 @@
 // See http://www.gnu.org/licenses/
 use crate::light_protocol::Error as LightProtocolError;
 use cfx_rpc_eth_types::Error as EthRpcError;
-pub use cfx_rpc_utils::error::{
-    error_codes::EXCEPTION_ERROR,
-    jsonrpc_error_helpers::error_object_owned_to_jsonrpc_error,
-};
+pub use cfx_rpc_utils::error::error_codes::EXCEPTION_ERROR;
 use cfx_statedb::Error as StateDbError;
 use cfx_storage::Error as StorageError;
 use cfxcore_errors::ProviderBlockError;
-use jsonrpc_core::{futures::future, Error as JsonRpcError, ErrorCode};
-use jsonrpsee::types::ErrorObjectOwned;
+use jsonrpsee::types::{error::INVALID_PARAMS_CODE, ErrorObjectOwned};
 use primitives::{account::AccountError, filter::FilterError};
 use rlp::DecoderError;
 use serde_json::Value;
-use std::{
-    fmt::{Debug, Display},
-    pin::Pin,
-};
+use std::fmt::{Debug, Display};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -34,10 +27,6 @@ pub enum Error {
     #[error(transparent)]
     LightProtocol(#[from] LightProtocolError),
     #[error(
-        "JsonRpcError directly constructed to return to Rpc peer. Error: {0}"
-    )]
-    JsonRpcError(#[from] JsonRpcError),
-    #[error(
         "JsonRpseeError directly constructed to return to Rpc peer. Error: {0}"
     )]
     JsonRpseeError(#[from] ErrorObjectOwned),
@@ -49,21 +38,18 @@ pub enum Error {
     Msg(String),
 }
 
-pub type BoxFuture<T> = Pin<Box<dyn future::Future<Output = Result<T>> + Send>>;
-
 pub type Result<T> = std::result::Result<T, Error>;
 
-impl From<Error> for JsonRpcError {
-    fn from(e: Error) -> JsonRpcError {
+impl From<Error> for ErrorObjectOwned {
+    fn from(e: Error) -> ErrorObjectOwned {
         match e {
-            Error::JsonRpcError(j) => j,
-            Error::JsonRpseeError(e) => error_object_owned_to_jsonrpc_error(e),
+            Error::JsonRpseeError(e) => e,
             Error::InvalidParam(param, details) => {
-                JsonRpcError {
-                    code: ErrorCode::InvalidParams,
-                    message: format!("Invalid parameters: {}", param),
-                    data: Some(Value::String(format!("{:?}", details))),
-                }
+                ErrorObjectOwned::owned(
+                    INVALID_PARAMS_CODE,
+                    format!("Invalid parameters: {}", param),
+                    Some(Value::String(format!("{:?}", details))),
+                )
             }
             Error::Msg(_)
             | Error::Decoder(_)
@@ -75,19 +61,14 @@ impl From<Error> for JsonRpcError {
             | Error::LightProtocol(_)
             | Error::StateDb(_)
             | Error::Storage(_)
-            | Error::Custom(_) => JsonRpcError {
-                code: ErrorCode::ServerError(EXCEPTION_ERROR),
-                message: format!("Error processing request: {}", e),
-                data: None,
+            | Error::Custom(_) => {
+                ErrorObjectOwned::owned(
+                    EXCEPTION_ERROR as i32,
+                    format!("Error processing request: {}", e),
+                    None::<()>,
+                )
             },
         }
-    }
-}
-
-impl From<Error> for ErrorObjectOwned {
-    fn from(e: Error) -> ErrorObjectOwned {
-        let err: JsonRpcError = e.into();
-        ErrorObjectOwned::owned(err.code.code() as i32, err.message, err.data)
     }
 }
 
@@ -105,18 +86,18 @@ impl From<ProviderBlockError> for Error {
 
 impl From<EthRpcError> for Error {
     fn from(e: EthRpcError) -> Error {
-        let e: JsonRpcError = error_object_owned_to_jsonrpc_error(e.into());
+        let e = ErrorObjectOwned::from(e);
         e.into()
     }
 }
 
 pub(crate) fn invalid_params<T: Debug>(param: &str, details: T) -> Error {
-    Error::JsonRpcError(JsonRpcError {
-        code: ErrorCode::InvalidParams,
-        message: format!("Invalid parameters: {}", param),
-        data: Some(Value::String(format!("{:?}", details))),
-    })
-    .into()
+    let err = ErrorObjectOwned::owned(
+        INVALID_PARAMS_CODE,
+        format!("Invalid parameters: {}", param),
+        Some(Value::String(format!("{:?}", details))),
+    );
+    Error::JsonRpseeError(err).into()
 }
 
 pub(crate) fn invalid_params_check<T, E: Display>(

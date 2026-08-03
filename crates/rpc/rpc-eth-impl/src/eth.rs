@@ -18,12 +18,10 @@ use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::{
     error::{
         errors::{EthApiError, RpcPoolError},
-        jsonrpc_error_helpers::{
-            request_rejected_in_catch_up_mode, unknown_block,
-        },
         jsonrpsee_error_helpers::{
             internal_error, internal_error_with_data, invalid_params,
-            invalid_params_rpc_err,
+            invalid_params_rpc_err, request_rejected_in_catch_up_mode,
+            unknown_block,
         },
     },
     helpers::SpawnBlocking,
@@ -193,7 +191,7 @@ impl EthApi {
         let transaction_hash = tx.hash();
         let transaction_index: U256 = idx.into();
         let block_hash = b.pivot_header.hash();
-        let block_height: U256 = b.pivot_header.height().into();
+        let block_height: U64 = b.pivot_header.height().into();
 
         let logs: Vec<_> = receipt
             .logs
@@ -348,9 +346,9 @@ impl EthApi {
     pub fn sync_status(&self) -> SyncStatus {
         if self.sync.catch_up_mode() {
             SyncStatus::Info(SyncInfo {
-                starting_block: U256::from(self.consensus.block_count()),
-                current_block: U256::from(self.consensus.block_count()),
-                highest_block: U256::from(
+                starting_block: U64::from(self.consensus.block_count()),
+                current_block: U64::from(self.consensus.block_count()),
+                highest_block: U64::from(
                     self.sync.get_synchronization_graph().block_count(),
                 ),
                 warp_chunks_amount: None,

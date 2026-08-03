@@ -71,6 +71,7 @@ impl GethTracer {
                             .expect("should success");
                         TracingInspectorConfig::from_geth_prestate_config(&c)
                     }
+                    Erc7562Tracer => TracingInspectorConfig::none(),
                 }
             }
             Some(GethDebugTracerType::JsTracer(_)) => {
@@ -145,7 +146,7 @@ impl GethTracer {
                         .unwrap();
                     GethTrace::PreStateTracer(frame)
                 }
-                NoopTracer | MuxTracer | FlatCallTracer => {
+                NoopTracer | MuxTracer | FlatCallTracer | Erc7562Tracer => {
                     GethTrace::NoopTracer(NoopFrame::default())
                 }
             },

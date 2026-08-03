@@ -109,7 +109,7 @@ impl Signature {
 // manual implementation large arrays don't have trait impls by default.
 // remove when integer generics exist
 impl PartialEq for Signature {
-    fn eq(&self, other: &Self) -> bool { &self.0[..] == &other.0[..] }
+    fn eq(&self, other: &Self) -> bool { self.0[..] == other.0[..] }
 }
 
 // manual implementation required in Rust 1.13+, see
@@ -164,8 +164,8 @@ impl From<[u8; 65]> for Signature {
     fn from(s: [u8; 65]) -> Self { Signature(s) }
 }
 
-impl Into<[u8; 65]> for Signature {
-    fn into(self) -> [u8; 65] { self.0 }
+impl From<Signature> for [u8; 65] {
+    fn from(val: Signature) -> Self { val.0 }
 }
 
 impl From<Signature> for H520 {

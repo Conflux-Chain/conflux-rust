@@ -10,19 +10,10 @@ use crate::PosLedgerDB;
 use diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
 use diem_types::{
     account_address::AccountAddress,
-    block_metadata::NewBlockEvent,
+    block_metadata::{new_block_event_key, NewBlockEvent},
     contract_event::ContractEvent,
-    event::EventKey,
-    proptest_types::{AccountInfoUniverse, ContractEventGen},
 };
-use itertools::Itertools;
-use proptest::{
-    collection::{hash_set, vec},
-    prelude::*,
-    strategy::Union,
-};
-use rand::Rng;
-use std::collections::HashMap;
+use proptest::{collection::vec, prelude::*};
 use tempfile::TempDir;
 
 fn save(

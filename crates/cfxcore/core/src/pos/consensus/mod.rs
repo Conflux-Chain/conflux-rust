@@ -27,8 +27,6 @@ mod persistent_liveness_storage;
 mod round_manager;
 mod state_computer;
 mod state_replication;
-#[cfg(any(test, feature = "fuzzing"))]
-mod test_utils;
 mod txn_manager;
 mod util;
 
@@ -37,6 +35,4 @@ pub mod consensus_provider;
 
 pub use self::network::NetworkTask;
 pub use consensusdb::ConsensusDB;
-#[cfg(feature = "fuzzing")]
-pub use round_manager::round_manager_fuzzing;
 pub use util::TestCommand;

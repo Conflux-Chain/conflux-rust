@@ -144,11 +144,11 @@ where
         } else {
             base_weight.clone()
         };
-        let search_dir = f(&left_weight, &node);
+        let search_dir = f(&left_weight, node);
 
         let found = SearchResult::Found {
             base_weight: left_weight,
-            node: &node,
+            node,
         };
 
         if matches!(search_dir, Left | LeftOrStop) {

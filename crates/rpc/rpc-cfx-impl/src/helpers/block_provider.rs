@@ -58,10 +58,15 @@ pub fn build_block(
                         }
                         Some(total_gas_used)
                     }
-                    None => Some(
-                        execution_result.block_receipts.receipts[tx_len - 1]
-                            .accumulated_gas_used,
-                    ),
+                    None => {
+                        let total_gas_used = if tx_len == 0 {
+                            U256::zero()
+                        } else {
+                            execution_result.block_receipts.receipts[tx_len - 1]
+                                .accumulated_gas_used
+                        };
+                        Some(total_gas_used)
+                    }
                 }
             }
             None => None,
@@ -218,8 +223,7 @@ pub fn build_block(
         transactions,
         custom: b
             .block_header
-            .custom()
-            .clone()
+            .custom_items()
             .into_iter()
             .map(Into::into)
             .collect(),
@@ -269,6 +273,6 @@ pub fn build_header(
             .pow_hash
             .map(|pow_hash| pow::pow_hash_to_quality(&pow_hash, &h.nonce())),
         pos_reference: *h.pos_reference(),
-        custom: h.custom().clone().into_iter().map(Into::into).collect(),
+        custom: h.custom_items().into_iter().map(Into::into).collect(),
     })
 }

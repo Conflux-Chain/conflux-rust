@@ -9,7 +9,6 @@ use cfxcore::{
     },
 };
 use cfxkey::{Error as EthkeyError, Generator, KeyPair, Random};
-use clap;
 use diem_crypto::{
     key_file::save_pri_key, HashValue, Uniform, ValidCryptoMaterialStringExt,
 };
@@ -166,7 +165,7 @@ fn elect_genesis_committee(
 
 fn execute(command: clap::Command) -> Result<String, Error> {
     let matches = command.get_matches();
-    return match matches.subcommand() {
+    match matches.subcommand() {
         Some(("random", sub_matches)) => {
             let initial_seed: H256 = sub_matches
                 .get_one::<String>("initial-seed")
@@ -174,16 +173,13 @@ fn execute(command: clap::Command) -> Result<String, Error> {
                 .clone()
                 .parse()
                 .expect("invalid initial seed");
-            let num_validator = sub_matches
-                .get_one::<usize>("num-validator")
-                .unwrap_or(&1)
-                .clone();
-            let num_genesis_validator = sub_matches
+            let num_validator =
+                *sub_matches.get_one::<usize>("num-validator").unwrap_or(&1);
+            let num_genesis_validator = *sub_matches
                 .get_one::<usize>("num-genesis-validator")
-                .unwrap_or(&1)
-                .clone();
+                .unwrap_or(&1);
             let chain_id =
-                sub_matches.get_one::<u32>("chain-id").unwrap_or(&0).clone();
+                *sub_matches.get_one::<u32>("chain-id").unwrap_or(&0);
 
             if num_genesis_validator > num_validator {
                 panic!("The number of genesis validators cannot be more than the total number of \
@@ -205,7 +201,7 @@ fn execute(command: clap::Command) -> Result<String, Error> {
                     ConsensusVRFPrivateKey::generate(&mut rng);
                 save_pri_key(
                     private_key_dir.join(PathBuf::from(i.to_string())),
-                    &[],
+                    [],
                     &(&private_key, &vrf_private_key),
                 )
                 .expect("Error saving private keys");
@@ -276,11 +272,11 @@ fn execute(command: clap::Command) -> Result<String, Error> {
             let mut public_key_file = File::open(&public_key_path)?;
             let mut contents = String::new();
             public_key_file.read_to_string(&mut contents)?;
-            let mut lines = contents.as_str().lines();
+            let lines = contents.as_str().lines();
 
             let mut public_keys = Vec::new();
             let mut genesis_nodes = Vec::new();
-            while let Some(key_str) = lines.next() {
+            for key_str in lines {
                 let key_array: Vec<_> = key_str.split(",").collect();
                 let public_key =
                     ConsensusPublicKey::from_encoded_string(key_array[0])
@@ -325,5 +321,5 @@ fn execute(command: clap::Command) -> Result<String, Error> {
         }
 
         _ => unreachable!("clap should ensure we don't get here"),
-    };
+    }
 }

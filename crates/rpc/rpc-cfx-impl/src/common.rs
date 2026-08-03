@@ -273,7 +273,7 @@ impl CommonRpcImpl {
     ) -> CoreResult<RpcBlock> {
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
-        let epoch_number = epoch_number.as_usize() as u64;
+        let epoch_number = epoch_number.as_u64();
 
         info!(
             "RPC Request: cfx_getBlockByHashWithPivotAssumption block_hash={:?} pivot_hash={:?} epoch_number={:?}",

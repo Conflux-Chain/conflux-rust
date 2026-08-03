@@ -7,6 +7,8 @@
 
 #![forbid(unsafe_code)]
 
+extern crate rand_08 as rand;
+
 pub use account_address::AccountAddress as PeerId;
 
 pub mod account_address;

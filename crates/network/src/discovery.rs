@@ -96,7 +96,7 @@ impl Discovery {
         config: DiscoveryConfiguration,
     ) -> Discovery {
         Discovery {
-            id: key.public().clone(),
+            id: *key.public(),
             id_hash: keccak(key.public()),
             secret: key.secret().clone(),
             public_endpoint: public,
@@ -177,7 +177,7 @@ impl Discovery {
         )?;
 
         self.in_flight_pings.insert(
-            node.id.clone(),
+            node.id,
             PingRequest {
                 sent_at: Instant::now(),
                 node: node.clone(),
@@ -195,7 +195,7 @@ impl Discovery {
     ) -> Result<H256, Error> {
         let packet = assemble_packet(packet_id, payload, &self.secret)?;
         let hash = H256::from_slice(&packet[1..=32]);
-        self.send_to(uio, packet, address.clone());
+        self.send_to(uio, packet, *address);
         Ok(hash)
     }
 
@@ -210,12 +210,12 @@ impl Discovery {
     ) -> Result<(), Error> {
         // validate packet
         if packet.len() < 32 + 65 + 4 + 1 {
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
 
         let hash_signed = keccak(&packet[32..]);
         if hash_signed[..] != packet[0..32] {
-            return Err(Error::BadProtocol.into());
+            return Err(Error::BadProtocol);
         }
 
         let signed = &packet[(32 + 65)..];
@@ -247,7 +247,7 @@ impl Discovery {
             .as_secs();
         if self.check_timestamps && timestamp < secs_since_epoch {
             debug!("Expired packet");
-            return Err(Error::Expired.into());
+            return Err(Error::Expired);
         }
         Ok(())
     }
@@ -261,8 +261,7 @@ impl Discovery {
         if !self.ping_throttling.try_acquire(from.ip()) {
             return Err(Error::Throttling(ThrottlingReason::PacketThrottled(
                 "PING",
-            ))
-            .into());
+            )));
         }
 
         let ping_from = NodeEndpoint::from_rlp(&rlp.at(1)?)?;
@@ -272,7 +271,7 @@ impl Discovery {
 
         let mut response = RlpStream::new_list(3);
         let pong_to = NodeEndpoint {
-            address: from.clone(),
+            address: *from,
             udp_port: ping_from.udp_port,
         };
         // Here the PONG's `To` field should be the node we are
@@ -289,7 +288,7 @@ impl Discovery {
         self.send_packet(uio, PACKET_PONG, from, &response.out())?;
 
         let entry = NodeEntry {
-            id: node_id.clone(),
+            id: *node_id,
             endpoint: pong_to,
         };
         // TODO handle the error before sending pong
@@ -353,14 +352,13 @@ impl Discovery {
         if !self.find_nodes_throttling.try_acquire(from.ip()) {
             return Err(Error::Throttling(ThrottlingReason::PacketThrottled(
                 "FIND_NODES",
-            ))
-            .into());
+            )));
         }
 
         let msg: FindNodeMessage = rlp.as_val()?;
         self.check_timestamp(msg.expire_timestamp)?;
         let neighbors = msg.sample(
-            &*uio.node_db.read(),
+            &uio.node_db.read(),
             &self.ip_filter,
             self.config.discover_node_count,
         )?;
@@ -532,7 +530,7 @@ impl Discovery {
         )?;
 
         self.in_flight_find_nodes
-            .insert(node.id.clone(), FindNodeRequest::default());
+            .insert(node.id, FindNodeRequest::default());
 
         trace!("Sent FindNode to {:?}", node);
         Ok(())
@@ -700,7 +698,7 @@ impl FindNodeMessage {
 
         let value = match self.tag_value {
             Some(ref value) => value,
-            None => return Err(Error::BadProtocol.into()),
+            None => return Err(Error::BadProtocol),
         };
 
         let ids = node_db.sample_trusted_node_ids_with_tag(

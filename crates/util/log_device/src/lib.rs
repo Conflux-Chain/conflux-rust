@@ -38,10 +38,9 @@ const SEGMENT_FILE_NAME_PREFIX: &str = "segment_";
 ///                      /segment_1
 ///                      /...
 ///         /...
-
+///
 /// There is an independent file for each segment in a log.
 /// This is to facilitate log trimming in garbage collection.
-
 #[derive(Clone, Copy, Debug, Default, RlpDecodable, RlpEncodable)]
 pub struct StripeReference {
     /// Segment id of the stripe.
@@ -72,7 +71,7 @@ impl LogDeviceManager {
             &db_dir_path,
             None,
             db::DatabaseCompactionProfile::default(),
-            NUM_COLUMNS.clone(),
+            NUM_COLUMNS,
             false, /* disable_wal */
         );
 
@@ -112,12 +111,11 @@ impl LogDeviceManager {
             .key_value()
             .get(COL_DB, DB_KEY_LOG_DEVICE_NUM)
             .expect("Low level database error.");
-        let device_num = match res {
+
+        match res {
             Some(value) => LittleEndian::read_u64(&value) as usize,
             None => 0,
-        };
-
-        device_num
+        }
     }
 
     fn set_device_num_to_db(&self, device_num: usize) {
@@ -264,8 +262,7 @@ impl LogDevice {
     pub fn trim(&self, stripe: &StripeInfo) {
         let mut inner = self.inner.lock();
         let new_head = inner.check_trim(stripe.stripe_ref.segment_id);
-        if new_head.is_some() {
-            let new_head = new_head.unwrap();
+        if let Some(new_head) = new_head {
             self.set_stripe_info_to_db(self.head_db_key.as_bytes(), &new_head);
             self.db.key_value().flush().expect("DB flush failed.");
             inner.trim(&new_head);
@@ -401,8 +398,7 @@ impl LogDeviceInner {
             self.file_cache.get_mut(&stripe_ref.segment_id).unwrap();
         let offset = segment_file.seek(SeekFrom::Start(stripe_ref.offset))?;
         assert_eq!(offset, stripe_ref.offset);
-        let mut stripe: Vec<u8> = Vec::new();
-        stripe.resize(4, 0);
+        let mut stripe: Vec<u8> = vec![0; 4];
         let read_size = segment_file.read(&mut stripe[0..4])?;
         assert_eq!(read_size, 4);
         let payload_size = LittleEndian::read_u32(&stripe[0..4]) as usize;
@@ -475,8 +471,8 @@ mod tests {
     }
 
     fn read_and_check(
-        log_device: Arc<LogDevice>, stripes: &Vec<Vec<u8>>,
-        stripe_refs: &Vec<StripeReference>, start: usize, end: usize,
+        log_device: Arc<LogDevice>, stripes: &[Vec<u8>],
+        stripe_refs: &[StripeReference], start: usize, end: usize,
     ) {
         for i in start..end {
             let stripe = &stripes[i];
@@ -584,7 +580,7 @@ mod tests {
 
         let mut log_device_path_dir = path_dir.clone();
         let mut log_device_dir = String::from(LOG_DEVICE_DIR_PREFIX);
-        log_device_dir.push_str("0");
+        log_device_dir.push('0');
         log_device_path_dir.push(log_device_dir.as_str());
 
         let mut segment_0_path = log_device_path_dir.clone();
@@ -650,7 +646,7 @@ mod tests {
 
         let mut log_device_path_dir = path_dir.clone();
         let mut log_device_dir = String::from(LOG_DEVICE_DIR_PREFIX);
-        log_device_dir.push_str("0");
+        log_device_dir.push('0');
         log_device_path_dir.push(log_device_dir.as_str());
         let mut segment_0_path = log_device_path_dir.clone();
         segment_0_path.push("segment_0");
@@ -658,7 +654,7 @@ mod tests {
 
         let mut log_device_path_dir = path_dir.clone();
         let mut log_device_dir = String::from(LOG_DEVICE_DIR_PREFIX);
-        log_device_dir.push_str("1");
+        log_device_dir.push('1');
         log_device_path_dir.push(log_device_dir.as_str());
         let mut segment_0_path = log_device_path_dir.clone();
         segment_0_path.push("segment_0");
@@ -666,7 +662,7 @@ mod tests {
 
         let mut log_device_path_dir = path_dir.clone();
         let mut log_device_dir = String::from(LOG_DEVICE_DIR_PREFIX);
-        log_device_dir.push_str("2");
+        log_device_dir.push('2');
         log_device_path_dir.push(log_device_dir.as_str());
         let mut segment_0_path = log_device_path_dir.clone();
         segment_0_path.push("segment_0");
@@ -674,7 +670,7 @@ mod tests {
 
         let mut log_device_path_dir = path_dir.clone();
         let mut log_device_dir = String::from(LOG_DEVICE_DIR_PREFIX);
-        log_device_dir.push_str("3");
+        log_device_dir.push('3');
         log_device_path_dir.push(log_device_dir.as_str());
         let mut segment_0_path = log_device_path_dir.clone();
         segment_0_path.push("segment_0");

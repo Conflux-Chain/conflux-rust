@@ -62,7 +62,6 @@ pub(crate) fn start_shared_mempool(
         validator,
         peer_manager,
         subscribers,
-        commited_pos_state: db_with_cache.db.reader.get_latest_pos_state(),
     };
 
     executor.spawn(coordinator(

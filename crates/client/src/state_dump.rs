@@ -127,7 +127,7 @@ fn prepare_state_db(
 
     let state_db = StateDbGeneric::new(state);
 
-    Ok((state_db, state_root.clone()))
+    Ok((state_db, *state_root))
 }
 
 fn export_space_accounts(
@@ -211,7 +211,7 @@ fn export_space_accounts(
             storage_map.get(&address).cloned()
         } else {
             if let Some(_storage) = storage_map.get(&address) {
-                println(&format!("no-contract account have storage"));
+                println("no-contract account have storage");
             }
             None
         };
@@ -255,7 +255,7 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
         let mut inner_callback = |(key, value): (Vec<u8>, Box<[u8]>)| {
             total_key_count += 1;
 
-            if total_key_count % 10000 == 0 {
+            if total_key_count.is_multiple_of(10000) {
                 println(&format!(
                     "total_key_count: {}, core_space_key_count: {}",
                     total_key_count, core_space_key_count
@@ -283,7 +283,7 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
 
         state.read_all_with_callback(start_key, &mut inner_callback, true)?;
 
-        if account_states.len() > 0 {
+        if !account_states.is_empty() {
             println("Start to read account code and storage data...");
         }
 
@@ -367,7 +367,7 @@ fn get_contract_storage(
                 rlp::decode(&value).expect("Failed to decode storage value");
             storage.insert(h256_storage_key, storage_value_with_owner.value);
 
-            if storage.len() == 5000_000 {
+            if storage.len() == 5_000_000 {
                 chunk_count += 1;
                 let name = format!("{:?}-chunk{}.json", address, chunk_count);
                 let file_path = Path::new(&config.out_put_path).join(&name);

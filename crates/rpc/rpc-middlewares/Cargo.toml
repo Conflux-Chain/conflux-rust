@@ -15,9 +15,7 @@ license-file.workspace = true
 [dependencies]
 jsonrpsee = { workspace = true, features = ["server", "ws-client"] }
 throttling = { workspace = true }
-futures-util = { workspace = true }
 log = { workspace = true }
-jsonrpsee-types = { workspace = true }
 cfx-rpc-utils = { workspace = true }
 cfx-util-macros = { workspace = true }
 lazy_static = { workspace = true }  
@@ -27,3 +25,6 @@ futures = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = {workspace = true}
 tokio = { workspace = true }
+thiserror = { workspace = true }
+http = { workspace = true }
+tower-http = { workspace = true, features = ["cors"] }

@@ -104,7 +104,7 @@ build_config! {
         //
         // `dev` mode is for users to run a single node that automatically
         //     generates blocks with fixed intervals
-        //     * You are expected to also set `jsonrpc_ws_port`, `jsonrpc_tcp_port`,
+        //     * You are expected to also set `jsonrpc_ws_port`,
         //       and `jsonrpc_http_port` if you want RPC functionalities.
         //     * generate blocks automatically without PoW.
         //     * Skip catch-up mode even there is no peer
@@ -203,9 +203,15 @@ build_config! {
         (cip145_fix_transition_height, (Option<u64>), Some(229140000))
         // For test only
         (align_evm_transition_height, (u64), u64::MAX)
+
         // V3.1
-        (cip166_transition_height, (Option<u64>), None)
         (osaka_opcode_transition_height, (Option<u64>), None)
+        (cip166_transition_height, (Option<u64>), None)
+        (cip167_transition_height, (Option<u64>), None)
+        (cip172_transition_height, (Option<u64>), None)
+        (cip174_transition_height, (Option<u64>), None)
+        (cip175_transition_height, (Option<u64>), None)
+        (cip176_transition_height, (Option<u64>), None)
 
         // Mining section.
         (mining_author, (Option<String>), None)
@@ -402,6 +408,7 @@ build_config! {
         (pos_cip156_transition_view, (u64), 2745000)
         // 6 months with 30s rounds
         (pos_cip156_dispute_locked_views, (u64), 6 * 30 * 24 * 60 * 2)
+        (pos_cip173_transition_view, (u64), u64::MAX)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
         (pos_started_as_voter, (bool), true)
 
@@ -458,41 +465,32 @@ build_config! {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Configuration {
     pub raw_conf: RawConfiguration,
 }
 
-impl Default for Configuration {
-    fn default() -> Self {
-        Configuration {
-            raw_conf: Default::default(),
-        }
-    }
-}
-
 impl Configuration {
     pub fn parse(matches: &clap::ArgMatches) -> Result<Configuration, String> {
-        let mut config = Configuration::default();
-        config.raw_conf = RawConfiguration::parse(matches)?;
+        let mut raw_conf = RawConfiguration::parse(matches)?;
 
         if matches.get_flag("archive") {
-            config.raw_conf.node_type = Some(NodeType::Archive);
+            raw_conf.node_type = Some(NodeType::Archive);
         } else if matches.get_flag("full") {
-            config.raw_conf.node_type = Some(NodeType::Full);
+            raw_conf.node_type = Some(NodeType::Full);
         } else if matches.get_flag("light") {
-            config.raw_conf.node_type = Some(NodeType::Light);
+            raw_conf.node_type = Some(NodeType::Light);
         }
 
         CIP112_TRANSITION_HEIGHT
-            .set(config.raw_conf.cip112_transition_height.unwrap_or(u64::MAX))
+            .set(raw_conf.cip112_transition_height.unwrap_or(u64::MAX))
             .expect("called once");
 
         USE_SIMPLE_RPC_ADDRESS
-            .set(config.raw_conf.rpc_address_simple_mode)
+            .set(raw_conf.rpc_address_simple_mode)
             .expect("called once");
 
-        Ok(config)
+        Ok(Configuration { raw_conf })
     }
 
     pub fn from_file(config_path: &str) -> Result<Configuration, String> {
@@ -542,7 +540,7 @@ impl Configuration {
         if let Some(addr) = self.raw_conf.public_address.clone() {
             let addr_ip = if let Some(idx) = addr.find(":") {
                 warn!("Public address configuration should not contain port! (val = {}). Content after ':' is ignored.", &addr);
-                (&addr[0..idx]).to_string()
+                addr[0..idx].to_string()
             } else {
                 addr
             };
@@ -586,13 +584,15 @@ impl Configuration {
     }
 
     pub fn cache_config(&self) -> CacheConfig {
-        let mut cache_config = CacheConfig::default();
-        cache_config.ledger = self.raw_conf.ledger_cache_size;
-        cache_config.invalid_block_hashes_cache_size_in_count =
-            self.raw_conf.invalid_block_hash_cache_size_in_count;
-        cache_config.target_difficulties_cache_size_in_count =
-            self.raw_conf.target_difficulties_cache_size_in_count;
-        cache_config
+        CacheConfig {
+            ledger: self.raw_conf.ledger_cache_size,
+            invalid_block_hashes_cache_size_in_count: self
+                .raw_conf
+                .invalid_block_hash_cache_size_in_count,
+            target_difficulties_cache_size_in_count: self
+                .raw_conf
+                .target_difficulties_cache_size_in_count,
+        }
     }
 
     pub fn db_config(&self) -> (PathBuf, DatabaseConfig) {
@@ -612,9 +612,9 @@ impl Configuration {
             };
         let db_config = db::db_config(
             &db_dir,
-            self.raw_conf.rocksdb_cache_size.clone(),
+            self.raw_conf.rocksdb_cache_size,
             compact_profile,
-            NUM_COLUMNS.clone(),
+            NUM_COLUMNS,
             self.raw_conf.rocksdb_disable_wal,
         );
         (db_dir, db_config)
@@ -693,15 +693,9 @@ impl Configuration {
                     None
                 },
 
-                debug_invalid_state_root_epoch: match &self
+                debug_invalid_state_root_epoch: self
                     .raw_conf
-                    .debug_invalid_state_root_epoch
-                {
-                    Some(epoch_hex) => {
-                        Some(H256::from_str(&epoch_hex).expect("debug_invalid_state_root_epoch byte length is incorrect."))
-                    }
-                    None => None,
-                },
+                    .debug_invalid_state_root_epoch.as_ref().map(|epoch_hex| H256::from_str(epoch_hex).expect("debug_invalid_state_root_epoch byte length is incorrect.")),
                 force_recompute_height_during_construct_pivot: self.raw_conf.force_recompute_height_during_construct_pivot,
                 recovery_latest_mpt_snapshot: self.raw_conf.recovery_latest_mpt_snapshot,
                 use_isolated_db_for_mpt_table: self.raw_conf.use_isolated_db_for_mpt_table,
@@ -851,7 +845,7 @@ impl Configuration {
                     false
                 }
             },
-            single_mpt_space: self.raw_conf.single_mpt_space.clone(),
+            single_mpt_space: self.raw_conf.single_mpt_space,
             cip90a: self
                 .raw_conf
                 .cip90_transition_height
@@ -1151,9 +1145,9 @@ impl Configuration {
         HttpConfiguration::new(
             Some((127, 0, 0, 1)),
             self.raw_conf.jsonrpc_local_http_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
+            self.raw_conf.jsonrpc_cors.clone(),
         )
     }
 
@@ -1162,6 +1156,7 @@ impl Configuration {
             Some((127, 0, 0, 1)),
             self.raw_conf.jsonrpc_local_ws_port,
             self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            self.raw_conf.jsonrpc_cors.clone(),
         )
     }
 
@@ -1169,9 +1164,9 @@ impl Configuration {
         HttpConfiguration::new(
             None,
             self.raw_conf.jsonrpc_http_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
+            self.raw_conf.jsonrpc_cors.clone(),
         )
     }
 
@@ -1180,6 +1175,7 @@ impl Configuration {
             None,
             self.raw_conf.jsonrpc_ws_port,
             self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            self.raw_conf.jsonrpc_cors.clone(), // use same cors option as http
         )
     }
 
@@ -1187,9 +1183,9 @@ impl Configuration {
         HttpConfiguration::new(
             None,
             self.raw_conf.jsonrpc_http_eth_port,
-            self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
+            self.raw_conf.jsonrpc_cors.clone(),
         )
     }
 
@@ -1198,11 +1194,12 @@ impl Configuration {
             None,
             self.raw_conf.jsonrpc_ws_eth_port,
             self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            self.raw_conf.jsonrpc_cors.clone(), // use same cors option as http
         )
     }
 
     pub fn jsonrpsee_server_builder(&self) -> ServerConfigBuilder {
-        let builder = ServerConfigBuilder::default()
+        ServerConfigBuilder::default()
             .max_request_body_size(self.raw_conf.jsonrpc_max_request_body_size)
             .max_response_body_size(
                 self.raw_conf.jsonrpc_max_response_body_size,
@@ -1213,9 +1210,7 @@ impl Configuration {
             )
             .set_message_buffer_capacity(
                 self.raw_conf.jsonrpc_message_buffer_capacity,
-            );
-
-        builder
+            )
     }
 
     pub fn execution_config(&self) -> ConsensusExecutionConfiguration {
@@ -1250,24 +1245,15 @@ impl Configuration {
     }
 
     pub fn is_test_mode(&self) -> bool {
-        match self.raw_conf.mode.as_ref().map(|s| s.as_str()) {
-            Some("test") => true,
-            _ => false,
-        }
+        matches!(self.raw_conf.mode.as_deref(), Some("test"))
     }
 
     pub fn is_dev_mode(&self) -> bool {
-        match self.raw_conf.mode.as_ref().map(|s| s.as_str()) {
-            Some("dev") => true,
-            _ => false,
-        }
+        matches!(self.raw_conf.mode.as_deref(), Some("dev"))
     }
 
     pub fn is_test_or_dev_mode(&self) -> bool {
-        match self.raw_conf.mode.as_ref().map(|s| s.as_str()) {
-            Some("dev") | Some("test") => true,
-            _ => false,
-        }
+        matches!(self.raw_conf.mode.as_deref(), Some("dev") | Some("test"))
     }
 
     pub fn is_consortium(&self) -> bool { self.raw_conf.is_consortium }
@@ -1367,6 +1353,7 @@ impl Configuration {
             self.raw_conf.pos_fix_cip136_out_queue_locked_views,
             self.raw_conf.pos_cip156_transition_view,
             self.raw_conf.pos_cip156_dispute_locked_views,
+            self.raw_conf.pos_cip173_transition_view,
         )
     }
 
@@ -1563,10 +1550,25 @@ impl Configuration {
         // hardfork (V3.1)
         set_conf!(
             self.raw_conf.osaka_opcode_transition_height.unwrap_or(default_transition_time);
-            params.transition_heights => { cip166 }
+            params.transition_heights => { cip166, cip167, cip172, cip174, cip175, cip176 }
         );
         if let Some(x) = self.raw_conf.cip166_transition_height {
             params.transition_heights.cip166 = x;
+        }
+        if let Some(x) = self.raw_conf.cip167_transition_height {
+            params.transition_heights.cip167 = x;
+        }
+        if let Some(x) = self.raw_conf.cip172_transition_height {
+            params.transition_heights.cip172 = x;
+        }
+        if let Some(x) = self.raw_conf.cip174_transition_height {
+            params.transition_heights.cip174 = x;
+        }
+        if let Some(x) = self.raw_conf.cip175_transition_height {
+            params.transition_heights.cip175 = x;
+        }
+        if let Some(x) = self.raw_conf.cip176_transition_height {
+            params.transition_heights.cip176 = x;
         }
     }
 }
@@ -1578,7 +1580,7 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
             .split(',')
             // ignore empty strings
             .filter(|s| !s.is_empty())
-            .map(|s| match validate_node_url(s).map(Into::into) {
+            .map(|s| match validate_node_url(s){
                 None => Ok(s.to_owned()),
                 Some(network::Error::AddressResolve(_)) => Err(format!(
                     "Failed to resolve hostname of a boot node: {}",

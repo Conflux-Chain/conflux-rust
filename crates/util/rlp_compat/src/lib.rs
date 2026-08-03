@@ -146,8 +146,8 @@ mod tests {
 
     #[test]
     fn decode_empty_payload() {
-        assert_eq!(rlp_04::decode::<bool>(&[0x80]).unwrap(), false);
-        assert_eq!(rlp::decode::<bool>(&[0x80]).unwrap(), false);
+        assert!(!rlp_04::decode::<bool>(&[0x80]).unwrap());
+        assert!(!rlp::decode::<bool>(&[0x80]).unwrap());
 
         assert!(decode::<StrictBool>(&[0x80]).is_err());
         assert_eq!(
@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn decode_zero_byte() {
-        assert_eq!(rlp_04::decode::<bool>(&[0x00]).unwrap(), false);
+        assert!(!rlp_04::decode::<bool>(&[0x00]).unwrap());
         assert!(rlp::decode::<bool>(&[0x00]).is_err());
 
         assert_eq!(decode::<StrictBool>(&[0x00]).unwrap(), StrictBool(false));
@@ -178,8 +178,8 @@ mod tests {
 
     #[test]
     fn decode_one_byte() {
-        assert_eq!(rlp_04::decode::<bool>(&[0x01]).unwrap(), true);
-        assert_eq!(rlp::decode::<bool>(&[0x01]).unwrap(), true);
+        assert!(rlp_04::decode::<bool>(&[0x01]).unwrap());
+        assert!(rlp::decode::<bool>(&[0x01]).unwrap());
 
         assert_eq!(decode::<StrictBool>(&[0x01]).unwrap(), StrictBool(true));
         assert_eq!(
@@ -203,9 +203,8 @@ mod tests {
                 vec![0x81, byte]
             };
 
-            assert_eq!(
+            assert!(
                 rlp_04::decode::<bool>(&rlp_bytes).unwrap(),
-                true,
                 "rlp_04 byte {:#04x}",
                 byte
             );

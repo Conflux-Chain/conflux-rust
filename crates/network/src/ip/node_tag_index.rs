@@ -10,7 +10,6 @@ use crate::{
     node_table::{NodeId, NodeTable},
     Node,
 };
-use rand::thread_rng;
 use std::collections::{HashMap, HashSet};
 
 /// Tag based node index, so as to filter nodes by tag in node database.
@@ -46,9 +45,9 @@ impl NodeTagIndex {
     ) -> bool {
         self.items
             .entry(key)
-            .or_insert_with(Default::default)
+            .or_default()
             .entry(value)
-            .or_insert_with(Default::default)
+            .or_default()
             .get_mut_or_insert_with(subnet, Default::default)
             .insert(id)
     }
@@ -84,7 +83,7 @@ impl NodeTagIndex {
     ) -> Option<HashSet<NodeId>> {
         let buckets = self.items.get(key)?.get(value)?;
 
-        let mut rng = thread_rng();
+        let mut rng = rand::rng();
         let mut sampled = HashSet::new();
 
         for _ in 0..count {
@@ -107,7 +106,7 @@ impl NodeTagIndex {
         let subnet = SubnetType::C.subnet(&ip);
 
         for (key, value) in node.tags.iter() {
-            self.insert(node.id.clone(), subnet, key.clone(), value.clone());
+            self.insert(node.id, subnet, key.clone(), value.clone());
         }
     }
 

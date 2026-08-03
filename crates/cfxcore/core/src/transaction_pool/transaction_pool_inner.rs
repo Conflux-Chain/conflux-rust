@@ -1029,18 +1029,24 @@ impl TransactionPoolInner {
             );
             match transaction.unsigned {
                 Transaction::Native(ref utx) => {
-                    need_balance += utx.value().clone();
+                    need_balance =
+                        need_balance.saturating_add(utx.value().clone());
                     if sponsored_gas == U256::from(0) {
-                        need_balance += estimate_gas_fee;
+                        need_balance =
+                            need_balance.saturating_add(estimate_gas_fee);
                     }
                     if sponsored_storage == 0 {
-                        need_balance += U256::from(*utx.storage_limit())
-                            * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                        need_balance = need_balance.saturating_add(
+                            U256::from(*utx.storage_limit())
+                                * *DRIPS_PER_STORAGE_COLLATERAL_UNIT,
+                        );
                     }
                 }
                 Transaction::Ethereum(ref utx) => {
-                    need_balance += utx.value().clone();
-                    need_balance += estimate_gas_fee;
+                    need_balance =
+                        need_balance.saturating_add(utx.value().clone());
+                    need_balance =
+                        need_balance.saturating_add(estimate_gas_fee);
                 }
             }
 
