@@ -212,6 +212,9 @@ build_config! {
         (cip174_transition_height, (Option<u64>), None)
         (cip175_transition_height, (Option<u64>), None)
         (cip176_transition_height, (Option<u64>), None)
+        (hn_fix_transition_height, (Option<u64>), None)
+        (max_difficulty_guard, (Option<U256>), None)
+        (max_finalize_confirmation_guard, (Option<u64>), None)
 
         // Mining section.
         (mining_author, (Option<String>), None)
@@ -1544,7 +1547,7 @@ impl Configuration {
         // hardfork (V3.1)
         set_conf!(
             self.raw_conf.osaka_opcode_transition_height.unwrap_or(default_transition_time);
-            params.transition_heights => { cip166, cip167, cip172, cip174, cip175, cip176 }
+            params.transition_heights => { cip166, cip167, cip172, cip174, cip175, cip176, cip_hn_fix }
         );
         if let Some(x) = self.raw_conf.cip166_transition_height {
             params.transition_heights.cip166 = x;
@@ -1564,6 +1567,13 @@ impl Configuration {
         if let Some(x) = self.raw_conf.cip176_transition_height {
             params.transition_heights.cip176 = x;
         }
+        if let Some(x) = self.raw_conf.hn_fix_transition_height {
+            params.transition_heights.cip_hn_fix = x;
+        }
+
+        params.max_difficulty_guard = self.raw_conf.max_difficulty_guard;
+        params.max_finalize_confirmation_guard =
+            self.raw_conf.max_finalize_confirmation_guard;
     }
 }
 
