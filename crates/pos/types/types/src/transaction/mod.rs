@@ -457,13 +457,15 @@ impl SignedTransaction {
 
     pub fn new_multisig(
         raw_txn: RawTransaction, signatures: Vec<(ConsensusSignature, usize)>,
-    ) -> SignedTransaction {
-        let signature = MultiConsensusSignature::new(signatures).unwrap();
+    ) -> Result<SignedTransaction> {
+        // Return errors instead of panicking so a malformed aggregation
+        // can't crash proposal construction.
+        let signature = MultiConsensusSignature::new(signatures)?;
         let authenticator = TransactionAuthenticator::multi_bls(signature);
-        SignedTransaction {
+        Ok(SignedTransaction {
             raw_txn,
             authenticator,
-        }
+        })
     }
 
     pub fn authenticator(&self) -> TransactionAuthenticator {

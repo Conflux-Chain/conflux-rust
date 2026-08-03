@@ -106,6 +106,22 @@ impl TransactionStore {
             return MempoolStatus::new(MempoolStatusCode::Accepted);
         }
 
+        // Only the payload is signed, so a validator could mint distinct-hash
+        // duplicates of one vote by varying `chain_id`; keep one per sender.
+        if let TransactionPayload::PivotDecision(pivot_decision) =
+            txn.txn.payload()
+        {
+            let already_voted = self
+                .pivot_decisions
+                .get(&pivot_decision.hash())
+                .is_some_and(|set| {
+                    set.iter().any(|(addr, _)| *addr == address)
+                });
+            if already_voted {
+                return MempoolStatus::new(MempoolStatusCode::Accepted);
+            }
+        }
+
         let sender_entry = self.per_sender_count.entry(address).or_insert(0);
         if *sender_entry >= self.capacity_per_sender {
             let sender_count = *sender_entry;
@@ -243,12 +259,24 @@ impl TransactionStore {
         let mut gc_txns_log = TxnsLog::new();
         for key in gc_txns.iter() {
             if let Some(txn) = self.transactions.remove(&key.hash) {
-                gc_txns_log.add(txn.get_sender(), txn.get_hash());
+                let sender = txn.get_sender();
+                let tx_hash = txn.get_hash();
+                gc_txns_log.add(sender, tx_hash);
                 self.index_remove(&txn);
                 if let TransactionPayload::PivotDecision(pivot_decision) =
                     txn.txn.into_raw_transaction().into_payload()
                 {
-                    self.pivot_decisions.remove(&pivot_decision.hash());
+                    // Drop only this entry: other validators' live votes
+                    // share this set.
+                    let pivot_decision_hash = pivot_decision.hash();
+                    if let Some(account_decision) =
+                        self.pivot_decisions.get_mut(&pivot_decision_hash)
+                    {
+                        account_decision.remove(&(sender, tx_hash));
+                        if account_decision.is_empty() {
+                            self.pivot_decisions.remove(&pivot_decision_hash);
+                        }
+                    }
                 }
             }
         }
@@ -272,11 +300,13 @@ impl TransactionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cfx_types::H256;
     use diem_crypto::{
         bls::{BLSPrivateKey, BLSPublicKey},
         PrivateKey, SigningKey, Uniform,
     };
     use diem_types::{
+        block_info::PivotBlockDecision,
         chain_id::ChainId,
         transaction::{RawTransaction, RetirePayload, TransactionPayload},
     };
@@ -311,6 +341,98 @@ mod tests {
             Duration::from_secs(3600),
             TimelineState::NotReady,
         )
+    }
+
+    fn mk_pivot_txn(
+        sk: &BLSPrivateKey, sender: AccountAddress,
+        decision: &PivotBlockDecision, chain_id: u64,
+    ) -> MempoolTransaction {
+        // Only the payload is signed, so varying `chain_id` gives a distinct
+        // hash.
+        let signed = RawTransaction::new_pivot_decision(
+            sender,
+            decision.clone(),
+            ChainId::new(chain_id),
+        )
+        .sign(sk)
+        .unwrap()
+        .into_inner();
+        MempoolTransaction::new(
+            signed,
+            Duration::from_secs(3600),
+            TimelineState::NotReady,
+        )
+    }
+
+    #[test]
+    fn duplicate_pivot_decision_from_one_validator_stored_once() {
+        let mut store = store_with_cap(128);
+        let (sk, _pk, sender) = new_sender();
+        let decision = PivotBlockDecision {
+            block_hash: H256::from([9u8; 32]),
+            height: 1,
+        };
+        let pivot_hash = decision.hash();
+
+        assert_eq!(
+            store.insert(mk_pivot_txn(&sk, sender, &decision, 1)).code,
+            MempoolStatusCode::Accepted
+        );
+        assert_eq!(store.per_sender_count[&sender], 1);
+        assert_eq!(store.get_pivot_decisions(&pivot_hash).len(), 1);
+
+        // Distinct-hash duplicates (different `chain_id`) must not add entries.
+        for chain_id in 2..=5 {
+            assert_eq!(
+                store
+                    .insert(mk_pivot_txn(&sk, sender, &decision, chain_id))
+                    .code,
+                MempoolStatusCode::Accepted
+            );
+        }
+        assert_eq!(store.per_sender_count[&sender], 1);
+        assert_eq!(store.get_pivot_decisions(&pivot_hash).len(), 1);
+    }
+
+    #[test]
+    fn gc_drops_only_expired_pivot_vote_keeping_other_validators() {
+        let mut store = store_with_cap(8);
+        let (sk_a, _, sender_a) = new_sender();
+        let (sk_b, _, sender_b) = new_sender();
+        let decision = PivotBlockDecision {
+            block_hash: H256::from([7u8; 32]),
+            height: 1,
+        };
+        let pivot_hash = decision.hash();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap();
+
+        // Validator A's vote is already past its system TTL; B's is still live.
+        let mut a = mk_pivot_txn(&sk_a, sender_a, &decision, 1);
+        a.expiration_time = Duration::from_secs(1);
+        let mut b = mk_pivot_txn(&sk_b, sender_b, &decision, 1);
+        b.expiration_time = now + Duration::from_secs(3600);
+        assert_eq!(store.insert(a).code, MempoolStatusCode::Accepted);
+        assert_eq!(store.insert(b).code, MempoolStatusCode::Accepted);
+        assert_eq!(store.get_pivot_decisions(&pivot_hash).len(), 2);
+
+        store.gc_by_system_ttl();
+
+        // B's live vote survives; only A's expired entry is removed.
+        assert_eq!(store.get_pivot_decisions(&pivot_hash).len(), 1);
+        assert_eq!(store.per_sender_count.get(&sender_a), None);
+        assert_eq!(store.per_sender_count[&sender_b], 1);
+
+        // Dedup still holds for B afterwards.
+        assert_eq!(
+            store
+                .insert(mk_pivot_txn(&sk_b, sender_b, &decision, 2))
+                .code,
+            MempoolStatusCode::Accepted
+        );
+        assert_eq!(store.get_pivot_decisions(&pivot_hash).len(), 1);
+        assert_eq!(store.per_sender_count[&sender_b], 1);
     }
 
     #[test]
