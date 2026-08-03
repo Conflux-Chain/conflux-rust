@@ -212,9 +212,11 @@ build_config! {
         (cip174_transition_height, (Option<u64>), None)
         (cip175_transition_height, (Option<u64>), None)
         (cip176_transition_height, (Option<u64>), None)
+        // Left None so it inherits osaka_opcode_transition_height, i.e. fires
+        // with the rest of V3.1.
         (hn_fix_transition_height, (Option<u64>), None)
-        (max_difficulty_guard, (Option<U256>), None)
-        (max_finalize_confirmation_guard, (Option<u64>), None)
+        (max_difficulty_guard, (Option<U256>), Some(U256::from(600000000u64)))
+        (max_finalize_confirmation_guard, (Option<u64>), Some(1200))
 
         // Mining section.
         (mining_author, (Option<String>), None)
