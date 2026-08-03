@@ -1,4 +1,4 @@
-use cfx_types::U256;
+use cfx_types::{U256, U64};
 use serde::Serialize;
 use std::collections::VecDeque;
 
@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 #[serde(rename_all = "camelCase")]
 pub struct CfxFeeHistory {
     /// Oldest epoch
-    oldest_epoch: U256,
+    oldest_epoch: U64,
     /// An array of pivot block base fees per gas. This includes one block
     /// earlier than the oldest block. Zeroes are returned for pre-EIP-1559
     /// blocks.
@@ -21,7 +21,7 @@ pub struct CfxFeeHistory {
 
 impl CfxFeeHistory {
     pub fn new(
-        oldest_epoch: U256, base_fee_per_gas: VecDeque<U256>,
+        oldest_epoch: U64, base_fee_per_gas: VecDeque<U256>,
         gas_used_ratio: VecDeque<f64>, reward: VecDeque<Vec<U256>>,
     ) -> Self {
         CfxFeeHistory {

@@ -41,6 +41,7 @@ pub struct BlockGenerator {
 }
 
 impl BlockGenerator {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         graph: SharedSynchronizationGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService,
@@ -89,16 +90,16 @@ impl BlockGenerator {
         BlockGeneratorTestApi::new(self.clone())
     }
 
-    pub async fn mine(self: &Arc<Self>) {
+    pub fn mine(self: &Arc<Self>) {
         let miner_type = if self.pow_config.use_stratum() {
             miner::MinerType::Stratum
         } else {
             miner::MinerType::Cpu(1)
         };
 
-        let (miner, solution_rx) = miner::spawn(self.clone(), miner_type).await;
+        let (miner, solution_rx) = miner::spawn(self.clone(), miner_type);
 
-        MiningSession::new(&*self, &*miner, solution_rx).run();
+        MiningSession::new(self, &*miner, solution_rx).run();
     }
 }
 

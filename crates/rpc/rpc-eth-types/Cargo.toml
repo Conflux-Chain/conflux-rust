@@ -23,6 +23,7 @@ primitives = { workspace = true }
 rlp = { workspace = true }
 cfx-parameters = { workspace = true }
 alloy-rpc-types = { workspace = true }
+alloy-rpc-types-trace = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 cfx-parity-trace-types = { workspace = true }

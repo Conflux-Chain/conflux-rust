@@ -280,7 +280,7 @@ where P: AsRef<Path> {
     let vault_file_path = vault_dir_path.as_ref().join(VAULT_FILE_NAME);
     let temp_vault_file_name = disk::find_unique_filename_using_random_suffix(
         vault_dir_path.as_ref(),
-        &VAULT_TEMP_FILE_NAME,
+        VAULT_TEMP_FILE_NAME,
     )?;
     let temp_vault_file_path =
         vault_dir_path.as_ref().join(&temp_vault_file_name);

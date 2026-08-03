@@ -18,13 +18,13 @@ fn test() {
 fn safety_rules(export_consensus_key: bool) -> suite::Callback {
     Box::new(move || {
         let signer = ValidatorSigner::from_int(0);
-        let storage = test_utils::test_storage(&signer);
+        let (dir, storage) = test_utils::test_storage(&signer);
         let safety_rules = SafetyRules::new(
             storage,
             export_consensus_key,
             None,
             Default::default(),
         );
-        (safety_rules, signer, None)
+        (dir, safety_rules, signer, None)
     })
 }

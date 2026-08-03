@@ -228,24 +228,25 @@ pub mod fuzzing {
     use diem_types::epoch_state::EpochState;
 
     pub fn fuzz_initialize(epoch_state: EpochState) -> Result<(), Error> {
-        let mut safety_rules = test_utils::test_safety_rules_uninitialized();
+        let (_dir, mut safety_rules) =
+            test_utils::test_safety_rules_uninitialized();
         safety_rules.initialize(&epoch_state)
     }
 
     pub fn fuzz_construct_and_sign_vote(
         maybe_signed_vote_proposal: MaybeSignedVoteProposal,
     ) -> Result<Vote, Error> {
-        let mut safety_rules = test_utils::test_safety_rules();
+        let (_dir, mut safety_rules) = test_utils::test_safety_rules();
         safety_rules.construct_and_sign_vote(&maybe_signed_vote_proposal)
     }
 
     pub fn fuzz_sign_proposal(block_data: BlockData) -> Result<Block, Error> {
-        let mut safety_rules = test_utils::test_safety_rules();
+        let (_dir, mut safety_rules) = test_utils::test_safety_rules();
         safety_rules.sign_proposal(block_data)
     }
 
     pub fn fuzz_sign_timeout(timeout: Timeout) -> Result<BLSSignature, Error> {
-        let mut safety_rules = test_utils::test_safety_rules();
+        let (_dir, mut safety_rules) = test_utils::test_safety_rules();
         safety_rules.sign_timeout(&timeout)
     }
 }

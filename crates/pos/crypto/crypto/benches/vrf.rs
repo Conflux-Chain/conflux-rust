@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate criterion;
+extern crate rand_08 as rand;
 use criterion::{BatchSize, Criterion};
 use diem_crypto::{
     ec_vrf::EcVrfPrivateKey, traits::Uniform, vrf_number_with_nonce, HashValue,

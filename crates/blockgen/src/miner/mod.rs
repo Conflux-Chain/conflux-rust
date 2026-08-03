@@ -20,13 +20,13 @@ pub enum MinerType {
     Cpu(usize), // Number of CPU workers
 }
 
-pub async fn spawn(
+pub fn spawn(
     bg: Arc<BlockGenerator>, miner_type: MinerType,
 ) -> (Box<dyn MineWorker>, SolutionReceiver) {
     let (worker, solution_receiver): (Box<dyn MineWorker>, _) = match miner_type
     {
         MinerType::Stratum => {
-            let (stratum, receiver) = Stratum::spawn(&*bg).await;
+            let (stratum, receiver) = Stratum::spawn(&bg);
             (Box::new(stratum), receiver)
         }
         MinerType::Cpu(num_workers) => {

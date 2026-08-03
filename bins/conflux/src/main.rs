@@ -25,7 +25,7 @@ use clap::{crate_version, ArgMatches, CommandFactory};
 use cli::Cli;
 use client::{
     archive::ArchiveClient,
-    common::{shutdown_handler, ClientTrait},
+    common::{panic_handler, shutdown_handler, ClientTrait},
     configuration::Configuration,
     full::FullClient,
     light::LightClient,
@@ -86,6 +86,7 @@ fn main() -> Result<(), String> {
     let conf = Configuration::parse(&matches)?;
 
     setup_logger(&conf)?;
+    panic_handler::setup();
 
     THROTTLING_SERVICE.write().initialize(
         conf.raw_conf.egress_queue_capacity,
@@ -110,8 +111,7 @@ Current Version: {}
         get_version()
     );
 
-    let client_handle: Box<dyn ClientTrait>;
-    client_handle = match conf.node_type() {
+    let client_handle: Box<dyn ClientTrait> = match conf.node_type() {
         NodeType::Archive => {
             info!("Starting archive client...");
             ArchiveClient::start(conf, exit.clone())
@@ -173,7 +173,7 @@ fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
         let dump_cmd = DumpCommand::parse(dump_matches).map_err(|e| {
             format!("Failed to parse dump command arguments: {}", e)
         })?;
-        let mut conf = Configuration::parse(&matches)?;
+        let mut conf = Configuration::parse(matches)?;
         let execute_output = dump_cmd.execute(&mut conf)?;
         return Ok(Some(execute_output));
     }

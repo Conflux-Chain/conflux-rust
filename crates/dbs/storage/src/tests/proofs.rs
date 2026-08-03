@@ -40,7 +40,7 @@ fn generate_random_state(
 
     let mut keys: Vec<Vec<u8>> = generate_account_keys(TEST_NUMBER_OF_KEYS)
         .into_iter()
-        .filter(|_| rng.gen_bool(0.2))
+        .filter(|_| rng.random_bool(0.2))
         .collect();
 
     // insert 0th, 1st, 2nd, 3rd 1/7 portions into state-0
@@ -228,7 +228,7 @@ fn select_keys(
 ) -> Vec<Vec<u8>> {
     existing_keys
         .iter()
-        .filter(|_| rng.gen_bool(0.1))
+        .filter(|_| rng.random_bool(0.1))
         .cloned()
         .collect()
 }
@@ -238,7 +238,7 @@ fn generate_nonexistent_keys(
 ) -> Vec<Vec<u8>> {
     generate_account_keys(TEST_NUMBER_OF_KEYS)
         .into_iter()
-        .filter(|_| rng.gen_bool(0.1)) // use fewer keys for now so that tests won't run forever
+        .filter(|_| rng.random_bool(0.1)) // use fewer keys for now so that tests won't run forever
         .filter(|k| !existing_keys.contains(k))
         .collect()
 }
@@ -247,7 +247,7 @@ fn get_invalid_hash(rng: &mut ChaChaRng, hash: H256) -> H256 {
     let mut new_hash = hash;
 
     while new_hash == hash {
-        new_hash.as_bytes_mut()[rng.random_range(0..32)] = rng.gen::<u8>();
+        new_hash.as_bytes_mut()[rng.random_range(0..32)] = rng.random::<u8>();
     }
 
     new_hash
@@ -260,7 +260,7 @@ fn get_invalid_maybe_hash(
     let mut new_maybe_hash = maybe_hash.map(|h| get_invalid_hash(rng, h));
 
     // randomly change Some(_) to None
-    if rng.gen_bool(0.1) {
+    if rng.random_bool(0.1) {
         new_maybe_hash = None;
     }
 

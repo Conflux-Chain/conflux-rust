@@ -8,7 +8,6 @@
 use crate::{
     configurable_validator_signer::ConfigurableValidatorSigner,
     consensus_state::ConsensusState,
-    counters,
     error::Error,
     logging::{LogEntry, LogEvent, SafetyLogSchema},
     persistent_safety_storage::PersistentSafetyStorage,
@@ -534,16 +533,13 @@ where
     F: FnOnce() -> Result<R, Error>,
     L: for<'a> Fn(SafetyLogSchema<'a>) -> SafetyLogSchema<'a>,
 {
-    let _timer = counters::start_timer("internal", log_entry.as_str());
     diem_debug!(log_cb(SafetyLogSchema::new(log_entry, LogEvent::Request)));
-    counters::increment_query(log_entry.as_str(), "request");
     callback()
         .map(|v| {
             diem_info!(log_cb(SafetyLogSchema::new(
                 log_entry,
                 LogEvent::Success
             )));
-            counters::increment_query(log_entry.as_str(), "success");
             v
         })
         .map_err(|err| {
@@ -552,7 +548,6 @@ where
                 LogEvent::Error
             ))
             .error(&err));
-            counters::increment_query(log_entry.as_str(), "error");
             err
         })
 }

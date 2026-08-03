@@ -7,8 +7,8 @@
 
 use super::*;
 use crate::PosLedgerDB;
-use diem_temppath::TempPath;
 use proptest::{collection::vec, prelude::*};
+use tempfile::TempDir;
 
 fn verify(
     store: &LedgerStore, txn_infos: &[TransactionInfo], first_version: Version,
@@ -42,7 +42,7 @@ proptest! {
         batch1 in vec(any::<TransactionInfo>(), 1..100),
         batch2 in vec(any::<TransactionInfo>(), 1..100),
     ) {
-        let tmp_dir = TempPath::new();
+        let tmp_dir = TempDir::new().unwrap();
         let db = PosLedgerDB::new_for_test(&tmp_dir);
         let store = &db.ledger_store;
 

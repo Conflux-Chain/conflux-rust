@@ -349,7 +349,7 @@ pub mod staking {
     }
 
     pub fn code_collateral_units(len: usize) -> u64 {
-        (len as u64 + 1023) / 1024 * CODE_COLLATERAL_UNITS_PER_KI_BYTES
+        (len as u64).div_ceil(1024) * CODE_COLLATERAL_UNITS_PER_KI_BYTES
     }
 }
 

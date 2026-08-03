@@ -12,8 +12,9 @@ use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, AddressSpaceUtil, Space, U256, U512};
-use cfx_vm_types::extract_7702_payload;
-use primitives::{transaction::Action, SignedTransaction, Transaction};
+use primitives::{
+    extract_7702_payload, transaction::Action, SignedTransaction, Transaction,
+};
 
 macro_rules! early_return_on_err {
     ($e:expr) => {

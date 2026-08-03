@@ -56,7 +56,7 @@ fn print_graph(db: &Arc<db::SystemDB>, from: &H256, max_depth: u32) {
 
     let mut queue: VecDeque<(u32, H256)> = VecDeque::new();
     let mut visited: HashSet<H256> = HashSet::new();
-    queue.push_back((0, from.clone()));
+    queue.push_back((0, *from));
 
     while let Some((depth, hash)) = queue.pop_front() {
         if visited.contains(&hash) || depth == max_depth {
@@ -66,15 +66,15 @@ fn print_graph(db: &Arc<db::SystemDB>, from: &H256, max_depth: u32) {
         assert!(depth < max_depth);
         visited.insert(hash);
 
-        if let Some(block) = retrieve_block(&db, &hash) {
+        if let Some(block) = retrieve_block(db, &hash) {
             let parent = block.block_header.parent_hash();
             let refs = block.block_header.referee_hashes();
 
-            print_edge(&hash, &parent);
+            print_edge(&hash, parent);
             queue.push_back((depth + 1, *parent));
 
             for r in refs {
-                print_ref_edge(&hash, &r);
+                print_ref_edge(&hash, r);
                 queue.push_back((depth + 1, *r));
             }
         }
@@ -125,7 +125,7 @@ Example usage:
         .get_matches();
 
     let db_path = matches.get_one::<String>("db-path").unwrap();
-    let max_depth = matches.get_one::<u32>("max-depth").unwrap().clone();
+    let max_depth = *matches.get_one::<u32>("max-depth").unwrap();
 
     let from_block = {
         let mut from =

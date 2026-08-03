@@ -135,7 +135,7 @@ impl Histogram for Snapshot {
     fn variance(&self) -> f64 { sample_variance(&self.values) }
 }
 
-fn sample_percentile(sorted_values: &Vec<u64>, p: f64) -> u64 {
+fn sample_percentile(sorted_values: &[u64], p: f64) -> u64 {
     assert!(p > 0.0 && p < 1.0);
     if sorted_values.is_empty() {
         return 0;
@@ -145,7 +145,7 @@ fn sample_percentile(sorted_values: &Vec<u64>, p: f64) -> u64 {
     sorted_values.get(pos as usize).cloned().unwrap_or(0)
 }
 
-fn sample_variance(values: &Vec<u64>) -> f64 {
+fn sample_variance(values: &[u64]) -> f64 {
     if values.is_empty() {
         return 0.0;
     }

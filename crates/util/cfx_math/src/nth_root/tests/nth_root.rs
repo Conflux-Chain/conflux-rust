@@ -45,7 +45,7 @@ fn test_nth_root_single<N: RootDegree, I: NthRoot>(input: I) {
     assert!(output_pow <= input);
     assert!(pow::<<N as SubU1>::Output, _>(output + one)
         .checked_mul(output + one)
-        .map_or(true, |x| x > input));
+        .is_none_or(|x| x > input));
 
     assert_eq!(nth_root::<N, _>(output_pow), output);
     if output > I::from(0) {

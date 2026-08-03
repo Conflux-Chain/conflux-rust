@@ -22,7 +22,6 @@ use parking_lot::Mutex;
 use std::{cmp, collections::VecDeque, sync::Arc, thread};
 
 use cfxstore::{cfxkey::Password, Error, PresaleWallet};
-use num_cpus;
 
 pub fn run(
     passwords: VecDeque<Password>, wallet_path: &str,
@@ -33,7 +32,7 @@ pub fn run(
 
     for _ in 0..num_cpus::get() {
         let passwords = passwords.clone();
-        let wallet = PresaleWallet::open(&wallet_path)?;
+        let wallet = PresaleWallet::open(wallet_path)?;
         handles.push(thread::spawn(move || {
             look_for_password(passwords, wallet);
         }));

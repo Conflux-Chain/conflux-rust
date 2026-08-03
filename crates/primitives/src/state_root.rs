@@ -46,7 +46,7 @@ impl StateRoot {
         Self {
             snapshot_root: MERKLE_NULL_NODE,
             intermediate_delta_root: MERKLE_NULL_NODE,
-            delta_root: genesis_root.clone(),
+            delta_root: *genesis_root,
         }
     }
 }

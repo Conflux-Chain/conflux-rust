@@ -1,8 +1,8 @@
 [package]
 name = "cfx-rpc-cfx-impl"
-version = "0.1.0"
 edition = "2021"
-license-file.workspace = true
+version = { workspace = true }
+license-file = { workspace = true }
 
 [dependencies]
 cfx-execute-helper = { workspace = true }

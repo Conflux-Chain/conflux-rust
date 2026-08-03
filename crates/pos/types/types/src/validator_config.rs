@@ -20,9 +20,12 @@ pub struct ValidatorConfig {
     pub consensus_public_key: ConsensusPublicKey,
     /// None if the leader election does not need VRF.
     pub vrf_public_key: Option<ConsensusVRFPublicKey>,
-    /// This is a bcs serialized validator network address blob
+    // Both address fields are placeholders — always `vec![]`. Kept to
+    // preserve the BCS layout of the genesis `ValidatorSet` event (and
+    // thus the genesis transaction hash) for existing deployments.
+    // Historically held BCS-encoded validator network address stacks;
+    // Conflux-PoS never populated them.
     pub validator_network_addresses: Vec<u8>,
-    /// This is an bcs serialized `Vec<NetworkAddress>`
     pub fullnode_network_addresses: Vec<u8>,
 }
 

@@ -58,8 +58,8 @@ impl error::Error for Error {
     fn description(&self) -> &str { "Crypto error" }
 }
 
-impl Into<String> for Error {
-    fn into(self) -> String { format!("{}", self) }
+impl From<Error> for String {
+    fn from(val: Error) -> Self { format!("{}", val) }
 }
 
 impl From<::secp256k1::Error> for Error {

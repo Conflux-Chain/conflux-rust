@@ -15,6 +15,7 @@ log = { workspace = true }
 malloc_size_of = { workspace = true }
 rand = { workspace = true }
 rlp = { workspace = true }
+rlp-compat = { workspace = true }
 rlp_derive = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_derive = { workspace = true }

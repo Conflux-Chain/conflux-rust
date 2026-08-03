@@ -7,8 +7,7 @@ fn test_node_ref_delta_mpt_compact_encode_decode() {
     let x = NodeRefDeltaMptCompact::new(1234);
     let rlp_bytes = x.rlp_bytes();
     assert_eq!(
-        NodeRefDeltaMptCompact::decode(&Rlp::new(rlp_bytes.as_slice()))
-            .unwrap(),
+        NodeRefDeltaMptCompact::decode(&Rlp::new(&rlp_bytes)).unwrap(),
         x
     );
 }
@@ -31,7 +30,7 @@ fn test_full_children_table_encode_decode() {
     }
     let rlp_bytes = children_table.to_ref().rlp_bytes();
 
-    let rlp = &Rlp::new(rlp_bytes.as_slice());
+    let rlp = &Rlp::new(&rlp_bytes);
     // Assert that the rlp has 16 items.
     assert_eq!(rlp.item_count().unwrap(), 16);
 
@@ -53,8 +52,7 @@ fn test_non_empty_children_table_encode_decode() {
     }
     let rlp_bytes = children_table.to_ref().rlp_bytes();
     let rlp_parsed =
-        ChildrenTableManagedDeltaMpt::decode(&Rlp::new(rlp_bytes.as_slice()))
-            .unwrap();
+        ChildrenTableManagedDeltaMpt::decode(&Rlp::new(&rlp_bytes)).unwrap();
     assert_eq!(children_table, rlp_parsed.into());
 }
 
@@ -63,8 +61,7 @@ fn test_empty_children_table_encode_decode() {
     let empty_children_table: ChildrenTableDeltaMpt = Default::default();
     let rlp_bytes = empty_children_table.to_ref().rlp_bytes();
     let rlp_parsed =
-        ChildrenTableManagedDeltaMpt::decode(&Rlp::new(rlp_bytes.as_slice()))
-            .unwrap();
+        ChildrenTableManagedDeltaMpt::decode(&Rlp::new(&rlp_bytes)).unwrap();
     assert_eq!(
         ChildrenTableDeltaMpt::from(rlp_parsed).get_children_count(),
         0
@@ -94,7 +91,7 @@ fn test_trie_node_encode_decode() {
     );
     let rlp_bytes = x.rlp_bytes();
     let rlp_parsed = MemOptimizedTrieNode::<DeltaMptsCacheAlgoData>::decode(
-        &Rlp::new(rlp_bytes.as_slice()),
+        &Rlp::new(&rlp_bytes),
     )
     .unwrap();
 

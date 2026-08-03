@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use crate::{
     block_data_manager::BlockExecutionResult,
     message::NetworkContext,
@@ -27,12 +25,9 @@ use cfx_types::{option_vec_to_hex, H256};
 use network::node_table::NodeId;
 use primitives::{
     BlockHeaderBuilder, BlockReceipts, EpochId, EpochNumber, StateRoot,
-    StorageKey, StorageKeyWithSpace, NULL_EPOCH,
+    StorageKeyWithSpace, NULL_EPOCH,
 };
-use rand::{
-    rng,
-    seq::{IndexedRandom, SliceRandom},
-};
+use rand::{rng, seq::IndexedRandom};
 
 use std::{
     collections::HashSet,
@@ -172,9 +167,8 @@ impl SnapshotManifestManager {
                     }
                 };
 
-            // Check proofs for keys.
             if let Err(e) =
-                response.manifest.validate(&snapshot_info.merkle_root)
+                response.manifest.validate(&snapshot_info.merkle_root, None)
             {
                 warn!("failed to validate snapshot manifest, error = {:?}", e);
                 bail!(Error::InvalidSnapshotManifest(
@@ -196,28 +190,27 @@ impl SnapshotManifestManager {
                     "Non-initial manifest is not expected".into()
                 ));
             }
-            debug_assert_eq!(
-                request.start_chunk.as_ref(),
-                self.chunk_boundaries.last()
-            );
-            if let Some(related_data) = &self.related_data {
-                // Check proofs for keys.
-                if let Err(e) = response
-                    .manifest
-                    .validate(&related_data.snapshot_info.merkle_root)
-                {
-                    warn!(
-                        "failed to validate snapshot manifest, error = {:?}",
-                        e
-                    );
-                    bail!(Error::InvalidSnapshotManifest(
-                        "invalid chunk proofs in manifest".into(),
-                    ));
-                }
+            if request.start_chunk.as_ref() != self.chunk_boundaries.last() {
+                bail!(Error::InvalidSnapshotManifest(
+                    "manifest start does not match accumulated boundary".into(),
+                ));
+            }
+            let related_data = match &self.related_data {
+                Some(related_data) => related_data,
+                None => bail!(Error::InvalidSnapshotManifest(
+                    "missing related data for non-initial manifest".into(),
+                )),
+            };
+            if let Err(e) = response.manifest.validate(
+                &related_data.snapshot_info.merkle_root,
+                self.chunk_boundaries.last().map(|b| b.as_slice()),
+            ) {
+                warn!("failed to validate snapshot manifest, error = {:?}", e);
+                bail!(Error::InvalidSnapshotManifest(
+                    "invalid chunk proofs in manifest".into(),
+                ));
             }
         }
-        // The first element is `start_key` and overlaps with the previous
-        // manifest.
         self.chunk_boundaries
             .extend_from_slice(&response.manifest.chunk_boundaries);
         self.chunk_boundary_proofs
@@ -439,7 +432,7 @@ impl SnapshotManifestManager {
                 .unwrap()
                 .height()
         };
-        let mut snapshot_state_root = state_root_vec[offset].clone();
+        let snapshot_state_root = state_root_vec[offset].clone();
         let state_root_hash = state_root_vec[offset].compute_state_root_hash();
 
         let snapshot_before_stable_checkpoint = if snapshot_block_header

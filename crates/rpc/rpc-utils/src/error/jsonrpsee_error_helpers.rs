@@ -6,6 +6,7 @@ use jsonrpsee::types::error::{
     INVALID_PARAMS_CODE, INVALID_REQUEST_CODE,
 };
 use serde::Serialize;
+use std::fmt;
 
 pub fn invalid_params_msg(param: &str) -> ErrorObjectOwned {
     let data: Option<bool> = None;
@@ -16,6 +17,16 @@ pub fn invalid_params<S: Serialize>(
     param: &str, data: Option<S>,
 ) -> ErrorObjectOwned {
     invalid_params_rpc_err(format!("Invalid parameters: {}", param), data)
+}
+
+pub fn invalid_params_detail<T: fmt::Debug>(
+    param: &str, details: T,
+) -> ErrorObjectOwned {
+    ErrorObjectOwned::owned(
+        INVALID_PARAMS_CODE,
+        format!("Invalid parameters: {} {:?}", param, details),
+        Some(format!("{:?}", details)),
+    )
 }
 
 pub fn invalid_params_rpc_err<S: Serialize>(
@@ -48,6 +59,11 @@ pub fn invalid_request_msg(param: &str) -> ErrorObjectOwned {
 pub fn internal_error() -> ErrorObjectOwned {
     let data: Option<bool> = None;
     ErrorObjectOwned::owned(INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, data)
+}
+
+pub fn internal_error_with_msg(msg: String) -> ErrorObjectOwned {
+    let data: Option<bool> = None;
+    ErrorObjectOwned::owned(INTERNAL_ERROR_CODE, msg, data)
 }
 
 /// Constructs an internal JSON-RPC error.
@@ -83,6 +99,16 @@ pub fn request_rejected_in_catch_up_mode(
     )
 }
 
+pub fn request_rejected_too_many_request_error(
+    details: Option<String>,
+) -> ErrorObjectOwned {
+    ErrorObjectOwned::owned(
+        codes::REQUEST_REJECTED_TOO_MANY_REQUESTS as i32,
+        "Request rejected.",
+        details,
+    )
+}
+
 pub fn pivot_assumption_failed(expected: H256, got: H256) -> ErrorObjectOwned {
     ErrorObjectOwned::owned(
         codes::CONFLUX_PIVOT_CHAIN_UNSTABLE as i32,
@@ -101,10 +127,22 @@ pub fn rpc_error_with_code(
     rpc_err(code, msg, None::<()>)
 }
 
+pub fn unimplemented(details: Option<String>) -> ErrorObjectOwned {
+    ErrorObjectOwned::owned(
+        codes::UNSUPPORTED as i32,
+        "This API is not implemented yet",
+        details,
+    )
+}
+
 /// Constructs a JSON-RPC error, consisting of `code`, `message` and optional
 /// `data`.
 pub fn rpc_err<S: Serialize>(
     code: i32, msg: impl Into<String>, data: Option<S>,
 ) -> ErrorObjectOwned {
     ErrorObjectOwned::owned(code, msg, data)
+}
+
+pub fn unknown_block() -> ErrorObjectOwned {
+    invalid_params_rpc_err("Unknown block number", None::<()>)
 }

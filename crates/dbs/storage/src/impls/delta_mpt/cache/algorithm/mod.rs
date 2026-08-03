@@ -102,24 +102,28 @@ where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
         }
     }
 
-    unsafe fn new_mut(
+    fn new_mut(
         util: &mut CacheStoreUtilT, index: CacheIndexT,
     ) -> CacheAlgoDataSetter<'_, CacheStoreUtilT, CacheIndexT> {
+        // `algo_data` is a write-only placeholder: every caller overwrites it
+        // via `placement_new_*` before the `Drop` flush, so its initial value
+        // never affects the result. `Default` avoids `mem::uninitialized()` UB.
         CacheAlgoDataSetter {
             cache_store_util: util,
             element_index: index,
-            algo_data: mem::uninitialized(),
+            algo_data: Default::default(),
         }
     }
 
-    unsafe fn new_mut_most_recently_accessed(
+    fn new_mut_most_recently_accessed(
         util: &mut CacheStoreUtilT, index: CacheIndexT,
     ) -> CacheAlgoDataSetterMostRecentlyAccessed<'_, CacheStoreUtilT, CacheIndexT>
     {
+        // See `new_mut`: write-only placeholder, overwritten before flush.
         CacheAlgoDataSetterMostRecentlyAccessed {
             cache_store_util: util,
             element_index: index,
-            algo_data: mem::uninitialized(),
+            algo_data: Default::default(),
         }
     }
 }
@@ -342,7 +346,6 @@ use malloc_size_of::MallocSizeOf;
 use std::{
     fmt::{Debug, Display},
     marker::PhantomData,
-    mem,
     ops::{
         Add, AddAssign, Deref, DerefMut, Div, DivAssign, Mul, Sub, SubAssign,
     },

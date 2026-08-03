@@ -9,7 +9,6 @@
 
 use super::*;
 use diem_crypto::hash::CryptoHash;
-use diem_temppath::TempPath;
 use diem_types::{
     block_info::BlockInfo,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
@@ -19,6 +18,7 @@ use diem_types::{
     validator_signer::ValidatorSigner,
 };
 use proptest::{collection::vec, prelude::*};
+use tempfile::TempDir;
 
 fn to_blocks_to_commit(
     partial_blocks: Vec<(
@@ -30,7 +30,7 @@ fn to_blocks_to_commit(
     // Use temporary DiemDB and STORE LEVEL APIs to calculate hashes on a per
     // transaction basis. Result is used to test the batch PUBLIC API for
     // saving everything, i.e. `save_transactions()`
-    let tmp_dir = TempPath::new();
+    let tmp_dir = TempDir::new().unwrap();
     let db = PosLedgerDB::new_for_test(&tmp_dir);
 
     let mut cur_ver = 0;

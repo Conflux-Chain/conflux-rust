@@ -13,9 +13,10 @@
 
 //! A library supplying various cryptographic primitives
 
+extern crate rand_08 as rand;
+
 /// A BLS signature wrapper
 pub mod bls;
-pub mod compat;
 /// A Elliptic Curve VRF wrapper
 pub mod ec_vrf;
 pub mod error;

@@ -10,7 +10,7 @@ use std::{mem::Discriminant, time::Duration};
 use anyhow::{anyhow, bail, ensure, format_err};
 use serde::{Deserialize, Serialize};
 
-use channel::{self, diem_channel, message_queues::QueueStyle};
+use channel::{diem_channel, message_queues::QueueStyle};
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
     common::Author,
@@ -20,7 +20,6 @@ use consensus_types::{
     vote_msg::VoteMsg,
 };
 use diem_logger::prelude::*;
-use diem_metrics::monitor;
 use diem_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof,
     validator_verifier::ValidatorVerifier,
@@ -37,8 +36,6 @@ use crate::{
         network_sender::NetworkSender,
     },
 };
-
-use super::counters;
 
 /// Network type for consensus
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -144,13 +141,11 @@ impl ConsensusNetworkSender {
             timeout,
         };
 
-        let rpc_response = monitor!(
-            "block_retrieval",
-            self.network_sender
-                .send_rpc(Some(peer_id), Box::new(request))
-                .await
-                .map_err(|_| { format_err!("rpc call failed") })?
-        );
+        let rpc_response = self
+            .network_sender
+            .send_rpc(Some(peer_id), Box::new(request))
+            .await
+            .map_err(|_| format_err!("rpc call failed"))?;
         let response = match rpc_response
             .as_any()
             .downcast_ref::<BlockRetrievalRpcResponse>()
@@ -295,16 +290,10 @@ impl NetworkTask {
     /// Establishes the initial connections with the peers and returns the
     /// receivers.
     pub fn new() -> (NetworkTask, NetworkReceivers) {
-        let (consensus_messages_tx, consensus_messages) = diem_channel::new(
-            QueueStyle::LIFO,
-            1,
-            Some(&counters::CONSENSUS_CHANNEL_MSGS),
-        );
-        let (block_retrieval_tx, block_retrieval) = diem_channel::new(
-            QueueStyle::LIFO,
-            1,
-            Some(&counters::BLOCK_RETRIEVAL_CHANNEL_MSGS),
-        );
+        let (consensus_messages_tx, consensus_messages) =
+            diem_channel::new(QueueStyle::LIFO, 1);
+        let (block_retrieval_tx, block_retrieval) =
+            diem_channel::new(QueueStyle::LIFO, 1);
         (
             NetworkTask {
                 consensus_messages_tx,

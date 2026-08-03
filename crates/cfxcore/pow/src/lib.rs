@@ -213,14 +213,12 @@ impl ProofOfWorkConfig {
 // bound of our PoW. The rationale is to provide a solution for block
 // withholding attack among mining pools.
 pub fn nonce_to_lower_bound(nonce: &U256) -> U256 {
-    let mut buf = [0u8; 32];
-    nonce.to_big_endian(&mut buf[..]);
+    let mut buf = nonce.to_big_endian();
     for i in 16..32 {
         buf[i] = 0;
     }
     buf[0] = buf[0] & 0x7f;
-    // Note that U256::from assumes big_endian of the bytes
-    let lower_bound = U256::from(buf);
+    let lower_bound = U256::from_big_endian(&buf);
     lower_bound
 }
 
@@ -301,7 +299,7 @@ impl PowComputer {
             for i in 0..32 {
                 buf[i] = block_hash[i];
             }
-            nonce.to_little_endian(&mut buf[32..64]);
+            buf[32..64].copy_from_slice(&nonce.to_little_endian());
             let intermediate = keccak_hash(&buf[..]);
             let mut tmp = [0u8; 32];
             for i in 0..32 {

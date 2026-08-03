@@ -27,7 +27,6 @@ use diem_state_view::StateViewId;
 use diem_types::{
     block_info::PivotBlockDecision,
     committed_block::CommittedBlock,
-    contract_event::ContractEvent,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
     on_chain_config::{self, ValidatorSet},
@@ -50,23 +49,15 @@ use storage_interface::state_view::VerifiedStateView;
 
 use crate::{
     logging::{LogEntry, LogSchema},
-    metrics::{
-        DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS, DIEM_EXECUTOR_ERRORS,
-        DIEM_EXECUTOR_EXECUTE_BLOCK_SECONDS,
-        DIEM_EXECUTOR_SAVE_TRANSACTIONS_SECONDS,
-        DIEM_EXECUTOR_TRANSACTIONS_SAVED,
-        DIEM_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS,
-    },
     vm::PosVM,
 };
 use diem_types::term_state::{
+    decode_dispute_event,
     pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
-    DisputeEvent,
 };
 
 pub mod db_bootstrapper;
 mod logging;
-mod metrics;
 pub mod vm;
 
 /// `Executor` implements all functionalities the execution module needs to
@@ -118,7 +109,6 @@ impl Executor {
         let retire_event_key = RetireEvent::event_key();
         let register_event_key = RegisterEvent::event_key();
         let update_voting_power_event_key = UpdateVotingPowerEvent::event_key();
-        let dispute_event_key = DisputeEvent::event_key();
 
         // Find the next pivot block.
         let mut pivot_decision = None;
@@ -138,10 +128,9 @@ impl Executor {
                     let election_event =
                         ElectionEvent::from_bytes(event.event_data())?;
                     new_pos_state.new_node_elected(&election_event)?;
-                } else if *event.key() == dispute_event_key {
-                    let dispute_event =
-                        DisputeEvent::from_bytes(event.event_data())?;
-                    new_pos_state.forfeit_node(&dispute_event.node_id)?;
+                } else if let Some(dispute) = decode_dispute_event(event) {
+                    let (node_id, offense_epoch) = dispute?;
+                    new_pos_state.forfeit_node(&node_id, offense_epoch)?;
                 }
             }
         }
@@ -325,7 +314,6 @@ impl Executor {
                              Transaction: {:?}. Status: {:?}.",
                             txn, status,
                         );
-                        DIEM_EXECUTOR_ERRORS.inc();
                     }
                 }
                 TransactionStatus::Retry => (),
@@ -383,16 +371,6 @@ impl Executor {
             // TODO(lpl): Check if we need to assert it's Some.
             pivot_decision,
         ))
-    }
-
-    fn extract_reconfig_events(
-        events: Vec<ContractEvent>,
-    ) -> Vec<ContractEvent> {
-        let new_epoch_event_key = on_chain_config::new_epoch_event_key();
-        events
-            .into_iter()
-            .filter(|event| *event.key() == new_epoch_event_key)
-            .collect()
     }
 
     fn get_executed_trees(
@@ -479,8 +457,6 @@ impl BlockExecutor for Executor {
                 "execute_block"
             );
 
-            let _timer = DIEM_EXECUTOR_EXECUTE_BLOCK_SECONDS.start_timer();
-
             let parent_block_executed_trees =
                 self.get_executed_trees(parent_block_id)?;
 
@@ -496,8 +472,6 @@ impl BlockExecutor for Executor {
             let vm_outputs = {
                 // trace_code_block!("executor::execute_block", {"block",
                 // block_id});
-                let _timer =
-                    DIEM_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS.start_timer();
                 fail_point!("executor::vm_execute_block", |_| {
                     Err(Error::from(anyhow::anyhow!(
                         "Injected error in vm_execute_block"
@@ -554,8 +528,7 @@ impl BlockExecutor for Executor {
     fn commit_blocks(
         &self, block_ids: Vec<HashValue>,
         ledger_info_with_sigs: LedgerInfoWithSignatures,
-    ) -> Result<(Vec<Transaction>, Vec<ContractEvent>), Error> {
-        let _timer = DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS.start_timer();
+    ) -> Result<Vec<Transaction>, Error> {
         let mut pos_state_to_commit = self
             .get_executed_trees(
                 ledger_info_with_sigs.ledger_info().consensus_block_id(),
@@ -882,9 +855,6 @@ impl BlockExecutor for Executor {
 
         let num_txns_to_commit = txns_to_commit.len() as u64;
         {
-            let _timer = DIEM_EXECUTOR_SAVE_TRANSACTIONS_SECONDS.start_timer();
-            DIEM_EXECUTOR_TRANSACTIONS_SAVED.observe(num_txns_to_commit as f64);
-
             assert_eq!(
                 first_version_to_commit,
                 num_txns_in_li - num_txns_to_commit
@@ -904,16 +874,10 @@ impl BlockExecutor for Executor {
             )?;
         }
 
-        // Calculate committed transactions and reconfig events now that commit
-        // has succeeded
-        let mut committed_txns = vec![];
-        let mut reconfig_events = vec![];
-        for txn in txns_to_commit.iter() {
-            committed_txns.push(txn.transaction().clone());
-            reconfig_events.append(&mut Self::extract_reconfig_events(
-                txn.events().to_vec(),
-            ));
-        }
+        let committed_txns: Vec<Transaction> = txns_to_commit
+            .iter()
+            .map(|txn| txn.transaction().clone())
+            .collect();
 
         // Drop block locks before prune() which needs to re-lock them.
         drop(blocks);
@@ -922,15 +886,12 @@ impl BlockExecutor for Executor {
         let old_committed_block = self.db_with_cache.prune(
             ledger_info_with_sigs.ledger_info(),
             committed_txns.clone(),
-            reconfig_events.clone(),
         )?;
         self.db_with_cache
             .db
             .writer
             .delete_pos_state_by_block(&old_committed_block)?;
 
-        // Now that the blocks are persisted successfully, we can reply to
-        // consensus
-        Ok((committed_txns, reconfig_events))
+        Ok(committed_txns)
     }
 }

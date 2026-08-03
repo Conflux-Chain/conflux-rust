@@ -22,17 +22,11 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
     Clone, Hash, Ord, PartialOrd, PartialEq, Eq, Debug, DeriveMallocSizeOf,
 )]
 pub enum SnapshotSyncCandidate {
-    OneStepSync {
-        height: u64,
-        snapshot_epoch_id: EpochId,
-    },
+    // Wire type_id 0 (OneStepSync) and 2 (IncSync) were never implemented and
+    // have been deprecated and removed; `Decodable` rejects those ids. Do not
+    // reuse them for a new variant.
     FullSync {
         height: u64,
-        snapshot_epoch_id: EpochId,
-    },
-    IncSync {
-        height: u64,
-        base_snapshot_epoch_id: EpochId,
         snapshot_epoch_id: EpochId,
     },
 }
@@ -40,21 +34,13 @@ pub enum SnapshotSyncCandidate {
 impl SnapshotSyncCandidate {
     fn to_type_id(&self) -> u8 {
         match self {
-            SnapshotSyncCandidate::OneStepSync { .. } => 0,
             SnapshotSyncCandidate::FullSync { .. } => 1,
-            SnapshotSyncCandidate::IncSync { .. } => 2,
         }
     }
 
     pub fn get_snapshot_epoch_id(&self) -> &EpochId {
         match self {
-            SnapshotSyncCandidate::OneStepSync {
-                snapshot_epoch_id, ..
-            } => snapshot_epoch_id,
             SnapshotSyncCandidate::FullSync {
-                snapshot_epoch_id, ..
-            } => snapshot_epoch_id,
-            SnapshotSyncCandidate::IncSync {
                 snapshot_epoch_id, ..
             } => snapshot_epoch_id,
         }
@@ -64,15 +50,6 @@ impl SnapshotSyncCandidate {
 impl Encodable for SnapshotSyncCandidate {
     fn rlp_append(&self, s: &mut RlpStream) {
         match &self {
-            SnapshotSyncCandidate::OneStepSync {
-                height,
-                snapshot_epoch_id,
-            } => {
-                s.begin_list(3)
-                    .append(&self.to_type_id())
-                    .append(height)
-                    .append(snapshot_epoch_id);
-            }
             SnapshotSyncCandidate::FullSync {
                 height,
                 snapshot_epoch_id,
@@ -82,17 +59,6 @@ impl Encodable for SnapshotSyncCandidate {
                     .append(height)
                     .append(snapshot_epoch_id);
             }
-            SnapshotSyncCandidate::IncSync {
-                height,
-                base_snapshot_epoch_id,
-                snapshot_epoch_id,
-            } => {
-                s.begin_list(4)
-                    .append(&self.to_type_id())
-                    .append(height)
-                    .append(base_snapshot_epoch_id)
-                    .append(snapshot_epoch_id);
-            }
         }
     }
 }
@@ -100,28 +66,20 @@ impl Encodable for SnapshotSyncCandidate {
 impl Decodable for SnapshotSyncCandidate {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let type_id: u8 = rlp.val_at(0)?;
-        let parsed = match type_id {
-            0 => SnapshotSyncCandidate::OneStepSync {
+        match type_id {
+            1 => Ok(SnapshotSyncCandidate::FullSync {
                 height: rlp.val_at(1)?,
                 snapshot_epoch_id: rlp.val_at(2)?,
-            },
-            1 => SnapshotSyncCandidate::FullSync {
-                height: rlp.val_at(1)?,
-                snapshot_epoch_id: rlp.val_at(2)?,
-            },
-            2 => SnapshotSyncCandidate::IncSync {
-                height: rlp.val_at(1)?,
-                base_snapshot_epoch_id: rlp.val_at(2)?,
-                snapshot_epoch_id: rlp.val_at(3)?,
-            },
-            _ => {
-                return Err(DecoderError::Custom(
-                    "Unknown SnapshotSyncCandidate type id",
-                ))
-            }
-        };
-        debug_assert_eq!(parsed.to_type_id(), type_id);
-        Ok(parsed)
+            }),
+            // type_id 0 (OneStepSync) and 2 (IncSync) were never implemented
+            // and are deprecated: reject them so they can never
+            // reach a handler. A peer that sends one is treated
+            // like any unknown/malformed type. Do not reuse these
+            // ids.
+            _ => Err(DecoderError::Custom(
+                "Unsupported SnapshotSyncCandidate type id",
+            )),
+        }
     }
 }
 
@@ -170,21 +128,39 @@ impl Decodable for RangedManifest {
 }
 
 impl RangedManifest {
-    /// Validate the manifest with specified snapshot merkle root and the
-    /// requested start chunk key. Basically, the retrieved chunks should
-    /// not be empty, and the proofs of all chunk keys are valid.
-    pub fn validate(&self, snapshot_root: &MerkleHash) -> Result<(), Error> {
+    /// `lower_bound_excl` is the previous page's last boundary (the
+    /// continuation `start_chunk`), or `None` for the initial page.
+    pub fn validate(
+        &self, snapshot_root: &MerkleHash, lower_bound_excl: Option<&[u8]>,
+    ) -> Result<(), Error> {
         if self.chunk_boundaries.len() != self.chunk_boundary_proofs.len() {
             bail!(Error::InvalidSnapshotManifest(
                 "chunk and proof number do not match".into(),
             ));
         }
         if let Some(next) = &self.next {
-            if next != self.chunk_boundaries.last().unwrap() {
-                bail!(Error::InvalidSnapshotManifest(
+            match self.chunk_boundaries.last() {
+                Some(last) if next == last => (),
+                _ => bail!(Error::InvalidSnapshotManifest(
                     "next does not match last boundary".into(),
-                ));
+                )),
             }
+        }
+
+        // The per-key proofs below are order-independent, so this is what
+        // rejects a permuted/duplicated boundary list (which would otherwise
+        // become impossible empty download ranges).
+        let mut prev_excl = lower_bound_excl;
+        for boundary in &self.chunk_boundaries {
+            let boundary = boundary.as_slice();
+            if let Some(prev) = prev_excl {
+                if boundary <= prev {
+                    bail!(Error::InvalidSnapshotManifest(
+                        "chunk boundaries are not strictly increasing".into(),
+                    ));
+                }
+            }
+            prev_excl = Some(boundary);
         }
 
         // validate the trie proof for all chunks
@@ -235,12 +211,6 @@ impl RangedManifest {
             SnapshotSyncCandidate::FullSync {
                 snapshot_epoch_id, ..
             } => snapshot_epoch_id,
-            SnapshotSyncCandidate::IncSync { .. } => {
-                unimplemented!();
-            }
-            SnapshotSyncCandidate::OneStepSync { .. } => {
-                unimplemented!();
-            }
         };
         debug!(
             "begin to load manifest, snapshot_epoch_id = {:?}, start_key = {:?}",
@@ -274,6 +244,9 @@ impl RangedManifest {
         let mut manifest = RangedManifest::default();
         let mut has_next = true;
 
+        // The slicer advances monotonically through the trie, so the boundaries
+        // come out strictly increasing -- the invariant the receiver enforces
+        // in `validate`.
         for i in 0..max_chunks {
             trace!("cut chunks for manifest, loop = {}", i);
             slicer.advance(chunk_size)?;
@@ -421,4 +394,80 @@ impl Chunk {
     }
 }
 
-// todo add necessary unit tests when code is stable
+#[cfg(test)]
+mod tests {
+    use super::RangedManifest;
+    use cfx_storage::TrieProof;
+    use cfx_types::H256;
+
+    fn manifest(boundaries: Vec<Vec<u8>>) -> RangedManifest {
+        let chunk_boundary_proofs =
+            boundaries.iter().map(|_| TrieProof::default()).collect();
+        RangedManifest {
+            chunk_boundaries: boundaries,
+            chunk_boundary_proofs,
+            next: None,
+        }
+    }
+
+    // Non-null so the default proofs fail their root check, letting tests tell
+    // the ordering error apart from the proof error.
+    fn non_null_root() -> H256 { H256::from_low_u64_be(1) }
+
+    #[test]
+    fn reversed_boundaries_are_rejected() {
+        let err = manifest(vec![vec![2], vec![1]])
+            .validate(&non_null_root(), None)
+            .expect_err("reversed boundaries must be rejected");
+        assert!(
+            err.to_string().contains("strictly increasing"),
+            "expected ordering error, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn duplicate_boundaries_are_rejected() {
+        let err = manifest(vec![vec![1], vec![1]])
+            .validate(&non_null_root(), None)
+            .expect_err("duplicate boundaries must be rejected");
+        assert!(
+            err.to_string().contains("strictly increasing"),
+            "expected ordering error, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn boundary_not_greater_than_lower_bound_is_rejected() {
+        let err = manifest(vec![vec![5]])
+            .validate(&non_null_root(), Some(&[5]))
+            .expect_err("boundary equal to lower bound must be rejected");
+        assert!(
+            err.to_string().contains("strictly increasing"),
+            "expected ordering error, got: {}",
+            err
+        );
+
+        let err = manifest(vec![vec![4]])
+            .validate(&non_null_root(), Some(&[5]))
+            .expect_err("boundary below lower bound must be rejected");
+        assert!(
+            err.to_string().contains("strictly increasing"),
+            "expected ordering error, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn in_order_boundaries_pass_ordering_check() {
+        let err = manifest(vec![vec![1], vec![2]])
+            .validate(&non_null_root(), Some(&[0]))
+            .expect_err("dummy proofs must fail the proof check");
+        assert!(
+            !err.to_string().contains("strictly increasing"),
+            "in-order boundaries must pass the ordering check, got: {}",
+            err
+        );
+    }
+}

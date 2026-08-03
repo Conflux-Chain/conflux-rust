@@ -7,6 +7,8 @@
 
 #![forbid(unsafe_code)]
 
+extern crate rand_08 as rand;
+
 pub use account_address::AccountAddress as PeerId;
 
 pub mod account_address;
@@ -20,7 +22,6 @@ pub mod epoch_state;
 pub mod event;
 pub mod ledger_info;
 pub mod mempool_status;
-pub mod network_address;
 pub mod on_chain_config;
 pub mod proof;
 #[cfg(any(test, feature = "fuzzing"))]

@@ -105,18 +105,29 @@ pub fn get_vote_power(
         block_number = current_block_number;
     }
 
-    let three_months_locked = state.locked_staking_balance_at_block_number(
-        &address,
-        block_number + BLOCKS_PER_HOUR,
-    )?;
-    let six_months_locked = state.locked_staking_balance_at_block_number(
-        &address,
-        block_number + 2 * BLOCKS_PER_HOUR,
-    )?;
-    let one_year_locked = state.locked_staking_balance_at_block_number(
-        &address,
-        block_number + 4 * BLOCKS_PER_HOUR,
-    )?;
+    // This devnet runs accelerated vote-power tiers (hours, not quarters);
+    // keep BLOCKS_PER_HOUR and take master's overflow guard on top.
+    let three_months_block =
+        block_number.checked_add(BLOCKS_PER_HOUR).ok_or_else(|| {
+            vm::Error::InternalContract("block number overflow".into())
+        })?;
+    let six_months_block = block_number
+        .checked_add(2 * BLOCKS_PER_HOUR)
+        .ok_or_else(|| {
+            vm::Error::InternalContract("block number overflow".into())
+        })?;
+    let one_year_block = block_number
+        .checked_add(4 * BLOCKS_PER_HOUR)
+        .ok_or_else(|| {
+            vm::Error::InternalContract("block number overflow".into())
+        })?;
+
+    let three_months_locked = state
+        .locked_staking_balance_at_block_number(&address, three_months_block)?;
+    let six_months_locked = state
+        .locked_staking_balance_at_block_number(&address, six_months_block)?;
+    let one_year_locked = state
+        .locked_staking_balance_at_block_number(&address, one_year_block)?;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━
     //              Remaining Committed Staking Time             ┃  Voting Power

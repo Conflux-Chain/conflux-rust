@@ -8,23 +8,13 @@
 use super::*;
 use crate::PosLedgerDB;
 use diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
-use diem_proptest_helpers::Index;
-use diem_temppath::TempPath;
 use diem_types::{
     account_address::AccountAddress,
-    block_metadata::NewBlockEvent,
+    block_metadata::{new_block_event_key, NewBlockEvent},
     contract_event::ContractEvent,
-    event::EventKey,
-    proptest_types::{AccountInfoUniverse, ContractEventGen},
 };
-use itertools::Itertools;
-use proptest::{
-    collection::{hash_set, vec},
-    prelude::*,
-    strategy::Union,
-};
-use rand::Rng;
-use std::collections::HashMap;
+use proptest::{collection::vec, prelude::*};
+use tempfile::TempDir;
 
 fn save(
     store: &EventStore, version: Version, events: &[ContractEvent],
@@ -38,7 +28,7 @@ fn save(
 
 #[test]
 fn test_put_empty() {
-    let tmp_dir = TempPath::new();
+    let tmp_dir = TempDir::new().unwrap();
     let db = PosLedgerDB::new_for_test(&tmp_dir);
     let store = &db.event_store;
     let mut cs = ChangeSet::new();
@@ -50,7 +40,7 @@ fn test_put_empty() {
 
 #[test]
 fn test_error_on_get_from_empty() {
-    let tmp_dir = TempPath::new();
+    let tmp_dir = TempDir::new().unwrap();
     let db = PosLedgerDB::new_for_test(&tmp_dir);
     let store = &db.event_store;
 
@@ -64,7 +54,7 @@ proptest! {
 
     #[test]
     fn test_put_get_verify(events in vec(any::<ContractEvent>().no_shrink(), 1..100)) {
-        let tmp_dir = TempPath::new();
+        let tmp_dir = TempDir::new().unwrap();
         let db = PosLedgerDB::new_for_test(&tmp_dir);
         let store = &db.event_store;
 
@@ -96,7 +86,7 @@ proptest! {
         events3 in vec(any::<ContractEvent>().no_shrink(), 1..100),
     ) {
 
-        let tmp_dir = TempPath::new();
+        let tmp_dir = TempDir::new().unwrap();
         let db = PosLedgerDB::new_for_test(&tmp_dir);
         let store = &db.event_store;
         // Save 3 chunks at different versions
@@ -177,7 +167,7 @@ proptest! {
 
 // fn test_index_get_impl(event_batches: Vec<Vec<ContractEvent>>) {
 //     // Put into db.
-//     let tmp_dir = TempPath::new();
+//     let tmp_dir = TempDir::new().unwrap();
 //     let db = DiemDB::new_for_test(&tmp_dir);
 //     let store = &db.event_store;
 //

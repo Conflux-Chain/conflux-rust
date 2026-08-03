@@ -75,24 +75,24 @@ impl Handleable for GetBlockTxn {
         match ctx.manager.graph.block_by_hash(&self.block_hash) {
             Some(block) => {
                 debug!("Process get_blocktxn hash={:?}", block.hash());
-                let mut tx_resp = Vec::with_capacity(self.index_skips.len());
-                let mut last = 0;
-                for index_skip in self.index_skips.iter() {
-                    last += *index_skip;
-                    if last >= block.transactions.len() {
+                let mut transactions = block.transactions.iter();
+                let tx_resp = self
+                    .index_skips
+                    .iter()
+                    .map(|index_skip| {
+                        transactions
+                            .nth(*index_skip)
+                            .map(|tx| tx.transaction.clone())
+                    })
+                    .collect::<Option<Vec<_>>>()
+                    .ok_or_else(|| {
                         warn!(
                             "Request tx index out of bound, peer={}, hash={}",
                             ctx.node_id,
                             block.hash()
                         );
-                        return Err(Error::InvalidGetBlockTxn(
-                            "index out-of-bound".into(),
-                        )
-                        .into());
-                    }
-                    tx_resp.push(block.transactions[last].transaction.clone());
-                    last += 1;
-                }
+                        Error::InvalidGetBlockTxn("index out-of-bound".into())
+                    })?;
                 let response = GetBlockTxnResponse {
                     request_id: self.request_id,
                     block_hash: self.block_hash,

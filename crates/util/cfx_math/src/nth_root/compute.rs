@@ -63,8 +63,8 @@ pub enum InitRoot<I> {
 
 #[inline]
 fn check_answer<const N: u32>(input: u64, output: u64) -> bool {
-    (output).checked_pow(N).map_or(false, |x| x <= input)
-        && (output + 1).checked_pow(N).map_or(true, |x| x > input)
+    (output).checked_pow(N).is_some_and(|x| x <= input)
+        && (output + 1).checked_pow(N).is_none_or(|x| x > input)
 }
 
 impl NthRoot for u64 {
@@ -181,7 +181,7 @@ impl NthRoot for U256 {
     #[inline]
     fn init_root<N: RootDegree>(self) -> InitRoot<Self> {
         let compute_next = |me: U256| U256::from(me.as_u128().nth_root::<N>());
-        if &self.0[2..4] == &[0, 0] {
+        if self.0[2..4] == [0, 0] {
             InitRoot::Done(compute_next(self))
         } else {
             InitRoot::Init({
@@ -214,7 +214,7 @@ impl NthRoot for U512 {
     fn init_root<N: RootDegree>(self) -> InitRoot<Self> {
         let compute_next =
             |me: U512| U512::from(U256::try_from(me).unwrap().nth_root::<N>());
-        if &self.0[4..8] == &[0, 0, 0, 0] {
+        if self.0[4..8] == [0, 0, 0, 0] {
             InitRoot::Done(compute_next(self))
         } else {
             InitRoot::Init({
@@ -232,7 +232,7 @@ fn newtons_method<N: RootDegree, I: NthRoot>(input: I, init_root: I) -> I {
         let pow_n_1 = pow::<<N as SubU1>::Output, I>(root);
         let pow_n = pow_n_1.checked_mul(root);
 
-        if pow_n.map_or(false, |x| x <= input) {
+        if pow_n.is_some_and(|x| x <= input) {
             return root;
         }
 

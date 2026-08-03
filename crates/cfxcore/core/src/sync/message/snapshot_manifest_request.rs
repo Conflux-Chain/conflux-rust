@@ -208,15 +208,30 @@ impl SnapshotManifestRequest {
             ctx.manager.graph.data_man.block_header_by_hash(
                 self.snapshot_to_sync.get_snapshot_epoch_id(),
             )?;
-        if trusted_block.height() < snapshot_epoch_block.height() {
-            warn!(
-                "receive invalid snapshot manifest request from peer={}",
-                ctx.node_id
-            );
-            return None;
-        }
+        let trusted_height = trusted_block.height();
+        let snapshot_height = snapshot_epoch_block.height();
+        // The deferred-state walk below requires `trusted_height` to be at
+        // least `DEFERRED_STATE_EPOCH_COUNT` ahead of `snapshot_height`;
+        // otherwise the `min_vec_len` arithmetic would underflow on `u64`
+        // and panic under `overflow-checks=true`. Reject such requests
+        // (which are only producible by a malicious or misconfigured peer)
+        // before performing any further work.
+        let base_len = match trusted_height
+            .checked_sub(DEFERRED_STATE_EPOCH_COUNT)
+            .and_then(|v| v.checked_sub(snapshot_height))
+        {
+            Some(v) => v,
+            None => {
+                warn!(
+                    "receive invalid snapshot manifest request from peer={}, \
+                     trusted_height={}, snapshot_height={}",
+                    ctx.node_id, trusted_height, snapshot_height,
+                );
+                return None;
+            }
+        };
         let mut block_hash = trusted_block.hash();
-        let mut trusted_block_height = trusted_block.height();
+        let mut trusted_block_height = trusted_height;
         let mut blame_count = trusted_block.blame();
         let mut deferred_block_hash = block_hash;
         for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
@@ -224,21 +239,14 @@ impl SnapshotManifestRequest {
                 .manager
                 .graph
                 .data_man
-                .block_header_by_hash(&deferred_block_hash)
-                .expect("All headers exist")
+                .block_header_by_hash(&deferred_block_hash)?
                 .parent_hash();
         }
 
-        let min_vec_len = if snapshot_epoch_block.height() == 0 {
-            trusted_block.height()
-                - DEFERRED_STATE_EPOCH_COUNT
-                - snapshot_epoch_block.height()
-                + 1
+        let min_vec_len = if snapshot_height == 0 {
+            base_len + 1
         } else {
-            trusted_block.height()
-                - DEFERRED_STATE_EPOCH_COUNT
-                - snapshot_epoch_block.height()
-                + REWARD_EPOCH_COUNT
+            base_len + REWARD_EPOCH_COUNT
         };
         let mut state_root_vec = Vec::with_capacity(min_vec_len as usize);
         let mut receipt_blame_vec = Vec::with_capacity(min_vec_len as usize);
@@ -287,8 +295,7 @@ impl SnapshotManifestRequest {
                     .manager
                     .graph
                     .data_man
-                    .block_header_by_hash(&deferred_block_hash)
-                    .expect("All headers received")
+                    .block_header_by_hash(&deferred_block_hash)?
                     .parent_hash();
             } else {
                 warn!(

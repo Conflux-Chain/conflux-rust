@@ -7,24 +7,20 @@
 
 #![forbid(unsafe_code)]
 
+extern crate rand_08 as rand;
+
 mod crypto_kv_storage;
 mod crypto_storage;
 mod error;
-mod in_memory;
 mod kv_storage;
-mod namespaced_storage;
 mod on_disk;
-mod storage;
 
 pub use crate::{
     crypto_kv_storage::CryptoKVStorage,
     crypto_storage::{CryptoStorage, PublicKeyResponse},
     error::Error,
-    in_memory::InMemoryStorage,
     kv_storage::{GetResponse, KVStorage},
-    namespaced_storage::NamespacedStorage,
     on_disk::OnDiskStorage,
-    storage::Storage,
 };
 
 // Some common serializations for interacting with bytes these must be manually

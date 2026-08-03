@@ -1,8 +1,9 @@
 mod cfx_filter_handler;
 mod cfx_handler;
+pub mod common;
 mod debug_handler;
 pub mod helpers;
-mod light;
+pub mod light;
 mod pos_handler;
 mod pubsub;
 mod test_handler;

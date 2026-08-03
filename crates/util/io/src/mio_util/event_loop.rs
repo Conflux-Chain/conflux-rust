@@ -192,7 +192,7 @@ impl<H: Handler> EventLoop<H> {
     /// If the supplied timeout has not been triggered, cancel it such that it
     /// will not be triggered in the future.
     pub fn clear_timeout(&mut self, timeout: &Timeout) -> bool {
-        self.timer.cancel_timeout(&timeout).is_some()
+        self.timer.cancel_timeout(timeout).is_some()
     }
 
     /// Tells the event loop to exit after it is done handling all events in the
@@ -204,18 +204,16 @@ impl<H: Handler> EventLoop<H> {
     pub fn is_running(&self) -> bool { self.run }
 
     /// Registers an IO handle with the event loop.
-    pub fn register<E: ?Sized>(
+    pub fn register<E: ?Sized + Source>(
         &mut self, io: &mut E, token: Token, interest: Interest,
-    ) -> io::Result<()>
-    where E: Source {
+    ) -> io::Result<()> {
         self.poll.registry().register(io, token, interest)
     }
 
     /// Re-Registers an IO handle with the event loop.
-    pub fn reregister<E: ?Sized>(
+    pub fn reregister<E: ?Sized + Source>(
         &mut self, io: &mut E, token: Token, interest: Interest,
-    ) -> io::Result<()>
-    where E: Source {
+    ) -> io::Result<()> {
         self.poll.registry().reregister(io, token, interest)
     }
 
@@ -228,8 +226,9 @@ impl<H: Handler> EventLoop<H> {
     /// Warning: kqueue effectively builds in deregister when using
     /// edge-triggered mode with oneshot. Calling `deregister()` on the
     /// socket will cause a TcpStream error.
-    pub fn deregister<E: ?Sized>(&mut self, io: &mut E) -> io::Result<()>
-    where E: Source {
+    pub fn deregister<E: ?Sized + Source>(
+        &mut self, io: &mut E,
+    ) -> io::Result<()> {
         self.poll.registry().deregister(io)
     }
 
@@ -281,13 +280,12 @@ impl<H: Handler> EventLoop<H> {
         // it was registered with (which usually represents, at least, the
         // handle that the event is about) as well as information about
         // what kind of event occurred (readable, writable, signal, etc.)
-        let events: Vec<Event> =
-            self.events.iter().map(|e| e.clone()).collect();
+        let events: Vec<Event> = self.events.iter().cloned().collect();
 
         for evt in events {
             match evt.token() {
                 NOTIFY_OR_TIMER => {
-                    while self.notify_queue.len() > 0 {
+                    while !self.notify_queue.is_empty() {
                         match self.notify_queue.pop() {
                             Some(id) if id == self.channel_noti_id => {
                                 self.notify(handler);
@@ -317,11 +315,8 @@ impl<H: Handler> EventLoop<H> {
     }
 
     fn notify(&mut self, handler: &mut H) {
-        match self.notify_rx.try_recv() {
-            Ok(msg) => {
-                handler.notify(self, msg);
-            }
-            _ => {}
+        if let Ok(msg) = self.notify_rx.try_recv() {
+            handler.notify(self, msg);
         }
     }
 

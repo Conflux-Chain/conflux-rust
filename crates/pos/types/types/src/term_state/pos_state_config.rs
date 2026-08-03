@@ -28,6 +28,7 @@ pub struct PosStateConfig {
 
     cip156_transition_view: u64,
     cip156_dispute_locked_views: u64,
+    cip173_transition_view: u64,
 
     nonce_limit_transition_view: u64,
     max_nonce_per_account: u64,
@@ -52,6 +53,13 @@ pub trait PosStateConfigTrait {
     // Returning None means the stake should be forfeited instead of being
     // locked.
     fn dispute_locked_views(&self, view: u64) -> Option<u64>;
+    /// One predicate for the whole CIP-173 dispute rule, because each half
+    /// assumes the others: a chain evaluating them at different views would
+    /// punish differently from one that did not.
+    fn cip173_active(&self, view: u64) -> bool;
+    fn cip173_transition_view(&self) -> u64;
+    /// `None` while the rule is unscheduled.
+    fn dispute_first_admissible_epoch(&self) -> Option<u64>;
 }
 
 impl PosStateConfig {
@@ -63,9 +71,9 @@ impl PosStateConfig {
         max_nonce_per_account: u64, cip136_transition_view: u64,
         cip136_in_queue_locked_views: u64, cip136_out_queue_locked_views: u64,
         cip136_round_per_term: u64, cip156_transition_view: u64,
-        cip156_dispute_locked_views: u64,
+        cip156_dispute_locked_views: u64, cip173_transition_view: u64,
     ) -> Self {
-        Self {
+        let config = Self {
             round_per_term,
             term_max_size,
             term_elected_size,
@@ -80,9 +88,38 @@ impl PosStateConfig {
             cip136_round_per_term,
             cip156_transition_view,
             cip156_dispute_locked_views,
+            cip173_transition_view,
             nonce_limit_transition_view,
             max_nonce_per_account,
+        };
+        assert!(
+            config.cip173_activation_starts_a_term(),
+            "pos_cip173_transition_view {} must be the first view of a term",
+            cip173_transition_view,
+        );
+        config
+    }
+
+    fn term_view(&self, view: u64) -> (u64, u64) {
+        if view < self.cip136_transition_view {
+            (view / self.round_per_term, view % self.round_per_term)
+        } else {
+            let transition_term =
+                self.cip136_transition_view / self.round_per_term;
+            let view_after = view - self.cip136_transition_view;
+            (
+                transition_term + view_after / self.cip136_round_per_term,
+                view_after % self.cip136_round_per_term,
+            )
         }
+    }
+
+    /// The replay watermark cannot be backfilled, so an epoch straddling the
+    /// activation would hold offences already punished under the old rule and
+    /// let them be filed again as new.
+    fn cip173_activation_starts_a_term(&self) -> bool {
+        self.cip173_transition_view == u64::MAX
+            || self.term_view(self.cip173_transition_view).1 == 0
     }
 }
 
@@ -174,18 +211,7 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
     }
 
     fn get_term_view(&self, view: u64) -> (u64, u64) {
-        let conf = self.get().unwrap();
-        if view < conf.cip136_transition_view {
-            (view / conf.round_per_term, view % conf.round_per_term)
-        } else {
-            let transition_term =
-                conf.cip136_transition_view / conf.round_per_term;
-            let view_after = view - conf.cip136_transition_view;
-            (
-                transition_term + view_after / conf.cip136_round_per_term,
-                view_after % conf.cip136_round_per_term,
-            )
-        }
+        self.get().unwrap().term_view(view)
     }
 
     fn get_starting_view_for_term(&self, term: u64) -> Option<u64> {
@@ -208,6 +234,23 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
             Some(conf.cip156_dispute_locked_views)
         }
     }
+
+    fn cip173_active(&self, view: u64) -> bool {
+        view >= self.cip173_transition_view()
+    }
+
+    fn cip173_transition_view(&self) -> u64 {
+        self.get().unwrap().cip173_transition_view
+    }
+
+    fn dispute_first_admissible_epoch(&self) -> Option<u64> {
+        let conf = self.get().unwrap();
+        if conf.cip173_transition_view == u64::MAX {
+            return None;
+        }
+        // Epoch `n` is term `n - 1`.
+        Some(conf.term_view(conf.cip173_transition_view).0 + 1)
+    }
 }
 
 pub static POS_STATE_CONFIG: OnceCell<PosStateConfig> = OnceCell::new();
@@ -229,8 +272,30 @@ impl Default for PosStateConfig {
             cip136_round_per_term: ROUND_PER_TERM,
             cip156_transition_view: u64::MAX,
             cip156_dispute_locked_views: u64::MAX,
+            cip173_transition_view: u64::MAX,
             nonce_limit_transition_view: u64::MAX,
             max_nonce_per_account: u64::MAX,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn with_cip173_at(view: u64) -> PosStateConfig {
+        PosStateConfig {
+            cip173_transition_view: view,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn cip173_must_activate_on_a_term_boundary() {
+        assert!(with_cip173_at(u64::MAX).cip173_activation_starts_a_term());
+        assert!(with_cip173_at(2 * ROUND_PER_TERM)
+            .cip173_activation_starts_a_term());
+        assert!(!with_cip173_at(2 * ROUND_PER_TERM + 1)
+            .cip173_activation_starts_a_term());
     }
 }

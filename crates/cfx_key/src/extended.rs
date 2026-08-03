@@ -61,7 +61,7 @@ impl Label for H256 {
     fn len() -> usize { Self::len_bytes() }
 
     fn store(&self, target: &mut [u8]) {
-        (&mut target[0..32]).copy_from_slice(self.as_bytes());
+        target[0..32].copy_from_slice(self.as_bytes());
     }
 }
 
@@ -123,7 +123,7 @@ impl ExtendedPublic {
     ) -> Result<Self, DerivationError> {
         Ok(ExtendedPublic::new(
             derivation::point(**secret.as_raw())?,
-            secret.chain_code.clone(),
+            secret.chain_code,
         ))
     }
 
@@ -159,7 +159,7 @@ impl ExtendedKeyPair {
 
     pub fn with_code(secret: Secret, public: Public, chain_code: H256) -> Self {
         ExtendedKeyPair {
-            secret: ExtendedSecret::with_code(secret, chain_code.clone()),
+            secret: ExtendedSecret::with_code(secret, chain_code),
             public: ExtendedPublic::new(public, chain_code),
         }
     }
@@ -298,7 +298,7 @@ mod derivation {
 
         // 0x00 (padding) -- private_key --  index
         //  0             --    1..33    -- 33..end
-        private.to_big_endian(&mut data[1..33]);
+        data[1..33].copy_from_slice(&private.to_big_endian());
         index.store(&mut data[33..(33 + T::len())]);
 
         hmac_pair(&data, private_key, chain_code)

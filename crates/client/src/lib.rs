@@ -3,14 +3,15 @@
 // See http://www.gnu.org/licenses/
 
 #![recursion_limit = "512"]
-#![allow(deprecated)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::too_many_arguments)]
 
 use cfxkey as keylib;
 
 pub mod accounts;
 pub mod common;
 mod node_types;
-pub mod rpc;
 pub use cfx_config as configuration;
 pub use node_types::{archive, full, light};
+pub mod rpc_starter;
 pub mod state_dump;
