@@ -187,7 +187,7 @@ impl NodeLockStatus {
 
     pub(super) fn new_lock(
         &mut self, view: View, votes: u64, initialize_mode: bool,
-        update_views: &mut Vec<View>,
+        dispute_lock_until: Option<View>, update_views: &mut Vec<View>,
     ) {
         if votes == 0 {
             return;
@@ -199,12 +199,13 @@ impl NodeLockStatus {
             return;
         }
 
-        // If force retired is not none, new locked tokens will be forced
-        // retire.
-        if self.force_retired.is_some() {
-            let exit_view = view
+        // Removal for inactivity and a dispute penalty both bar topping up
+        // into active voting power, so the deposit queues for withdrawal.
+        if self.force_retired.is_some() || dispute_lock_until.is_some() {
+            let exit_view = (view
                 + POS_STATE_CONFIG.in_queue_locked_views(view)
-                + POS_STATE_CONFIG.out_queue_locked_views(view);
+                + POS_STATE_CONFIG.out_queue_locked_views(view))
+            .max(dispute_lock_until.unwrap_or(0));
             self.out_queue.push(exit_view, votes, update_views);
         } else {
             self.available_votes += votes;
@@ -273,22 +274,20 @@ impl NodeLockStatus {
     }
 
     pub(super) fn forfeit(
-        &mut self, view: View, updated_views: &mut Vec<View>,
+        &mut self, rule: ForfeitRule, updated_views: &mut Vec<View>,
     ) {
         if self.exempt_from_forfeit.is_some() {
             return;
         }
-        match POS_STATE_CONFIG.dispute_locked_views(view) {
-            None => self.exempt_from_forfeit = Some(self.unlocked),
-            Some(dispute_locked_views) => {
-                // available_votes excludes out_queue, so a fully-retired node
-                // (stake only in out_queue) escaped the lock before the fix.
-                let relock = self.available_votes > 0
-                    || (POS_STATE_CONFIG.dispute_lock_includes_out_queue(view)
-                        && !self.out_queue.is_empty());
-                if relock {
-                    // We will lock all votes in `in_queue`, `locked`, and
-                    // `out_queue`.
+        match rule {
+            ForfeitRule::FreezeWithdrawable => {
+                self.exempt_from_forfeit = Some(self.unlocked)
+            }
+            ForfeitRule::RelockOnActive { deadline } => {
+                // `available_votes` excludes `out_queue`, so a fully retired
+                // node escapes the lock. That is what CIP-173 fixes; it must
+                // stay exact to replay history written before the fix.
+                if self.available_votes > 0 {
                     let mut to_lock_votes = self.available_votes;
                     self.in_queue.clear();
                     self.locked = 0;
@@ -298,19 +297,97 @@ impl NodeLockStatus {
                     {
                         to_lock_votes += item.votes;
                     }
-                    // `out_queue` is cleared, so we also clear force_retired in
-                    // case it will not be updated in the
-                    // future.
                     self.force_retired = None;
 
-                    self.out_queue.push(
-                        view.saturating_add(dispute_locked_views),
-                        to_lock_votes,
-                        updated_views,
-                    );
+                    self.out_queue.push(deadline, to_lock_votes, updated_views);
                 }
             }
+            ForfeitRule::RelockAll { deadline } => {
+                self.relock_all(deadline, updated_views)
+            }
         }
+    }
+
+    /// Holds every piece of stake to `max(its own exit view, deadline)`.
+    /// Flooring, not replacing: a dispute filed late would otherwise land
+    /// behind a withdrawal in flight and *shorten* its delay.
+    fn relock_all(&mut self, deadline: View, updated_views: &mut Vec<View>) {
+        // `pop_by_view` sorts first and flooring preserves that order, so the
+        // items can go back without a re-sort. Active stake has no exit view
+        // of its own, so it leads at the deadline.
+        let mut held = Vec::with_capacity(self.out_queue.len() + 1);
+        if self.available_votes > 0 {
+            held.push(StatusItem {
+                view: deadline,
+                votes: self.available_votes,
+            });
+        }
+        while let Some(item) = self.out_queue.pop_by_view(u64::MAX) {
+            held.push(StatusItem {
+                view: item.view.max(deadline),
+                votes: item.votes,
+            });
+        }
+
+        // Unlike the legacy rule this leaves `force_retired` alone: a penalty
+        // must not double as an amnesty for an ongoing retirement.
+        self.in_queue.clear();
+        self.locked = 0;
+        self.available_votes = 0;
+
+        for item in held {
+            self.out_queue.push(item.view, item.votes, updated_views);
+        }
+    }
+}
+
+/// Chosen by `PosState`, which has the transition views and dispute record.
+pub(super) enum ForfeitRule {
+    /// Before CIP-156: forfeit outright rather than lock.
+    FreezeWithdrawable,
+    /// CIP-156: relock, but only for a node that still has active stake.
+    RelockOnActive { deadline: View },
+    /// CIP-173: relock unconditionally, stake already leaving included.
+    RelockAll { deadline: View },
+}
+
+#[cfg(test)]
+mod relock_tests {
+    use super::*;
+
+    /// `relock_all` reads no config, so these cases need no `POS_STATE_CONFIG`.
+    fn status_with(out_queue: &[(View, u64)], active: u64) -> NodeLockStatus {
+        let mut status = NodeLockStatus::default();
+        status.available_votes = active;
+        status.locked = active;
+        for (view, votes) in out_queue {
+            status.out_queue.push(*view, *votes, &mut Vec::new());
+        }
+        status
+    }
+
+    #[test]
+    fn relocking_orders_the_queue_and_never_brings_an_exit_forward() {
+        // Pushed descending, so the order must come from `pop_by_view`.
+        let mut status = status_with(&[(900, 3), (100, 1), (500, 2)], 10);
+        status.force_retired = Some(7);
+        assert!(!status.out_queue.sorted);
+
+        let mut updated = Vec::new();
+        status.forfeit(ForfeitRule::RelockAll { deadline: 500 }, &mut updated);
+
+        let exits: Vec<(View, u64)> = status
+            .out_queue
+            .iter()
+            .map(|item| (item.view, item.votes))
+            .collect();
+        // The later exit survives; the earlier two are held to the deadline.
+        assert_eq!(exits, vec![(500, 10), (500, 1), (500, 2), (900, 3)]);
+        assert!(status.out_queue.sorted);
+        assert_eq!(status.available_votes, 0);
+        assert!(status.in_queue.is_empty());
+        assert_eq!(status.force_retired, Some(7));
+        assert_eq!(updated, vec![500, 500, 500, 900]);
     }
 }
 
@@ -323,7 +400,6 @@ pub mod tests {
         NewLock(u64),
         NewUnlock(u64),
         ForceRetire,
-        Forfeit,
         AssertAvailable(u64),
         AssertLocked(u64),
         AssertUnlocked(u64),
@@ -353,6 +429,7 @@ pub mod tests {
                             view,
                             votes,
                             false,
+                            None,
                             &mut update_views,
                         );
                     }
@@ -361,9 +438,6 @@ pub mod tests {
                     }
                     Operation::ForceRetire => {
                         lock_status.force_retire(view, &mut update_views);
-                    }
-                    Operation::Forfeit => {
-                        lock_status.forfeit(view, &mut update_views)
                     }
                     Operation::AssertAvailable(votes) => {
                         if lock_status.available_votes != votes {

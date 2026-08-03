@@ -84,7 +84,17 @@ impl LedgerStore {
                 db.get::<PosStateSchema>(
                     &ledger_info.ledger_info().consensus_block_id(),
                 )
-                .unwrap()
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "Cannot read the committed PoS state: {:#}. A state \
+                         written after a hardfork this binary does not \
+                         implement is unreadable here; restore a backup taken \
+                         before the activation instead of deleting pos_db, \
+                         which would lose reward events that are never \
+                         re-derived.",
+                        e
+                    )
+                })
                 .expect("pos state and ledger info both committed")
             })
             .unwrap_or(PosState::new_empty());

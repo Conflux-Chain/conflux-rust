@@ -193,15 +193,23 @@ impl ExecutableBuiltinTx for DisputePayload {
         &self, state_view: &dyn StateView, _tx: &SignatureCheckedTransaction,
         _spec: &Spec,
     ) -> Result<Vec<ContractEvent>, VMStatus> {
-        state_view.pos_state().validate_dispute(self).map_err(|e| {
-            diem_error!("dispute tx error: {:?}", e);
-            VMStatus::Error(StatusCode::CFX_INVALID_TX)
-        })?;
         let view = state_view.pos_state().current_view();
-        if !verify_dispute(self, view) {
-            return Err(VMStatus::Error(StatusCode::CFX_INVALID_TX));
-        }
-        Ok(vec![self.to_event()])
+        let offense_epoch = verify_dispute(self, view)
+            .ok_or(VMStatus::Error(StatusCode::CFX_INVALID_TX))?;
+        state_view
+            .pos_state()
+            .validate_dispute(self, offense_epoch)
+            .map_err(|e| {
+                diem_error!("dispute tx error: {:?}", e);
+                VMStatus::Error(StatusCode::CFX_INVALID_TX)
+            })?;
+        Ok(vec![
+            if POS_STATE_CONFIG.cip173_active(view) {
+                self.to_event_v2(offense_epoch)
+            } else {
+                self.to_event()
+            },
+        ])
     }
 }
 
@@ -251,17 +259,15 @@ fn verify_dispute_proposal(
     }
 }
 
-/// Return true if the dispute is valid.
-/// Return false if the encoding is invalid or the provided signatures are
-/// not from the same round.
-pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
+/// The epoch the offence claims, or `None` if the evidence is invalid.
+pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> Option<u64> {
     let computed_address =
         from_consensus_public_key(&dispute.bls_pub_key, &dispute.vrf_pub_key);
     if dispute.address != computed_address {
         diem_trace!("Incorrect address and public keys");
-        return false;
+        return None;
     }
-    let enforce_conflict = POS_STATE_CONFIG.enforce_dispute_conflict(view);
+    let enforce_conflict = POS_STATE_CONFIG.cip173_active(view);
     match &dispute.conflicting_votes {
         ConflictSignature::Proposal((proposal_byte1, proposal_byte2)) => {
             let proposal1: Block =
@@ -269,7 +275,7 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                     Ok(proposal) => proposal,
                     Err(e) => {
                         diem_trace!("1st proposal encoding error: {:?}", e);
-                        return false;
+                        return None;
                     }
                 };
             let proposal2: Block =
@@ -277,7 +283,7 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                     Ok(proposal) => proposal,
                     Err(e) => {
                         diem_trace!("2nd proposal encoding error: {:?}", e);
-                        return false;
+                        return None;
                     }
                 };
             if (proposal1.block_data().epoch()
@@ -286,7 +292,7 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                     != proposal2.block_data().round())
             {
                 diem_trace!("Two proposals are from different rounds");
-                return false;
+                return None;
             }
             let temp_verifier = ValidatorVerifier::new_single(
                 dispute.address,
@@ -303,33 +309,34 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                     dispute.address,
                     &temp_verifier,
                 ) {
-                    return false;
+                    return None;
                 }
                 // `id()` is the hash of `block_data` only (excludes
                 // signature/vrf).
                 if proposal1.id() == proposal2.id() {
                     diem_trace!("Two proposals are identical");
-                    return false;
+                    return None;
                 }
             } else if proposal1.validate_signature(&temp_verifier).is_err()
                 || proposal2.validate_signature(&temp_verifier).is_err()
             {
-                return false;
+                return None;
             }
+            return Some(proposal1.block_data().epoch());
         }
         ConflictSignature::Vote((vote_byte1, vote_byte2)) => {
             let vote1: Vote = match bcs::from_bytes(vote_byte1.as_slice()) {
                 Ok(vote) => vote,
                 Err(e) => {
                     diem_trace!("1st vote encoding error: {:?}", e);
-                    return false;
+                    return None;
                 }
             };
             let vote2: Vote = match bcs::from_bytes(vote_byte2.as_slice()) {
                 Ok(vote) => vote,
                 Err(e) => {
                     diem_trace!("2nd vote encoding error: {:?}", e);
-                    return false;
+                    return None;
                 }
             };
             if (vote1.vote_data().proposed().epoch()
@@ -338,7 +345,17 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                     != vote2.vote_data().proposed().round())
             {
                 diem_trace!("Two votes are from different rounds");
-                return false;
+                return None;
+            }
+            // `new_single` already forces this as a side effect of holding one
+            // member; stated outright, a wider verifier cannot silently let
+            // A's equivocation convict B.
+            if enforce_conflict
+                && (vote1.author() != dispute.address
+                    || vote2.author() != dispute.address)
+            {
+                diem_trace!("Dispute vote authored by another validator");
+                return None;
             }
             let temp_verifier = ValidatorVerifier::new_single(
                 dispute.address,
@@ -349,7 +366,7 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                 || vote2.verify(&temp_verifier).is_err()
             {
                 diem_trace!("dispute vote verification error: vote1_r={:?} vote2_r={:?}", vote1.verify(&temp_verifier), vote2.verify(&temp_verifier));
-                return false;
+                return None;
             }
             // Compare `LedgerInfo` by hash, not serialized bytes: the optional
             // `timeout_signature` is not part of the `LedgerInfo`.
@@ -357,11 +374,11 @@ pub fn verify_dispute(dispute: &DisputePayload, view: u64) -> bool {
                 && vote1.ledger_info().hash() == vote2.ledger_info().hash()
             {
                 diem_trace!("Two votes share the same ledger info");
-                return false;
+                return None;
             }
+            return Some(vote1.vote_data().proposed().epoch());
         }
     }
-    true
 }
 
 #[cfg(test)]
@@ -397,7 +414,8 @@ mod tests {
     };
     use std::{collections::BTreeMap, convert::TryFrom};
 
-    const TRANSITION: u64 = 100;
+    /// Must start a term — `PosStateConfig::new` rejects anything else.
+    const TRANSITION: u64 = 2 * 60;
     const BEFORE: u64 = 0;
 
     /// Every piece of evidence below shares this epoch/round, so the epoch and
@@ -408,28 +426,28 @@ mod tests {
 
     #[track_caller]
     fn accepted(evidence: &DisputePayload) {
-        assert!(verify_dispute(evidence, BEFORE));
-        assert!(verify_dispute(evidence, TRANSITION));
+        assert_eq!(verify_dispute(evidence, BEFORE), Some(EPOCH));
+        assert_eq!(verify_dispute(evidence, TRANSITION), Some(EPOCH));
     }
 
     #[track_caller]
     fn gated(evidence: &DisputePayload) {
-        assert!(verify_dispute(evidence, BEFORE));
-        assert!(!verify_dispute(evidence, TRANSITION));
+        assert_eq!(verify_dispute(evidence, BEFORE), Some(EPOCH));
+        assert_eq!(verify_dispute(evidence, TRANSITION), None);
     }
 
     /// Evidence the legacy path rejected and CIP-173 accepts: real proposal
     /// equivocation, which the QC check made unusable before the gate.
     #[track_caller]
     fn enabled(evidence: &DisputePayload) {
-        assert!(!verify_dispute(evidence, BEFORE));
-        assert!(verify_dispute(evidence, TRANSITION));
+        assert_eq!(verify_dispute(evidence, BEFORE), None);
+        assert_eq!(verify_dispute(evidence, TRANSITION), Some(EPOCH));
     }
 
     #[track_caller]
     fn rejected(evidence: &DisputePayload) {
-        assert!(!verify_dispute(evidence, BEFORE));
-        assert!(!verify_dispute(evidence, TRANSITION));
+        assert_eq!(verify_dispute(evidence, BEFORE), None);
+        assert_eq!(verify_dispute(evidence, TRANSITION), None);
     }
 
     /// The last argument is `cip173_transition_view`; `M` leaves every other
@@ -656,8 +674,6 @@ mod tests {
         let foreign_b = make_vote(other, impostor, 2);
         // `author` is the target but the signature is the impostor's.
         let forged = make_vote(other, target.address, 2);
-        // Signed by the target but naming someone else: only the author
-        // comparison rejects this one.
         let misnamed = make_vote(signer, impostor, 2);
 
         rejected(&target.votes(&foreign_a, &foreign_b));

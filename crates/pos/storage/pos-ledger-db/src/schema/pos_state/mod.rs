@@ -42,12 +42,10 @@ impl KeyCodec<PosStateSchema> for HashValue {
 }
 
 impl ValueCodec<PosStateSchema> for PosState {
-    fn encode_value(&self) -> Result<Vec<u8>> {
-        bcs::to_bytes(self).map_err(Into::into)
-    }
+    fn encode_value(&self) -> Result<Vec<u8>> { self.encode_persisted() }
 
     fn decode_value(data: &[u8]) -> Result<Self> {
-        bcs::from_bytes(data).map_err(Into::into)
+        PosState::decode_persisted(data)
     }
 }
 
