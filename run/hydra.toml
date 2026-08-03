@@ -27,7 +27,7 @@ bootnodes="cfxnode://25265e1aa470d9d8667947820c4830a64e9f9678d6cb23ecde91e044752
 #
 # `dev` mode is for users to run a single node that automatically
 #     generates blocks with fixed intervals
-#     * You are expected to also set `jsonrpc_ws_port`, `jsonrpc_tcp_port`,
+#     * You are expected to also set `jsonrpc_ws_port`
 #       and `jsonrpc_http_port` if you want RPC functionalities.
 #     * generate blocks without PoW (either after receiving a transaction or
 #       in fixed period, see ``dev_block_interval_ms'')
@@ -150,9 +150,7 @@ log_conf="log.yaml"
 # the node will only be able to handle very recent transactions.
 #
 # jsonrpc_ws_port=12535
-# jsonrpc_tcp_port=12536
 # jsonrpc_http_port=12537
-# jsonrpc_local_tcp_port=12538
 jsonrpc_local_http_port=12539
 # jsonrpc_local_ws_port=12540
 # jsonrpc_http_eth_port=8545
