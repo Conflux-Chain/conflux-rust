@@ -440,8 +440,8 @@ mod tests {
     /// equivocation, which the QC check made unusable before the gate.
     #[track_caller]
     fn enabled(evidence: &DisputePayload) {
-        assert!(!verify_dispute(evidence, BEFORE));
-        assert!(verify_dispute(evidence, TRANSITION));
+        assert_eq!(verify_dispute(evidence, BEFORE), None);
+        assert_eq!(verify_dispute(evidence, TRANSITION), Some(EPOCH));
     }
 
     #[track_caller]
