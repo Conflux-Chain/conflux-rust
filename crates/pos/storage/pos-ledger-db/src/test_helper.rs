@@ -128,7 +128,7 @@ prop_compose! {
                 let block_size = txn_gens.len();
                 let txns_to_commit = txn_gens
                         .into_iter()
-                        .map(|gen| gen.materialize(&mut universe))
+                        .map(|r#gen| r#gen.materialize(&mut universe))
                         .collect();
                 let ledger_info = ledger_info_gen.materialize(&mut universe, block_size);
                 let validator_set = universe.get_validator_set(ledger_info.epoch()).to_vec();

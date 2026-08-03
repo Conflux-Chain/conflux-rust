@@ -1,6 +1,6 @@
 [package]
 name = "cfx-rpc-utils"
-edition = "2021"
+edition = "2024"
 version.workspace = true
 authors.workspace = true
 description.workspace = true

@@ -65,7 +65,7 @@ impl PubSubApi {
         }
     }
 
-    fn new_headers_stream(&self) -> impl Stream<Item = Header> {
+    fn new_headers_stream(&self) -> impl Stream<Item = Header> + use<> {
         let receiver = self.head_sender.subscribe();
         BroadcastStream::new(receiver)
             .filter(|item| {
@@ -79,7 +79,9 @@ impl PubSubApi {
             .map(|item| item.expect("should not be an error"))
     }
 
-    fn new_logs_stream(&self, filter: LogFilter) -> impl Stream<Item = Log> {
+    fn new_logs_stream(
+        &self, filter: LogFilter,
+    ) -> impl Stream<Item = Log> + use<> {
         let receiver;
         let senders = self.log_senders.read();
         if !senders.contains_key(&filter) {

@@ -157,7 +157,7 @@ macro_rules! derive_status_try_from_repr {
         $( #[$metas:meta] )*
         $vis:vis enum $enum_name:ident {
             $(
-                $variant:ident = $value: expr
+                $variant:ident = $value: expr_2021
             ),*
             $( , )?
         }

@@ -3,7 +3,7 @@ name = "cfx-addr"
 version = "0.2.0"
 license = "GPL-3.0"
 description = "Conflux Base32 Address Encoder/Decoder"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 cfx-types = { workspace = true }

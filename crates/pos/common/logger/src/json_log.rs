@@ -30,7 +30,7 @@ const MAX_EVENTS_IN_QUEUE: usize = 10_000;
 // TODO: ideally we want to unify it with existing logger
 #[macro_export]
 macro_rules! event {
-    ($name:expr, $($json:tt)*) => {
+    ($name:expr_2021, $($json:tt)*) => {
         $crate::json_log::send_json_log($crate::json_log::JsonLogEntry::new(
             $name,
             serde_json::json!({$($json)+}),

@@ -45,9 +45,11 @@ impl Default for MaybeInPlaceByteArray {
 pub trait MaybeInPlaceByteArrayMemoryManagerTrait: Drop {
     /// Unsafe because the size isn't set to 0.
     unsafe fn drop_value(&mut self) {
-        let size = self.get_size();
-        if size > MaybeInPlaceByteArray::MAX_INPLACE_SIZE {
-            self.get_in_place_byte_array_mut().ptr_into_vec(size);
+        unsafe {
+            let size = self.get_size();
+            if size > MaybeInPlaceByteArray::MAX_INPLACE_SIZE {
+                self.get_in_place_byte_array_mut().ptr_into_vec(size);
+            }
         }
     }
 
@@ -60,13 +62,15 @@ pub trait MaybeInPlaceByteArrayMemoryManagerTrait: Drop {
     unsafe fn move_byte_array_dest_unchecked(
         &mut self, free_dest: &mut MaybeInPlaceByteArray,
     ) {
-        self.set_size(0);
+        unsafe {
+            self.set_size(0);
 
-        std::ptr::copy_nonoverlapping(
-            self.get_in_place_byte_array(),
-            free_dest,
-            1,
-        );
+            std::ptr::copy_nonoverlapping(
+                self.get_in_place_byte_array(),
+                free_dest,
+                1,
+            );
+        }
     }
 
     fn move_to<T: MaybeInPlaceByteArrayMemoryManagerTrait>(
@@ -127,39 +131,45 @@ impl<
 impl MaybeInPlaceByteArray {
     /// Take ptr out and clear ptr.
     pub unsafe fn ptr_into_vec(&mut self, size: usize) -> Vec<u8> {
-        debug_assert!(!self.ptr.is_null() || size == 0);
-        let ptr = if self.ptr.is_null() {
-            NonNull::dangling().as_ptr()
-        } else {
-            self.ptr
-        };
-        let vec = Vec::from_raw_parts(ptr, size, size);
-        self.ptr = null_mut();
-        vec
+        unsafe {
+            debug_assert!(!self.ptr.is_null() || size == 0);
+            let ptr = if self.ptr.is_null() {
+                NonNull::dangling().as_ptr()
+            } else {
+                self.ptr
+            };
+            let vec = Vec::from_raw_parts(ptr, size, size);
+            self.ptr = null_mut();
+            vec
+        }
     }
 
     unsafe fn ptr_slice(&self, size: usize) -> &[u8] {
-        debug_assert!(!self.ptr.is_null() || size == 0);
-        slice::from_raw_parts(
-            if self.ptr.is_null() {
-                NonNull::dangling().as_ptr()
-            } else {
-                self.ptr
-            },
-            size,
-        )
+        unsafe {
+            debug_assert!(!self.ptr.is_null() || size == 0);
+            slice::from_raw_parts(
+                if self.ptr.is_null() {
+                    NonNull::dangling().as_ptr()
+                } else {
+                    self.ptr
+                },
+                size,
+            )
+        }
     }
 
     unsafe fn ptr_slice_mut(&mut self, size: usize) -> &mut [u8] {
-        debug_assert!(!self.ptr.is_null() || size == 0);
-        slice::from_raw_parts_mut(
-            if self.ptr.is_null() {
-                NonNull::dangling().as_ptr()
-            } else {
-                self.ptr
-            },
-            size,
-        )
+        unsafe {
+            debug_assert!(!self.ptr.is_null() || size == 0);
+            slice::from_raw_parts_mut(
+                if self.ptr.is_null() {
+                    NonNull::dangling().as_ptr()
+                } else {
+                    self.ptr
+                },
+                size,
+            )
+        }
     }
 
     pub fn get_slice_mut(&mut self, size: usize) -> &mut [u8] {

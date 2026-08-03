@@ -85,8 +85,8 @@ impl Default for Action {
 impl Action {
     pub fn gas(&self) -> Option<U256> {
         match self {
-            Action::Call(ref call) => Some(call.gas),
-            Action::Create(ref create) => Some(create.gas),
+            Action::Call(call) => Some(call.gas),
+            Action::Create(create) => Some(create.gas),
             Action::SelfDestruct(_) => None,
         }
     }

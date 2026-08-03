@@ -95,7 +95,7 @@ fn test_struct() {
     let expanded = malloc_size_of_derive(source).to_string();
     let mut no_space = expanded.replace(" ", "");
     macro_rules! match_count {
-        ($e:expr, $count:expr) => {
+        ($e:expr_2021, $count:expr_2021) => {
             assert_eq!(
                 no_space.matches(&$e.replace(" ", "")).count(),
                 $count,

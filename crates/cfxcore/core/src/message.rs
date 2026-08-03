@@ -21,7 +21,7 @@ pub use network::{
 };
 
 macro_rules! build_msgid {
-    ($($name:ident = $value:expr)*) => {
+    ($($name:ident = $value:expr_2021)*) => {
         #[allow(dead_code)]
         pub mod msgid {
             use super::MsgId;
@@ -158,7 +158,7 @@ pub fn decode_msg(mut msg: &[u8]) -> Option<(MsgId, Rlp<'_>)> {
 }
 
 macro_rules! mark_msg_version_bound {
-    ($name:ident, $msg_ver:expr, $msg_valid_till_ver:expr) => {
+    ($name:ident, $msg_ver:expr_2021, $msg_valid_till_ver:expr_2021) => {
         impl MessageProtocolVersionBound for $name {
             fn version_introduced(&self) -> ProtocolVersion { $msg_ver }
 
@@ -172,10 +172,10 @@ macro_rules! mark_msg_version_bound {
 macro_rules! build_msg_basic {
     (
         $name:ident,
-        $msg:expr,
+        $msg:expr_2021,
         $name_str:literal,
-        $msg_ver:expr,
-        $msg_valid_till_ver:expr
+        $msg_ver:expr_2021,
+        $msg_valid_till_ver:expr_2021
     ) => {
         mark_msg_version_bound!($name, $msg_ver, $msg_valid_till_ver);
 
@@ -196,10 +196,10 @@ macro_rules! build_msg_basic {
 macro_rules! build_msg_impl {
     (
         $name:ident,
-        $msg:expr,
+        $msg:expr_2021,
         $name_str:literal,
-        $msg_ver:expr,
-        $msg_valid_till_ver:expr
+        $msg_ver:expr_2021,
+        $msg_valid_till_ver:expr_2021
     ) => {
         impl GetMaybeRequestId for $name {}
 
@@ -226,10 +226,10 @@ macro_rules! impl_request_id_methods {
 macro_rules! build_msg_with_request_id_impl {
     (
         $name:ident,
-        $msg:expr,
+        $msg:expr_2021,
         $name_str:literal,
-        $msg_ver:expr,
-        $msg_valid_till_ver:expr
+        $msg_ver:expr_2021,
+        $msg_valid_till_ver:expr_2021
     ) => {
         build_msg_basic!($name, $msg, $name_str, $msg_ver, $msg_valid_till_ver);
         impl_request_id_methods!($name);

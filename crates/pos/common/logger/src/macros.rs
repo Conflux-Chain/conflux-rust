@@ -12,7 +12,7 @@
 #[macro_export]
 macro_rules! log {
     // Entry, Log Level + stuff
-    ($level:expr, $($args:tt)+) => {{
+    ($level:expr_2021, $($args:tt)+) => {{
         const METADATA: $crate::Metadata = $crate::Metadata::new(
             $level,
             env!("CARGO_CRATE_NAME"),
@@ -78,7 +78,7 @@ macro_rules! schema {
     //
     // base case
     //
-    (@ { $(,)* $($val:expr),* $(,)* } $(,)*) => {
+    (@ { $(,)* $($val:expr_2021),* $(,)* } $(,)*) => {
         &[ $($val),* ]
     };
 
@@ -87,109 +87,109 @@ macro_rules! schema {
     //
 
     // format args
-    (@ { $(,)* $($out:expr),* }, $template:literal, $($args:tt)*) => {
+    (@ { $(,)* $($out:expr_2021),* }, $template:literal, $($args:tt)*) => {
         $crate::schema!(
             @ { $($out),* }
         )
     };
-    (@ { $(,)* $($out:expr),* }, $template:literal) => {
+    (@ { $(,)* $($out:expr_2021),* }, $template:literal) => {
         $crate::schema!(
             @ { $($out),* }
         )
     };
 
     // Identifier Keys
-    (@ { $(,)* $($out:expr),* }, $($k:ident).+ = $val:expr, $($args:tt)*) => {
+    (@ { $(,)* $($out:expr_2021),* }, $($k:ident).+ = $val:expr_2021, $($args:tt)*) => {
         $crate::schema!(
             @ { $($out),*, &$crate::KeyValue::new($crate::__log_stringify!($($k).+), $crate::Value::from_serde(&$val)) },
             $($args)*
         )
     };
 
-    (@ { $(,)* $($out:expr),* }, $($k:ident).+ = $val:expr) => {
+    (@ { $(,)* $($out:expr_2021),* }, $($k:ident).+ = $val:expr_2021) => {
         $crate::schema!(
             @ { $($out),*, &$crate::KeyValue::new($crate::__log_stringify!($($k).+), $crate::Value::from_serde(&$val)) },
         )
     };
 
     // Identifier Keys debug
-    (@ { $(,)* $($out:expr),* }, $($k:ident).+ = ?$val:expr, $($args:tt)*) => {
+    (@ { $(,)* $($out:expr_2021),* }, $($k:ident).+ = ?$val:expr_2021, $($args:tt)*) => {
         $crate::schema!(
             @ { $($out),*, &$crate::KeyValue::new($crate::__log_stringify!($($k).+), $crate::Value::from_debug(&$val)) },
             $($args)*
         )
     };
 
-    (@ { $(,)* $($out:expr),* }, $($k:ident).+ = ?$val:expr) => {
+    (@ { $(,)* $($out:expr_2021),* }, $($k:ident).+ = ?$val:expr_2021) => {
         $crate::schema!(
             @ { $($out),*, &$crate::KeyValue::new($crate::__log_stringify!($($k).+), $crate::Value::from_debug($val)) },
         )
     };
 
     // Identifier Keys display
-    (@ { $(,)* $($out:expr),* }, $($k:ident).+ = %$val:expr, $($args:tt)*) => {
+    (@ { $(,)* $($out:expr_2021),* }, $($k:ident).+ = %$val:expr_2021, $($args:tt)*) => {
         $crate::schema!(
             @ { $($out),*, &$crate::KeyValue::new($crate::__log_stringify!($($k).+), $crate::Value::from_display(&$val)) },
             $($args)*
         )
     };
 
-    (@ { $(,)* $($out:expr),* }, $($k:ident).+ = %$val:expr) => {
+    (@ { $(,)* $($out:expr_2021),* }, $($k:ident).+ = %$val:expr_2021) => {
         $crate::schema!(
             @ { $($out),*, &$crate::KeyValue::new($crate::__log_stringify!($($k).+), $crate::Value::from_display(&$val)) },
         )
     };
 
     // Literal Keys
-    (@ { $(,)* $($out:expr),* }, $k:literal = $val:expr, $($args:tt)*) => {
+    (@ { $(,)* $($out:expr_2021),* }, $k:literal = $val:expr_2021, $($args:tt)*) => {
         $crate::schema!(
             @ { $($out),*, &$crate::KeyValue::new($k, $crate::Value::from_serde(&$val)) },
             $($args)*
         )
     };
 
-    (@ { $(,)* $($out:expr),* }, $k:literal = $val:expr) => {
+    (@ { $(,)* $($out:expr_2021),* }, $k:literal = $val:expr_2021) => {
         $crate::schema!(
             @ { $($out),*, &$crate::KeyValue::new($k, $crate::Value::from_serde(&$val)) },
         )
     };
 
     // Literal Keys debug
-    (@ { $(,)* $($out:expr),* }, $k:literal = ?$val:expr, $($args:tt)*) => {
+    (@ { $(,)* $($out:expr_2021),* }, $k:literal = ?$val:expr_2021, $($args:tt)*) => {
         $crate::schema!(
             @ { $($out),*, &$crate::KeyValue::new($k, $crate::Value::from_debug(&$val)) },
             $($args)*
         )
     };
 
-    (@ { $(,)* $($out:expr),* }, $k:literal = ?$val:expr) => {
+    (@ { $(,)* $($out:expr_2021),* }, $k:literal = ?$val:expr_2021) => {
         $crate::schema!(
             @ { $($out),*, &$crate::KeyValue::new($k, $crate::Value::from_debug(&$val)) },
         )
     };
 
     // Literal Keys display
-    (@ { $(,)* $($out:expr),* }, $k:literal = %$val:expr, $($args:tt)*) => {
+    (@ { $(,)* $($out:expr_2021),* }, $k:literal = %$val:expr_2021, $($args:tt)*) => {
         $crate::schema!(
             @ { $($out),*, &$crate::KeyValue::new($k, $crate::Value::from_display(&$val)) },
             $($args)*
         )
     };
 
-    (@ { $(,)* $($out:expr),* }, $k:literal = %$val:expr) => {
+    (@ { $(,)* $($out:expr_2021),* }, $k:literal = %$val:expr_2021) => {
         $crate::schema!(
             @ { $($out),*, &$crate::KeyValue::new($k, $crate::Value::from_display(&$val)) },
         )
     };
 
     // Lone Schemas
-    (@ { $(,)* $($out:expr),* }, $schema:expr, $($args:tt)*) => {
+    (@ { $(,)* $($out:expr_2021),* }, $schema:expr_2021, $($args:tt)*) => {
         $crate::schema!(
             @ { $($out),*, &$schema },
             $($args)*
         )
     };
-    (@ { $(,)* $($out:expr),* }, $schema:expr) => {
+    (@ { $(,)* $($out:expr_2021),* }, $schema:expr_2021) => {
         $crate::schema!(
             @ { $($out),*, &$schema },
         )
@@ -222,68 +222,68 @@ macro_rules! fmt_args {
     };
 
     // Identifier Keys
-    ($($k:ident).+ = $val:expr, $($args:tt)*) => {
+    ($($k:ident).+ = $val:expr_2021, $($args:tt)*) => {
         $crate::fmt_args!(
             $($args)*
         )
     };
-    ($($k:ident).+ = $val:expr) => {
+    ($($k:ident).+ = $val:expr_2021) => {
         $crate::fmt_args!()
     };
     // Identifier Keys with Debug
-    ($($k:ident).+ = ?$val:expr, $($args:tt)*) => {
+    ($($k:ident).+ = ?$val:expr_2021, $($args:tt)*) => {
         $crate::fmt_args!(
             $($args)*
         )
     };
-    ($($k:ident).+ = ?$val:expr) => {
+    ($($k:ident).+ = ?$val:expr_2021) => {
         $crate::fmt_args!()
     };
     // Identifier Keys with Display
-    ($($k:ident).+ = %$val:expr, $($args:tt)*) => {
+    ($($k:ident).+ = %$val:expr_2021, $($args:tt)*) => {
         $crate::fmt_args!(
             $($args)*
         )
     };
-    ($($k:ident).+ = %$val:expr) => {
+    ($($k:ident).+ = %$val:expr_2021) => {
         $crate::fmt_args!()
     };
 
     // Literal Keys
-    ($k:literal = $val:expr, $($args:tt)*) => {
+    ($k:literal = $val:expr_2021, $($args:tt)*) => {
         $crate::fmt_args!(
             $($args)*
         )
     };
-    ($k:literal = $val:expr) => {
+    ($k:literal = $val:expr_2021) => {
         $crate::fmt_args!()
     };
     // Literal Keys with Debug
-    ($k:literal = ?$val:expr, $($args:tt)*) => {
+    ($k:literal = ?$val:expr_2021, $($args:tt)*) => {
         $crate::fmt_args!(
             $($args)*
         )
     };
-    ($k:literal = ?$val:expr) => {
+    ($k:literal = ?$val:expr_2021) => {
         $crate::fmt_args!()
     };
     // Literal Keys with Display
-    ($k:literal = %$val:expr, $($args:tt)*) => {
+    ($k:literal = %$val:expr_2021, $($args:tt)*) => {
         $crate::fmt_args!(
             $($args)*
         )
     };
-    ($k:literal = %$val:expr) => {
+    ($k:literal = %$val:expr_2021) => {
         $crate::fmt_args!()
     };
 
     // Lone Schemas
-    ($schema:expr, $($args:tt)*) => {
+    ($schema:expr_2021, $($args:tt)*) => {
         $crate::fmt_args!(
             $($args)*
         )
     };
-    ($schema:expr) => {
+    ($schema:expr_2021) => {
         $crate::fmt_args!()
     };
 }
@@ -291,7 +291,7 @@ macro_rules! fmt_args {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __log_stringify {
-    ($s:expr) => {
+    ($s:expr_2021) => {
         stringify!($s)
     };
 }

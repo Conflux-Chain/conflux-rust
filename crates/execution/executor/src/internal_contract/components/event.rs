@@ -26,7 +26,7 @@ pub trait SolidityEventTrait: Send + Sync {
 
 #[macro_export]
 macro_rules! make_solidity_event {
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($interface:expr $(, indexed: $indexed:ty)? $(, non_indexed: $non_indexed:ty)?); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($interface:expr_2021 $(, indexed: $indexed:ty)? $(, non_indexed: $non_indexed:ty)?); ) => {
         $(#[$attr])*
         #[derive(Copy, Clone)]
         $visibility struct $name;

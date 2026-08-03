@@ -23,7 +23,7 @@ use serde::{
 use std::{cmp::Ordering, fmt, ops, str};
 
 macro_rules! impl_hash {
-    ($name:ident, $size:expr) => {
+    ($name:ident, $size:expr_2021) => {
         pub struct $name([u8; $size]);
 
         impl $name {

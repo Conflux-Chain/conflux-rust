@@ -913,7 +913,7 @@ impl SpawnBlocking for EthApi {
 impl EthApi {
     pub fn async_transaction_by_hash(
         &self, hash: H256,
-    ) -> impl Future<Output = Result<Option<Transaction>, RpcError>> + Send
+    ) -> impl Future<Output = Result<Option<Transaction>, RpcError>> + Send + use<>
     {
         let self_clone = self.clone();
         async move {

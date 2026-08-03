@@ -95,7 +95,7 @@ impl BlockTxs {
     #[inline]
     pub fn request(
         &self, hash: H256,
-    ) -> impl Future<Output = Result<Vec<SignedTransaction>>> {
+    ) -> impl Future<Output = Result<Vec<SignedTransaction>>> + use<> {
         let mut verified = self.verified.write();
 
         if !verified.contains_key(&hash) {

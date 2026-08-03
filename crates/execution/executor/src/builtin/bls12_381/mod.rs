@@ -49,7 +49,7 @@ pub fn bls12_builtin_factory(name: &str) -> Box<dyn Precompile> {
 }
 
 macro_rules! bls12_precompile {
-    ($address:expr, $price_fn:path, $impl_fn:path) => {
+    ($address:expr_2021, $price_fn:path, $impl_fn:path) => {
         (
             $address,
             Box::new(StaticPlan($price_fn())),
