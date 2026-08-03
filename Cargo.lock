@@ -1603,7 +1603,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-config"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "cfx-addr",
  "cfx-executor",
@@ -1751,7 +1751,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-mallocator-utils"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "axum",
  "cfg-if 1.0.0",
@@ -1811,7 +1811,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-parity-trace-types"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
@@ -1829,7 +1829,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-builder"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "alloy-primitives",
  "blockgen",
@@ -1855,7 +1855,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-api"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-types",
@@ -1869,7 +1869,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-impl"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "async-trait",
  "bigdecimal",
@@ -1923,7 +1923,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-types"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "bls-signatures",
  "cfx-addr",
@@ -1954,7 +1954,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-common-impl"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "cfx-parity-trace-types",
  "cfx-rpc-eth-types",
@@ -1964,7 +1964,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-api"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -1976,7 +1976,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-impl"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -2016,7 +2016,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-types"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
@@ -2041,7 +2041,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-middlewares"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "anyhow",
  "cfx-rpc-utils",
@@ -2062,7 +2062,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-primitives"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "rustc-hex",
  "serde",
@@ -2072,7 +2072,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -2160,7 +2160,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-tasks"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -2186,7 +2186,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-util-macros"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 
 [[package]]
 name = "cfx-vm-interpreter"
@@ -2230,7 +2230,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -2354,14 +2354,14 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-errors"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "cfxcore-pow"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "cfx-parameters",
  "cfx-types",
@@ -2376,7 +2376,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-types"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "cfx-bytes",
  "cfx-execute-helper",
@@ -2592,7 +2592,7 @@ checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
 name = "client"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "app_dirs",
  "blockgen",
@@ -2690,7 +2690,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "bls-signatures",
  "cfx-execute-helper",
@@ -3613,7 +3613,7 @@ dependencies = [
 
 [[package]]
 name = "eest_types"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "cfx-rpc-primitives",
  "cfx-types",
@@ -4139,7 +4139,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "alloy-primitives",
  "alloy-primitives-wrapper",
@@ -8185,7 +8185,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "3.0.3-net8888"
+version = "3.1.0-net8888"
 dependencies = [
  "alloy-primitives",
  "cfx-types",
