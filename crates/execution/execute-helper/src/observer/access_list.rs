@@ -81,8 +81,17 @@ impl AccessListInspector {
         items.collect()
     }
 
-    pub fn collcect_excluded_addresses(&mut self, item: Address) {
+    pub fn collect_excluded_addresses(&mut self, item: Address) {
         self.excluded.insert(item);
+    }
+
+    /// Marks an address as touched, unless it is one that never belongs in an
+    /// access list: the sender, the callee, the precompiles and the 7702
+    /// authorities are warm already.
+    fn record_address(&mut self, address: Address) {
+        if !self.excluded.contains(&address) {
+            self.touched_slots.entry(address).or_default();
+        }
     }
 }
 
@@ -99,9 +108,12 @@ impl typemap::Key for AccessListKey {
 }
 
 impl OpcodeTracer for AccessListInspector {
+    fn do_trace_opcode(&self, enabled: &mut bool) { *enabled |= true; }
+
     fn step(&mut self, interp: &dyn InterpreterInfo) {
-        let ins = Instruction::from_u8(interp.current_opcode())
-            .expect("valid opcode");
+        let Some(ins) = Instruction::from_u8(interp.current_opcode()) else {
+            return;
+        };
         match ins {
             Instruction::SLOAD | Instruction::SSTORE => {
                 if let Some(slot) = interp.stack().last() {
@@ -117,22 +129,36 @@ impl OpcodeTracer for AccessListInspector {
             | Instruction::EXTCODESIZE
             | Instruction::BALANCE
             | Instruction::SUICIDE => {
-                if let Some(slot) = interp.stack().last() {
-                    let addr = u256_to_address_be(*slot);
-                    if !self.excluded.contains(&addr) {
-                        self.touched_slots.entry(addr).or_default();
-                    }
+                let operands = match ins {
+                    Instruction::EXTCODECOPY => 4,
+                    _ => 1,
+                };
+                let stack = interp.stack();
+                if stack.len() >= operands {
+                    // The address is these instructions' first operand, so it
+                    // sits on top of the stack.
+                    let address = stack[stack.len() - 1];
+                    self.record_address(u256_to_address_be(address));
                 }
             }
             Instruction::DELEGATECALL
             | Instruction::CALL
             | Instruction::STATICCALL
             | Instruction::CALLCODE => {
-                if let Some(slot) = interp.stack().last() {
-                    let addr = u256_to_address_be(*slot);
-                    if !self.excluded.contains(&addr) {
-                        self.touched_slots.entry(addr).or_default();
-                    }
+                // Every call instruction takes `gas` first and the callee
+                // second, so the address sits one below the top of the stack.
+                // Requiring the full operand count keeps us off a stack that
+                // the instruction itself is about to reject as underflowed.
+                let operands = match ins {
+                    // gas, address, value, in_off, in_size, out_off, out_size
+                    Instruction::CALL | Instruction::CALLCODE => 7,
+                    // the same, without `value`
+                    _ => 6,
+                };
+                let stack = interp.stack();
+                if stack.len() >= operands {
+                    let address = stack[stack.len() - 2];
+                    self.record_address(u256_to_address_be(address));
                 }
             }
             _ => (),
