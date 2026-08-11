@@ -181,7 +181,7 @@ impl<'a> EstimationContext<'a> {
         )
     }
 
-    pub fn prepare_access_list_inspector(
+    fn prepare_access_list_inspector(
         &mut self, tx: &SignedTransaction, request: &EstimateRequest,
     ) -> Option<AccessListInspector> {
         if !request.collect_access_list {

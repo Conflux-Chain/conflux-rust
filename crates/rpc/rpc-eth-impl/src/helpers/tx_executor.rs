@@ -12,7 +12,7 @@ use cfx_rpc_utils::error::{
         geth_call_execution_error, invalid_input_rpc_err,
     },
 };
-use cfx_types::U256;
+use cfx_types::{U256, U64};
 use cfx_util_macros::bail;
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
@@ -95,6 +95,15 @@ impl TxExecutor {
             {
                 return Err(RpcError::from(
                     RpcInvalidTransactionError::TipAboveFeeCap,
+                )
+                .into());
+            }
+        }
+
+        if let Some(tx_type) = request.transaction_type {
+            if tx_type == U64::zero() && request.access_list.is_some() {
+                return Err(RpcError::from(
+                    RpcInvalidTransactionError::AccessListNotSupported,
                 )
                 .into());
             }

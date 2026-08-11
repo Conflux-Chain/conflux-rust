@@ -6,7 +6,7 @@ use cfx_types::{u256_to_address_be, u256_to_h256_be, Address, H256};
 use cfx_vm_interpreter::instructions::Instruction;
 use cfx_vm_types::InterpreterInfo;
 use primitives::{AccessList, AccessListItem};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use typemap::ShareDebugMap;
 
 /// An [Inspector] that collects touched accounts and storage slots.
@@ -18,7 +18,7 @@ pub struct AccessListInspector {
     /// All addresses that should be excluded from the final accesslist
     excluded: HashSet<Address>,
     /// All addresses and touched slots
-    touched_slots: HashMap<Address, BTreeSet<H256>>,
+    touched_slots: BTreeMap<Address, BTreeSet<H256>>,
 }
 
 impl From<(AccessList, HashSet<Address>)> for AccessListInspector {
@@ -30,12 +30,19 @@ impl From<(AccessList, HashSet<Address>)> for AccessListInspector {
 impl AccessListInspector {
     /// Creates a new [AccessListInspector] with the given excluded addresses.
     pub fn new(access_list: AccessList, excluded: HashSet<Address>) -> Self {
+        let mut touched_slots = BTreeMap::<Address, BTreeSet<H256>>::new();
+        for item in access_list {
+            if excluded.contains(&item.address) {
+                continue;
+            }
+            touched_slots
+                .entry(item.address)
+                .or_default()
+                .extend(item.storage_keys);
+        }
         Self {
             excluded,
-            touched_slots: access_list
-                .into_iter()
-                .map(|v| (v.address, v.storage_keys.into_iter().collect()))
-                .collect(),
+            touched_slots,
         }
     }
 
@@ -44,13 +51,13 @@ impl AccessListInspector {
 
     /// Returns a reference to the map of addresses and their corresponding
     /// touched storage slots.
-    pub fn touched_slots(&self) -> &HashMap<Address, BTreeSet<H256>> {
+    pub fn touched_slots(&self) -> &BTreeMap<Address, BTreeSet<H256>> {
         &self.touched_slots
     }
 
     /// Consumes the inspector and returns the map of addresses and their
     /// corresponding touched storage slots.
-    pub fn into_touched_slots(self) -> HashMap<Address, BTreeSet<H256>> {
+    pub fn into_touched_slots(self) -> BTreeMap<Address, BTreeSet<H256>> {
         self.touched_slots
     }
 
@@ -171,3 +178,65 @@ impl CheckpointTracer for AccessListInspector {}
 impl InternalTransferTracer for AccessListInspector {}
 impl StorageTracer for AccessListInspector {}
 impl SetAuthTracer for AccessListInspector {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn caller_access_list_merges_slots_for_duplicate_addresses() {
+        let address = Address::from_low_u64_be(1);
+        let lower_slot = H256::from_low_u64_be(7);
+        let higher_slot = H256::from_low_u64_be(8);
+        let inspector = AccessListInspector::new(
+            vec![
+                AccessListItem {
+                    address,
+                    storage_keys: vec![lower_slot],
+                },
+                AccessListItem {
+                    address,
+                    storage_keys: vec![higher_slot],
+                },
+            ],
+            HashSet::new(),
+        );
+
+        assert_eq!(
+            inspector.access_list(),
+            vec![AccessListItem {
+                address,
+                storage_keys: vec![lower_slot, higher_slot],
+            }]
+        );
+    }
+
+    #[test]
+    fn caller_access_list_omits_excluded_addresses() {
+        let excluded_address = Address::from_low_u64_be(1);
+        let included_address = Address::from_low_u64_be(2);
+        let excluded_slot = H256::from_low_u64_be(7);
+        let included_slot = H256::from_low_u64_be(8);
+        let inspector = AccessListInspector::new(
+            vec![
+                AccessListItem {
+                    address: excluded_address,
+                    storage_keys: vec![excluded_slot],
+                },
+                AccessListItem {
+                    address: included_address,
+                    storage_keys: vec![included_slot],
+                },
+            ],
+            HashSet::from([excluded_address]),
+        );
+
+        assert_eq!(
+            inspector.access_list(),
+            vec![AccessListItem {
+                address: included_address,
+                storage_keys: vec![included_slot],
+            }]
+        );
+    }
+}
