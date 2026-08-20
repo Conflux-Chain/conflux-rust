@@ -1957,6 +1957,16 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
 
     fn self_node_id(&self) -> NodeId { *self.network_service.metadata.id() }
 
+    fn get_peer_addr(&self, node_id: &NodeId) -> Option<String> {
+        match self.network_service.sessions.get_by_id(node_id) {
+            Some(session) => {
+                let sess = session.read();
+                Some(sess.address().to_string())
+            }
+            None => None,
+        }
+    }
+
     /// Message is sent through this method.
     fn send(
         &self, node_id: &NodeId, msg: Vec<u8>,
