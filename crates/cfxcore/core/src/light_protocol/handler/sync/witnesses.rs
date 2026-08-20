@@ -150,18 +150,46 @@ impl Witnesses {
         }
     }
 
+    /// Lowest pivot height the header at `witness` vouches for (`witness -
+    /// blame`), or `None` if malformed. `blame` is unbounded and unchecked at
+    /// acceptance; a correct header never blames genesis, so `blame < witness`.
+    /// `None` replaces an underflow panic on bad input.
+    fn lowest_blamed_height(witness: u64, blame: u64) -> Option<u64> {
+        match witness.checked_sub(blame) {
+            Some(start) if start >= 1 => Some(start),
+            _ => None,
+        }
+    }
+
     #[inline]
-    pub fn request(&self, witness: u64) {
+    pub fn request(&self, first_blamed_height: u64, witness: u64) {
+        // Mark the blamed range in-flight (so `root_hashes_of` reports it
+        // unavailable until verified) from the authoritative lower bound, not
+        // `witness - header.blame()`: `blame` is unchecked and could underflow.
+        {
+            let mut in_flight = self.in_flight.write();
+            for h in first_blamed_height..=witness {
+                in_flight.insert(h);
+            }
+        }
+
         let blame = self
             .ledger
             .pivot_header_of(witness)
             .expect("Pivot header should exist")
             .blame() as u64;
 
-        let mut in_flight = self.in_flight.write();
-
-        for h in (witness - blame)..=witness {
-            in_flight.insert(h);
+        // A malformed local header can't be satisfied by an honest peer, and
+        // requesting it would demote peers whose valid response fails to match
+        // it. Leave the range in-flight (unavailable) until a reorg
+        // re-verifies.
+        if Self::lowest_blamed_height(witness, blame).is_none() {
+            debug!(
+                "Not requesting witness at height {}: local pivot header blames \
+                 genesis or earlier (blame = {})",
+                witness, blame
+            );
+            return;
         }
 
         let missing = MissingWitness::new(witness);
@@ -191,11 +219,25 @@ impl Witnesses {
             return Ok(());
         }
 
+        // `witness - ii` below underflows if `blame >= witness`, which means
+        // our *local* header is malformed (e.g. after a reorg the proof
+        // happens to match) — local invalid state, not peer misconduct,
+        // so skip without punishing the peer.
+        let blame = header.blame() as u64;
+        if Self::lowest_blamed_height(witness, blame).is_none() {
+            debug!(
+                "Skipping witness info at height {}: local pivot header blames \
+                 genesis or earlier (blame = {})",
+                witness, blame
+            );
+            return Ok(());
+        }
+
         let mut in_flight = self.in_flight.write();
 
         // handle valid hashes
         for ii in 0..state_roots.len() as u64 {
-            // find corresponding epoch
+            // find corresponding epoch (safe: `witness > blame`, guarded above)
             let height = witness - ii;
 
             // insert into db
@@ -290,5 +332,47 @@ impl Witnesses {
             WITNESS_REQUEST_BATCH_SIZE,
             |peer, witnesses| self.send_request(io, peer, witnesses),
         );
+    }
+}
+
+#[cfg(test)]
+mod blame_underflow_tests {
+    use super::Witnesses;
+
+    // The raw `witness - blame` this fix replaced panics under
+    // `overflow-checks` when `blame >= witness`. `black_box` forces a
+    // runtime subtraction (not a compile-time `arithmetic_overflow` error),
+    // matching the header-fed path.
+    #[test]
+    #[should_panic]
+    fn raw_subtraction_underflows_on_malformed_blame() {
+        let witness = std::hint::black_box(100u64);
+        let blame = std::hint::black_box(200u64);
+        let _ = witness - blame;
+    }
+
+    #[test]
+    fn lowest_blamed_height_matches_raw_on_honest_inputs() {
+        for &(witness, blame) in
+            &[(100u64, 0u64), (100, 1), (100, 3), (100, 99)]
+        {
+            assert_eq!(
+                Witnesses::lowest_blamed_height(witness, blame),
+                Some(witness - blame),
+                "witness={witness} blame={blame}",
+            );
+        }
+    }
+
+    #[test]
+    fn lowest_blamed_height_none_on_malformed_blame() {
+        // blame > witness: raw `witness - blame` would underflow
+        assert_eq!(Witnesses::lowest_blamed_height(100, 200), None);
+        assert_eq!(Witnesses::lowest_blamed_height(3, u32::MAX as u64), None);
+        // blame == witness: would blame the genesis block (height 0)
+        assert_eq!(Witnesses::lowest_blamed_height(100, 100), None);
+        assert_eq!(Witnesses::lowest_blamed_height(0, 0), None);
+        // blame == witness - 1: lowest blamed height is 1, just above genesis
+        assert_eq!(Witnesses::lowest_blamed_height(100, 99), Some(1));
     }
 }
