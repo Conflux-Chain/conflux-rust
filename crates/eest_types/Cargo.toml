@@ -1,6 +1,6 @@
 [package]
 name = "eest_types"
-edition = "2021"
+edition = "2024"
 description = "Ethereum execution spec test types"
 version.workspace = true
 authors.workspace = true

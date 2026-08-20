@@ -129,8 +129,8 @@ impl_function_type!(CallToEVM, "payable_write");
 
 impl UpfrontPaymentTrait for CallToEVM {
     fn upfront_gas_payment(
-        &self, (ref receiver, ref data): &(Bytes20, Bytes),
-        params: &ActionParams, context: &InternalRefContext,
+        &self, (receiver, data): &(Bytes20, Bytes), params: &ActionParams,
+        context: &InternalRefContext,
     ) -> DbResult<U256> {
         call_gas(H160(*receiver), params, context, data)
     }

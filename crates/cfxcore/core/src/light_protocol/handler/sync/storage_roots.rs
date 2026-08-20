@@ -90,7 +90,7 @@ impl StorageRoots {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, epoch: u64, address: H160,
-    ) -> impl Future<Output = Result<StorageRoot>> {
+    ) -> impl Future<Output = Result<StorageRoot>> + use<> {
         let mut verified = self.verified.write();
         let key = StorageRootKey { epoch, address };
 

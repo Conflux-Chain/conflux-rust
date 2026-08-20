@@ -93,11 +93,11 @@ impl Sampling {
 /// logs or metrics on high throughput pieces of code.
 #[macro_export]
 macro_rules! sample {
-    ($sample_rate:expr, $($args:expr)+ ,) => {
+    ($sample_rate:expr_2021, $($args:expr_2021)+ ,) => {
         $crate::sample!($sample_rate, $($args)+);
     };
 
-    ($sample_rate:expr, $($args:tt)+) => {{
+    ($sample_rate:expr_2021, $($args:tt)+) => {{
         static SAMPLING: Sampling = $crate::sample::Sampling::new($sample_rate);
         if SAMPLING.sample() {
             $($args)+

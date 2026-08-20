@@ -10,10 +10,10 @@ macro_rules! unwrap_option_or_return_result_none {
 
 #[macro_export]
 macro_rules! bail {
-    ($e:expr) => {
+    ($e:expr_2021) => {
         return Err($e.into());
     };
-    ($fmt:expr, $($arg:tt)+) => {
+    ($fmt:expr_2021, $($arg:tt)+) => {
         return Err(format!($fmt, $($arg)+).into());
     };
 }

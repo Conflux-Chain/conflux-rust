@@ -78,7 +78,7 @@ impl PubSubHandler {
         }
     }
 
-    fn new_headers_stream(&self) -> impl Stream<Item = Header> {
+    fn new_headers_stream(&self) -> impl Stream<Item = Header> + use<> {
         let receiver = self.head_sender.subscribe();
         BroadcastStream::new(receiver)
             .filter(|item| {
@@ -94,7 +94,7 @@ impl PubSubHandler {
 
     fn new_epoch_stream(
         &self, epoch: SubscriptionEpoch,
-    ) -> impl Stream<Item = pubsub::Result> {
+    ) -> impl Stream<Item = pubsub::Result> + use<> {
         let receiver = match epoch {
             SubscriptionEpoch::LatestState => {
                 self.latest_state_epoch_task.sender.subscribe()
@@ -122,7 +122,7 @@ impl PubSubHandler {
 
     fn new_logs_stream(
         &self, filter: LogFilter,
-    ) -> impl Stream<Item = pubsub::Result> {
+    ) -> impl Stream<Item = pubsub::Result> + use<> {
         let receiver;
         let senders = self.log_senders.read();
         if !senders.contains_key(&filter) {

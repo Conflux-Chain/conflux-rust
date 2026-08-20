@@ -9,7 +9,7 @@ macro_rules! group_impl_is_active {
     ("genesis" $(, $name:ident)* $(,)?) => {
         group_impl_is_active!(|_| true $(, $name)*);
     };
-    ($is_active:expr $(, $name:ident)* $(,)?) => {
+    ($is_active:expr_2021 $(, $name:ident)* $(,)?) => {
         $(impl IsActive for $name {
             fn is_active(&self, spec: &Spec) -> bool { $is_active(spec) }
         })*

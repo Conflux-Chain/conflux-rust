@@ -197,12 +197,12 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
 /// ```
 /// If the function has no return value, the third parameter can be omitted.
 macro_rules! make_solidity_function {
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($input:ty, $interface:expr ); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($input:ty, $interface:expr_2021 ); ) => {
         $crate::make_solidity_function! {
             $(#[$attr])* $visibility struct $name ($input, $interface, () );
         }
     };
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($input:ty, $interface:expr, $output:ty ); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($input:ty, $interface:expr_2021, $output:ty ); ) => {
         $(#[$attr])*
         #[derive(Copy, Clone)]
         $visibility struct $name {
@@ -228,16 +228,16 @@ macro_rules! make_solidity_function {
 
 #[macro_export]
 macro_rules! impl_function_type {
-    ( $name:ident, "non_payable_write" $(, gas: $gas:expr)? ) => {
+    ( $name:ident, "non_payable_write" $(, gas: $gas:expr_2021)? ) => {
         $crate::impl_function_type!(@inner, $name, false, true $(, $gas)?);
     };
-    ( $name:ident, "payable_write" $(, gas: $gas:expr)? ) => {
+    ( $name:ident, "payable_write" $(, gas: $gas:expr_2021)? ) => {
         $crate::impl_function_type!(@inner, $name, true, true $(, $gas)?);
     };
-    ( $name:ident, "query" $(, gas: $gas:expr)? ) => {
+    ( $name:ident, "query" $(, gas: $gas:expr_2021)? ) => {
         $crate::impl_function_type!(@inner, $name, false, false $(, $gas)?);
     };
-    ( @inner, $name:ident, $payable:expr, $has_write_op:expr $(, $gas:expr)? ) => {
+    ( @inner, $name:ident, $payable:expr_2021, $has_write_op:expr_2021 $(, $gas:expr_2021)? ) => {
         impl PreExecCheckConfTrait for $name {
             const PAYABLE: bool = $payable;
             const HAS_WRITE_OP: bool = $has_write_op;

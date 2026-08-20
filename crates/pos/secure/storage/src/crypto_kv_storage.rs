@@ -114,7 +114,7 @@ impl<T: CryptoKVStorage> CryptoStorage for T {
 
 fn new_key_pair<SK: SigningKey + Uniform>() -> (SK, SK::PublicKeyMaterial) {
     let mut seed_rng = OsRng;
-    let mut rng = rand::rngs::StdRng::from_seed(seed_rng.gen());
+    let mut rng = rand::rngs::StdRng::from_seed(seed_rng.r#gen());
     let private_key = SK::generate(&mut rng);
     let public_key = private_key.public_key();
     (private_key, public_key)

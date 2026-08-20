@@ -41,7 +41,7 @@ impl NoncePoolMap {
     #[inline]
     pub fn iter_range(
         &self, nonce: &U256,
-    ) -> impl Iterator<Item = &TxWithReadyInfo> {
+    ) -> impl Iterator<Item = &TxWithReadyInfo> + use<'_> {
         self.0.iter_range(nonce).map(|x| &x.value)
     }
 

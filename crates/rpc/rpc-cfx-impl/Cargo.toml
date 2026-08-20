@@ -1,6 +1,6 @@
 [package]
 name = "cfx-rpc-cfx-impl"
-edition = "2021"
+edition = "2024"
 version = { workspace = true }
 license-file = { workspace = true }
 

@@ -85,51 +85,53 @@ fn make_memory_cache(num_nodes: usize, ident: &H256) -> Cache {
 // afterwards to be elided. Yes, really. I know, I want to refactor this to use
 // less `unsafe` as much as the next rustacean.
 unsafe fn initialize_memory(memory: *mut Node, num_nodes: usize, ident: &H256) {
-    // We use raw pointers here, see above
-    let dst = slice::from_raw_parts_mut(memory as *mut u8, NODE_BYTES);
-
-    debug_assert_eq!(ident.len(), 32);
-    keccak_512::write(&ident[..], dst);
-
-    for i in 1..num_nodes {
+    unsafe {
         // We use raw pointers here, see above
-        let dst = slice::from_raw_parts_mut(
-            memory.offset(i as _) as *mut u8,
-            NODE_BYTES,
-        );
-        let src = slice::from_raw_parts(
-            memory.offset(i as isize - 1) as *mut u8,
-            NODE_BYTES,
-        );
-        keccak_512::write(src, dst);
-    }
+        let dst = slice::from_raw_parts_mut(memory as *mut u8, NODE_BYTES);
 
-    // Now this is initialized, we can treat it as a slice.
-    let nodes: &mut [Node] = slice::from_raw_parts_mut(memory, num_nodes);
+        debug_assert_eq!(ident.len(), 32);
+        keccak_512::write(&ident[..], dst);
 
-    for _ in 0..POW_CACHE_ROUNDS {
-        for i in 0..num_nodes {
-            let data_idx = (num_nodes - 1 + i) % num_nodes;
-            let idx =
-                nodes.get_unchecked_mut(i).as_words()[0] as usize % num_nodes;
-
-            let data = {
-                let mut data: Node = nodes.get_unchecked(data_idx).clone();
-                let rhs: &Node = nodes.get_unchecked(idx);
-
-                for (a, b) in
-                    data.as_dwords_mut().iter_mut().zip(rhs.as_dwords())
-                {
-                    *a ^= *b;
-                }
-
-                data
-            };
-
-            keccak_512::write(
-                &data.bytes,
-                &mut nodes.get_unchecked_mut(i).bytes,
+        for i in 1..num_nodes {
+            // We use raw pointers here, see above
+            let dst = slice::from_raw_parts_mut(
+                memory.offset(i as _) as *mut u8,
+                NODE_BYTES,
             );
+            let src = slice::from_raw_parts(
+                memory.offset(i as isize - 1) as *mut u8,
+                NODE_BYTES,
+            );
+            keccak_512::write(src, dst);
+        }
+
+        // Now this is initialized, we can treat it as a slice.
+        let nodes: &mut [Node] = slice::from_raw_parts_mut(memory, num_nodes);
+
+        for _ in 0..POW_CACHE_ROUNDS {
+            for i in 0..num_nodes {
+                let data_idx = (num_nodes - 1 + i) % num_nodes;
+                let idx = nodes.get_unchecked_mut(i).as_words()[0] as usize
+                    % num_nodes;
+
+                let data = {
+                    let mut data: Node = nodes.get_unchecked(data_idx).clone();
+                    let rhs: &Node = nodes.get_unchecked(idx);
+
+                    for (a, b) in
+                        data.as_dwords_mut().iter_mut().zip(rhs.as_dwords())
+                    {
+                        *a ^= *b;
+                    }
+
+                    data
+                };
+
+                keccak_512::write(
+                    &data.bytes,
+                    &mut nodes.get_unchecked_mut(i).bytes,
+                );
+            }
         }
     }
 }

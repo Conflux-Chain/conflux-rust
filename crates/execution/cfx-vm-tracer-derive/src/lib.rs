@@ -5,7 +5,7 @@ use syn::{Data, DataStruct, DeriveInput, Error, Fields, Ident};
 type Result<T> = std::result::Result<T, Error>;
 
 macro_rules! unwrap_or_compile_error {
-    ($e:expr) => {
+    ($e:expr_2021) => {
         match $e {
             Ok(x) => x,
             Err(e) => return e.into_compile_error().into(),

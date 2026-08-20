@@ -47,7 +47,7 @@ build_msgid! {
 }
 
 macro_rules! build_msg_impl_with_serde_serialization {
-    ($name:ident, $msg:expr, $name_str:literal) => {
+    ($name:ident, $msg:expr_2021, $name_str:literal) => {
         impl GetMaybeRequestId for $name {}
 
         impl Message for $name {
@@ -66,7 +66,7 @@ macro_rules! build_msg_impl_with_serde_serialization {
 }
 
 macro_rules! build_msg_impl_with_serde_serialization_generic {
-    ($name:ident, $msg:expr, $name_str:literal) => {
+    ($name:ident, $msg:expr_2021, $name_str:literal) => {
         impl GetMaybeRequestId for $name {}
 
         impl Message for $name {
@@ -85,7 +85,7 @@ macro_rules! build_msg_impl_with_serde_serialization_generic {
 }
 
 macro_rules! build_msg_impl_with_request_id_and_serde_serialization {
-    ($name:ident, $msg:expr, $name_str:literal) => {
+    ($name:ident, $msg:expr_2021, $name_str:literal) => {
         impl Message for $name {
             fn msg_id(&self) -> MsgId { $msg }
 

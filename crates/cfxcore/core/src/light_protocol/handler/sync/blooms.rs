@@ -86,7 +86,9 @@ impl Blooms {
     }
 
     #[inline]
-    pub fn request(&self, epoch: u64) -> impl Future<Output = Result<Bloom>> {
+    pub fn request(
+        &self, epoch: u64,
+    ) -> impl Future<Output = Result<Bloom>> + use<> {
         let mut verified = self.verified.write();
 
         if epoch == 0 {

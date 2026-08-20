@@ -54,7 +54,7 @@ impl MaybeOwnedTrieNodeAsCowCallParam {
     unsafe fn owned_as_mut_unchecked<'a>(
         &mut self,
     ) -> &'a mut TrieNodeDeltaMpt {
-        &mut *self.trie_node
+        unsafe { &mut *self.trie_node }
     }
 
     /// Do not implement in a trait to keep the call private.
@@ -102,7 +102,7 @@ impl<'a> MaybeOwnedTrieNode<'a> {
     pub unsafe fn owned_as_mut_unchecked(
         &mut self,
     ) -> &'a mut TrieNodeDeltaMpt {
-        self.trie_node.get_as_mut()
+        unsafe { self.trie_node.get_as_mut() }
     }
 }
 
@@ -811,13 +811,15 @@ impl CowNodeRef {
     pub unsafe fn delete_value_unchecked_followed_by_node_deletion(
         &mut self, mut trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
     ) -> Box<[u8]> {
-        if self.owned {
-            trie_node
-                .as_mut()
-                .owned_as_mut_unchecked()
-                .delete_value_unchecked()
-        } else {
-            trie_node.as_ref().as_ref().value_clone().unwrap()
+        unsafe {
+            if self.owned {
+                trie_node
+                    .as_mut()
+                    .owned_as_mut_unchecked()
+                    .delete_value_unchecked()
+            } else {
+                trie_node.as_ref().as_ref().value_clone().unwrap()
+            }
         }
     }
 
@@ -856,22 +858,24 @@ impl CowNodeRef {
         owned_node_set: &mut OwnedNodeSet,
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
     ) -> Result<Box<[u8]>> {
-        self.cow_modify_with_operation(
-            &node_memory_manager.get_allocator(),
-            owned_node_set,
-            trie_node,
-            |owned_trie_node| owned_trie_node.delete_value_unchecked(),
-            |read_only_trie_node| {
-                (
-                    read_only_trie_node.copy_and_replace_fields(
-                        Some(None),
-                        None,
-                        None,
-                    ),
-                    read_only_trie_node.value_clone().unwrap(),
-                )
-            },
-        )
+        unsafe {
+            self.cow_modify_with_operation(
+                &node_memory_manager.get_allocator(),
+                owned_node_set,
+                trie_node,
+                |owned_trie_node| owned_trie_node.delete_value_unchecked(),
+                |read_only_trie_node| {
+                    (
+                        read_only_trie_node.copy_and_replace_fields(
+                            Some(None),
+                            None,
+                            None,
+                        ),
+                        read_only_trie_node.value_clone().unwrap(),
+                    )
+                },
+            )
+        }
     }
 
     pub fn cow_replace_value_valid(

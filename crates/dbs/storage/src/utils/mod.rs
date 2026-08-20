@@ -91,7 +91,7 @@ impl<T: Sized> UnsafeCellExtension<T> for UnsafeCell<T> {
 
     fn get_mut(&mut self) -> &mut T { unsafe { &mut *self.get() } }
 
-    unsafe fn get_as_mut(&self) -> &mut T { &mut *self.get() }
+    unsafe fn get_as_mut(&self) -> &mut T { unsafe { &mut *self.get() } }
 }
 
 /// Only used by storage benchmark due to incompatibility of rlp crate version.

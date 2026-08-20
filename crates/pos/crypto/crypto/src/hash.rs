@@ -174,13 +174,13 @@ impl HashValue {
     /// Create a cryptographically random instance.
     pub fn random() -> Self {
         let mut rng = OsRng;
-        let hash: [u8; HashValue::LENGTH] = rng.gen();
+        let hash: [u8; HashValue::LENGTH] = rng.r#gen();
         HashValue { hash }
     }
 
     /// Creates a random instance with given rng. Useful in unit tests.
     pub fn random_with_rng<R: Rng>(rng: &mut R) -> Self {
-        let hash: [u8; HashValue::LENGTH] = rng.gen();
+        let hash: [u8; HashValue::LENGTH] = rng.r#gen();
         HashValue { hash }
     }
 
@@ -506,7 +506,7 @@ impl fmt::Debug for DefaultHasher {
 macro_rules! define_hasher {
     (
         $(#[$attr:meta])*
-        ($hasher_type: ident, $hasher_name: ident, $seed_name: ident, $salt: expr)
+        ($hasher_type: ident, $hasher_name: ident, $seed_name: ident, $salt: expr_2021)
     ) => {
 
         #[derive(Clone, Debug)]
