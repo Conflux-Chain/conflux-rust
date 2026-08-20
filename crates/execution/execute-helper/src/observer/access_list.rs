@@ -6,7 +6,7 @@ use cfx_types::{u256_to_address_be, u256_to_h256_be, Address, H256};
 use cfx_vm_interpreter::instructions::Instruction;
 use cfx_vm_types::InterpreterInfo;
 use primitives::{AccessList, AccessListItem};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use typemap::ShareDebugMap;
 
 /// An [Inspector] that collects touched accounts and storage slots.
@@ -18,7 +18,7 @@ pub struct AccessListInspector {
     /// All addresses that should be excluded from the final accesslist
     excluded: HashSet<Address>,
     /// All addresses and touched slots
-    touched_slots: HashMap<Address, BTreeSet<H256>>,
+    touched_slots: BTreeMap<Address, BTreeSet<H256>>,
 }
 
 impl From<(AccessList, HashSet<Address>)> for AccessListInspector {
@@ -30,12 +30,19 @@ impl From<(AccessList, HashSet<Address>)> for AccessListInspector {
 impl AccessListInspector {
     /// Creates a new [AccessListInspector] with the given excluded addresses.
     pub fn new(access_list: AccessList, excluded: HashSet<Address>) -> Self {
+        let mut touched_slots = BTreeMap::<Address, BTreeSet<H256>>::new();
+        for item in access_list {
+            if excluded.contains(&item.address) {
+                continue;
+            }
+            touched_slots
+                .entry(item.address)
+                .or_default()
+                .extend(item.storage_keys);
+        }
         Self {
             excluded,
-            touched_slots: access_list
-                .into_iter()
-                .map(|v| (v.address, v.storage_keys.into_iter().collect()))
-                .collect(),
+            touched_slots,
         }
     }
 
@@ -44,13 +51,13 @@ impl AccessListInspector {
 
     /// Returns a reference to the map of addresses and their corresponding
     /// touched storage slots.
-    pub fn touched_slots(&self) -> &HashMap<Address, BTreeSet<H256>> {
+    pub fn touched_slots(&self) -> &BTreeMap<Address, BTreeSet<H256>> {
         &self.touched_slots
     }
 
     /// Consumes the inspector and returns the map of addresses and their
     /// corresponding touched storage slots.
-    pub fn into_touched_slots(self) -> HashMap<Address, BTreeSet<H256>> {
+    pub fn into_touched_slots(self) -> BTreeMap<Address, BTreeSet<H256>> {
         self.touched_slots
     }
 
@@ -81,8 +88,17 @@ impl AccessListInspector {
         items.collect()
     }
 
-    pub fn collcect_excluded_addresses(&mut self, item: Address) {
+    pub fn collect_excluded_addresses(&mut self, item: Address) {
         self.excluded.insert(item);
+    }
+
+    /// Marks an address as touched, unless it is one that never belongs in an
+    /// access list: the sender, the callee, the precompiles and the 7702
+    /// authorities are warm already.
+    fn record_address(&mut self, address: Address) {
+        if !self.excluded.contains(&address) {
+            self.touched_slots.entry(address).or_default();
+        }
     }
 }
 
@@ -99,9 +115,12 @@ impl typemap::Key for AccessListKey {
 }
 
 impl OpcodeTracer for AccessListInspector {
+    fn do_trace_opcode(&self, enabled: &mut bool) { *enabled |= true; }
+
     fn step(&mut self, interp: &dyn InterpreterInfo) {
-        let ins = Instruction::from_u8(interp.current_opcode())
-            .expect("valid opcode");
+        let Some(ins) = Instruction::from_u8(interp.current_opcode()) else {
+            return;
+        };
         match ins {
             Instruction::SLOAD | Instruction::SSTORE => {
                 if let Some(slot) = interp.stack().last() {
@@ -117,22 +136,36 @@ impl OpcodeTracer for AccessListInspector {
             | Instruction::EXTCODESIZE
             | Instruction::BALANCE
             | Instruction::SUICIDE => {
-                if let Some(slot) = interp.stack().last() {
-                    let addr = u256_to_address_be(*slot);
-                    if !self.excluded.contains(&addr) {
-                        self.touched_slots.entry(addr).or_default();
-                    }
+                let operands = match ins {
+                    Instruction::EXTCODECOPY => 4,
+                    _ => 1,
+                };
+                let stack = interp.stack();
+                if stack.len() >= operands {
+                    // The address is these instructions' first operand, so it
+                    // sits on top of the stack.
+                    let address = stack[stack.len() - 1];
+                    self.record_address(u256_to_address_be(address));
                 }
             }
             Instruction::DELEGATECALL
             | Instruction::CALL
             | Instruction::STATICCALL
             | Instruction::CALLCODE => {
-                if let Some(slot) = interp.stack().last() {
-                    let addr = u256_to_address_be(*slot);
-                    if !self.excluded.contains(&addr) {
-                        self.touched_slots.entry(addr).or_default();
-                    }
+                // Every call instruction takes `gas` first and the callee
+                // second, so the address sits one below the top of the stack.
+                // Requiring the full operand count keeps us off a stack that
+                // the instruction itself is about to reject as underflowed.
+                let operands = match ins {
+                    // gas, address, value, in_off, in_size, out_off, out_size
+                    Instruction::CALL | Instruction::CALLCODE => 7,
+                    // the same, without `value`
+                    _ => 6,
+                };
+                let stack = interp.stack();
+                if stack.len() >= operands {
+                    let address = stack[stack.len() - 2];
+                    self.record_address(u256_to_address_be(address));
                 }
             }
             _ => (),
@@ -145,3 +178,65 @@ impl CheckpointTracer for AccessListInspector {}
 impl InternalTransferTracer for AccessListInspector {}
 impl StorageTracer for AccessListInspector {}
 impl SetAuthTracer for AccessListInspector {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn caller_access_list_merges_slots_for_duplicate_addresses() {
+        let address = Address::from_low_u64_be(1);
+        let lower_slot = H256::from_low_u64_be(7);
+        let higher_slot = H256::from_low_u64_be(8);
+        let inspector = AccessListInspector::new(
+            vec![
+                AccessListItem {
+                    address,
+                    storage_keys: vec![lower_slot],
+                },
+                AccessListItem {
+                    address,
+                    storage_keys: vec![higher_slot],
+                },
+            ],
+            HashSet::new(),
+        );
+
+        assert_eq!(
+            inspector.access_list(),
+            vec![AccessListItem {
+                address,
+                storage_keys: vec![lower_slot, higher_slot],
+            }]
+        );
+    }
+
+    #[test]
+    fn caller_access_list_omits_excluded_addresses() {
+        let excluded_address = Address::from_low_u64_be(1);
+        let included_address = Address::from_low_u64_be(2);
+        let excluded_slot = H256::from_low_u64_be(7);
+        let included_slot = H256::from_low_u64_be(8);
+        let inspector = AccessListInspector::new(
+            vec![
+                AccessListItem {
+                    address: excluded_address,
+                    storage_keys: vec![excluded_slot],
+                },
+                AccessListItem {
+                    address: included_address,
+                    storage_keys: vec![included_slot],
+                },
+            ],
+            HashSet::from([excluded_address]),
+        );
+
+        assert_eq!(
+            inspector.access_list(),
+            vec![AccessListItem {
+                address: included_address,
+                storage_keys: vec![included_slot],
+            }]
+        );
+    }
+}
