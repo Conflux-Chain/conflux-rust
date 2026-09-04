@@ -10,6 +10,7 @@ use crate::{
         block_test_utils::{certificate_for_genesis, *},
         Block,
     },
+    block_data::BlockData,
     quorum_cert::QuorumCert,
 };
 use diem_crypto::hash::HashValue;
@@ -155,4 +156,18 @@ fn test_same_qc_different_authors() {
 
     assert!(block_round_1.id() != block_round_1_altered.id());
     assert_eq!(block_round_1.id(), block_round_1_same.id());
+}
+
+#[test]
+fn test_vrf_round_seed_boundaries() {
+    let epoch_seed = [0, 255, 17];
+    let qc = certificate_for_genesis();
+    for round in (0..10).chain(u64::MAX - 4..=u64::MAX) {
+        let block_data = BlockData::new_nil(round, qc.clone());
+        // Widen before adding so the oracle covers the entire u64 domain.
+        let leader_round = ((u128::from(round) + 1) / 3) as u64;
+        let mut expected = epoch_seed.to_vec();
+        expected.extend_from_slice(&leader_round.to_be_bytes());
+        assert_eq!(block_data.vrf_round_seed(&epoch_seed), expected);
+    }
 }
