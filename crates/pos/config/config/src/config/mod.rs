@@ -13,6 +13,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(test)]
+mod yaml_tests;
+
 mod consensus_config;
 pub use consensus_config::*;
 mod error;

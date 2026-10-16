@@ -11,7 +11,7 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.124", features = ["rc"], default-features = false }
-yaml_serde = "0.10.3"
+yaml_serde = { workspace = true }
 thiserror = "1.0.24"
 
 bcs = "0.1.2"
@@ -20,6 +20,7 @@ diem-logger = { workspace = true }
 diem-secure-storage = { workspace = true }
 diem-types = { workspace = true }
 [dev-dependencies]
+tempfile = { workspace = true }
 diem-crypto = { workspace = true, features = ["fuzzing"] }
 
 [features]

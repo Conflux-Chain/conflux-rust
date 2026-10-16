@@ -56,6 +56,7 @@ members = [
     "crates/util/treap-map",
     "crates/util/version",
     "crates/util/serde_utils",
+    "crates/util/serde_yaml_compat",
     "crates/execution/geth-tracer",
     "crates/rpc/rpc-eth-types",
     "crates/rpc/rpc-primitives",
@@ -236,6 +237,7 @@ serde = { version = "1.0", features = [
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_derive = { version = "1.0", default-features = false }
 serde_with = { version = "3", default-features = false, features = ["macros"] }
+yaml_serde = "0.10.7"
 hex = "0.4"
 rustc-hex = "2.1"
 hex-literal = "1.0"
@@ -446,6 +448,8 @@ influx_db_client = "0.6.1"
 rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "672b02bc21874a5e91705f3642dac3614a7a8f9e" }
 
 [patch.crates-io]
+# Keep log4rs YAML loading on the maintained YAML Organization backend.
+serde_yaml = { path = "crates/util/serde_yaml_compat" }
 # use a forked version to fix a vulnerability(introduced by failure) in vrf-rs, can be removed after the upstream is fixed
 vrf = { git = "https://github.com/andrcmdr/vrf-rs.git", rev = "f7bdb21f7f5d1858a3bb0183f194440f9a4199b3" }
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }
