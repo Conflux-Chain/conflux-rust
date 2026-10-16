@@ -3329,7 +3329,6 @@ dependencies = [
  "diem-secure-storage",
  "diem-types",
  "serde",
- "tempfile",
  "thiserror 1.0.63",
  "yaml_serde",
 ]
