@@ -305,6 +305,10 @@ impl Session {
         match packet.id {
             PACKET_HELLO => {
                 debug!("Read HELLO in session {:?}", self);
+                // A second HELLO would panic in `update_ingress_node_id`.
+                if self.had_hello.is_some() {
+                    return Err(Error::BadProtocol);
+                }
                 self.metadata.peer_header_version = packet.header_version;
                 // For ingress session, update the node id in `SessionManager`
                 let token_to_disconnect = self.update_ingress_node_id(host)?;
