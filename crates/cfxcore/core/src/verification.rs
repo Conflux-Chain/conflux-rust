@@ -5,8 +5,8 @@
 use crate::{
     core_error::{BlockError, CoreError as Error},
     pow::{
-        self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem,
-        MAX_POW_HEIGHT,
+        self, nonce_has_non_zero_high_128_bits, nonce_to_lower_bound,
+        PowComputer, ProofOfWorkProblem, MAX_POW_HEIGHT,
     },
     sync::Error as SyncError,
 };
@@ -308,6 +308,13 @@ impl VerificationConfig {
                 found: *header.difficulty(),
             })
             .into());
+        }
+        if header.height()
+            >= self.machine.params().transition_heights.cip_hn_fix
+        {
+            if nonce_has_non_zero_high_128_bits(&header.nonce()) {
+                return Err(From::from(BlockError::InvalidNonce));
+            }
         }
         let pow_hash = Self::get_or_fill_header_pow_hash(pow, header);
         let boundary = pow::difficulty_to_boundary(header.difficulty());

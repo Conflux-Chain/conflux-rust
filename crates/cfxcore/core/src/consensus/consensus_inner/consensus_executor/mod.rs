@@ -1022,6 +1022,11 @@ impl ConsensusExecutionHandler {
             .block_header_by_hash(epoch_hash)
             .expect("must exists");
 
+        if on_local_pivot {
+            // A temporary safety guard before high nonce
+            self.safety_guard(pivot_block_header.as_ref());
+        }
+
         // Check if epoch is computed
         if !force_recompute
             && debug_record.is_none()
