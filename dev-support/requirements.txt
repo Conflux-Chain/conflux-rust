@@ -16,7 +16,7 @@ attrs==25.3.0
     # via aiohttp
 bitarray==3.4.2
     # via eth-account
-certifi==2025.4.26
+certifi==2026.10.19
     # via requests
 cffi==1.17.1
     # via coincurve
