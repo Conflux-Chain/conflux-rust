@@ -287,12 +287,12 @@
 <a href=#287 id=287 data-nosnippet>287</a>
 <a href=#288 id=288 data-nosnippet>288</a>                    <span class="comment">// handle witness
 <a href=#289 id=289 data-nosnippet>289</a>                    </span><span class="kw">match </span>maybe_witness {
-<a href=#290 id=290 data-nosnippet>290</a>                        <span class="comment">// request witness for blamed headers
-<a href=#291 id=291 data-nosnippet>291</a>                        </span><span class="prelude-val">Some</span>(w) =&gt; {
-<a href=#292 id=292 data-nosnippet>292</a>                            <span class="comment">// this request covers all blamed headers:
-<a href=#293 id=293 data-nosnippet>293</a>                            // [w - w.blame, w - w.blame + 1, ..., w]
-<a href=#294 id=294 data-nosnippet>294</a>                            </span><span class="macro">debug!</span>(<span class="string">"Requesting witness at height {}"</span>, w);
-<a href=#295 id=295 data-nosnippet>295</a>                            witnesses.request(w);
+<a href=#290 id=290 data-nosnippet>290</a>                        <span class="comment">// request witness for blamed headers [height..=w];
+<a href=#291 id=291 data-nosnippet>291</a>                        // pass the authoritative `height`, not `w`'s unchecked
+<a href=#292 id=292 data-nosnippet>292</a>                        // `blame` field (which could underflow).
+<a href=#293 id=293 data-nosnippet>293</a>                        </span><span class="prelude-val">Some</span>(w) =&gt; {
+<a href=#294 id=294 data-nosnippet>294</a>                            <span class="macro">debug!</span>(<span class="string">"Requesting witness at height {}"</span>, w);
+<a href=#295 id=295 data-nosnippet>295</a>                            witnesses.request(height, w);
 <a href=#296 id=296 data-nosnippet>296</a>                        }
 <a href=#297 id=297 data-nosnippet>297</a>
 <a href=#298 id=298 data-nosnippet>298</a>                        <span class="comment">// for non-blamed headers, we will serve roots from disk
