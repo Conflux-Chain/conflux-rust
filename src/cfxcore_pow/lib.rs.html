@@ -278,64 +278,69 @@
 <a href=#278 id=278 data-nosnippet>278</a>    }
 <a href=#279 id=279 data-nosnippet>279</a>}
 <a href=#280 id=280 data-nosnippet>280</a>
-<a href=#281 id=281 data-nosnippet>281</a><span class="kw">pub struct </span>PowComputer {
-<a href=#282 id=282 data-nosnippet>282</a>    use_octopus: bool,
-<a href=#283 id=283 data-nosnippet>283</a>    cache_builder: CacheBuilder,
-<a href=#284 id=284 data-nosnippet>284</a>}
+<a href=#281 id=281 data-nosnippet>281</a><span class="doccomment">/// The light cache is sized by the header height and built before the height
+<a href=#282 id=282 data-nosnippet>282</a>/// is checked against the chain, so cap it. Local sanity limit, not a
+<a href=#283 id=283 data-nosnippet>283</a>/// consensus rule.
+<a href=#284 id=284 data-nosnippet>284</a></span><span class="kw">pub const </span>MAX_POW_HEIGHT: u64 = <span class="number">1 </span>&lt;&lt; <span class="number">31</span>;
 <a href=#285 id=285 data-nosnippet>285</a>
-<a href=#286 id=286 data-nosnippet>286</a><span class="kw">impl </span>PowComputer {
-<a href=#287 id=287 data-nosnippet>287</a>    <span class="kw">pub fn </span>new(use_octopus: bool) -&gt; <span class="self">Self </span>{
-<a href=#288 id=288 data-nosnippet>288</a>        PowComputer {
-<a href=#289 id=289 data-nosnippet>289</a>            use_octopus,
-<a href=#290 id=290 data-nosnippet>290</a>            cache_builder: CacheBuilder::new(),
-<a href=#291 id=291 data-nosnippet>291</a>        }
-<a href=#292 id=292 data-nosnippet>292</a>    }
-<a href=#293 id=293 data-nosnippet>293</a>
-<a href=#294 id=294 data-nosnippet>294</a>    <span class="kw">pub fn </span>compute(
-<a href=#295 id=295 data-nosnippet>295</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, nonce: <span class="kw-2">&amp;</span>U256, block_hash: <span class="kw-2">&amp;</span>H256, block_height: u64,
-<a href=#296 id=296 data-nosnippet>296</a>    ) -&gt; H256 {
-<a href=#297 id=297 data-nosnippet>297</a>        <span class="kw">if </span>!<span class="self">self</span>.use_octopus {
-<a href=#298 id=298 data-nosnippet>298</a>            <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">64</span>];
-<a href=#299 id=299 data-nosnippet>299</a>            <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">32 </span>{
-<a href=#300 id=300 data-nosnippet>300</a>                buf[i] = block_hash[i];
-<a href=#301 id=301 data-nosnippet>301</a>            }
-<a href=#302 id=302 data-nosnippet>302</a>            buf[<span class="number">32</span>..<span class="number">64</span>].copy_from_slice(<span class="kw-2">&amp;</span>nonce.to_little_endian());
-<a href=#303 id=303 data-nosnippet>303</a>            <span class="kw">let </span>intermediate = keccak_hash(<span class="kw-2">&amp;</span>buf[..]);
-<a href=#304 id=304 data-nosnippet>304</a>            <span class="kw">let </span><span class="kw-2">mut </span>tmp = [<span class="number">0u8</span>; <span class="number">32</span>];
-<a href=#305 id=305 data-nosnippet>305</a>            <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">32 </span>{
-<a href=#306 id=306 data-nosnippet>306</a>                tmp[i] = intermediate[i] ^ block_hash[i]
-<a href=#307 id=307 data-nosnippet>307</a>            }
-<a href=#308 id=308 data-nosnippet>308</a>            keccak_hash(tmp)
-<a href=#309 id=309 data-nosnippet>309</a>        } <span class="kw">else </span>{
-<a href=#310 id=310 data-nosnippet>310</a>            <span class="kw">let </span>light = <span class="self">self</span>.cache_builder.light(block_height);
-<a href=#311 id=311 data-nosnippet>311</a>            light
-<a href=#312 id=312 data-nosnippet>312</a>                .compute(block_hash.as_fixed_bytes(), nonce.low_u64())
-<a href=#313 id=313 data-nosnippet>313</a>                .into()
-<a href=#314 id=314 data-nosnippet>314</a>        }
-<a href=#315 id=315 data-nosnippet>315</a>    }
-<a href=#316 id=316 data-nosnippet>316</a>
-<a href=#317 id=317 data-nosnippet>317</a>    <span class="kw">pub fn </span>validate(
-<a href=#318 id=318 data-nosnippet>318</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, problem: <span class="kw-2">&amp;</span>ProofOfWorkProblem, solution: <span class="kw-2">&amp;</span>ProofOfWorkSolution,
-<a href=#319 id=319 data-nosnippet>319</a>    ) -&gt; bool {
-<a href=#320 id=320 data-nosnippet>320</a>        <span class="kw">let </span>nonce = solution.nonce;
-<a href=#321 id=321 data-nosnippet>321</a>        <span class="kw">let </span>hash =
-<a href=#322 id=322 data-nosnippet>322</a>            <span class="self">self</span>.compute(<span class="kw-2">&amp;</span>nonce, <span class="kw-2">&amp;</span>problem.block_hash, problem.block_height);
-<a href=#323 id=323 data-nosnippet>323</a>        ProofOfWorkProblem::validate_hash_against_boundary(
-<a href=#324 id=324 data-nosnippet>324</a>            <span class="kw-2">&amp;</span>hash,
-<a href=#325 id=325 data-nosnippet>325</a>            <span class="kw-2">&amp;</span>nonce,
-<a href=#326 id=326 data-nosnippet>326</a>            <span class="kw-2">&amp;</span>problem.boundary,
-<a href=#327 id=327 data-nosnippet>327</a>        )
-<a href=#328 id=328 data-nosnippet>328</a>    }
-<a href=#329 id=329 data-nosnippet>329</a>}
-<a href=#330 id=330 data-nosnippet>330</a>
-<a href=#331 id=331 data-nosnippet>331</a><span class="attr">#[test]
-<a href=#332 id=332 data-nosnippet>332</a></span><span class="kw">fn </span>test_octopus() {
-<a href=#333 id=333 data-nosnippet>333</a>    <span class="kw">let </span>pow = PowComputer::new(<span class="bool-val">true</span>);
-<a href=#334 id=334 data-nosnippet>334</a>
-<a href=#335 id=335 data-nosnippet>335</a>    <span class="kw">let </span>block_hash =
-<a href=#336 id=336 data-nosnippet>336</a>        <span class="string">"4d99d0b41c7eb0dd1a801c35aae2df28ae6b53bc7743f0818a34b6ec97f5b4ae"
-<a href=#337 id=337 data-nosnippet>337</a>            </span>.parse()
-<a href=#338 id=338 data-nosnippet>338</a>            .unwrap();
-<a href=#339 id=339 data-nosnippet>339</a>    <span class="kw">let </span>start_nonce = <span class="number">0x2333333333u64 </span>&amp; (!<span class="number">0x1f</span>);
-<a href=#340 id=340 data-nosnippet>340</a>    pow.compute(<span class="kw-2">&amp;</span>U256::from(start_nonce), <span class="kw-2">&amp;</span>block_hash, <span class="number">2</span>);
-<a href=#341 id=341 data-nosnippet>341</a>}</code></pre></div></section></main></body></html>
+<a href=#286 id=286 data-nosnippet>286</a><span class="kw">pub struct </span>PowComputer {
+<a href=#287 id=287 data-nosnippet>287</a>    use_octopus: bool,
+<a href=#288 id=288 data-nosnippet>288</a>    cache_builder: CacheBuilder,
+<a href=#289 id=289 data-nosnippet>289</a>}
+<a href=#290 id=290 data-nosnippet>290</a>
+<a href=#291 id=291 data-nosnippet>291</a><span class="kw">impl </span>PowComputer {
+<a href=#292 id=292 data-nosnippet>292</a>    <span class="kw">pub fn </span>new(use_octopus: bool) -&gt; <span class="self">Self </span>{
+<a href=#293 id=293 data-nosnippet>293</a>        PowComputer {
+<a href=#294 id=294 data-nosnippet>294</a>            use_octopus,
+<a href=#295 id=295 data-nosnippet>295</a>            cache_builder: CacheBuilder::new(),
+<a href=#296 id=296 data-nosnippet>296</a>        }
+<a href=#297 id=297 data-nosnippet>297</a>    }
+<a href=#298 id=298 data-nosnippet>298</a>
+<a href=#299 id=299 data-nosnippet>299</a>    <span class="kw">pub fn </span>compute(
+<a href=#300 id=300 data-nosnippet>300</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, nonce: <span class="kw-2">&amp;</span>U256, block_hash: <span class="kw-2">&amp;</span>H256, block_height: u64,
+<a href=#301 id=301 data-nosnippet>301</a>    ) -&gt; H256 {
+<a href=#302 id=302 data-nosnippet>302</a>        <span class="kw">if </span>!<span class="self">self</span>.use_octopus {
+<a href=#303 id=303 data-nosnippet>303</a>            <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">64</span>];
+<a href=#304 id=304 data-nosnippet>304</a>            <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">32 </span>{
+<a href=#305 id=305 data-nosnippet>305</a>                buf[i] = block_hash[i];
+<a href=#306 id=306 data-nosnippet>306</a>            }
+<a href=#307 id=307 data-nosnippet>307</a>            buf[<span class="number">32</span>..<span class="number">64</span>].copy_from_slice(<span class="kw-2">&amp;</span>nonce.to_little_endian());
+<a href=#308 id=308 data-nosnippet>308</a>            <span class="kw">let </span>intermediate = keccak_hash(<span class="kw-2">&amp;</span>buf[..]);
+<a href=#309 id=309 data-nosnippet>309</a>            <span class="kw">let </span><span class="kw-2">mut </span>tmp = [<span class="number">0u8</span>; <span class="number">32</span>];
+<a href=#310 id=310 data-nosnippet>310</a>            <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">32 </span>{
+<a href=#311 id=311 data-nosnippet>311</a>                tmp[i] = intermediate[i] ^ block_hash[i]
+<a href=#312 id=312 data-nosnippet>312</a>            }
+<a href=#313 id=313 data-nosnippet>313</a>            keccak_hash(tmp)
+<a href=#314 id=314 data-nosnippet>314</a>        } <span class="kw">else </span>{
+<a href=#315 id=315 data-nosnippet>315</a>            <span class="kw">let </span>light = <span class="self">self</span>.cache_builder.light(block_height);
+<a href=#316 id=316 data-nosnippet>316</a>            light
+<a href=#317 id=317 data-nosnippet>317</a>                .compute(block_hash.as_fixed_bytes(), nonce.low_u64())
+<a href=#318 id=318 data-nosnippet>318</a>                .into()
+<a href=#319 id=319 data-nosnippet>319</a>        }
+<a href=#320 id=320 data-nosnippet>320</a>    }
+<a href=#321 id=321 data-nosnippet>321</a>
+<a href=#322 id=322 data-nosnippet>322</a>    <span class="kw">pub fn </span>validate(
+<a href=#323 id=323 data-nosnippet>323</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, problem: <span class="kw-2">&amp;</span>ProofOfWorkProblem, solution: <span class="kw-2">&amp;</span>ProofOfWorkSolution,
+<a href=#324 id=324 data-nosnippet>324</a>    ) -&gt; bool {
+<a href=#325 id=325 data-nosnippet>325</a>        <span class="kw">let </span>nonce = solution.nonce;
+<a href=#326 id=326 data-nosnippet>326</a>        <span class="kw">let </span>hash =
+<a href=#327 id=327 data-nosnippet>327</a>            <span class="self">self</span>.compute(<span class="kw-2">&amp;</span>nonce, <span class="kw-2">&amp;</span>problem.block_hash, problem.block_height);
+<a href=#328 id=328 data-nosnippet>328</a>        ProofOfWorkProblem::validate_hash_against_boundary(
+<a href=#329 id=329 data-nosnippet>329</a>            <span class="kw-2">&amp;</span>hash,
+<a href=#330 id=330 data-nosnippet>330</a>            <span class="kw-2">&amp;</span>nonce,
+<a href=#331 id=331 data-nosnippet>331</a>            <span class="kw-2">&amp;</span>problem.boundary,
+<a href=#332 id=332 data-nosnippet>332</a>        )
+<a href=#333 id=333 data-nosnippet>333</a>    }
+<a href=#334 id=334 data-nosnippet>334</a>}
+<a href=#335 id=335 data-nosnippet>335</a>
+<a href=#336 id=336 data-nosnippet>336</a><span class="attr">#[test]
+<a href=#337 id=337 data-nosnippet>337</a></span><span class="kw">fn </span>test_octopus() {
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">let </span>pow = PowComputer::new(<span class="bool-val">true</span>);
+<a href=#339 id=339 data-nosnippet>339</a>
+<a href=#340 id=340 data-nosnippet>340</a>    <span class="kw">let </span>block_hash =
+<a href=#341 id=341 data-nosnippet>341</a>        <span class="string">"4d99d0b41c7eb0dd1a801c35aae2df28ae6b53bc7743f0818a34b6ec97f5b4ae"
+<a href=#342 id=342 data-nosnippet>342</a>            </span>.parse()
+<a href=#343 id=343 data-nosnippet>343</a>            .unwrap();
+<a href=#344 id=344 data-nosnippet>344</a>    <span class="kw">let </span>start_nonce = <span class="number">0x2333333333u64 </span>&amp; (!<span class="number">0x1f</span>);
+<a href=#345 id=345 data-nosnippet>345</a>    pow.compute(<span class="kw-2">&amp;</span>U256::from(start_nonce), <span class="kw-2">&amp;</span>block_hash, <span class="number">2</span>);
+<a href=#346 id=346 data-nosnippet>346</a>}</code></pre></div></section></main></body></html>
