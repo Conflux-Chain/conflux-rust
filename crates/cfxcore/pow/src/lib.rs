@@ -278,6 +278,11 @@ pub fn compute_inv_x_times_2_pow_256_floor(x: &U256) -> U256 {
     }
 }
 
+/// The light cache is sized by the header height and built before the height
+/// is checked against the chain, so cap it. Local sanity limit, not a
+/// consensus rule.
+pub const MAX_POW_HEIGHT: u64 = 1 << 31;
+
 pub struct PowComputer {
     use_octopus: bool,
     cache_builder: CacheBuilder,

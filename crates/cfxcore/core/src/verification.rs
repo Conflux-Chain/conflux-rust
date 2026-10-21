@@ -4,7 +4,10 @@
 
 use crate::{
     core_error::{BlockError, CoreError as Error},
-    pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
+    pow::{
+        self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem,
+        MAX_POW_HEIGHT,
+    },
     sync::Error as SyncError,
 };
 use cfx_executor::{
@@ -47,6 +50,12 @@ pub struct VerificationConfig {
     pub max_nonce: Option<U256>,
     machine: Arc<Machine>,
     pos_enable_height: u64,
+    /// Consensus already requires block difficulty to be no less than
+    /// `pow_config.initial_difficulty`: see the difficulty check in
+    /// [`SynchronizationGraphInner::verify_header_graph_ready_block`].
+    ///
+    /// [`SynchronizationGraphInner::verify_header_graph_ready_block`]: crate::sync::SynchronizationGraphInner::verify_header_graph_ready_block
+    min_difficulty: U256,
 }
 
 /// Create an MPT from the ordered list of block transactions.
@@ -225,7 +234,7 @@ impl VerificationConfig {
     pub fn new(
         test_mode: bool, referee_bound: usize, max_block_size_in_bytes: usize,
         transaction_epoch_bound: u64, tx_pool_nonce_bits: usize,
-        pos_enable_height: u64, machine: Arc<Machine>,
+        pos_enable_height: u64, initial_difficulty: u64, machine: Arc<Machine>,
     ) -> Self {
         let max_nonce = if tx_pool_nonce_bits < 256 {
             Some((U256::one() << tx_pool_nonce_bits) - 1)
@@ -240,6 +249,8 @@ impl VerificationConfig {
             machine,
             pos_enable_height,
             max_nonce,
+            // Difficulty 0 has no boundary; guard it even if misconfigured.
+            min_difficulty: initial_difficulty.max(1).into(),
         }
     }
 
@@ -279,15 +290,26 @@ impl VerificationConfig {
     pub fn verify_pow(
         &self, pow: &PowComputer, header: &mut BlockHeader,
     ) -> Result<(), Error> {
-        let pow_hash = Self::get_or_fill_header_pow_hash(pow, header);
-        if header.difficulty().is_zero() {
-            return Err(BlockError::InvalidDifficulty(OutOfBounds {
-                min: Some(0.into()),
-                max: Some(0.into()),
-                found: 0.into(),
+        // Both checks precede the hash computation, which builds a cache
+        // sized by the height. The difficulty check is an existing consensus
+        // rule (see `min_difficulty`) applied early so that a cheap forgery
+        // is not persisted.
+        if header.height() > MAX_POW_HEIGHT {
+            return Err(BlockError::InvalidHeight(Mismatch {
+                expected: MAX_POW_HEIGHT,
+                found: header.height(),
             })
             .into());
         }
+        if *header.difficulty() < self.min_difficulty {
+            return Err(BlockError::InvalidDifficulty(OutOfBounds {
+                min: Some(self.min_difficulty),
+                max: None,
+                found: *header.difficulty(),
+            })
+            .into());
+        }
+        let pow_hash = Self::get_or_fill_header_pow_hash(pow, header);
         let boundary = pow::difficulty_to_boundary(header.difficulty());
         if !ProofOfWorkProblem::validate_hash_against_boundary(
             &pow_hash,
@@ -1165,6 +1187,7 @@ mod tests {
             100_000,
             128,
             u64::MAX,
+            1,
             machine,
         );
 
@@ -1202,6 +1225,68 @@ mod tests {
         assert!(matches!(
             config.verify_sync_graph_ready_block(&block, &parent),
             Err(Error::Block(BlockError::InvalidPackedGasLimit(_))),
+        ));
+    }
+
+    // The PoW light cache is sized by the header height and built when the
+    // hash is computed. With Octopus enabled, computing the hash for a height
+    // of `u64::MAX` would try to allocate an exabyte-scale cache, so this test
+    // only passes if the height and difficulty checks run first.
+    #[test]
+    fn verify_pow_rejects_before_computing_hash() {
+        use crate::{
+            core_error::{BlockError, CoreError as Error},
+            pow::PowComputer,
+            verification::VerificationConfig,
+        };
+        use cfx_executor::{
+            machine::{Machine, VmFactory},
+            spec::CommonParams,
+        };
+        use primitives::BlockHeaderBuilder;
+        use std::sync::Arc;
+
+        let machine = Arc::new(Machine::new_with_builtin(
+            CommonParams::default(),
+            VmFactory::new(1024),
+        ));
+        let config = VerificationConfig::new(
+            false,
+            200,
+            200 * 1024,
+            100_000,
+            128,
+            u64::MAX,
+            4, /* initial_difficulty */
+            machine,
+        );
+        let pow = PowComputer::new(true /* use_octopus */);
+
+        let mut header = BlockHeaderBuilder::new()
+            .with_height(u64::MAX)
+            .with_difficulty(4.into())
+            .build();
+        assert!(matches!(
+            config.verify_pow(&pow, &mut header),
+            Err(Error::Block(BlockError::InvalidHeight(_))),
+        ));
+
+        let mut header = BlockHeaderBuilder::new()
+            .with_height(u64::MAX)
+            .with_difficulty(3.into())
+            .build();
+        assert!(matches!(
+            config.verify_pow(&pow, &mut header),
+            Err(Error::Block(BlockError::InvalidHeight(_))),
+        ));
+
+        let mut header = BlockHeaderBuilder::new()
+            .with_height(1)
+            .with_difficulty(3.into())
+            .build();
+        assert!(matches!(
+            config.verify_pow(&pow, &mut header),
+            Err(Error::Block(BlockError::InvalidDifficulty(_))),
         ));
     }
 }

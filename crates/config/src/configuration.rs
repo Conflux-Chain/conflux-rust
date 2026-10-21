@@ -764,6 +764,7 @@ impl Configuration {
             self.raw_conf.transaction_epoch_bound,
             self.raw_conf.tx_pool_nonce_bits,
             self.raw_conf.pos_reference_enable_height,
+            self.pow_config().initial_difficulty,
             machine,
         )
     }
