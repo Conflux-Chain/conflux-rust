@@ -11,7 +11,7 @@ edition = "2018"
 
 [dependencies]
 serde = { version = "1.0.124", features = ["rc"], default-features = false }
-yaml_serde = "0.10.3"
+yaml_serde = "0.10.7"
 thiserror = "1.0.24"
 
 bcs = "0.1.2"
