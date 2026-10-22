@@ -83,9 +83,16 @@ ignore = [
     # parking_lot 0.12 in 0.13+, but jsonrpc-tcp-server has no such release, so
     # the instant edge stays until cfx-stratum drops parity jsonrpc.
     "RUSTSEC-2024-0384",
-    # proc-macro-error2 is unmaintained; pulled by alloy-sol-macro 1.6.0
-    # (latest 1.6.0 still pins proc-macro-error2 <=2.0.1; no upstream fix).
+    # proc-macro-error2 is unmaintained; the locked Alloy 1.6.0 macros and
+    # impl-tools 0.11.4 both require it. Alloy 1.7.3 and impl-tools 0.13 use
+    # proc-macro-error3, but removing this exception requires migrating both
+    # dependency chains, including the current impl-tools 0.11 constraint.
     "RUSTSEC-2026-0173",
+    # log4rs 1.4 still requires serde_yaml 0.9 -> unsafe-libyaml. This is an
+    # unmaintained advisory; there is no released log4rs backend migration.
+    # Track https://github.com/estk/log4rs/issues/436 and remove this exception
+    # once a release drops the dependency; cargo-deny also warns on unused ignores.
+    "RUSTSEC-2024-0449",
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.

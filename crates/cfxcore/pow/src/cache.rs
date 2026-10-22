@@ -9,21 +9,28 @@ use super::{
     },
 };
 
-use std::{collections::HashMap, slice, sync::Arc};
+use lru_cache::LruCache;
+use std::{slice, sync::Arc};
 
 pub type Cache = Vec<Node>;
+
+/// Number of per-stage caches kept in memory, evicted least-recently-used.
+/// A stage spans `POW_STAGE_LENGTH` blocks, so a few entries cover normal
+/// operation around a stage boundary; keeping every stage ever seen would
+/// retain the cache of each stage passed during a sync from genesis.
+const CACHE_KEEP: usize = 3;
 
 #[derive(Clone)]
 pub struct CacheBuilder {
     seedhash: Arc<Mutex<SeedHashCompute>>,
-    caches: Arc<Mutex<HashMap<u64, Arc<Cache>>>>,
+    caches: Arc<Mutex<LruCache<u64, Arc<Cache>>>>,
 }
 
 impl CacheBuilder {
     pub fn new() -> Self {
         CacheBuilder {
             seedhash: Arc::new(Mutex::new(SeedHashCompute::default())),
-            caches: Arc::new(Mutex::new(HashMap::new())),
+            caches: Arc::new(Mutex::new(LruCache::new(CACHE_KEEP))),
         }
     }
 
@@ -44,7 +51,7 @@ impl CacheBuilder {
         let stage = block_height / POW_STAGE_LENGTH;
 
         let mut caches = self.caches.lock();
-        if let Some(cache) = caches.get(&stage) {
+        if let Some(cache) = caches.get_mut(&stage) {
             return cache.clone();
         }
 
