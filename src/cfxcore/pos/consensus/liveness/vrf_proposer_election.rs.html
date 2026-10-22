@@ -85,7 +85,7 @@
 <a href=#85 id=85 data-nosnippet>85</a>        <span class="comment">// TODO(lpl): Unify seed computation and avoid duplicate computation
 <a href=#86 id=86 data-nosnippet>86</a>        // with `gen_vrf_nonce_and_proof`.
 <a href=#87 id=87 data-nosnippet>87</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>round_seed = <span class="self">self</span>.current_seed.lock().clone();
-<a href=#88 id=88 data-nosnippet>88</a>        <span class="kw">let </span>leader_round = (round + <span class="number">1</span>) / <span class="number">3</span>;
+<a href=#88 id=88 data-nosnippet>88</a>        <span class="kw">let </span>leader_round = round.saturating_add(<span class="number">1</span>) / <span class="number">3</span>;
 <a href=#89 id=89 data-nosnippet>89</a>        round_seed.extend_from_slice(<span class="kw-2">&amp;</span>leader_round.to_be_bytes());
 <a href=#90 id=90 data-nosnippet>90</a>        <span class="kw">let </span>vrf_output = <span class="self">self
 <a href=#91 id=91 data-nosnippet>91</a>            </span>.vrf_private_key
