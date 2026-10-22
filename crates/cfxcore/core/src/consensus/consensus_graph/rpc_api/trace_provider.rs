@@ -726,6 +726,11 @@ impl ConsensusGraph {
         let epoch = EpochNumber::Number(epoch_num);
         self.validate_stated_epoch(&epoch)?;
 
+        // Genesis has no eSpace transactions or parent state to replay from.
+        if epoch_num == 0 {
+            return Ok(vec![]);
+        }
+
         let epoch_block_hashes = if let Ok(v) =
             self.get_block_hashes_by_epoch(epoch)
         {
