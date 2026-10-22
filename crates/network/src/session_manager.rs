@@ -383,7 +383,13 @@ impl SessionManager {
 
         if let Some(existing) = node_id_index.get(node_id).cloned() {
             if existing.token == idx {
-                panic!("The same token already exists for the same node!!!");
+                // Should be unreachable: the duplicate-HELLO guard in
+                // `Session::read_packet` rejects a second HELLO before this.
+                // Return a soft error instead of panicking the node.
+                return Err(format!(
+                    "node id index already maps node {:?} to this session's own token {}",
+                    node_id, idx
+                ));
             }
             let outcome = simultaneous_dial_outcome(
                 &self.own_node_id,

@@ -1,3 +1,39 @@
+import pytest
+from web3 import Web3
+
+
+@pytest.mark.parametrize("method", ["debug_traceBlockByNumber", "debug_traceBlockByHash"])
+@pytest.mark.parametrize("options", [
+    {},
+    {"tracer": "noopTracer"},
+    {"tracer": "4byteTracer"},
+    {"tracer": "callTracer"},
+    {"tracer": "prestateTracer"},
+])
+def test_trace_genesis_block(ew3: Web3, method: str, options: dict) -> None:
+    genesis = ew3.eth.get_block(0)
+    assert genesis["transactions"] == []
+    block = "0x0" if method == "debug_traceBlockByNumber" else genesis["hash"].to_0x_hex()
+
+    assert ew3.manager.request_blocking(method, [block, options]) == []
+
+
+def test_trace_nonzero_block(ew3: Web3, erc20_token_transfer) -> None:
+    receipt = erc20_token_transfer["receipt"]
+    traces = ew3.manager.request_blocking("debug_traceBlockByNumber", [
+        hex(receipt["blockNumber"]), {"tracer": "callTracer"},
+    ])
+
+    assert len(traces) == 1
+    assert traces[0]["txHash"] == erc20_token_transfer["tx_hash"].to_0x_hex()
+    trace = traces[0]["result"]
+    assert trace["type"] == "CALL"
+    assert trace["from"].lower() == receipt["from"].lower()
+    assert trace["to"].lower() == receipt["to"].lower()
+    assert trace["input"].startswith("0xa9059cbb")
+    assert "error" not in trace
+
+
 def test_trace_simple_cfx_transfer(ew3, evm_accounts):
     account = evm_accounts[0]
     to_address = ew3.eth.account.create().address

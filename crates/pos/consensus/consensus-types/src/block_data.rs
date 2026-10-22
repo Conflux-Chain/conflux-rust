@@ -177,7 +177,8 @@ impl BlockData {
         let mut round_seed = seed.to_vec();
         // Make 3 continuous rounds have the same leader.
         // Round 0 has no leader, so we use "round+1" here.
-        let leader_round = (self.round + 1) / 3;
+        // u64::MAX is divisible by 3, so saturation preserves the quotient.
+        let leader_round = self.round.saturating_add(1) / 3;
         round_seed.extend_from_slice(&leader_round.to_be_bytes());
         round_seed
     }
