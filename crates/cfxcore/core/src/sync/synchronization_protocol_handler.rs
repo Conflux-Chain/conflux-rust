@@ -578,6 +578,7 @@ impl SynchronizationProtocolHandler {
             node_id: *peer,
             io,
             manager: self,
+            peer_addr: io.get_peer_addr(peer),
         };
 
         if !handle_rlp_message(msg_id, &ctx, &rlp)? {
@@ -1023,6 +1024,7 @@ impl SynchronizationProtocolHandler {
                 node_id: io.self_node_id(),
                 io,
                 manager: self,
+                peer_addr: None,
             };
 
             ctx.send_response(&block_headers_resp)

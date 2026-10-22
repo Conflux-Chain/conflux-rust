@@ -299,6 +299,10 @@ pub trait NetworkContext {
     fn is_peer_self(&self, _node_id: &NodeId) -> bool;
 
     fn self_node_id(&self) -> NodeId;
+
+    /// Get the remote socket address of a connected peer by its NodeId.
+    /// Returns None if the peer is not currently connected.
+    fn get_peer_addr(&self, _node_id: &NodeId) -> Option<String>;
 }
 
 #[derive(Debug, Clone)]
