@@ -32,7 +32,7 @@ use super::{
 use crate::CostType;
 
 macro_rules! overflowing {
-    ($x:expr) => {{
+    ($x:expr_2021) => {{
         let (v, overflow) = $x;
         if overflow {
             return Err(vm::Error::OutOfGas);

@@ -29,7 +29,7 @@ pub trait GlobalParamKey {
 
 #[macro_export]
 macro_rules! for_all_global_param_keys {
-    ($f:ident::<Key>($($args:expr),*);) => {
+    ($f:ident::<Key>($($args:expr_2021),*);) => {
         $f::<InterestRate>($($args),*);
         $f::<AccumulateInterestRate>($($args),*);
         $f::<TotalIssued>($($args),*);
@@ -45,7 +45,7 @@ macro_rules! for_all_global_param_keys {
         $f::<TotalBurnt1559>($($args),*);
         $f::<BaseFeeProp>($($args),*);
     };
-    ($f:ident::<Key>($($args:expr),*)?;) => {
+    ($f:ident::<Key>($($args:expr_2021),*)?;) => {
         $f::<InterestRate>($($args),*)?;
         $f::<AccumulateInterestRate>($($args),*)?;
         $f::<TotalIssued>($($args),*)?;

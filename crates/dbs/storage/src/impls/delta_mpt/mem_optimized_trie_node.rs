@@ -316,33 +316,41 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
     unsafe fn add_new_child_unchecked<T>(&mut self, child_index: u8, child: T)
     where ChildrenTableItem<NodeRefDeltaMptCompact>:
             WrappedCreateFrom<T, NodeRefDeltaMptCompact> {
-        self.children_table = CompactedChildrenTable::insert_child_unchecked(
-            self.children_table.to_ref(),
-            child_index,
-            ChildrenTableItem::<NodeRefDeltaMptCompact>::take(child),
-        );
+        unsafe {
+            self.children_table =
+                CompactedChildrenTable::insert_child_unchecked(
+                    self.children_table.to_ref(),
+                    child_index,
+                    ChildrenTableItem::<NodeRefDeltaMptCompact>::take(child),
+                );
+        }
     }
 
     unsafe fn get_child_mut_unchecked(
         &mut self, child_index: u8,
     ) -> &mut Self::NodeRefType {
-        self.children_table.get_child_mut_unchecked(child_index)
+        unsafe { self.children_table.get_child_mut_unchecked(child_index) }
     }
 
     unsafe fn replace_child_unchecked<T>(&mut self, child_index: u8, child: T)
     where ChildrenTableItem<NodeRefDeltaMptCompact>:
             WrappedCreateFrom<T, NodeRefDeltaMptCompact> {
-        self.children_table.set_child_unchecked(
-            child_index,
-            ChildrenTableItem::<NodeRefDeltaMptCompact>::take(child),
-        );
+        unsafe {
+            self.children_table.set_child_unchecked(
+                child_index,
+                ChildrenTableItem::<NodeRefDeltaMptCompact>::take(child),
+            );
+        }
     }
 
     unsafe fn delete_child_unchecked(&mut self, child_index: u8) {
-        self.children_table = CompactedChildrenTable::delete_child_unchecked(
-            self.children_table.to_ref(),
-            child_index,
-        );
+        unsafe {
+            self.children_table =
+                CompactedChildrenTable::delete_child_unchecked(
+                    self.children_table.to_ref(),
+                    child_index,
+                );
+        }
     }
 
     unsafe fn delete_value_unchecked(&mut self) -> Box<[u8]> {

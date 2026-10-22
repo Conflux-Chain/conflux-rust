@@ -205,11 +205,11 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     pub fn get_array_mut(&mut self) -> &mut Vec<ValueType> { &mut self.array }
 
     pub unsafe fn get_unchecked(&self, pos: PosT) -> &ValueType {
-        self.array.get_unchecked(MyInto::<usize>::into(pos))
+        unsafe { self.array.get_unchecked(MyInto::<usize>::into(pos)) }
     }
 
     pub unsafe fn get_unchecked_mut(&mut self, pos: PosT) -> &mut ValueType {
-        self.array.get_unchecked_mut(MyInto::<usize>::into(pos))
+        unsafe { self.array.get_unchecked_mut(MyInto::<usize>::into(pos)) }
     }
 
     /// Replace an element with hole, and place the removed element at the end
@@ -222,21 +222,24 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
         &mut self, pos: PosT, hole: &mut Hole<ValueType>,
         value_util: &mut ValueUtilT,
     ) -> PosT {
-        let array_pos = self.array.len();
+        unsafe {
+            let array_pos = self.array.len();
 
-        self.array.set_len(array_pos + 1);
-        let array_pos = PosT::from(array_pos);
-        if pos != array_pos {
-            ptr::copy_nonoverlapping(
-                self.get_unchecked(pos),
-                self.get_unchecked_mut(array_pos),
-                1,
-            );
-            value_util.set_handle(self.get_unchecked_mut(array_pos), array_pos);
+            self.array.set_len(array_pos + 1);
+            let array_pos = PosT::from(array_pos);
+            if pos != array_pos {
+                ptr::copy_nonoverlapping(
+                    self.get_unchecked(pos),
+                    self.get_unchecked_mut(array_pos),
+                    1,
+                );
+                value_util
+                    .set_handle(self.get_unchecked_mut(array_pos), array_pos);
+            }
+            hole.pointer_pos.write(self.get_unchecked_mut(pos));
+
+            array_pos
         }
-        hole.pointer_pos.write(self.get_unchecked_mut(pos));
-
-        array_pos
     }
 }
 
@@ -507,15 +510,17 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     >(
         &mut self, mut hole: Hole<ValueType>, value_util: &mut ValueUtilT,
     ) -> PosT {
-        let heap_size = self.heap_size;
-        self.hole_push_back_and_swap_unchecked(
-            heap_size, &mut hole, value_util,
-        );
+        unsafe {
+            let heap_size = self.heap_size;
+            self.hole_push_back_and_swap_unchecked(
+                heap_size, &mut hole, value_util,
+            );
 
-        self.sift_up_with_hole(heap_size, hole, value_util);
-        self.heap_size += PosT::from(1);
+            self.sift_up_with_hole(heap_size, hole, value_util);
+            self.heap_size += PosT::from(1);
 
-        heap_size
+            heap_size
+        }
     }
 
     // Used in tests and by a currently unused class.
@@ -547,13 +552,15 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
         &mut self, hole: Hole<ValueType>, replaced: *mut ValueType,
         value_util: &mut ValueUtilT,
     ) {
-        ptr::copy_nonoverlapping(
-            self.get_unchecked_mut(PosT::from(0)),
-            replaced,
-            1,
-        );
+        unsafe {
+            ptr::copy_nonoverlapping(
+                self.get_unchecked_mut(PosT::from(0)),
+                replaced,
+                1,
+            );
 
-        self.sift_down_with_hole(PosT::from(0), hole, value_util);
+            self.sift_down_with_hole(PosT::from(0), hole, value_util);
+        }
     }
 
     /// The value is set to removed from heap. However if user provides a value
@@ -567,13 +574,15 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     >(
         &mut self, value: &mut ValueType, value_util: &mut ValueUtilT,
     ) {
-        let hole =
-            Hole::new_from_value_ptr_read(self.array.as_mut_ptr(), value);
+        unsafe {
+            let hole =
+                Hole::new_from_value_ptr_read(self.array.as_mut_ptr(), value);
 
-        // The value may be in-place updated so set_removed must be called
-        // before set_handle is called from Hole.
-        value_util.set_removed(value);
-        self.replace_head_unchecked_with_hole(hole, value, value_util);
+            // The value may be in-place updated so set_removed must be called
+            // before set_handle is called from Hole.
+            value_util.set_removed(value);
+            self.replace_head_unchecked_with_hole(hole, value, value_util);
+        }
     }
 
     // Used in tests and by a currently unused class.
@@ -636,20 +645,22 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
         &mut self, pos: PosT, hole: Hole<ValueType>, replaced: *mut ValueType,
         value_util: &mut ValueUtilT,
     ) {
-        {
-            let src = self.get_unchecked_mut(pos) as *mut ValueType;
-            let dst = replaced;
-            if src != dst {
-                ptr::copy_nonoverlapping(src, dst, 1);
+        unsafe {
+            {
+                let src = self.get_unchecked_mut(pos) as *mut ValueType;
+                let dst = replaced;
+                if src != dst {
+                    ptr::copy_nonoverlapping(src, dst, 1);
+                }
             }
-        }
 
-        if value_util.get_key_for_comparison(self.get_unchecked_mut(pos))
-            < value_util.get_key_for_comparison(&hole.value)
-        {
-            self.sift_down_with_hole(pos, hole, value_util);
-        } else {
-            self.sift_up_with_hole(pos, hole, value_util);
+            if value_util.get_key_for_comparison(self.get_unchecked_mut(pos))
+                < value_util.get_key_for_comparison(&hole.value)
+            {
+                self.sift_down_with_hole(pos, hole, value_util);
+            } else {
+                self.sift_up_with_hole(pos, hole, value_util);
+            }
         }
     }
 
@@ -662,17 +673,19 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
         &mut self, pos: PosT, value: &mut ValueType,
         value_util: &mut ValueUtilT,
     ) {
-        let hole = {
-            let replaced = self.get_unchecked_mut(pos);
-            let hole = Hole::new_from_value_ptr_read(replaced, value);
+        unsafe {
+            let hole = {
+                let replaced = self.get_unchecked_mut(pos);
+                let hole = Hole::new_from_value_ptr_read(replaced, value);
 
-            // The value may be in-place updated so set_removed must be
-            // called before set_handle is called from Hole.
-            value_util.set_removed(replaced);
+                // The value may be in-place updated so set_removed must be
+                // called before set_handle is called from Hole.
+                value_util.set_removed(replaced);
 
-            hole
-        };
-        self.replace_at_unchecked_with_hole(pos, hole, value, value_util);
+                hole
+            };
+            self.replace_at_unchecked_with_hole(pos, hole, value, value_util);
+        }
     }
 
     /// Unsafe because the pos is unchecked.
@@ -683,25 +696,27 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     >(
         &mut self, pos: PosT, value_util: &mut ValueUtilT,
     ) {
-        self.heap_size -= PosT::from(1);
-        let heap_last_pos = self.heap_size;
-        if pos < heap_last_pos {
-            let hole = Hole::new_from_value_ptr_read(
-                self.get_unchecked_mut(pos),
-                self.get_unchecked_mut(heap_last_pos),
-            );
-            let ptr_heap_last_element =
-                self.get_unchecked_mut(heap_last_pos) as *mut ValueType;
-            self.replace_at_unchecked_with_hole(
-                pos,
-                hole,
-                ptr_heap_last_element,
-                value_util,
-            );
-            value_util.set_handle(
-                self.get_unchecked_mut(heap_last_pos),
-                heap_last_pos,
-            );
+        unsafe {
+            self.heap_size -= PosT::from(1);
+            let heap_last_pos = self.heap_size;
+            if pos < heap_last_pos {
+                let hole = Hole::new_from_value_ptr_read(
+                    self.get_unchecked_mut(pos),
+                    self.get_unchecked_mut(heap_last_pos),
+                );
+                let ptr_heap_last_element =
+                    self.get_unchecked_mut(heap_last_pos) as *mut ValueType;
+                self.replace_at_unchecked_with_hole(
+                    pos,
+                    hole,
+                    ptr_heap_last_element,
+                    value_util,
+                );
+                value_util.set_handle(
+                    self.get_unchecked_mut(heap_last_pos),
+                    heap_last_pos,
+                );
+            }
         }
     }
 
@@ -711,42 +726,49 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     >(
         &mut self, pos: PosT, value_util: &mut ValueUtilT,
     ) -> ValueType {
-        let mut removed = MaybeUninit::uninit();
-        value_util.set_removed(self.get_unchecked_mut(pos));
-        let hole_pos = if self.heap_size > pos {
-            self.heap_size -= PosT::from(1);
-            let last_element_pos = self.heap_size;
-            if last_element_pos != pos {
-                let hole = Hole::new_from_value_ptr_read(
-                    self.get_unchecked_mut(pos),
-                    self.get_unchecked_mut(last_element_pos),
-                );
+        unsafe {
+            let mut removed = MaybeUninit::uninit();
+            value_util.set_removed(self.get_unchecked_mut(pos));
+            let hole_pos = if self.heap_size > pos {
+                self.heap_size -= PosT::from(1);
+                let last_element_pos = self.heap_size;
+                if last_element_pos != pos {
+                    let hole = Hole::new_from_value_ptr_read(
+                        self.get_unchecked_mut(pos),
+                        self.get_unchecked_mut(last_element_pos),
+                    );
 
-                self.replace_at_unchecked_with_hole(
-                    pos,
-                    hole,
+                    self.replace_at_unchecked_with_hole(
+                        pos,
+                        hole,
+                        removed.as_mut_ptr(),
+                        value_util,
+                    );
+                }
+                last_element_pos
+            } else {
+                let value_to_remove = self.get_unchecked_mut(pos);
+                ptr::copy_nonoverlapping(
+                    value_to_remove,
                     removed.as_mut_ptr(),
-                    value_util,
+                    1,
                 );
+                pos
+            };
+            let new_len = self.array.len() - 1;
+            if PosT::from(new_len) != hole_pos {
+                ptr::copy_nonoverlapping(
+                    self.get_unchecked(PosT::from(new_len)),
+                    self.get_unchecked_mut(hole_pos),
+                    1,
+                );
+                value_util
+                    .set_handle(self.get_unchecked_mut(hole_pos), hole_pos);
             }
-            last_element_pos
-        } else {
-            let value_to_remove = self.get_unchecked_mut(pos);
-            ptr::copy_nonoverlapping(value_to_remove, removed.as_mut_ptr(), 1);
-            pos
-        };
-        let new_len = self.array.len() - 1;
-        if PosT::from(new_len) != hole_pos {
-            ptr::copy_nonoverlapping(
-                self.get_unchecked(PosT::from(new_len)),
-                self.get_unchecked_mut(hole_pos),
-                1,
-            );
-            value_util.set_handle(self.get_unchecked_mut(hole_pos), hole_pos);
-        }
-        self.array.set_len(new_len);
+            self.array.set_len(new_len);
 
-        removed.assume_init()
+            removed.assume_init()
+        }
     }
 
     pub fn sift_up_with_hole<ValueUtilT: HeapValueUtil<ValueType, PosT>>(
