@@ -181,7 +181,7 @@ impl<'a> EstimationContext<'a> {
         )
     }
 
-    pub fn prepare_access_list_inspector(
+    fn prepare_access_list_inspector(
         &mut self, tx: &SignedTransaction, request: &EstimateRequest,
     ) -> Option<AccessListInspector> {
         if !request.collect_access_list {
@@ -199,16 +199,40 @@ impl<'a> EstimationContext<'a> {
         };
         excludes.insert(to);
 
+        let chain_id = self
+            .env
+            .chain_id
+            .get(&tx.space())
+            .cloned()
+            .expect("chain id should exist");
+
         if let Some(auth_list) = tx.authorization_list() {
-            excludes
-                .extend(auth_list.iter().filter_map(|auth| auth.authority()));
+            excludes.extend(
+                auth_list
+                    .iter()
+                    .filter(|auth| {
+                        let auth_chain_id = auth.chain_id;
+                        (auth_chain_id.is_zero()
+                            || auth_chain_id == U256::from(chain_id))
+                            && auth.nonce != u64::MAX
+                    })
+                    .filter_map(|auth| auth.authority()),
+            );
         }
 
         let builtins = match tx.space() {
             Space::Native => &self.machine.builtins(),
             Space::Ethereum => &self.machine.builtins_evm(),
         };
-        excludes.extend(builtins.iter().map(|(addr, _)| *addr));
+
+        excludes.extend(
+            builtins
+                .iter()
+                .filter(|(_, builtin)| {
+                    builtin.is_active(self.env.number, self.env.epoch_height)
+                })
+                .map(|(addr, _)| *addr),
+        );
 
         let access_list = tx
             .access_list()
