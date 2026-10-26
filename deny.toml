@@ -93,6 +93,14 @@ ignore = [
     # Track https://github.com/estk/log4rs/issues/436 and remove this exception
     # once a release drops the dependency; cargo-deny also warns on unused ignores.
     "RUSTSEC-2024-0449",
+    # crypto-bigint 0.5 is required by Alloy's k256 0.13 and REVM's
+    # k256/p256 0.13. RUSTSEC-2026-0387 concerns timing leaks of secret inputs;
+    # the audited node paths use these crates for public-input signature
+    # verification/recovery. Conflux secp256k1 signing and ECDH use libsecp256k1.
+    # Reassess before introducing secret-input RustCrypto operations. Remove
+    # when all three lockfiles resolve crypto-bigint >=0.7.6 or drop the crate.
+    # https://rustsec.org/advisories/RUSTSEC-2026-0387.html
+    "RUSTSEC-2026-0387",
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.

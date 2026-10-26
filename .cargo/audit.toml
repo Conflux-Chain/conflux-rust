@@ -8,4 +8,9 @@ ignore = [
     # coordinated revm upgrade. cargo-deny's resolved graph omits this edge;
     # only the raw-lockfile cargo-audit scan flags it, hence audit-only.
     "RUSTSEC-2025-0055",
+    # Same scoped crypto-bigint exception and removal conditions as deny.toml.
+    # The audited node paths verify/recover public inputs; Conflux secp256k1
+    # signing and ECDH use libsecp256k1. Reassess before adding secret-input
+    # RustCrypto operations.
+    "RUSTSEC-2026-0387",
 ]
