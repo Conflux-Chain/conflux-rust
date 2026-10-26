@@ -93,6 +93,14 @@ ignore = [
     # Track https://github.com/estk/log4rs/issues/436 and remove this exception
     # once a release drops the dependency; cargo-deny also warns on unused ignores.
     "RUSTSEC-2024-0449",
+    # crypto-bigint 0.5 is required by elliptic-curve 0.13 through the locked
+    # Alloy/revm k256 and p256 dependencies. RUSTSEC-2026-0387 is patched only
+    # in >=0.7.6, outside that constraint. These paths process public inputs
+    # for signature recovery/verification; transaction signing uses cfxkey's
+    # libsecp256k1 backend. Reassess before using RustCrypto for secret-key
+    # operations, and remove once Alloy/revm support a patched crypto-bigint.
+    # Keep in sync with .cargo/audit.toml.
+    "RUSTSEC-2026-0387",
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
