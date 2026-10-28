@@ -275,7 +275,8 @@ tower = "0.5"
 tower-http = "0.6"
 
 # async
-tokio = "1.48"
+# Patched for RUSTSEC-2026-0386 (AsyncFd I/O safety).
+tokio = "1.53.3"
 tokio-stream = "0.1"
 tokio-test = "0.4"
 futures = "0.3"

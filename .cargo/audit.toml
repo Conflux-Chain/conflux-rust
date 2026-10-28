@@ -8,4 +8,12 @@ ignore = [
     # coordinated revm upgrade. cargo-deny's resolved graph omits this edge;
     # only the raw-lockfile cargo-audit scan flags it, hence audit-only.
     "RUSTSEC-2025-0055",
+    # crypto-bigint 0.5 is required by elliptic-curve 0.13 through the locked
+    # Alloy/revm k256 and p256 dependencies. RUSTSEC-2026-0387 is patched only
+    # in >=0.7.6, outside that constraint. These paths process public inputs
+    # for signature recovery/verification; transaction signing uses cfxkey's
+    # libsecp256k1 backend. Reassess before using RustCrypto for secret-key
+    # operations, and remove once Alloy/revm support a patched crypto-bigint.
+    # Keep in sync with deny.toml.
+    "RUSTSEC-2026-0387",
 ]
