@@ -25,7 +25,7 @@ impl AccountAddress {
 
     pub fn random() -> Self {
         let mut rng = OsRng;
-        let buf: [u8; Self::LENGTH] = rng.gen();
+        let buf: [u8; Self::LENGTH] = rng.r#gen();
         Self(buf)
     }
 

@@ -687,7 +687,7 @@ impl QueryService {
         epoch: u64, block_hash: H256, block_timestamp: Option<u64>,
         transaction_index: usize, num_logs_remaining: &mut usize,
         mut logs: Vec<LogEntry>, filter: LogFilter,
-    ) -> impl Iterator<Item = LocalizedLogEntry> {
+    ) -> impl Iterator<Item = LocalizedLogEntry> + use<> {
         let num_logs = logs.len();
 
         let log_base_index = *num_logs_remaining;
@@ -745,7 +745,7 @@ impl QueryService {
     /// Apply filter to all receipts within an epoch.
     fn filter_epoch_receipts(
         &self, epoch: u64, mut receipts: Vec<BlockReceipts>, filter: LogFilter,
-    ) -> Result<impl Iterator<Item = LocalizedLogEntry>, String> {
+    ) -> Result<impl Iterator<Item = LocalizedLogEntry> + use<>, String> {
         // get epoch blocks in execution order
         let mut hashes = self
             .ledger

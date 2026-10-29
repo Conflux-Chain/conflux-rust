@@ -183,7 +183,7 @@ impl State {
             for checkpoint in &mut checkpoints_iter {
                 match checkpoint.as_hash_map().get(address) {
                     Some(Recorded(AccountEntryWithWarm {
-                        entry: AccountEntry::Cached(ref account, _),
+                        entry: AccountEntry::Cached(account, _),
                         ..
                     })) => {
                         first_account = Some(account);
@@ -230,7 +230,7 @@ impl State {
                 let mut require_cache = true;
                 for checkpoint in checkpoints_iter {
                     if let Some(Recorded(AccountEntryWithWarm {
-                        entry: AccountEntry::Cached(ref account, _),
+                        entry: AccountEntry::Cached(account, _),
                         ..
                     })) = checkpoint.as_hash_map().get(address)
                     {
@@ -257,7 +257,7 @@ impl State {
                 if !account_changed && require_cache {
                     let outer_cache = self.cache.read();
                     if let Some(AccountEntryWithWarm {
-                        entry: AccountEntry::Cached(ref account, _),
+                        entry: AccountEntry::Cached(account, _),
                         ..
                     }) = outer_cache.get(address)
                     {

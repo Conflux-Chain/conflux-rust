@@ -451,9 +451,9 @@ impl StateTraitExt for State {
             &self.maybe_intermediate_trie_key_padding,
         ) {
             (
-                Some(ref root_node),
-                Some(ref intermediate_trie),
-                Some(ref intermediate_trie_key_padding),
+                Some(root_node),
+                Some(intermediate_trie),
+                Some(intermediate_trie_key_padding),
             ) => {
                 let key = access_key
                     .to_delta_mpt_key_bytes(&intermediate_trie_key_padding);

@@ -711,7 +711,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     ///     assert_eq!(slab.get_unchecked(key), &2);
     /// }
     pub unsafe fn get_unchecked(&self, key: usize) -> &T {
-        self.entries.get_unchecked(key).get_ref().get_occupied_ref()
+        unsafe { self.entries.get_unchecked(key).get_ref().get_occupied_ref() }
     }
 
     /// Return a mutable reference to the value associated with the given key
@@ -734,10 +734,12 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// assert_eq!(slab[key], 13);
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T {
-        self.entries
-            .get_unchecked_mut(key)
-            .get_mut()
-            .get_occupied_mut()
+        unsafe {
+            self.entries
+                .get_unchecked_mut(key)
+                .get_mut()
+                .get_occupied_mut()
+        }
     }
 
     /// Insert a value in the slab, returning key assigned to the value.

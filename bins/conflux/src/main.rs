@@ -8,7 +8,7 @@ static ALLOC: cfx_mallocator_utils::allocator::Allocator =
     cfx_mallocator_utils::allocator::new_allocator();
 // jemalloc profiling config
 #[allow(non_upper_case_globals)]
-#[export_name = "malloc_conf"]
+#[unsafe(export_name = "malloc_conf")]
 #[cfg(all(not(target_env = "msvc"), feature = "jemalloc-prof"))]
 pub static malloc_conf: &[u8] =
     b"prof:true,prof_active:true,lg_prof_sample:19\0"; // 512kb

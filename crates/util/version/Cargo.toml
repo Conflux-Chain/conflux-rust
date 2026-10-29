@@ -4,7 +4,7 @@ name = "parity-version"
 version = "3.3.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
-edition = "2021"
+edition = "2024"
 license-file.workspace = true
 
 [package.metadata]

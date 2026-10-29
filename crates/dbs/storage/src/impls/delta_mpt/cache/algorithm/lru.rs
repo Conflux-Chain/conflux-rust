@@ -344,7 +344,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> LRU<PosT, CacheIndexT> {
     unsafe fn get_unchecked_mut(
         &mut self, pos: PosT,
     ) -> &mut DoubleLinkListNode<PosT, CacheIndexT> {
-        self.recent.get_unchecked_mut(MyInto::<usize>::into(pos))
+        unsafe { self.recent.get_unchecked_mut(MyInto::<usize>::into(pos)) }
     }
 
     /// User may update the cache index.
@@ -352,8 +352,10 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> LRU<PosT, CacheIndexT> {
     pub unsafe fn get_cache_index_mut(
         &mut self, handle: LRUHandle<PosT>,
     ) -> &mut CacheIndexT {
-        let pos = self.get_lru_pos_for_handle(&handle);
-        return &mut self.get_unchecked_mut(pos).cache_index;
+        unsafe {
+            let pos = self.get_lru_pos_for_handle(&handle);
+            return &mut self.get_unchecked_mut(pos).cache_index;
+        }
     }
 
     pub fn has_space(&self) -> bool { self.capacity != self.size }

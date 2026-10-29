@@ -7,7 +7,7 @@ description = "Diem's Persistent, Secure Storage"
 homepage = "https://diem.com"
 license = "Apache-2.0"
 publish = false
-edition = "2018"
+edition = "2024"
 
 [dependencies]
 base64 = "0.13.0"

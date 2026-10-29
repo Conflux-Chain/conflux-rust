@@ -72,7 +72,7 @@ impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
 
     pub fn revert_to_checkpoint(
         &mut self,
-    ) -> Option<impl Iterator<Item = (usize, T)>> {
+    ) -> Option<impl Iterator<Item = (usize, T)> + use<T>> {
         let first_layer_id = self.bundle_start_indices.pop()?;
         assert!(first_layer_id < self.total_len());
         let last_layer_id = self.total_len() - 1;

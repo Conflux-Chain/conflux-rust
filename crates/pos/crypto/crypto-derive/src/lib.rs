@@ -117,7 +117,7 @@ use unions::*;
 pub fn silent_display(source: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(source).expect("Incorrect macro input");
     let name = &ast.ident;
-    let gen = quote! {
+    let r#gen = quote! {
         // In order to ensure that secrets are never leaked, Display is elided
         impl ::std::fmt::Display for #name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -125,14 +125,14 @@ pub fn silent_display(source: TokenStream) -> TokenStream {
             }
         }
     };
-    gen.into()
+    r#gen.into()
 }
 
 #[proc_macro_derive(SilentDebug)]
 pub fn silent_debug(source: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(source).expect("Incorrect macro input");
     let name = &ast.ident;
-    let gen = quote! {
+    let r#gen = quote! {
         // In order to ensure that secrets are never leaked, Debug is elided
         impl ::std::fmt::Debug for #name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -140,7 +140,7 @@ pub fn silent_debug(source: TokenStream) -> TokenStream {
             }
         }
     };
-    gen.into()
+    r#gen.into()
 }
 
 /// Deserialize from a human readable format where applicable
@@ -149,7 +149,7 @@ pub fn deserialize_key(source: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(source).expect("Incorrect macro input");
     let name = &ast.ident;
     let name_string = name.to_string();
-    let gen = quote! {
+    let r#gen = quote! {
         impl<'de> ::serde::Deserialize<'de> for #name {
             fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
             where
@@ -175,7 +175,7 @@ pub fn deserialize_key(source: TokenStream) -> TokenStream {
             }
         }
     };
-    gen.into()
+    r#gen.into()
 }
 
 /// Serialize into a human readable format where applicable
@@ -184,7 +184,7 @@ pub fn serialize_key(source: TokenStream) -> TokenStream {
     let ast: DeriveInput = syn::parse(source).expect("Incorrect macro input");
     let name = &ast.ident;
     let name_string = name.to_string();
-    let gen = quote! {
+    let r#gen = quote! {
         impl ::serde::Serialize for #name {
             fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
             where
@@ -204,7 +204,7 @@ pub fn serialize_key(source: TokenStream) -> TokenStream {
             }
         }
     };
-    gen.into()
+    r#gen.into()
 }
 
 #[proc_macro_derive(Deref)]

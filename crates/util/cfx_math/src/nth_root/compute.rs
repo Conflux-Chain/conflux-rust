@@ -115,7 +115,7 @@ impl NthRoot for u64 {
                 InitRoot::Done(N::nth_root_lookup(self))
             } else {
                 let (small, rot) =
-                    self.truncate(N::LOOKUP_BITS as usize, N::USIZE);
+                    NthRoot::truncate(self, N::LOOKUP_BITS as usize, N::USIZE);
                 InitRoot::Init(
                     (N::nth_root_lookup(small) + 1) << (rot / N::USIZE),
                 )
@@ -153,7 +153,7 @@ impl NthRoot for u128 {
             InitRoot::Done(compute_next(self))
         } else {
             InitRoot::Init({
-                let (next, rot) = self.truncate(64, N::USIZE);
+                let (next, rot) = NthRoot::truncate(self, 64, N::USIZE);
                 (compute_next(next) + 1) << (rot / N::USIZE)
             })
         }

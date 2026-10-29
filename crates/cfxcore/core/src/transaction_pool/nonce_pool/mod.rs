@@ -79,7 +79,7 @@ impl TxWithReadyInfo {
             // executed locally
             return Ok("tx has been executed");
         }
-        if let (Transaction::Native(ref tx), Transaction::Native(ref other)) =
+        if let (Transaction::Native(tx), Transaction::Native(other)) =
             (&self.unsigned, &x.unsigned)
         {
             if *tx.epoch_height()
@@ -201,7 +201,7 @@ impl NoncePool {
     #[inline]
     pub fn iter_tx_by_nonce(
         &self, nonce: &U256,
-    ) -> impl Iterator<Item = &TxWithReadyInfo> {
+    ) -> impl Iterator<Item = &TxWithReadyInfo> + use<'_> {
         self.map.iter_range(nonce)
     }
 

@@ -3,7 +3,7 @@ description = "Conflux Core Space Keys Generator CLI"
 name = "cfxkey-cli"
 version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2021"
+edition = "2024"
 license-file.workspace = true
 
 [dependencies]

@@ -423,10 +423,12 @@ impl ScopedStatement {
     /// This method is unsafe because it extended the lifetime of Statement to
     /// infinity.
     unsafe fn new<'a>(scoped_statement: Statement<'a>) -> Self {
-        Self {
-            stmt: std::mem::transmute::<Statement<'a>, Statement<'static>>(
-                scoped_statement,
-            ),
+        unsafe {
+            Self {
+                stmt: std::mem::transmute::<Statement<'a>, Statement<'static>>(
+                    scoped_statement,
+                ),
+            }
         }
     }
 
