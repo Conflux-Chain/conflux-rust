@@ -13,7 +13,7 @@
 use anyhow::{ensure, Result};
 use cfxpack::{
     decode::decode_packet_ext,
-    packet::{Block, Packet, FLAG_PIVOT, FLAG_SKIPPED_EXECUTION},
+    packet::{Block, Packet, FLAG_BLAMED, FLAG_PIVOT, FLAG_SKIPPED_EXECUTION},
 };
 use cfx_config::Configuration;
 use cfx_executor::machine::Machine;
@@ -43,6 +43,8 @@ pub struct RunReport {
     pub receipts_root_prefix_matches: usize,
     pub logs_bloom_prefix_matches: usize,
     pub state_root_prefix_matches: usize,
+    pub blamed_skipped: usize,
+    pub fold_verified: usize,
     pub epochs: Vec<EpochReport>,
 }
 
@@ -63,6 +65,10 @@ pub struct EpochReport {
     pub computed_logs_bloom_hash: H256,
     pub expected_logs_bloom_hash_prefix: [u8; 4],
     pub logs_bloom_prefix_match: bool,
+    /// The pivot was FLAG_BLAMED — comparison skipped entirely.
+    pub blamed_skipped: bool,
+    /// The pivot had blame>0 and was fold-verified against the aggregate root.
+    pub fold_verified: bool,
 }
 
 pub struct Replayer {
@@ -81,6 +87,10 @@ pub struct Replayer {
     previous_state_root: StateRootWithAuxInfo,
     commitments_by_height: BTreeMap<u64, EpochCommitment>,
     executed_epochs_by_height: BTreeMap<u64, ExecutedEpoch>,
+    /// Most recent pivot height that was verified-OK (not blamed, not
+    /// mismatched). Used by `prune_old_state` to keep commitments needed for
+    /// fold verification, and by the driver to gate checkpoint writes.
+    pub(crate) last_verified_ok_height: Option<u64>,
     // Under the minimal-mpt backend, the single latest state shared across
     // epochs, seeded from the genesis dump. The cfx-storage `storage_manager`
     // above is still used to build genesis; only the per-epoch execution state
@@ -147,6 +157,8 @@ impl Replayer {
                 .iter()
                 .filter(|epoch| epoch.state_root_prefix_match)
                 .count(),
+            blamed_skipped: epochs.iter().filter(|e| e.blamed_skipped).count(),
+            fold_verified: epochs.iter().filter(|e| e.fold_verified).count(),
             epochs,
         })
     }

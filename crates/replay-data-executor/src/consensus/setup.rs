@@ -112,6 +112,7 @@ impl Replayer {
             previous_state_root,
             commitments_by_height: BTreeMap::from([(0, genesis_commitment)]),
             executed_epochs_by_height: BTreeMap::new(),
+            last_verified_ok_height: Some(0),
             #[cfg(feature = "backend-minimal-mpt")]
             minimal_backend,
         })
@@ -180,6 +181,9 @@ impl Replayer {
             restored.previous_epoch_finalized_epoch;
         executor.commitments_by_height = restored.commitments;
         executor.executed_epochs_by_height = restored.executed_epochs;
+        // Checkpoint is only written at verified-OK boundaries, so the resume
+        // height is itself a valid "last OK" anchor.
+        executor.last_verified_ok_height = Some(restored.height);
         Ok(executor)
     }
 }

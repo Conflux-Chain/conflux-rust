@@ -112,9 +112,18 @@ impl Replayer {
     /// epochs later and an executed epoch only REWARD_EPOCH_COUNT epochs later,
     /// so older entries are dead. Without this the maps grow with the chain
     /// length and a full-chain replay exhausts memory.
+    ///
+    /// The commitment floor is lowered when a recent blamed/mismatched run
+    /// means an older commitment may still be needed for fold verification:
+    /// `min(normal_floor, last_ok_height - DEFERRED_STATE_EPOCH_COUNT - 1)`.
     pub(super) fn prune_old_state(&mut self, pivot_height: u64) {
-        let commitment_floor =
+        let normal_floor =
             pivot_height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT + 1);
+        let safe_floor = self
+            .last_verified_ok_height
+            .map(|h| h.saturating_sub(DEFERRED_STATE_EPOCH_COUNT + 1))
+            .unwrap_or(0);
+        let commitment_floor = normal_floor.min(safe_floor);
         self.commitments_by_height =
             self.commitments_by_height.split_off(&commitment_floor);
         let reward_floor = pivot_height.saturating_sub(REWARD_EPOCH_COUNT + 1);

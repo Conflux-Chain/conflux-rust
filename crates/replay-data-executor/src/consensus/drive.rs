@@ -2,8 +2,8 @@
 //! transactions, apply the pre-execution chain hooks, recompute the epoch's
 //! roots, and compare them against the chain.
 
-use super::commitment::{compare_commitment, deferred_commitment_height};
-use super::{EpochCommitment, EpochReport, ExecutedEpoch, Replayer};
+use super::commitment::{compare_commitment, deferred_commitment_height, folded_blame_commitment};
+use super::{EpochCommitment, EpochReport, ExecutedEpoch, Replayer, FLAG_BLAMED};
 use anyhow::{anyhow, Context, Result};
 use cfxpack::packet::Block;
 use cfx_execute_helper::{observer::Observer, tx_outcome::make_process_tx_outcome};
@@ -101,19 +101,67 @@ impl Replayer {
             logs_bloom_hash: computed_logs_bloom_hash,
         };
         let deferred_height = deferred_commitment_height(pivot.height);
-        let deferred_commitment = self
-            .commitments_by_height
-            .get(&deferred_height)
-            .ok_or_else(|| {
-                anyhow!(
-                    "missing deferred execution commitment for height {} \
-                     (pivot.height={}, pivot.epoch={})",
-                    deferred_height,
-                    pivot.height,
-                    pivot.epoch,
-                )
-            })?;
-        let checks = compare_commitment(deferred_commitment, pivot);
+
+        let blamed = pivot.flags & FLAG_BLAMED != 0;
+        let blame = pivot.blame;
+
+        // Three-way dispatch:
+        //  1) FLAG_BLAMED → skip comparison entirely (header commitment is garbage)
+        //  2) blame == 0 → direct prefix comparison (existing path)
+        //  3) blame > 0  → fold-verify the aggregate root
+        let (checks, blamed_skipped, fold_verified) = if blamed {
+            // Blamed pivot — no comparison, all "match" fields are vacuously true
+            // so they don't count as mismatches in the streak tracker.
+            let checks = super::commitment::PrefixChecks {
+                expected_state_root_prefix: [0; 4],
+                expected_receipts_root_prefix: [0; 4],
+                expected_logs_bloom_hash_prefix: [0; 4],
+                state_root_prefix_match: true,
+                receipts_root_prefix_match: true,
+                logs_bloom_prefix_match: true,
+            };
+            (checks, true, false)
+        } else if blame > 0 {
+            // Valid blaming pivot: the header carries the keccak right-fold of
+            // heights h..=h-k. Compute the same fold from our commitments.
+            let folded = folded_blame_commitment(
+                &self.commitments_by_height,
+                pivot.height,
+                blame,
+            );
+            let checks = match folded {
+                Some(fc) => compare_commitment(&fc, pivot),
+                None => {
+                    // Missing commitment for fold — treat as mismatch.
+                    super::commitment::PrefixChecks {
+                        expected_state_root_prefix: prefix4_block(pivot.deferred_state_root),
+                        expected_receipts_root_prefix: prefix4_block(pivot.deferred_receipts_root),
+                        expected_logs_bloom_hash_prefix: prefix4_block(pivot.deferred_logs_bloom_hash),
+                        state_root_prefix_match: false,
+                        receipts_root_prefix_match: false,
+                        logs_bloom_prefix_match: false,
+                    }
+                }
+            };
+
+            (checks, false, true)
+        } else {
+            // blame == 0, direct comparison.
+            let deferred_commitment = self
+                .commitments_by_height
+                .get(&deferred_height)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "missing deferred execution commitment for height {} \
+                         (pivot.height={}, pivot.epoch={})",
+                        deferred_height,
+                        pivot.height,
+                        pivot.epoch,
+                    )
+                })?;
+            let checks = compare_commitment(deferred_commitment, pivot);
+            (checks, false, false)
+        };
 
         self.commitments_by_height
             .insert(pivot.height, current_commitment);
@@ -124,6 +172,37 @@ impl Replayer {
                 receipts: receipts.clone(),
             },
         );
+
+        let all_match = checks.state_root_prefix_match
+            && checks.receipts_root_prefix_match
+            && checks.logs_bloom_prefix_match;
+        if all_match && !blamed {
+            // Accounting invariant: a verified header with blame=k vouches
+            // heights h-k..=h-1 invalid and asserts h-k-1 valid, so its blame
+            // interval must exactly cover the stretch since the last verified
+            // pivot. A violation means either the pack labels contradict the
+            // chain (e.g. a valid pivot wrongly FLAG_BLAMED — its skipped check
+            // would otherwise go unnoticed) or our replay diverged on an epoch
+            // the chain itself never blamed.
+            if let Some(last_ok) = self.last_verified_ok_height {
+                let asserted_valid = pivot.height.saturating_sub(blame + 1);
+                anyhow::ensure!(
+                    asserted_valid == last_ok,
+                    "blame accounting violation at pivot {} (blame={}): header \
+                     asserts height {} is the nearest valid ancestor, but the \
+                     last verified pivot is {} — labels contradict the chain \
+                     or the replay diverged inside {}..={}",
+                    pivot.height,
+                    blame,
+                    asserted_valid,
+                    last_ok,
+                    last_ok + 1,
+                    pivot.height - 1,
+                );
+            }
+            self.last_verified_ok_height = Some(pivot.height);
+        }
+
         self.prune_old_state(pivot.height);
 
         Ok(EpochReport {
@@ -145,9 +224,20 @@ impl Replayer {
             computed_logs_bloom_hash,
             expected_logs_bloom_hash_prefix: checks.expected_logs_bloom_hash_prefix,
             logs_bloom_prefix_match: checks.logs_bloom_prefix_match,
+            blamed_skipped,
+            fold_verified,
         })
     }
 
+}
+
+fn prefix4_block(hash: H256) -> [u8; 4] {
+    let mut out = [0u8; 4];
+    out.copy_from_slice(&hash.as_bytes()[..4]);
+    out
+}
+
+impl Replayer {
     fn open_next_state(&self, pivot: &Block) -> Result<State> {
         // The minimal-mpt backend keeps only the latest state and is advanced
         // in place each epoch, so there is no `StateIndex` history to consult —

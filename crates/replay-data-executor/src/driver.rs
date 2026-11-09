@@ -10,7 +10,7 @@
 use crate::checkpoint::CheckpointData;
 use crate::consensus::{Config, Replayer};
 use crate::report::{
-    accumulate, epoch_matched, finish_verdict, print_single_report, report_mismatches,
+    accumulate, finish_verdict, print_single_report, report_mismatches,
     ProgressLogger, StreakTracker, Totals,
 };
 use anyhow::{Context, Result};
@@ -103,9 +103,11 @@ fn run_single(replayer: &mut Replayer, cfg: &DriverConfig) -> Result<()> {
     report_mismatches(&report.epochs, cfg.verbose_epochs, cfg.max_mismatches, &mut 0);
     let mut streak = StreakTracker::default();
     for epoch in &report.epochs {
-        streak.observe(epoch.pivot_height, epoch_matched(epoch));
+        streak.observe(epoch);
     }
-    save_checkpoint(replayer, cfg);
+    if !streak.in_unverified_run() {
+        save_checkpoint(replayer, cfg);
+    }
     finish_verdict(&streak, cfg.anomaly_streak)
 }
 
@@ -135,18 +137,17 @@ fn process_group(
         &mut tracker.printed_mismatches,
     );
     for epoch in &report.epochs {
-        tracker.streak.observe(epoch.pivot_height, epoch_matched(epoch));
+        tracker.streak.observe(epoch);
     }
     let last_block_ts = report.epochs.last().map_or(0, |e| e.pivot_timestamp);
 
     tracker.groups_done += 1;
     tracker.ckpt.tick();
-    // Only ever persist at a fully-clean boundary: if a mismatch run is in
-    // flight (blame window, or the start of a real divergence), defer the
-    // checkpoint until epochs match again. The cadence stays "due" (we do not
-    // reset it), so it fires on the first clean group after the run clears; a
-    // real divergence never clears, so ckpt.bin stays at the last good height.
-    if tracker.ckpt.should_write(cfg) && !tracker.streak.in_mismatch_run() {
+    // Only ever persist at a fully-verified boundary: if a mismatch run or
+    // blamed/fold-only stretch is in flight, defer the checkpoint until a
+    // fully-verified epoch lands. A real divergence never clears, so ckpt.bin
+    // stays at the last good height.
+    if tracker.ckpt.should_write(cfg) && !tracker.streak.in_unverified_run() {
         tracker.ckpt.write_and_reset(replayer, cfg, end_epoch);
         if cfg.stop_after_checkpoint && cfg.checkpoint.is_some() {
             println!(
@@ -158,7 +159,7 @@ fn process_group(
     tracker.progress.maybe_log(
         end_epoch, last_block_ts, tracker.groups_done, &tracker.totals, &tracker.streak,
     );
-    if tracker.streak.longest_run() >= cfg.anomaly_streak {
+    if tracker.streak.longest_run() > cfg.anomaly_streak {
         return Ok(true);
     }
     Ok(false)
@@ -190,18 +191,24 @@ fn run_packed_dir(replayer: &mut Replayer, cfg: &DriverConfig, resume_height: u6
             }
             container::validate_contiguity(start_epoch, &mut next_expected_epoch, resume_height)?;
             next_expected_epoch = Some(end_epoch + 1);
-            if process_group(&mut tracker, replayer, cfg, &data[offset..offset + length], start_epoch, end_epoch)? {
-                return Ok(());
+            let early_stop = process_group(&mut tracker, replayer, cfg, &data[offset..offset + length], start_epoch, end_epoch)?;
+            if early_stop {
+                return print_summary_and_verdict(&files, &tracker, cfg);
             }
         }
     }
 
-    if !tracker.streak.in_mismatch_run() {
+    if !tracker.streak.in_unverified_run() {
         save_checkpoint(replayer, cfg);
     }
+    print_summary_and_verdict(&files, &tracker, cfg)
+}
 
+fn print_summary_and_verdict(
+    files: &[PathBuf], tracker: &RunTracker, cfg: &DriverConfig,
+) -> Result<()> {
     println!(
-        "executed packed dir: files={}, epochs={}, blocks={}, txs={}, receipt_matches={}, log_matches={}, state_matches={}",
+        "executed packed dir: files={}, epochs={}, blocks={}, txs={}, receipt_matches={}, log_matches={}, state_matches={}, blamed_skipped={}, fold_verified={}",
         files.len(),
         tracker.totals.epoch_count,
         tracker.totals.block_count,
@@ -209,6 +216,8 @@ fn run_packed_dir(replayer: &mut Replayer, cfg: &DriverConfig, resume_height: u6
         tracker.totals.receipts_root_prefix_matches,
         tracker.totals.logs_bloom_prefix_matches,
         tracker.totals.state_root_prefix_matches,
+        tracker.totals.blamed_skipped,
+        tracker.totals.fold_verified,
     );
     finish_verdict(&tracker.streak, cfg.anomaly_streak)
 }
