@@ -7,8 +7,10 @@ use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT, consensus_internal::REWARD_EPOCH_COUNT,
 };
 use cfx_types::H256;
+use primitives::BlockHeaderBuilder;
 #[cfg(not(feature = "backend-minimal-mpt"))]
 use primitives::receipt::BlockReceipts;
+use std::collections::BTreeMap;
 #[cfg(not(feature = "backend-minimal-mpt"))]
 use std::sync::Arc;
 
@@ -75,6 +77,36 @@ pub(super) fn deferred_commitment_height(height: u64) -> u64 {
     height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT)
 }
 
+/// Compute the folded commitment for a blaming pivot at `height` with
+/// `blame = k > 0`. The fold covers heights `height..=height-k` (own root
+/// first), producing the keccak right-fold that a valid blaming header
+/// carries as its deferred commitment. Returns `None` if any needed
+/// commitment is missing from the map (caller treats as mismatch).
+pub(super) fn folded_blame_commitment(
+    commitments: &BTreeMap<u64, EpochCommitment>,
+    height: u64,
+    blame: u64,
+) -> Option<EpochCommitment> {
+    let mut state_roots = Vec::with_capacity(blame as usize + 1);
+    let mut receipts_roots = Vec::with_capacity(blame as usize + 1);
+    let mut bloom_hashes = Vec::with_capacity(blame as usize + 1);
+
+    for j in 0..=blame {
+        let h = height.checked_sub(j)?;
+        let dh = deferred_commitment_height(h);
+        let c = commitments.get(&dh)?;
+        state_roots.push(c.state_root);
+        receipts_roots.push(c.receipts_root);
+        bloom_hashes.push(c.logs_bloom_hash);
+    }
+
+    Some(EpochCommitment {
+        state_root: BlockHeaderBuilder::compute_blame_state_root_vec_root(state_roots),
+        receipts_root: BlockHeaderBuilder::compute_blame_state_root_vec_root(receipts_roots),
+        logs_bloom_hash: BlockHeaderBuilder::compute_blame_state_root_vec_root(bloom_hashes),
+    })
+}
+
 impl Replayer {
     /// Bound memory: a commitment is only re-read DEFERRED_STATE_EPOCH_COUNT
     /// epochs later and an executed epoch only REWARD_EPOCH_COUNT epochs later,
@@ -88,5 +120,72 @@ impl Replayer {
         let reward_floor = pivot_height.saturating_sub(REWARD_EPOCH_COUNT + 1);
         self.executed_epochs_by_height =
             self.executed_epochs_by_height.split_off(&reward_floor);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cfx_types::H256;
+
+    fn h(n: u64) -> H256 {
+        H256::from_low_u64_be(n)
+    }
+
+    fn commitment(n: u64) -> EpochCommitment {
+        EpochCommitment {
+            state_root: h(n * 3),
+            receipts_root: h(n * 3 + 1),
+            logs_bloom_hash: h(n * 3 + 2),
+        }
+    }
+
+    #[test]
+    fn fold_k1_matches_manual_keccak() {
+        let mut map = BTreeMap::new();
+        // height=10, blame=1 → fold deferred heights 5 and 4.
+        // (DEFERRED_STATE_EPOCH_COUNT = 5)
+        map.insert(5, commitment(5));
+        map.insert(4, commitment(4));
+
+        let folded = folded_blame_commitment(&map, 10, 1).unwrap();
+
+        let expected_state = BlockHeaderBuilder::compute_blame_state_root_vec_root(
+            vec![commitment(5).state_root, commitment(4).state_root],
+        );
+        assert_eq!(folded.state_root, expected_state);
+    }
+
+    #[test]
+    fn fold_k0_degenerates_to_single_root() {
+        let mut map = BTreeMap::new();
+        map.insert(5, commitment(5));
+
+        let folded = folded_blame_commitment(&map, 10, 0).unwrap();
+        assert_eq!(folded.state_root, commitment(5).state_root);
+    }
+
+    #[test]
+    fn fold_missing_commitment_returns_none() {
+        let map = BTreeMap::new(); // empty
+        assert!(folded_blame_commitment(&map, 10, 1).is_none());
+    }
+
+    #[test]
+    fn fold_low_height_saturates() {
+        let mut map = BTreeMap::new();
+        // height=3, blame=1 → deferred heights 0 and 0 (saturating_sub).
+        // Both map to the same key (0), so the fold gets [c(0), c(0)].
+        map.insert(0, commitment(0));
+        let folded = folded_blame_commitment(&map, 3, 1);
+        // height=3, j=0 → deferred_height=3-5=0 (saturated). j=1 → h=2, deferred=0.
+        assert!(folded.is_some());
+    }
+
+    #[test]
+    fn fold_height_underflow_returns_none() {
+        let map = BTreeMap::new();
+        // height=0, blame=1 → h=0-1 underflows
+        assert!(folded_blame_commitment(&map, 0, 1).is_none());
     }
 }
