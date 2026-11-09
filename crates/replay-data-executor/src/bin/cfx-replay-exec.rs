@@ -19,12 +19,12 @@ struct Cli {
     verbose_epochs: bool,
     #[arg(long, default_value_t = 20)]
     max_mismatches: usize,
-    /// The replay is only considered anomalous when this many epochs in a row
-    /// disagree with their on-chain commitments. Isolated mismatches are
-    /// tolerated: a block that an honest node later blamed carries deferred
-    /// roots that the network itself rejected, so the correct replay legitimately
-    /// disagrees with it for a short stretch before the chain self-corrects.
-    #[arg(long, default_value_t = 20)]
+    /// Maximum tolerable length of consecutive unexplained mismatches. With
+    /// blame-labelled data (`.cfxpackb`), flagged and fold-verified pivots
+    /// don't count as mismatches, so the default of 0 means any remaining
+    /// mismatch is a failure. Increase for unlabelled data where blamed
+    /// pivots produce legitimate short mismatch runs.
+    #[arg(long, default_value_t = 0)]
     anomaly_streak: usize,
     /// Checkpoint file for resumable replay (minimal-mpt backend only). When
     /// set: if the file exists the run resumes from it instead of genesis, and
