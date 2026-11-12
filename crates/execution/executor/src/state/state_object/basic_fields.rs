@@ -44,7 +44,13 @@ impl State {
         // The caller should guarantee the validity of address.
 
         if !by.is_zero() {
-            self.write_account_or_new_lock(address)?.add_balance(by);
+            let mut account = self.write_account_or_new_lock(address)?;
+            // RPC state overrides can violate the normal balance bounds.
+            // Abort execution instead of overflowing or clamping a balance.
+            if account.balance().checked_add(*by).is_none() {
+                return Err("account balance overflow".into());
+            }
+            account.add_balance(by);
         }
 
         Ok(())
