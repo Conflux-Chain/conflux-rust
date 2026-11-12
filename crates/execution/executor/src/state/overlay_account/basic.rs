@@ -26,7 +26,8 @@ impl OverlayAccount {
     pub fn balance(&self) -> &U256 { &self.balance }
 
     pub fn add_balance(&mut self, by: &U256) {
-        self.balance = self.balance + *by;
+        // RPC state overrides can exceed normal supply bounds.
+        self.balance = self.balance.saturating_add(*by);
     }
 
     pub fn sub_balance(&mut self, by: &U256) {

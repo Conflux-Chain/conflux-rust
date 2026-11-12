@@ -28,20 +28,26 @@ def framework_class(
 
 
 @pytest.mark.parametrize("method", ["eth_estimateGas", "eth_call"])
-def test_overridden_recipient_balance_overflow(ew3: Web3, method: str) -> None:
+def test_overridden_recipient_balance_saturates(ew3: Web3, method: str) -> None:
     balance_before = ew3.eth.get_balance(RECIPIENT)
-    request = {"to": RECIPIENT, "value": "0x1", "gas": "0x5208"}
-    overrides = {RECIPIENT: {"balance": hex(U256_MAX)}}
+    request = {"to": RECIPIENT, "value": "0x1", "gas": "0x186a0"}
+    overrides = {
+        RECIPIENT: {
+            "balance": hex(U256_MAX),
+            # Return SELFBALANCE after receiving the value.
+            "code": "0x4760005260206000f3",
+        }
+    }
 
-    assert assert_raises_web3_rpc_error(
-        -32016,
-        "account balance overflow",
-        ew3.manager.request_blocking,
-        method,
-        [request, "latest", overrides],
+    result = ew3.manager.request_blocking(
+        method, [request, "latest", overrides]
     )
+    if method == "eth_call":
+        assert result == f"0x{U256_MAX:064x}"
+    else:
+        assert 21000 < int(result, 16) <= int(request["gas"], 16)
 
-    # A failed simulation must leave the underlying state and RPC usable.
+    # Saturation and overrides must remain local to the simulation.
     assert ew3.eth.get_balance(RECIPIENT) == balance_before
     assert ew3.manager.request_blocking("eth_estimateGas", [request]) == "0x5208"
 
