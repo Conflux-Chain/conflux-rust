@@ -92,6 +92,14 @@ const EPOCH_SYNC_MAX_RETRY_COUNT: u64 = 20;
 const EPOCH_SYNC_RESTART_TIMEOUT_S: u64 = 60 * 10;
 const EPOCH_SYNC_MAX_INFLIGHT: u64 = 300;
 const EPOCH_SYNC_BATCH_SIZE: u64 = 30;
+
+fn peer_epoch_request_until(until: u64, best_epoch: u64) -> u64 {
+    if best_epoch < until {
+        best_epoch + 1
+    } else {
+        until
+    }
+}
 const BLOCK_SYNC_MAX_INFLIGHT: usize = 1000;
 
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -933,11 +941,7 @@ impl SynchronizationProtocolHandler {
                     maybe_peer_info.unwrap().read().best_epoch;
 
                 let until = from + cmp::min(EPOCH_SYNC_BATCH_SIZE, max_to_send);
-                if best_of_this_peer < until {
-                    best_of_this_peer + 1
-                } else {
-                    until
-                }
+                peer_epoch_request_until(until, best_of_this_peer)
             };
 
             let epochs = (from..until).collect::<Vec<u64>>();
@@ -1961,6 +1965,27 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 .ok();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::peer_epoch_request_until;
+
+    #[test]
+    fn peer_epoch_request_bounds_are_exact_and_overflow_safe() {
+        let cases = [
+            (30, 0, 1),
+            (30, 10, 11),
+            (30, 29, 30),
+            (30, 30, 30),
+            (30, u64::MAX, 30),
+            (u64::MAX, u64::MAX - 1, u64::MAX),
+            (u64::MAX, u64::MAX, u64::MAX),
+        ];
+        for (until, best_epoch, expected) in cases {
+            assert_eq!(peer_epoch_request_until(until, best_epoch), expected);
         }
     }
 }
