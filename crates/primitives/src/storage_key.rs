@@ -329,7 +329,14 @@ impl<'a> StorageKeyWithSpace<'a> {
         bytes: &'a [u8],
     ) -> <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::Output
     where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a>{
-        let key = if bytes.len() <= Self::ACCOUNT_BYTES {
+        let key = if bytes.len() < Self::ACCOUNT_BYTES {
+            if ShouldCheckInput::value() == CheckInput::value() {
+                return <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::from_result(
+                    Err(format!("Account key is too short: {}", bytes.len())),
+                );
+            }
+            StorageKey::AccountKey(bytes).with_native_space()
+        } else if bytes.len() == Self::ACCOUNT_BYTES {
             StorageKey::AccountKey(bytes).with_native_space()
         } else if bytes.len() == Self::ACCOUNT_BYTES + 1 {
             StorageKey::AccountKey(&bytes[..Self::ACCOUNT_BYTES])
