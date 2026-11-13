@@ -933,7 +933,11 @@ impl SynchronizationProtocolHandler {
                     maybe_peer_info.unwrap().read().best_epoch;
 
                 let until = from + cmp::min(EPOCH_SYNC_BATCH_SIZE, max_to_send);
-                cmp::min(until, best_of_this_peer + 1)
+                if best_of_this_peer < until {
+                    best_of_this_peer + 1
+                } else {
+                    until
+                }
             };
 
             let epochs = (from..until).collect::<Vec<u64>>();
