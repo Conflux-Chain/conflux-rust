@@ -13,10 +13,9 @@ from test_framework.util import *
 
 CHAIN_LEN = 400
 class InvalidBodyNode(DefaultNode):
-    def __init__(self, genesis):
+    def __init__(self, genesis, invalid_tx):
         super().__init__(genesis)
         correct_chain = create_chain_of_blocks(parent_hash=self.genesis, parent_height=0, count=CHAIN_LEN)
-        invalid_tx = create_transaction(chain_id=0)
         invalid_body_block = create_block(parent_hash=self.genesis, height=1, transactions=[invalid_tx],
                                           transaction_root=compute_transaction_root_for_single_transaction(invalid_tx.hash))
         invalid_chain_suffix = create_chain_of_blocks(parent_hash=invalid_body_block.hash, parent_height=1,
@@ -79,9 +78,13 @@ class InvalidBodySyncTest(ConfluxTestFramework):
             self.nodes[i].wait_for_rpc_connection()
             self.nodes[i].wait_for_nodeid()
 
+    def invalid_tx(self):
+        # Rejected by the per-transaction checks when the body arrives.
+        return create_transaction(chain_id=0)
+
     def run_test(self):
         genesis = self.nodes[0].cfx_getBlockByEpochNumber("0x0", False)["hash"]
-        conn0 = InvalidBodyNode(genesis)
+        conn0 = InvalidBodyNode(genesis, self.invalid_tx())
         conn1 = DefaultNode(genesis)
         self.nodes[1].add_p2p_connection(conn1)
         conn1.wait_for_status()

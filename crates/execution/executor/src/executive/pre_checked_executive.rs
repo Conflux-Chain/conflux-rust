@@ -84,12 +84,15 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         let result = self.exec_vm(params.clone())?;
 
         let refund_info = self.compute_refunded_gas(&result, eip7702_refund);
-        self.refund_gas(&params, refund_info.refund_value)?;
+        // Virtual calls that skip gas payment must also skip its settlement.
+        if self.settings.charge_gas {
+            self.refund_gas(&params, refund_info.refund_value)?;
 
-        if self.tx.space() == Space::Ethereum {
-            self.context
-                .state
-                .sub_total_evm_tokens(refund_info.fees_value);
+            if self.tx.space() == Space::Ethereum {
+                self.context
+                    .state
+                    .sub_total_evm_tokens(refund_info.fees_value);
+            }
         }
 
         // perform suicides

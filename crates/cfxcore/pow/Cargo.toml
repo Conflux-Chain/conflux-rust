@@ -21,4 +21,5 @@ cfx-parameters = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 keccak-hash = { workspace = true }
+lru-cache = { workspace = true }
 primal = { workspace = true }

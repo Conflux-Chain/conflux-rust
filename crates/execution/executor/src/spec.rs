@@ -63,6 +63,10 @@ pub struct CommonParams {
     pub transition_numbers: TransitionsBlockNumber,
     /// The upgrades activated at given block height (a.k.a. epoch number).
     pub transition_heights: TransitionsEpochHeight,
+    /// A parameter for temporary safety guard for hn_fix
+    pub max_difficulty_guard: Option<U256>,
+    /// A parameter for temporary safety guard for hn_fix
+    pub max_finalize_confirmation_guard: Option<u64>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -172,6 +176,7 @@ pub struct TransitionsEpochHeight {
     pub cip175: BlockHeight,
     /// CIP-176: Merge Storage Keys of Repeated Addresses in an Access List
     pub cip176: BlockHeight,
+    pub cip_hn_fix: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -195,6 +200,8 @@ impl Default for CommonParams {
             transition_numbers: Default::default(),
             transition_heights: Default::default(),
             min_base_price: SpaceMap::default(),
+            max_difficulty_guard: None,
+            max_finalize_confirmation_guard: None,
         }
     }
 }

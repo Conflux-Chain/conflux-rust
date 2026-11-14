@@ -32,6 +32,8 @@ pub enum BlockError {
     /// Proof-of-work aspect of seal, which we assume is a 256-bit value, is
     /// invalid.
     InvalidProofOfWork(OutOfBounds<H256>),
+    /// After hn_fix, nonces with non-zero high 128-bit are no longer allowed.
+    InvalidNonce,
     /// Gas limit header field is invalid.
     InvalidGasLimit(OutOfBounds<U256>),
     /// Total gas limits of transactions in block is out of bound.
@@ -94,6 +96,9 @@ impl fmt::Display for BlockError {
             }
             InvalidProofOfWork(ref oob) => {
                 format!("Block has invalid PoW: {}", oob)
+            }
+            InvalidNonce => {
+                format!("The high 128 bits of the block nonce are non-zero.")
             }
             InvalidGasLimit(ref oob) => format!("Invalid gas limit: {}", oob),
             InvalidBasePrice(ref mis) => {

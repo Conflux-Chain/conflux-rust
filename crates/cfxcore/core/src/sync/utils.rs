@@ -203,24 +203,6 @@ pub fn initialize_synchronization_graph_with_data_manager(
         u64::MAX,
     ));
 
-    let verification_config = VerificationConfig::new(
-        true, /* test_mode */
-        REFEREE_DEFAULT_BOUND,
-        MAX_BLOCK_SIZE_IN_BYTES,
-        TRANSACTION_DEFAULT_EPOCH_BOUND,
-        TXPOOL_DEFAULT_NONCE_BITS,
-        pos_verifier.enable_height(),
-        machine.clone(),
-    );
-
-    let txpool = Arc::new(TransactionPool::new(
-        TxPoolConfig::default(),
-        verification_config.clone(),
-        data_man.clone(),
-        machine.clone(),
-    ));
-    let statistics = Arc::new(Statistics::new());
-
     let pow_config = ProofOfWorkConfig::new(
         true,      /* test_mode */
         false,     /* use_octopus_in_test_mode */
@@ -232,6 +214,25 @@ pub fn initialize_synchronization_graph_with_data_manager(
         1,                /* pow_problem_window_size */
         0,                /* cip_height */
     );
+    let verification_config = VerificationConfig::new(
+        true, /* test_mode */
+        REFEREE_DEFAULT_BOUND,
+        MAX_BLOCK_SIZE_IN_BYTES,
+        TRANSACTION_DEFAULT_EPOCH_BOUND,
+        TXPOOL_DEFAULT_NONCE_BITS,
+        pos_verifier.enable_height(),
+        pow_config.initial_difficulty,
+        machine.clone(),
+    );
+
+    let txpool = Arc::new(TransactionPool::new(
+        TxPoolConfig::default(),
+        verification_config.clone(),
+        data_man.clone(),
+        machine.clone(),
+    ));
+    let statistics = Arc::new(Statistics::new());
+
     let sync_config = SyncGraphConfig {
         future_block_buffer_capacity: 1,
         enable_state_expose: false,

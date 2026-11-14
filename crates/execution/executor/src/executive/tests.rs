@@ -563,6 +563,87 @@ fn test_not_enough_cash() {
 }
 
 #[test]
+fn test_virtual_call_gas_settlement() {
+    use primitives::transaction::Eip155Transaction;
+
+    let sender = Address::from_low_u64_be(0x10000).with_evm_space();
+    let contract = Address::from_low_u64_be(0x20000).with_evm_space();
+    let env = Env::default();
+    let machine = make_byzantium_machine(0);
+    let spec = machine.spec_for_test(env.number);
+
+    for revert in [false, true] {
+        for (charge_gas, gas_price, balance) in [
+            (false, U256::from(7), U256::MAX),
+            (false, U256::MAX, U256::from(1_000_000)),
+            (true, U256::from(7), U256::MAX),
+        ] {
+            let mut state = get_state_for_genesis_write();
+            state.add_balance(&sender, &balance).unwrap();
+            state.add_total_evm_tokens(U256::from(1_000_000));
+            let total_espace_tokens = state.total_espace_tokens();
+            state.new_contract(&contract, U256::zero()).unwrap();
+            // Return (or revert with) GASPRICE to ensure that disabling gas
+            // charges does not change the value observed by the contract.
+            let code = if revert {
+                "3a60005260206000fd"
+            } else {
+                "3a60005260206000f3"
+            };
+            state
+                .init_code(
+                    &contract,
+                    code.from_hex().unwrap(),
+                    sender.address,
+                    env.transaction_hash,
+                )
+                .unwrap();
+            state.commit_cache(false);
+
+            let tx = Eip155Transaction {
+                nonce: U256::zero(),
+                gas_price,
+                gas: U256::from(100_000),
+                action: Action::Call(contract.address),
+                value: U256::zero(),
+                chain_id: Some(1),
+                data: vec![],
+            }
+            .fake_sign_rpc(sender);
+            let mut options = TransactOptions::default();
+            options.settings.charge_gas = charge_gas;
+            let outcome =
+                ExecutiveContext::new(&mut state, &env, &machine, &spec)
+                    .transact(&tx, options)
+                    .unwrap();
+            let executed = match outcome {
+                ExecutionOutcome::Finished(executed) if !revert => executed,
+                ExecutionOutcome::ExecutionErrorBumpNonce(
+                    ExecutionError::VmError(vm::Error::Reverted),
+                    executed,
+                ) if revert => executed,
+                other => panic!("unexpected execution outcome: {other:?}"),
+            };
+
+            assert_eq!(executed.output, gas_price.to_big_endian().to_vec());
+            assert!(executed.gas_used > U256::zero());
+            assert_eq!(executed.gas_charged, U256::from(75_000));
+            assert_eq!(
+                executed.fee,
+                U256::from(75_000).saturating_mul(gas_price)
+            );
+            let paid = if charge_gas {
+                executed.fee
+            } else {
+                U256::zero()
+            };
+            assert_eq!(state.balance(&sender).unwrap(), balance - paid);
+            assert_eq!(state.total_espace_tokens(), total_espace_tokens - paid);
+        }
+    }
+}
+
+#[test]
 fn test_deposit_withdraw_lock() {
     let mut sender = Address::zero();
     sender.set_user_account_type_bits();

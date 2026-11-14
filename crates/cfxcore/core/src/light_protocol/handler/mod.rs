@@ -287,12 +287,12 @@ impl Handler {
 
                     // handle witness
                     match maybe_witness {
-                        // request witness for blamed headers
+                        // request witness for blamed headers [height..=w];
+                        // pass the authoritative `height`, not `w`'s unchecked
+                        // `blame` field (which could underflow).
                         Some(w) => {
-                            // this request covers all blamed headers:
-                            // [w - w.blame, w - w.blame + 1, ..., w]
                             debug!("Requesting witness at height {}", w);
-                            witnesses.request(w);
+                            witnesses.request(height, w);
                         }
 
                         // for non-blamed headers, we will serve roots from disk

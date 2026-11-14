@@ -863,6 +863,8 @@ impl SynchronizationGraphInner {
         &self, index: usize, verification_config: &VerificationConfig,
     ) -> Result<(), Error> {
         let block_header = &self.arena[index].block_header;
+        // TODO: Take the parent from the arena like
+        // `get_parent_and_referee_info` does.
         let parent = self
             .data_man
             .block_header_by_hash(block_header.parent_hash())
@@ -2001,6 +2003,34 @@ impl SynchronizationGraph {
         {
             let inner = &mut *self.inner.write();
 
+            // Bodies received while locked skipped `propagate_graph_status`,
+            // so they have not been checked against their parent headers.
+            let received: Vec<usize> = inner
+                .hash_to_arena_indices
+                .values()
+                .copied()
+                .filter(|index| {
+                    inner.arena[*index].graph_status == BLOCK_HEADER_GRAPH_READY
+                        && inner.arena[*index].block_ready
+                })
+                .collect();
+            let mut invalid_frontier = Vec::new();
+            for index in received {
+                if let Err(e) = inner
+                    .verify_graph_ready_block(index, &self.verification_config)
+                {
+                    warn!(
+                        "Invalid block! inserted_header={:?} err={:?}",
+                        inner.arena[index].block_header, e
+                    );
+                    inner.arena[index].graph_status = BLOCK_INVALID;
+                    invalid_frontier.push(index);
+                }
+            }
+            let invalid_set =
+                self.propagate_graph_status(inner, invalid_frontier);
+            inner.process_invalid_blocks(&invalid_set);
+
             // Iterating over `hash_to_arena_indices` might be more efficient
             // than iterating over `arena`.
             let to_remove = {
@@ -2026,10 +2056,11 @@ impl SynchronizationGraph {
 
             // Check if we skip some block bodies. It's either because they are
             // never retrieved after a long time, or they have invalid
-            // bodies.
+            // bodies. Blocks found invalid above have entered consensus with
+            // their bodies persisted, so they are not seen as missing.
             let skipped_body_blocks =
                 self.consensus.get_blocks_needing_bodies();
-            if !skipped_body_blocks.is_empty() {
+            if !skipped_body_blocks.is_empty() || !invalid_set.is_empty() {
                 warn!("Has invalid blocks after downloading block bodies!");
                 // Some headers should not enter consensus, so we just
                 // reconstruct the consensus graph with the

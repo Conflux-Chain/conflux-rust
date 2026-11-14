@@ -235,3 +235,114 @@ fn test_remove_expire_blocks() {
         sleep(Duration::from_millis(300));
     }
 }
+
+// During catch-up `insert_block` does not run `propagate_graph_status`, so a
+// body is only checked against its parent header when
+// `complete_filling_block_bodies` promotes the block.
+#[test]
+fn catch_up_body_is_checked_against_parent_before_promotion() {
+    use crate::{
+        sync::synchronization_graph::BlockInsertionResult,
+        verification::compute_transaction_root,
+    };
+    use cfx_parameters::consensus::GENESIS_GAS_LIMIT;
+    use cfx_types::{Address, AddressUtil};
+    use cfxkey::{Generator, Random};
+    use primitives::{
+        transaction::native_transaction::{
+            NativeTransaction, TypedNativeTransaction,
+        },
+        Action, BlockHeaderBuilder, Transaction,
+    };
+
+    let db_dir = std::env::temp_dir()
+        .join(format!("conflux-catch-up-body-{}", std::process::id()));
+    let db_dir = db_dir.to_str().unwrap();
+    {
+        let (sync, _, data_man, genesis_block) =
+            initialize_synchronization_graph(
+                db_dir,
+                1,
+                1,
+                1,
+                1,
+                50000,
+                DbType::Rocksdb,
+            );
+        let chain_id = sync.consensus.best_chain_id().in_native_space();
+        let keypair = Random.generate().unwrap();
+
+        // A block whose only transaction passes every per-transaction check
+        // and packs `gas` in total.
+        let make_block = |parent: H256, height: u64, gas: u64, nonce: u64| {
+            let tx = Arc::new(
+                Transaction::Native(TypedNativeTransaction::Cip155(
+                    NativeTransaction {
+                        nonce: 0.into(),
+                        gas_price: U256::one(),
+                        gas: gas.into(),
+                        action: Action::Create,
+                        value: U256::zero(),
+                        storage_limit: 0,
+                        epoch_height: height,
+                        chain_id,
+                        data: vec![],
+                    },
+                ))
+                .sign(keypair.secret()),
+            );
+            let txs = vec![tx];
+            let mut author = Address::zero();
+            author.set_user_account_type_bits();
+            let header = BlockHeaderBuilder::new()
+                .with_parent_hash(parent)
+                .with_height(height)
+                .with_gas_limit(GENESIS_GAS_LIMIT.into())
+                .with_nonce(U256::from(nonce))
+                .with_difficulty(U256::from(10))
+                .with_author(author)
+                .with_transactions_root(compute_transaction_root(&txs))
+                .build();
+            Block::new(header, txs)
+        };
+        let mut good = make_block(genesis_block.hash(), 1, 100_000, 1);
+        let mut bad =
+            make_block(genesis_block.hash(), 1, GENESIS_GAS_LIMIT + 1, 2);
+        let mut bad_child = make_block(bad.hash(), 2, 100_000, 3);
+        let good_hash = good.hash();
+        let bad_hash = bad.hash();
+        let bad_child_hash = bad_child.hash();
+
+        for block in [&mut good, &mut bad, &mut bad_child] {
+            let (result, _) = sync.insert_block_header(
+                &mut block.block_header,
+                false, /* need_to_verify */
+                true,  /* bench_mode */
+                false, /* insert_to_consensus */
+                true,  /* persistent */
+            );
+            assert!(result.is_new_valid());
+        }
+
+        sync.inner.write().locked_for_catchup = true;
+        for block in [good, bad, bad_child] {
+            assert!(matches!(
+                sync.insert_block(block, true, true, false),
+                BlockInsertionResult::AlreadyProcessed
+            ));
+        }
+
+        assert!(sync.complete_filling_block_bodies());
+
+        let inner = sync.inner.read();
+        assert!(!inner.locked_for_catchup);
+        // Only graph ready blocks survive the promotion.
+        assert!(inner.hash_to_arena_indices.contains_key(&good_hash));
+        assert!(!inner.hash_to_arena_indices.contains_key(&bad_hash));
+        assert!(!inner.hash_to_arena_indices.contains_key(&bad_child_hash));
+        assert!(!data_man.verified_invalid(&good_hash).0);
+        assert!(data_man.verified_invalid(&bad_hash).0);
+        assert!(data_man.verified_invalid(&bad_child_hash).0);
+    }
+    fs::remove_dir_all(db_dir).unwrap();
+}

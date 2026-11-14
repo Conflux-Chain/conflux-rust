@@ -9,8 +9,8 @@ use pow_types::StakingEvent;
 use cfx_statedb::{Error as DbErrorKind, Result as DbResult};
 use cfx_types::{AddressSpaceUtil, Space, SpaceMap, H256, U256};
 use primitives::{
-    receipt::BlockReceipts, AccessListItem, Action, Block, BlockNumber,
-    Receipt, SignedTransaction, TransactionIndex,
+    receipt::BlockReceipts, AccessListItem, Action, Block, BlockHeader,
+    BlockNumber, Receipt, SignedTransaction, TransactionIndex,
 };
 
 use crate::{
@@ -129,6 +129,56 @@ impl ConsensusExecutionHandler {
 
         debug!("Finish processing tx for epoch");
         Ok(epoch_recorder.receipts)
+    }
+
+    pub(super) fn safety_guard(&self, pivot_block_header: &BlockHeader) {
+        fn safety_guard_is_active(
+            block_height: u64, hn_fix_height: u64,
+        ) -> bool {
+            // Roughly two months of block heights. The upgrade cycle is about
+            // one month, so this window covers the rollout period
+            // without applying the temporary guard too far into
+            // history. The guard thresholds were also checked against
+            // the latest year of historical data and did not trigger.
+            const SAFETY_GUARD_HEIGHT_WINDOW: u64 = 4_000_000;
+
+            let start_height =
+                hn_fix_height.saturating_sub(SAFETY_GUARD_HEIGHT_WINDOW);
+            block_height >= start_height && block_height < hn_fix_height
+        }
+        if !safety_guard_is_active(
+            pivot_block_header.height(),
+            self.machine.params().transition_heights.cip_hn_fix,
+        ) {
+            return;
+        }
+
+        if let Some(max_difficulty) = self.machine.params().max_difficulty_guard
+        {
+            assert!(
+                pivot_block_header.difficulty() < &max_difficulty,
+                "too large difficulty"
+            )
+        }
+
+        let pos_id = pivot_block_header.pos_reference().as_ref();
+        let pivot_decision_epoch = pos_id
+            .and_then(|id| self.pos_verifier.get_pivot_decision(id))
+            .and_then(|hash| self.data_man.block_header_by_hash(&hash))
+            .map(|header| header.height());
+
+        if let (Some(finalized_epoch), Some(confirm_offset)) = (
+            pivot_decision_epoch,
+            self.machine.params().max_finalize_confirmation_guard,
+        ) {
+            if pivot_block_header
+                .height()
+                .checked_sub(finalized_epoch)
+                .is_some_and(|x| x > confirm_offset)
+            {
+                panic!("Block finalization is larger than expected time range");
+            }
+        }
     }
 
     fn prefetch_storage_for_execution(

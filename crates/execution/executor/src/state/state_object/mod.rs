@@ -128,12 +128,14 @@ impl State {
     ) -> DbResult<()> {
         use rayon::prelude::*;
 
+        // Consume the iterator inside install so execution does not depend on
+        // the global Rayon pool, whose RPC jobs may wait for consensus locks.
         pool.install(|| {
             addresses
                 .into_par_iter()
                 .map(|addr| self.prefetch(&addr, RequireFields::Code))
-        })
-        .collect::<DbResult<()>>()?;
+                .collect::<DbResult<()>>()
+        })?;
 
         assert!(self.committed_cache.is_empty());
         self.commit_cache(false);
