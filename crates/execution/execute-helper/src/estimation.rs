@@ -492,9 +492,14 @@ fn estimated_gas_limit(executed: &Executed, tx: &SignedTransaction) -> U256 {
             .iter()
             .map(|&x| if x == 0 { 10 } else { 40 })
             .sum::<u64>();
-    let estimated =
-        executed.ext_result.get::<GasLimitEstimationKey>().unwrap() * 7 / 6
-            + executed.base_gas;
+    let estimated = {
+        let raw = executed.ext_result.get::<GasLimitEstimationKey>().unwrap();
+        let scaled = raw
+            .checked_mul(U256::from(7))
+            .map(|v| v / U256::from(6))
+            .unwrap_or(U256::MAX);
+        scaled.saturating_add(executed.base_gas.into())
+    };
     U256::max(
         eip7623_gas_limit.into(),
         U256::max(estimated, cip130_min_gas_limit),

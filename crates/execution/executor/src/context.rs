@@ -114,7 +114,7 @@ impl<'a> Context<'a> {
 
     fn blockhash_from_env(&self, number: &U256) -> H256 {
         if self.space == Space::Ethereum && self.spec.cip98 {
-            return if U256::from(self.env().epoch_height) == number + 1 {
+            return if env_blockhash_matches(number, self.env().epoch_height) {
                 self.env().last_hash.clone()
             } else {
                 H256::default()
@@ -123,7 +123,7 @@ impl<'a> Context<'a> {
 
         // In Conflux, we only maintain the block hash of the previous block.
         // For other block numbers, it always returns zero.
-        if U256::from(self.env().number) == number + 1 {
+        if env_blockhash_matches(number, self.env().number) {
             self.env().last_hash.clone()
         } else {
             H256::default()
@@ -160,6 +160,10 @@ impl<'a> Context<'a> {
 
         Ok(BigEndianHash::from_uint(&state_res))
     }
+}
+
+fn env_blockhash_matches(number: &U256, current: u64) -> bool {
+    number.checked_add(U256::one()) == Some(U256::from(current))
 }
 
 impl<'a> ContextTrait for Context<'a> {
@@ -684,6 +688,13 @@ mod tests {
             #[cfg(feature = "align_evm")]
             blob_gas_fee: 0.into(),
         }
+    }
+
+    #[test]
+    fn env_blockhash_match_boundaries() {
+        assert!(super::env_blockhash_matches(&U256::from(99), 100));
+        assert!(!super::env_blockhash_matches(&U256::from(100), 100));
+        assert!(!super::env_blockhash_matches(&U256::MAX, 100));
     }
 
     // storage_manager is apparently unused but it must be held to keep the

@@ -27,7 +27,9 @@ pub use transact_options::{
 };
 
 use crate::{
-    executive_observer::ExecutiveObserver, machine::Machine, state::State,
+    executive_observer::ExecutiveObserver,
+    machine::Machine,
+    state::{burnt_gas_price, State},
 };
 
 /// Transaction executor.
@@ -67,7 +69,7 @@ impl<'a> ExecutiveContext<'a> {
     }
 
     pub fn apply_env_overrides(
-        env: &mut Env, block_override: Box<BlockOverrides>,
+        env: &mut Env, block_override: Box<BlockOverrides>, base_fee_prop: U256,
     ) {
         if let Some(number) = block_override.number {
             env.number = number.as_u64();
@@ -89,6 +91,8 @@ impl<'a> ExecutiveContext<'a> {
         }
         if let Some(base_fee) = block_override.base_fee {
             env.base_gas_price = SpaceMap::new(base_fee, base_fee); // use same base_fee for both spaces
+            let burnt = burnt_gas_price(base_fee, base_fee_prop);
+            env.burnt_gas_price = SpaceMap::new(burnt, burnt);
         }
 
         if let Some(_block_hash) = &block_override.block_hash {

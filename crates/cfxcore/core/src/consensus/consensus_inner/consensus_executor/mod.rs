@@ -1673,6 +1673,7 @@ impl ConsensusExecutionHandler {
             ExecutiveContext::apply_env_overrides(
                 &mut env,
                 evm_overrides.block.unwrap(),
+                state.get_base_price_prop(),
             );
         }
         let spec = self.machine.spec(env.number, env.epoch_height);

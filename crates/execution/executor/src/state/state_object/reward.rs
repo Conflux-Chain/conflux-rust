@@ -2,7 +2,7 @@ use super::State;
 use cfx_parameters::{
     consensus::ONE_CFX_IN_DRIP, consensus_internal::CIP137_BASEFEE_PROP_INIT,
 };
-use cfx_types::U256;
+use cfx_types::{U256, U512};
 
 use cfx_parameters::staking::INTEREST_RATE_PER_BLOCK_SCALE;
 use cfx_statedb::global_params::*;
@@ -65,11 +65,32 @@ impl State {
     }
 
     pub fn burnt_gas_price(&self, base_price: U256) -> U256 {
-        if base_price.is_zero() {
-            return U256::zero();
+        burnt_gas_price(base_price, self.get_base_price_prop())
+    }
+}
+
+pub(crate) fn burnt_gas_price(base_price: U256, base_fee_prop: U256) -> U256 {
+    if base_price.is_zero() {
+        return U256::zero();
+    }
+    let denominator = U512::from(ONE_CFX_IN_DRIP) + U512::from(base_fee_prop);
+    let reduction =
+        (U512::from(base_price) * U512::from(base_fee_prop)) / denominator;
+    U256::try_from(U512::from(base_price) - reduction).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::burnt_gas_price;
+    use cfx_types::U256;
+
+    #[test]
+    fn burnt_gas_price_boundaries_are_safe() {
+        for base in [U256::zero(), U256::from(100), U256::MAX] {
+            let result = burnt_gas_price(base, U256::from(50));
+            assert!(result <= base);
         }
-        let prop = self.get_base_price_prop();
-        base_price - base_price * prop / (U256::from(ONE_CFX_IN_DRIP) + prop)
+        assert_eq!(burnt_gas_price(U256::zero(), U256::MAX), U256::zero());
     }
 }
 

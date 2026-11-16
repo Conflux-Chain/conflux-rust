@@ -58,6 +58,7 @@ pub use self::{
     sponsor::COMMISSION_PRIVILEGE_SPECIAL_KEY,
     staking::initialize_or_update_dao_voted_params,
 };
+pub(crate) use reward::burnt_gas_price;
 #[cfg(test)]
 pub use tests::{get_state_by_epoch_id, get_state_for_genesis_write};
 

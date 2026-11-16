@@ -9,7 +9,7 @@ use cfx_parameters::{
     block::CROSS_SPACE_GAS_RATIO,
     internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS,
 };
-use cfx_types::U256;
+use cfx_types::{Space, U256};
 use cfx_vm_types::ActionParams;
 
 use typemap::ShareDebugMap;
@@ -40,9 +40,13 @@ impl FrameGasInfo {
     #[inline]
     fn minimum_init_gas(&self, gas_left: &U256, ratio: (u64, u64)) -> U256 {
         let (numerator, denominator) = ratio;
-        self.gas_cost_this_level(gas_left)
-            + (self.gas_limit_for_subcall * numerator + denominator - 1)
-                / denominator
+        let scaled = self
+            .gas_limit_for_subcall
+            .checked_mul(U256::from(numerator))
+            .and_then(|v| v.checked_add(U256::from(denominator - 1)))
+            .map(|v| v / U256::from(denominator))
+            .unwrap_or(U256::MAX);
+        self.gas_cost_this_level(gas_left).saturating_add(scaled)
     }
 }
 
@@ -92,19 +96,69 @@ impl GasMan {
             ..
         }) = self.gas_record.last_mut()
         {
-            *gas_cost_in_subcall += child_level.gas_cost(gas_left);
-            *gas_limit_for_subcall +=
-                child_level.minimum_init_gas(gas_left, ratio);
+            *gas_cost_in_subcall = gas_cost_in_subcall
+                .saturating_add(child_level.gas_cost(gas_left));
+            *gas_limit_for_subcall = gas_limit_for_subcall
+                .saturating_add(child_level.minimum_init_gas(gas_left, ratio));
         } else {
             self.gas_limit = child_level.minimum_init_gas(gas_left, ratio);
         }
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn subcall_scaling_saturates_on_overflow() {
+        let overflowing_limit = U256::MAX / 7 + U256::one();
+        let frame = FrameGasInfo {
+            init_gas: U256::zero(),
+            gas_cost_in_subcall: U256::zero(),
+            gas_limit_for_subcall: overflowing_limit,
+            cross_space_internal: false,
+        };
+        assert_eq!(frame.minimum_init_gas(&U256::zero(), (7, 6)), U256::MAX);
+    }
+
+    #[test]
+    fn ceil_subcall_scaling_preserves_rounding() {
+        let limit = U256::from(10);
+        let frame = FrameGasInfo {
+            init_gas: U256::zero(),
+            gas_cost_in_subcall: U256::zero(),
+            gas_limit_for_subcall: limit,
+            cross_space_internal: false,
+        };
+        assert_eq!(
+            frame.minimum_init_gas(&U256::zero(), (64, 63)),
+            U256::from(11)
+        );
+    }
+
+    #[test]
+    fn record_call_marks_cross_space_address_in_native_only() {
+        let mut params = ActionParams {
+            space: Space::Native,
+            code_address: CROSS_SPACE_CONTRACT_ADDRESS,
+            ..Default::default()
+        };
+
+        let mut gas_man = GasMan::default();
+        gas_man.record_call(&params);
+        assert!(gas_man.gas_record.pop().unwrap().cross_space_internal);
+
+        params.space = Space::Ethereum;
+        gas_man.record_call(&params);
+        assert!(!gas_man.gas_record.pop().unwrap().cross_space_internal);
+    }
+}
+
 impl CallTracer for GasMan {
     fn record_call(&mut self, params: &ActionParams) {
         let cross_space_internal =
-            params.code_address == CROSS_SPACE_CONTRACT_ADDRESS;
+            is_cross_space_internal(params.space, params.code_address);
         self.record_call_create(&params.gas, cross_space_internal);
     }
 
@@ -130,3 +184,7 @@ impl InternalTransferTracer for GasMan {}
 impl StorageTracer for GasMan {}
 impl OpcodeTracer for GasMan {}
 impl SetAuthTracer for GasMan {}
+
+fn is_cross_space_internal(space: Space, address: cfx_types::Address) -> bool {
+    space == Space::Native && address == CROSS_SPACE_CONTRACT_ADDRESS
+}
