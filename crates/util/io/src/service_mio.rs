@@ -32,6 +32,7 @@ use parking_lot::{Mutex, RwLock};
 use slab::Slab;
 use std::{
     collections::HashMap,
+    io,
     sync::{Arc, Condvar as SCondvar, Mutex as SMutex, Weak},
     thread::{self, JoinHandle},
     time::Duration,
@@ -713,8 +714,16 @@ where Message: Send + Sync + 'static
 
                     {
                         let mut poll = network_poll.lock();
-                        poll.poll(&mut events, Some(Duration::from_secs(1)))
-                            .expect("Network poll failure");
+                        let result = poll
+                            .poll(&mut events, Some(Duration::from_secs(1)));
+                        if let Err(ref err) = result {
+                            if err.kind() == io::ErrorKind::Interrupted {
+                                // Signals, including debugger attach, can
+                                // interrupt polling. Retry before using events.
+                                continue;
+                            }
+                        }
+                        result.expect("Network poll failure");
                     }
 
                     for event in &events {
