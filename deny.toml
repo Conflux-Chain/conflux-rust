@@ -101,6 +101,13 @@ ignore = [
     # operations, and remove once Alloy/revm support a patched crypto-bigint.
     # Keep in sync with .cargo/audit.toml.
     "RUSTSEC-2026-0387",
+
+    # log4rs uses humantime to parse durations such as log.yaml's refresh_rate.
+    # Keep this maintenance exception until the logging dependencies drop humantime.
+    "RUSTSEC-2026-0542",
+    # chrono has no patched release. The client and metrics use it directly,
+    # and log4rs uses it for timestamps. Remove after those dependencies migrate.
+    "RUSTSEC-2026-0543",
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
