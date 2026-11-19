@@ -35,8 +35,8 @@ struct Bits(Arc<BitSet>);
 
 impl MallocSizeOf for Bits {
     fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
-        // dealing in bits here
-        self.0.capacity() * 8
+        // BitSet reports its backing capacity in bits.
+        self.0.capacity().div_ceil(u8::BITS as usize)
     }
 }
 
