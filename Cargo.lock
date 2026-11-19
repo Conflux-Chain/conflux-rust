@@ -5404,7 +5404,7 @@ checksum = "348108ab3fba42ec82ff6e9564fc4ca0247bdccdc68dd8af9764bbc79c3c8ffb"
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=672b02bc21874a5e91705f3642dac3614a7a8f9e#672b02bc21874a5e91705f3642dac3614a7a8f9e"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=4e6110aff206c97c9c8fb706feb3790476e8b03c#4e6110aff206c97c9c8fb706feb3790476e8b03c"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -5421,7 +5421,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=672b02bc21874a5e91705f3642dac3614a7a8f9e#672b02bc21874a5e91705f3642dac3614a7a8f9e"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=4e6110aff206c97c9c8fb706feb3790476e8b03c#4e6110aff206c97c9c8fb706feb3790476e8b03c"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -7530,7 +7530,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=672b02bc21874a5e91705f3642dac3614a7a8f9e#672b02bc21874a5e91705f3642dac3614a7a8f9e"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=4e6110aff206c97c9c8fb706feb3790476e8b03c#4e6110aff206c97c9c8fb706feb3790476e8b03c"
 dependencies = [
  "libc",
  "librocksdb_sys",
