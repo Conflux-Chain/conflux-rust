@@ -58,87 +58,88 @@
 <a href=#58 id=58 data-nosnippet>58</a>    sponsor::COMMISSION_PRIVILEGE_SPECIAL_KEY,
 <a href=#59 id=59 data-nosnippet>59</a>    staking::initialize_or_update_dao_voted_params,
 <a href=#60 id=60 data-nosnippet>60</a>};
-<a href=#61 id=61 data-nosnippet>61</a><span class="attr">#[cfg(test)]
-<a href=#62 id=62 data-nosnippet>62</a></span><span class="kw">pub use </span>tests::{get_state_by_epoch_id, get_state_for_genesis_write};
-<a href=#63 id=63 data-nosnippet>63</a>
-<a href=#64 id=64 data-nosnippet>64</a><span class="kw">use </span><span class="self">self</span>::checkpoints::CheckpointLayer;
-<a href=#65 id=65 data-nosnippet>65</a><span class="kw">use super</span>::{
-<a href=#66 id=66 data-nosnippet>66</a>    checkpoints::LazyDiscardedVec,
-<a href=#67 id=67 data-nosnippet>67</a>    global_stat::GlobalStat,
-<a href=#68 id=68 data-nosnippet>68</a>    overlay_account::{
-<a href=#69 id=69 data-nosnippet>69</a>        AccountEntry, AccountEntryWithWarm, OverlayAccount, RequireFields,
-<a href=#70 id=70 data-nosnippet>70</a>    },
-<a href=#71 id=71 data-nosnippet>71</a>};
-<a href=#72 id=72 data-nosnippet>72</a><span class="kw">use </span><span class="kw">crate</span>::substate::Substate;
-<a href=#73 id=73 data-nosnippet>73</a><span class="kw">use </span>cfx_statedb::{<span class="prelude-ty">Result</span> <span class="kw">as </span>DbResult, StateDbExt, StateDbGeneric <span class="kw">as </span>StateDb};
-<a href=#74 id=74 data-nosnippet>74</a><span class="kw">use </span>cfx_types::{AddressWithSpace, H256};
-<a href=#75 id=75 data-nosnippet>75</a><span class="kw">use </span>parking_lot::RwLock;
-<a href=#76 id=76 data-nosnippet>76</a><span class="kw">use </span>std::collections::{BTreeSet, HashMap, HashSet};
-<a href=#77 id=77 data-nosnippet>77</a>
-<a href=#78 id=78 data-nosnippet>78</a><span class="doccomment">/// A caching and checkpoint layer built upon semantically meaningful database
-<a href=#79 id=79 data-nosnippet>79</a>/// interfaces, providing interfaces and logics for managing accounts and global
-<a href=#80 id=80 data-nosnippet>80</a>/// statistics to the execution engine.
-<a href=#81 id=81 data-nosnippet>81</a></span><span class="kw">pub struct </span>State {
-<a href=#82 id=82 data-nosnippet>82</a>    <span class="doccomment">/// The backend database
-<a href=#83 id=83 data-nosnippet>83</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) db: StateDb,
-<a href=#84 id=84 data-nosnippet>84</a>
-<a href=#85 id=85 data-nosnippet>85</a>    <span class="doccomment">/// Caches for the account entries
-<a href=#86 id=86 data-nosnippet>86</a>    ///
-<a href=#87 id=87 data-nosnippet>87</a>    /// WARNING: Don't delete cache entries outside of `State::commit`, unless
-<a href=#88 id=88 data-nosnippet>88</a>    /// you are familiar with checkpoint maintenance.
-<a href=#89 id=89 data-nosnippet>89</a>    </span><span class="kw">pub </span>cache: RwLock&lt;HashMap&lt;AddressWithSpace, AccountEntryWithWarm&gt;&gt;,
-<a href=#90 id=90 data-nosnippet>90</a>
-<a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">pub </span>committed_cache: HashMap&lt;AddressWithSpace, AccountEntry&gt;,
-<a href=#92 id=92 data-nosnippet>92</a>    tx_access_list: <span class="prelude-ty">Option</span>&lt;HashMap&lt;AddressWithSpace, HashSet&lt;H256&gt;&gt;&gt;,
-<a href=#93 id=93 data-nosnippet>93</a>
-<a href=#94 id=94 data-nosnippet>94</a>    <span class="doccomment">/// In-memory global statistic variables.
-<a href=#95 id=95 data-nosnippet>95</a>    </span><span class="comment">// TODO: try not to make it special?
-<a href=#96 id=96 data-nosnippet>96</a>    </span>global_stat: GlobalStat,
-<a href=#97 id=97 data-nosnippet>97</a>
-<a href=#98 id=98 data-nosnippet>98</a>    <span class="doccomment">/// Checkpoint layers for the account entries
-<a href=#99 id=99 data-nosnippet>99</a>    </span><span class="comment">// TODO: it seems `RwLock` is not necessary here. But we need to change the
-<a href=#100 id=100 data-nosnippet>100</a>    // signature of `write_account` from `&amp;self` to `&amp;mut self` first
-<a href=#101 id=101 data-nosnippet>101</a>    </span>checkpoints: RwLock&lt;LazyDiscardedVec&lt;CheckpointLayer&gt;&gt;,
-<a href=#102 id=102 data-nosnippet>102</a>}
-<a href=#103 id=103 data-nosnippet>103</a>
-<a href=#104 id=104 data-nosnippet>104</a><span class="kw">impl </span>State {
-<a href=#105 id=105 data-nosnippet>105</a>    <span class="kw">pub fn </span>new(db: StateDb) -&gt; DbResult&lt;<span class="self">Self</span>&gt; {
-<a href=#106 id=106 data-nosnippet>106</a>        <span class="kw">let </span>initialized = db.is_initialized()<span class="question-mark">?</span>;
-<a href=#107 id=107 data-nosnippet>107</a>
-<a href=#108 id=108 data-nosnippet>108</a>        <span class="kw">let </span>world_stat = <span class="kw">if </span>initialized {
-<a href=#109 id=109 data-nosnippet>109</a>            GlobalStat::loaded(<span class="kw-2">&amp;</span>db)<span class="question-mark">?
-<a href=#110 id=110 data-nosnippet>110</a>        </span>} <span class="kw">else </span>{
-<a href=#111 id=111 data-nosnippet>111</a>            GlobalStat::assert_non_inited(<span class="kw-2">&amp;</span>db)<span class="question-mark">?</span>;
-<a href=#112 id=112 data-nosnippet>112</a>            GlobalStat::new()
-<a href=#113 id=113 data-nosnippet>113</a>        };
-<a href=#114 id=114 data-nosnippet>114</a>
-<a href=#115 id=115 data-nosnippet>115</a>        <span class="prelude-val">Ok</span>(State {
-<a href=#116 id=116 data-nosnippet>116</a>            db,
-<a href=#117 id=117 data-nosnippet>117</a>            cache: Default::default(),
-<a href=#118 id=118 data-nosnippet>118</a>            committed_cache: Default::default(),
-<a href=#119 id=119 data-nosnippet>119</a>            checkpoints: Default::default(),
-<a href=#120 id=120 data-nosnippet>120</a>            tx_access_list: <span class="prelude-val">None</span>,
-<a href=#121 id=121 data-nosnippet>121</a>            global_stat: world_stat,
-<a href=#122 id=122 data-nosnippet>122</a>        })
-<a href=#123 id=123 data-nosnippet>123</a>    }
-<a href=#124 id=124 data-nosnippet>124</a>
-<a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">pub fn </span>prefetch_accounts(
-<a href=#126 id=126 data-nosnippet>126</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>, addresses: BTreeSet&lt;AddressWithSpace&gt;,
-<a href=#127 id=127 data-nosnippet>127</a>        pool: <span class="kw-2">&amp;</span>rayon::ThreadPool,
-<a href=#128 id=128 data-nosnippet>128</a>    ) -&gt; DbResult&lt;()&gt; {
-<a href=#129 id=129 data-nosnippet>129</a>        <span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
-<a href=#130 id=130 data-nosnippet>130</a>
-<a href=#131 id=131 data-nosnippet>131</a>        <span class="comment">// Consume the iterator inside install so execution does not depend on
-<a href=#132 id=132 data-nosnippet>132</a>        // the global Rayon pool, whose RPC jobs may wait for consensus locks.
-<a href=#133 id=133 data-nosnippet>133</a>        </span>pool.install(|| {
-<a href=#134 id=134 data-nosnippet>134</a>            addresses
-<a href=#135 id=135 data-nosnippet>135</a>                .into_par_iter()
-<a href=#136 id=136 data-nosnippet>136</a>                .map(|addr| <span class="self">self</span>.prefetch(<span class="kw-2">&amp;</span>addr, RequireFields::Code))
-<a href=#137 id=137 data-nosnippet>137</a>                .collect::&lt;DbResult&lt;()&gt;&gt;()
-<a href=#138 id=138 data-nosnippet>138</a>        })<span class="question-mark">?</span>;
-<a href=#139 id=139 data-nosnippet>139</a>
-<a href=#140 id=140 data-nosnippet>140</a>        <span class="macro">assert!</span>(<span class="self">self</span>.committed_cache.is_empty());
-<a href=#141 id=141 data-nosnippet>141</a>        <span class="self">self</span>.commit_cache(<span class="bool-val">false</span>);
-<a href=#142 id=142 data-nosnippet>142</a>        <span class="prelude-val">Ok</span>(())
-<a href=#143 id=143 data-nosnippet>143</a>    }
-<a href=#144 id=144 data-nosnippet>144</a>}</code></pre></div></section></main></body></html>
+<a href=#61 id=61 data-nosnippet>61</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>reward::burnt_gas_price;
+<a href=#62 id=62 data-nosnippet>62</a><span class="attr">#[cfg(test)]
+<a href=#63 id=63 data-nosnippet>63</a></span><span class="kw">pub use </span>tests::{get_state_by_epoch_id, get_state_for_genesis_write};
+<a href=#64 id=64 data-nosnippet>64</a>
+<a href=#65 id=65 data-nosnippet>65</a><span class="kw">use </span><span class="self">self</span>::checkpoints::CheckpointLayer;
+<a href=#66 id=66 data-nosnippet>66</a><span class="kw">use super</span>::{
+<a href=#67 id=67 data-nosnippet>67</a>    checkpoints::LazyDiscardedVec,
+<a href=#68 id=68 data-nosnippet>68</a>    global_stat::GlobalStat,
+<a href=#69 id=69 data-nosnippet>69</a>    overlay_account::{
+<a href=#70 id=70 data-nosnippet>70</a>        AccountEntry, AccountEntryWithWarm, OverlayAccount, RequireFields,
+<a href=#71 id=71 data-nosnippet>71</a>    },
+<a href=#72 id=72 data-nosnippet>72</a>};
+<a href=#73 id=73 data-nosnippet>73</a><span class="kw">use </span><span class="kw">crate</span>::substate::Substate;
+<a href=#74 id=74 data-nosnippet>74</a><span class="kw">use </span>cfx_statedb::{<span class="prelude-ty">Result</span> <span class="kw">as </span>DbResult, StateDbExt, StateDbGeneric <span class="kw">as </span>StateDb};
+<a href=#75 id=75 data-nosnippet>75</a><span class="kw">use </span>cfx_types::{AddressWithSpace, H256};
+<a href=#76 id=76 data-nosnippet>76</a><span class="kw">use </span>parking_lot::RwLock;
+<a href=#77 id=77 data-nosnippet>77</a><span class="kw">use </span>std::collections::{BTreeSet, HashMap, HashSet};
+<a href=#78 id=78 data-nosnippet>78</a>
+<a href=#79 id=79 data-nosnippet>79</a><span class="doccomment">/// A caching and checkpoint layer built upon semantically meaningful database
+<a href=#80 id=80 data-nosnippet>80</a>/// interfaces, providing interfaces and logics for managing accounts and global
+<a href=#81 id=81 data-nosnippet>81</a>/// statistics to the execution engine.
+<a href=#82 id=82 data-nosnippet>82</a></span><span class="kw">pub struct </span>State {
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="doccomment">/// The backend database
+<a href=#84 id=84 data-nosnippet>84</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) db: StateDb,
+<a href=#85 id=85 data-nosnippet>85</a>
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="doccomment">/// Caches for the account entries
+<a href=#87 id=87 data-nosnippet>87</a>    ///
+<a href=#88 id=88 data-nosnippet>88</a>    /// WARNING: Don't delete cache entries outside of `State::commit`, unless
+<a href=#89 id=89 data-nosnippet>89</a>    /// you are familiar with checkpoint maintenance.
+<a href=#90 id=90 data-nosnippet>90</a>    </span><span class="kw">pub </span>cache: RwLock&lt;HashMap&lt;AddressWithSpace, AccountEntryWithWarm&gt;&gt;,
+<a href=#91 id=91 data-nosnippet>91</a>
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">pub </span>committed_cache: HashMap&lt;AddressWithSpace, AccountEntry&gt;,
+<a href=#93 id=93 data-nosnippet>93</a>    tx_access_list: <span class="prelude-ty">Option</span>&lt;HashMap&lt;AddressWithSpace, HashSet&lt;H256&gt;&gt;&gt;,
+<a href=#94 id=94 data-nosnippet>94</a>
+<a href=#95 id=95 data-nosnippet>95</a>    <span class="doccomment">/// In-memory global statistic variables.
+<a href=#96 id=96 data-nosnippet>96</a>    </span><span class="comment">// TODO: try not to make it special?
+<a href=#97 id=97 data-nosnippet>97</a>    </span>global_stat: GlobalStat,
+<a href=#98 id=98 data-nosnippet>98</a>
+<a href=#99 id=99 data-nosnippet>99</a>    <span class="doccomment">/// Checkpoint layers for the account entries
+<a href=#100 id=100 data-nosnippet>100</a>    </span><span class="comment">// TODO: it seems `RwLock` is not necessary here. But we need to change the
+<a href=#101 id=101 data-nosnippet>101</a>    // signature of `write_account` from `&amp;self` to `&amp;mut self` first
+<a href=#102 id=102 data-nosnippet>102</a>    </span>checkpoints: RwLock&lt;LazyDiscardedVec&lt;CheckpointLayer&gt;&gt;,
+<a href=#103 id=103 data-nosnippet>103</a>}
+<a href=#104 id=104 data-nosnippet>104</a>
+<a href=#105 id=105 data-nosnippet>105</a><span class="kw">impl </span>State {
+<a href=#106 id=106 data-nosnippet>106</a>    <span class="kw">pub fn </span>new(db: StateDb) -&gt; DbResult&lt;<span class="self">Self</span>&gt; {
+<a href=#107 id=107 data-nosnippet>107</a>        <span class="kw">let </span>initialized = db.is_initialized()<span class="question-mark">?</span>;
+<a href=#108 id=108 data-nosnippet>108</a>
+<a href=#109 id=109 data-nosnippet>109</a>        <span class="kw">let </span>world_stat = <span class="kw">if </span>initialized {
+<a href=#110 id=110 data-nosnippet>110</a>            GlobalStat::loaded(<span class="kw-2">&amp;</span>db)<span class="question-mark">?
+<a href=#111 id=111 data-nosnippet>111</a>        </span>} <span class="kw">else </span>{
+<a href=#112 id=112 data-nosnippet>112</a>            GlobalStat::assert_non_inited(<span class="kw-2">&amp;</span>db)<span class="question-mark">?</span>;
+<a href=#113 id=113 data-nosnippet>113</a>            GlobalStat::new()
+<a href=#114 id=114 data-nosnippet>114</a>        };
+<a href=#115 id=115 data-nosnippet>115</a>
+<a href=#116 id=116 data-nosnippet>116</a>        <span class="prelude-val">Ok</span>(State {
+<a href=#117 id=117 data-nosnippet>117</a>            db,
+<a href=#118 id=118 data-nosnippet>118</a>            cache: Default::default(),
+<a href=#119 id=119 data-nosnippet>119</a>            committed_cache: Default::default(),
+<a href=#120 id=120 data-nosnippet>120</a>            checkpoints: Default::default(),
+<a href=#121 id=121 data-nosnippet>121</a>            tx_access_list: <span class="prelude-val">None</span>,
+<a href=#122 id=122 data-nosnippet>122</a>            global_stat: world_stat,
+<a href=#123 id=123 data-nosnippet>123</a>        })
+<a href=#124 id=124 data-nosnippet>124</a>    }
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a>    <span class="kw">pub fn </span>prefetch_accounts(
+<a href=#127 id=127 data-nosnippet>127</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>, addresses: BTreeSet&lt;AddressWithSpace&gt;,
+<a href=#128 id=128 data-nosnippet>128</a>        pool: <span class="kw-2">&amp;</span>rayon::ThreadPool,
+<a href=#129 id=129 data-nosnippet>129</a>    ) -&gt; DbResult&lt;()&gt; {
+<a href=#130 id=130 data-nosnippet>130</a>        <span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+<a href=#131 id=131 data-nosnippet>131</a>
+<a href=#132 id=132 data-nosnippet>132</a>        <span class="comment">// Consume the iterator inside install so execution does not depend on
+<a href=#133 id=133 data-nosnippet>133</a>        // the global Rayon pool, whose RPC jobs may wait for consensus locks.
+<a href=#134 id=134 data-nosnippet>134</a>        </span>pool.install(|| {
+<a href=#135 id=135 data-nosnippet>135</a>            addresses
+<a href=#136 id=136 data-nosnippet>136</a>                .into_par_iter()
+<a href=#137 id=137 data-nosnippet>137</a>                .map(|addr| <span class="self">self</span>.prefetch(<span class="kw-2">&amp;</span>addr, RequireFields::Code))
+<a href=#138 id=138 data-nosnippet>138</a>                .collect::&lt;DbResult&lt;()&gt;&gt;()
+<a href=#139 id=139 data-nosnippet>139</a>        })<span class="question-mark">?</span>;
+<a href=#140 id=140 data-nosnippet>140</a>
+<a href=#141 id=141 data-nosnippet>141</a>        <span class="macro">assert!</span>(<span class="self">self</span>.committed_cache.is_empty());
+<a href=#142 id=142 data-nosnippet>142</a>        <span class="self">self</span>.commit_cache(<span class="bool-val">false</span>);
+<a href=#143 id=143 data-nosnippet>143</a>        <span class="prelude-val">Ok</span>(())
+<a href=#144 id=144 data-nosnippet>144</a>    }
+<a href=#145 id=145 data-nosnippet>145</a>}</code></pre></div></section></main></body></html>

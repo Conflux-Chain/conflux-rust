@@ -1673,107 +1673,108 @@
 <a href=#1673 id=1673 data-nosnippet>1673</a>            ExecutiveContext::apply_env_overrides(
 <a href=#1674 id=1674 data-nosnippet>1674</a>                <span class="kw-2">&amp;mut </span>env,
 <a href=#1675 id=1675 data-nosnippet>1675</a>                evm_overrides.block.unwrap(),
-<a href=#1676 id=1676 data-nosnippet>1676</a>            );
-<a href=#1677 id=1677 data-nosnippet>1677</a>        }
-<a href=#1678 id=1678 data-nosnippet>1678</a>        <span class="kw">let </span>spec = <span class="self">self</span>.machine.spec(env.number, env.epoch_height);
-<a href=#1679 id=1679 data-nosnippet>1679</a>        <span class="kw">let </span><span class="kw-2">mut </span>ex = EstimationContext::new(
-<a href=#1680 id=1680 data-nosnippet>1680</a>            <span class="kw-2">&amp;mut </span>state,
-<a href=#1681 id=1681 data-nosnippet>1681</a>            <span class="kw-2">&amp;</span>env,
-<a href=#1682 id=1682 data-nosnippet>1682</a>            <span class="self">self</span>.machine.as_ref(),
-<a href=#1683 id=1683 data-nosnippet>1683</a>            <span class="kw-2">&amp;</span>spec,
-<a href=#1684 id=1684 data-nosnippet>1684</a>        );
-<a href=#1685 id=1685 data-nosnippet>1685</a>
-<a href=#1686 id=1686 data-nosnippet>1686</a>        <span class="kw">let </span>r = ex.transact_virtual(tx.clone(), request);
-<a href=#1687 id=1687 data-nosnippet>1687</a>        <span class="macro">trace!</span>(<span class="string">"Execution result {:?}"</span>, r);
-<a href=#1688 id=1688 data-nosnippet>1688</a>        <span class="prelude-val">Ok</span>(r<span class="question-mark">?</span>)
-<a href=#1689 id=1689 data-nosnippet>1689</a>    }
-<a href=#1690 id=1690 data-nosnippet>1690</a>
-<a href=#1691 id=1691 data-nosnippet>1691</a>    <span class="doccomment">/// Execute transactions in the blocks to collect traces.
-<a href=#1692 id=1692 data-nosnippet>1692</a>    </span><span class="kw">pub fn </span>collect_blocks_geth_trace(
-<a href=#1693 id=1693 data-nosnippet>1693</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_id: H256, epoch_num: u64, blocks: <span class="kw-2">&amp;</span>Vec&lt;Arc&lt;Block&gt;&gt;,
-<a href=#1694 id=1694 data-nosnippet>1694</a>        opts: GethDebugTracingOptions, tx_hash: <span class="prelude-ty">Option</span>&lt;H256&gt;,
-<a href=#1695 id=1695 data-nosnippet>1695</a>    ) -&gt; CoreResult&lt;Vec&lt;GethTraceWithHash&gt;&gt; {
-<a href=#1696 id=1696 data-nosnippet>1696</a>        <span class="kw">let </span>state_space = <span class="prelude-val">None</span>;
-<a href=#1697 id=1697 data-nosnippet>1697</a>        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.get_state_by_epoch_id_and_space(
-<a href=#1698 id=1698 data-nosnippet>1698</a>            <span class="kw-2">&amp;</span>epoch_id,
-<a href=#1699 id=1699 data-nosnippet>1699</a>            epoch_num,
-<a href=#1700 id=1700 data-nosnippet>1700</a>            state_space,
-<a href=#1701 id=1701 data-nosnippet>1701</a>        )<span class="question-mark">?</span>;
-<a href=#1702 id=1702 data-nosnippet>1702</a>
-<a href=#1703 id=1703 data-nosnippet>1703</a>        <span class="kw">let </span>start_block_number = <span class="self">self
-<a href=#1704 id=1704 data-nosnippet>1704</a>            </span>.data_man
-<a href=#1705 id=1705 data-nosnippet>1705</a>            .get_epoch_execution_context(<span class="kw-2">&amp;</span>epoch_id)
-<a href=#1706 id=1706 data-nosnippet>1706</a>            .map(|v| v.start_block_number)
-<a href=#1707 id=1707 data-nosnippet>1707</a>            .expect(<span class="string">"should exist"</span>);
-<a href=#1708 id=1708 data-nosnippet>1708</a>
-<a href=#1709 id=1709 data-nosnippet>1709</a>        <span class="kw">let </span><span class="kw-2">mut </span>answer = <span class="macro">vec!</span>[];
-<a href=#1710 id=1710 data-nosnippet>1710</a>        <span class="kw">let </span>virtual_call = VirtualCall::GethTrace(GethTask {
-<a href=#1711 id=1711 data-nosnippet>1711</a>            tx_hash,
-<a href=#1712 id=1712 data-nosnippet>1712</a>            opts,
-<a href=#1713 id=1713 data-nosnippet>1713</a>            answer: <span class="kw-2">&amp;mut </span>answer,
-<a href=#1714 id=1714 data-nosnippet>1714</a>        });
-<a href=#1715 id=1715 data-nosnippet>1715</a>        <span class="self">self</span>.process_epoch_transactions(
-<a href=#1716 id=1716 data-nosnippet>1716</a>            <span class="kw-2">&amp;mut </span>state,
-<a href=#1717 id=1717 data-nosnippet>1717</a>            blocks,
-<a href=#1718 id=1718 data-nosnippet>1718</a>            start_block_number,
-<a href=#1719 id=1719 data-nosnippet>1719</a>            <span class="bool-val">false</span>,
-<a href=#1720 id=1720 data-nosnippet>1720</a>            <span class="prelude-val">Some</span>(virtual_call),
-<a href=#1721 id=1721 data-nosnippet>1721</a>        )<span class="question-mark">?</span>;
-<a href=#1722 id=1722 data-nosnippet>1722</a>
-<a href=#1723 id=1723 data-nosnippet>1723</a>        <span class="prelude-val">Ok</span>(answer)
-<a href=#1724 id=1724 data-nosnippet>1724</a>    }
-<a href=#1725 id=1725 data-nosnippet>1725</a>
-<a href=#1726 id=1726 data-nosnippet>1726</a>    <span class="kw">fn </span>get_state_by_epoch_id_and_space(
-<a href=#1727 id=1727 data-nosnippet>1727</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_id: <span class="kw-2">&amp;</span>H256, epoch_height: u64, state_space: <span class="prelude-ty">Option</span>&lt;Space&gt;,
-<a href=#1728 id=1728 data-nosnippet>1728</a>    ) -&gt; DbResult&lt;State&gt; {
-<a href=#1729 id=1729 data-nosnippet>1729</a>        <span class="kw">let </span>state_db = <span class="self">self</span>.get_statedb_by_epoch_id_and_space(
-<a href=#1730 id=1730 data-nosnippet>1730</a>            epoch_id,
-<a href=#1731 id=1731 data-nosnippet>1731</a>            epoch_height,
-<a href=#1732 id=1732 data-nosnippet>1732</a>            state_space,
-<a href=#1733 id=1733 data-nosnippet>1733</a>        )<span class="question-mark">?</span>;
-<a href=#1734 id=1734 data-nosnippet>1734</a>        <span class="kw">let </span>state = State::new(state_db)<span class="question-mark">?</span>;
-<a href=#1735 id=1735 data-nosnippet>1735</a>
-<a href=#1736 id=1736 data-nosnippet>1736</a>        <span class="prelude-val">Ok</span>(state)
-<a href=#1737 id=1737 data-nosnippet>1737</a>    }
-<a href=#1738 id=1738 data-nosnippet>1738</a>
-<a href=#1739 id=1739 data-nosnippet>1739</a>    <span class="kw">fn </span>get_statedb_by_epoch_id_and_space(
-<a href=#1740 id=1740 data-nosnippet>1740</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_id: <span class="kw-2">&amp;</span>H256, epoch_height: u64, state_space: <span class="prelude-ty">Option</span>&lt;Space&gt;,
-<a href=#1741 id=1741 data-nosnippet>1741</a>    ) -&gt; DbResult&lt;StateDb&gt; {
-<a href=#1742 id=1742 data-nosnippet>1742</a>        <span class="comment">// Keep the lock until we get the desired State, otherwise the State may
-<a href=#1743 id=1743 data-nosnippet>1743</a>        // expire.
-<a href=#1744 id=1744 data-nosnippet>1744</a>        </span><span class="kw">let </span>state_availability_boundary =
-<a href=#1745 id=1745 data-nosnippet>1745</a>            <span class="self">self</span>.data_man.state_availability_boundary.read();
-<a href=#1746 id=1746 data-nosnippet>1746</a>
-<a href=#1747 id=1747 data-nosnippet>1747</a>        <span class="kw">if </span>!state_availability_boundary.check_read_availability(
-<a href=#1748 id=1748 data-nosnippet>1748</a>            epoch_height,
-<a href=#1749 id=1749 data-nosnippet>1749</a>            epoch_id,
-<a href=#1750 id=1750 data-nosnippet>1750</a>            state_space,
-<a href=#1751 id=1751 data-nosnippet>1751</a>        ) {
-<a href=#1752 id=1752 data-nosnippet>1752</a>            <span class="macro">bail!</span>(<span class="string">"state is not ready"</span>);
-<a href=#1753 id=1753 data-nosnippet>1753</a>        }
-<a href=#1754 id=1754 data-nosnippet>1754</a>
-<a href=#1755 id=1755 data-nosnippet>1755</a>        <span class="kw">let </span>state_index = <span class="self">self
-<a href=#1756 id=1756 data-nosnippet>1756</a>            </span>.data_man
-<a href=#1757 id=1757 data-nosnippet>1757</a>            .get_state_readonly_index(epoch_id)
-<a href=#1758 id=1758 data-nosnippet>1758</a>            .expect(<span class="string">"state index should exist"</span>);
-<a href=#1759 id=1759 data-nosnippet>1759</a>
-<a href=#1760 id=1760 data-nosnippet>1760</a>        <span class="kw">let </span>state_db = StateDb::new(
-<a href=#1761 id=1761 data-nosnippet>1761</a>            <span class="self">self</span>.data_man
-<a href=#1762 id=1762 data-nosnippet>1762</a>                .storage_manager
-<a href=#1763 id=1763 data-nosnippet>1763</a>                .get_state_no_commit(
-<a href=#1764 id=1764 data-nosnippet>1764</a>                    state_index,
-<a href=#1765 id=1765 data-nosnippet>1765</a>                    <span class="comment">/* try_open = */ </span><span class="bool-val">true</span>,
-<a href=#1766 id=1766 data-nosnippet>1766</a>                    state_space,
-<a href=#1767 id=1767 data-nosnippet>1767</a>                )<span class="question-mark">?
-<a href=#1768 id=1768 data-nosnippet>1768</a>                </span>.ok_or(<span class="string">"state deleted"</span>)<span class="question-mark">?</span>,
-<a href=#1769 id=1769 data-nosnippet>1769</a>        );
-<a href=#1770 id=1770 data-nosnippet>1770</a>
-<a href=#1771 id=1771 data-nosnippet>1771</a>        drop(state_availability_boundary);
-<a href=#1772 id=1772 data-nosnippet>1772</a>
-<a href=#1773 id=1773 data-nosnippet>1773</a>        <span class="prelude-val">Ok</span>(state_db)
-<a href=#1774 id=1774 data-nosnippet>1774</a>    }
-<a href=#1775 id=1775 data-nosnippet>1775</a>}
-<a href=#1776 id=1776 data-nosnippet>1776</a>
-<a href=#1777 id=1777 data-nosnippet>1777</a><span class="kw">pub struct </span>ConsensusExecutionConfiguration {
-<a href=#1778 id=1778 data-nosnippet>1778</a>    <span class="kw">pub </span>executive_trace: bool,
-<a href=#1779 id=1779 data-nosnippet>1779</a>}</code></pre></div></section></main></body></html>
+<a href=#1676 id=1676 data-nosnippet>1676</a>                state.get_base_price_prop(),
+<a href=#1677 id=1677 data-nosnippet>1677</a>            );
+<a href=#1678 id=1678 data-nosnippet>1678</a>        }
+<a href=#1679 id=1679 data-nosnippet>1679</a>        <span class="kw">let </span>spec = <span class="self">self</span>.machine.spec(env.number, env.epoch_height);
+<a href=#1680 id=1680 data-nosnippet>1680</a>        <span class="kw">let </span><span class="kw-2">mut </span>ex = EstimationContext::new(
+<a href=#1681 id=1681 data-nosnippet>1681</a>            <span class="kw-2">&amp;mut </span>state,
+<a href=#1682 id=1682 data-nosnippet>1682</a>            <span class="kw-2">&amp;</span>env,
+<a href=#1683 id=1683 data-nosnippet>1683</a>            <span class="self">self</span>.machine.as_ref(),
+<a href=#1684 id=1684 data-nosnippet>1684</a>            <span class="kw-2">&amp;</span>spec,
+<a href=#1685 id=1685 data-nosnippet>1685</a>        );
+<a href=#1686 id=1686 data-nosnippet>1686</a>
+<a href=#1687 id=1687 data-nosnippet>1687</a>        <span class="kw">let </span>r = ex.transact_virtual(tx.clone(), request);
+<a href=#1688 id=1688 data-nosnippet>1688</a>        <span class="macro">trace!</span>(<span class="string">"Execution result {:?}"</span>, r);
+<a href=#1689 id=1689 data-nosnippet>1689</a>        <span class="prelude-val">Ok</span>(r<span class="question-mark">?</span>)
+<a href=#1690 id=1690 data-nosnippet>1690</a>    }
+<a href=#1691 id=1691 data-nosnippet>1691</a>
+<a href=#1692 id=1692 data-nosnippet>1692</a>    <span class="doccomment">/// Execute transactions in the blocks to collect traces.
+<a href=#1693 id=1693 data-nosnippet>1693</a>    </span><span class="kw">pub fn </span>collect_blocks_geth_trace(
+<a href=#1694 id=1694 data-nosnippet>1694</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_id: H256, epoch_num: u64, blocks: <span class="kw-2">&amp;</span>Vec&lt;Arc&lt;Block&gt;&gt;,
+<a href=#1695 id=1695 data-nosnippet>1695</a>        opts: GethDebugTracingOptions, tx_hash: <span class="prelude-ty">Option</span>&lt;H256&gt;,
+<a href=#1696 id=1696 data-nosnippet>1696</a>    ) -&gt; CoreResult&lt;Vec&lt;GethTraceWithHash&gt;&gt; {
+<a href=#1697 id=1697 data-nosnippet>1697</a>        <span class="kw">let </span>state_space = <span class="prelude-val">None</span>;
+<a href=#1698 id=1698 data-nosnippet>1698</a>        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.get_state_by_epoch_id_and_space(
+<a href=#1699 id=1699 data-nosnippet>1699</a>            <span class="kw-2">&amp;</span>epoch_id,
+<a href=#1700 id=1700 data-nosnippet>1700</a>            epoch_num,
+<a href=#1701 id=1701 data-nosnippet>1701</a>            state_space,
+<a href=#1702 id=1702 data-nosnippet>1702</a>        )<span class="question-mark">?</span>;
+<a href=#1703 id=1703 data-nosnippet>1703</a>
+<a href=#1704 id=1704 data-nosnippet>1704</a>        <span class="kw">let </span>start_block_number = <span class="self">self
+<a href=#1705 id=1705 data-nosnippet>1705</a>            </span>.data_man
+<a href=#1706 id=1706 data-nosnippet>1706</a>            .get_epoch_execution_context(<span class="kw-2">&amp;</span>epoch_id)
+<a href=#1707 id=1707 data-nosnippet>1707</a>            .map(|v| v.start_block_number)
+<a href=#1708 id=1708 data-nosnippet>1708</a>            .expect(<span class="string">"should exist"</span>);
+<a href=#1709 id=1709 data-nosnippet>1709</a>
+<a href=#1710 id=1710 data-nosnippet>1710</a>        <span class="kw">let </span><span class="kw-2">mut </span>answer = <span class="macro">vec!</span>[];
+<a href=#1711 id=1711 data-nosnippet>1711</a>        <span class="kw">let </span>virtual_call = VirtualCall::GethTrace(GethTask {
+<a href=#1712 id=1712 data-nosnippet>1712</a>            tx_hash,
+<a href=#1713 id=1713 data-nosnippet>1713</a>            opts,
+<a href=#1714 id=1714 data-nosnippet>1714</a>            answer: <span class="kw-2">&amp;mut </span>answer,
+<a href=#1715 id=1715 data-nosnippet>1715</a>        });
+<a href=#1716 id=1716 data-nosnippet>1716</a>        <span class="self">self</span>.process_epoch_transactions(
+<a href=#1717 id=1717 data-nosnippet>1717</a>            <span class="kw-2">&amp;mut </span>state,
+<a href=#1718 id=1718 data-nosnippet>1718</a>            blocks,
+<a href=#1719 id=1719 data-nosnippet>1719</a>            start_block_number,
+<a href=#1720 id=1720 data-nosnippet>1720</a>            <span class="bool-val">false</span>,
+<a href=#1721 id=1721 data-nosnippet>1721</a>            <span class="prelude-val">Some</span>(virtual_call),
+<a href=#1722 id=1722 data-nosnippet>1722</a>        )<span class="question-mark">?</span>;
+<a href=#1723 id=1723 data-nosnippet>1723</a>
+<a href=#1724 id=1724 data-nosnippet>1724</a>        <span class="prelude-val">Ok</span>(answer)
+<a href=#1725 id=1725 data-nosnippet>1725</a>    }
+<a href=#1726 id=1726 data-nosnippet>1726</a>
+<a href=#1727 id=1727 data-nosnippet>1727</a>    <span class="kw">fn </span>get_state_by_epoch_id_and_space(
+<a href=#1728 id=1728 data-nosnippet>1728</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_id: <span class="kw-2">&amp;</span>H256, epoch_height: u64, state_space: <span class="prelude-ty">Option</span>&lt;Space&gt;,
+<a href=#1729 id=1729 data-nosnippet>1729</a>    ) -&gt; DbResult&lt;State&gt; {
+<a href=#1730 id=1730 data-nosnippet>1730</a>        <span class="kw">let </span>state_db = <span class="self">self</span>.get_statedb_by_epoch_id_and_space(
+<a href=#1731 id=1731 data-nosnippet>1731</a>            epoch_id,
+<a href=#1732 id=1732 data-nosnippet>1732</a>            epoch_height,
+<a href=#1733 id=1733 data-nosnippet>1733</a>            state_space,
+<a href=#1734 id=1734 data-nosnippet>1734</a>        )<span class="question-mark">?</span>;
+<a href=#1735 id=1735 data-nosnippet>1735</a>        <span class="kw">let </span>state = State::new(state_db)<span class="question-mark">?</span>;
+<a href=#1736 id=1736 data-nosnippet>1736</a>
+<a href=#1737 id=1737 data-nosnippet>1737</a>        <span class="prelude-val">Ok</span>(state)
+<a href=#1738 id=1738 data-nosnippet>1738</a>    }
+<a href=#1739 id=1739 data-nosnippet>1739</a>
+<a href=#1740 id=1740 data-nosnippet>1740</a>    <span class="kw">fn </span>get_statedb_by_epoch_id_and_space(
+<a href=#1741 id=1741 data-nosnippet>1741</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_id: <span class="kw-2">&amp;</span>H256, epoch_height: u64, state_space: <span class="prelude-ty">Option</span>&lt;Space&gt;,
+<a href=#1742 id=1742 data-nosnippet>1742</a>    ) -&gt; DbResult&lt;StateDb&gt; {
+<a href=#1743 id=1743 data-nosnippet>1743</a>        <span class="comment">// Keep the lock until we get the desired State, otherwise the State may
+<a href=#1744 id=1744 data-nosnippet>1744</a>        // expire.
+<a href=#1745 id=1745 data-nosnippet>1745</a>        </span><span class="kw">let </span>state_availability_boundary =
+<a href=#1746 id=1746 data-nosnippet>1746</a>            <span class="self">self</span>.data_man.state_availability_boundary.read();
+<a href=#1747 id=1747 data-nosnippet>1747</a>
+<a href=#1748 id=1748 data-nosnippet>1748</a>        <span class="kw">if </span>!state_availability_boundary.check_read_availability(
+<a href=#1749 id=1749 data-nosnippet>1749</a>            epoch_height,
+<a href=#1750 id=1750 data-nosnippet>1750</a>            epoch_id,
+<a href=#1751 id=1751 data-nosnippet>1751</a>            state_space,
+<a href=#1752 id=1752 data-nosnippet>1752</a>        ) {
+<a href=#1753 id=1753 data-nosnippet>1753</a>            <span class="macro">bail!</span>(<span class="string">"state is not ready"</span>);
+<a href=#1754 id=1754 data-nosnippet>1754</a>        }
+<a href=#1755 id=1755 data-nosnippet>1755</a>
+<a href=#1756 id=1756 data-nosnippet>1756</a>        <span class="kw">let </span>state_index = <span class="self">self
+<a href=#1757 id=1757 data-nosnippet>1757</a>            </span>.data_man
+<a href=#1758 id=1758 data-nosnippet>1758</a>            .get_state_readonly_index(epoch_id)
+<a href=#1759 id=1759 data-nosnippet>1759</a>            .expect(<span class="string">"state index should exist"</span>);
+<a href=#1760 id=1760 data-nosnippet>1760</a>
+<a href=#1761 id=1761 data-nosnippet>1761</a>        <span class="kw">let </span>state_db = StateDb::new(
+<a href=#1762 id=1762 data-nosnippet>1762</a>            <span class="self">self</span>.data_man
+<a href=#1763 id=1763 data-nosnippet>1763</a>                .storage_manager
+<a href=#1764 id=1764 data-nosnippet>1764</a>                .get_state_no_commit(
+<a href=#1765 id=1765 data-nosnippet>1765</a>                    state_index,
+<a href=#1766 id=1766 data-nosnippet>1766</a>                    <span class="comment">/* try_open = */ </span><span class="bool-val">true</span>,
+<a href=#1767 id=1767 data-nosnippet>1767</a>                    state_space,
+<a href=#1768 id=1768 data-nosnippet>1768</a>                )<span class="question-mark">?
+<a href=#1769 id=1769 data-nosnippet>1769</a>                </span>.ok_or(<span class="string">"state deleted"</span>)<span class="question-mark">?</span>,
+<a href=#1770 id=1770 data-nosnippet>1770</a>        );
+<a href=#1771 id=1771 data-nosnippet>1771</a>
+<a href=#1772 id=1772 data-nosnippet>1772</a>        drop(state_availability_boundary);
+<a href=#1773 id=1773 data-nosnippet>1773</a>
+<a href=#1774 id=1774 data-nosnippet>1774</a>        <span class="prelude-val">Ok</span>(state_db)
+<a href=#1775 id=1775 data-nosnippet>1775</a>    }
+<a href=#1776 id=1776 data-nosnippet>1776</a>}
+<a href=#1777 id=1777 data-nosnippet>1777</a>
+<a href=#1778 id=1778 data-nosnippet>1778</a><span class="kw">pub struct </span>ConsensusExecutionConfiguration {
+<a href=#1779 id=1779 data-nosnippet>1779</a>    <span class="kw">pub </span>executive_trace: bool,
+<a href=#1780 id=1780 data-nosnippet>1780</a>}</code></pre></div></section></main></body></html>
