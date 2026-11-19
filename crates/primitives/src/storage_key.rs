@@ -329,7 +329,14 @@ impl<'a> StorageKeyWithSpace<'a> {
         bytes: &'a [u8],
     ) -> <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::Output
     where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a>{
-        let key = if bytes.len() <= Self::ACCOUNT_BYTES {
+        let key = if bytes.len() < Self::ACCOUNT_BYTES {
+            if ShouldCheckInput::value() == CheckInput::value() {
+                return <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::from_result(
+                    Err(format!("Account key is too short: {}", bytes.len())),
+                );
+            }
+            StorageKey::AccountKey(bytes).with_native_space()
+        } else if bytes.len() == Self::ACCOUNT_BYTES {
             StorageKey::AccountKey(bytes).with_native_space()
         } else if bytes.len() == Self::ACCOUNT_BYTES + 1 {
             StorageKey::AccountKey(&bytes[..Self::ACCOUNT_BYTES])
@@ -809,9 +816,45 @@ use std::{
 
 #[cfg(test)]
 mod tests {
-    use super::{delta_mpt_storage_key::*, DeltaMptKeyPadding, StorageKey};
+    use super::{
+        delta_mpt_storage_key::*, CheckInput, DeltaMptKeyPadding,
+        SkipInputCheck, StorageKey,
+    };
     use crate::StorageKeyWithSpace;
     use cfx_types::{Address, H256};
+
+    #[test]
+    fn test_checked_key_lengths_and_encodings() {
+        let native = [7u8; StorageKeyWithSpace::ACCOUNT_BYTES];
+        assert!(
+            StorageKeyWithSpace::from_key_bytes::<CheckInput>(&native).is_ok()
+        );
+        assert!(StorageKeyWithSpace::from_key_bytes::<CheckInput>(
+            &native[..19]
+        )
+        .is_err());
+        assert!(StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(
+            &native[..19]
+        )
+        .to_key_bytes()
+        .starts_with(&native[..19]));
+
+        let evm = [&native[..], StorageKeyWithSpace::EVM_SPACE_TYPE].concat();
+        assert_eq!(
+            StorageKeyWithSpace::from_key_bytes::<CheckInput>(&evm)
+                .unwrap()
+                .to_key_bytes(),
+            evm
+        );
+
+        let long = [&native[..], b"data", &[9u8; 32][..]].concat();
+        assert_eq!(
+            StorageKeyWithSpace::from_key_bytes::<CheckInput>(&long)
+                .unwrap()
+                .to_key_bytes(),
+            long
+        );
+    }
 
     #[test]
     fn test_delta_mpt_account_key() {
