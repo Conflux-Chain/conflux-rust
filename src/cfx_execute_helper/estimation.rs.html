@@ -27,7 +27,7 @@
 <a href=#27 id=27 data-nosnippet>27</a>    cmp::{max, min},
 <a href=#28 id=28 data-nosnippet>28</a>    collections::HashSet,
 <a href=#29 id=29 data-nosnippet>29</a>    fmt::Display,
-<a href=#30 id=30 data-nosnippet>30</a>    ops::{Mul, Shl},
+<a href=#30 id=30 data-nosnippet>30</a>    ops::Shl,
 <a href=#31 id=31 data-nosnippet>31</a>};
 <a href=#32 id=32 data-nosnippet>32</a>
 <a href=#33 id=33 data-nosnippet>33</a><span class="kw">enum </span>SponsoredType {
@@ -397,191 +397,193 @@
 <a href=#397 id=397 data-nosnippet>397</a>        <span class="kw">if </span>!request.has_gas_limit {
 <a href=#398 id=398 data-nosnippet>398</a>            executed.gas_used = estimated_gas_limit;
 <a href=#399 id=399 data-nosnippet>399</a>            executed.gas_charged = estimated_gas_limit;
-<a href=#400 id=400 data-nosnippet>400</a>            executed.fee = estimated_gas_limit.mul(tx.gas_price());
-<a href=#401 id=401 data-nosnippet>401</a>        }
-<a href=#402 id=402 data-nosnippet>402</a>
-<a href=#403 id=403 data-nosnippet>403</a>        <span class="comment">// If we don't charge gas, recheck the current gas_fee is ok for
-<a href=#404 id=404 data-nosnippet>404</a>        // sponsorship.
-<a href=#405 id=405 data-nosnippet>405</a>        </span><span class="kw">if </span>!request.charge_gas()
-<a href=#406 id=406 data-nosnippet>406</a>            &amp;&amp; request.has_gas_price
-<a href=#407 id=407 data-nosnippet>407</a>            &amp;&amp; executed.gas_sponsor_paid
-<a href=#408 id=408 data-nosnippet>408</a>        {
-<a href=#409 id=409 data-nosnippet>409</a>            <span class="kw">let </span>contract = gas_sponsored_contract_if_eligible_sender.unwrap();
-<a href=#410 id=410 data-nosnippet>410</a>            <span class="kw">let </span>enough_balance = executed.fee
-<a href=#411 id=411 data-nosnippet>411</a>                &lt;= <span class="self">self</span>.state.sponsor_balance_for_gas(<span class="kw-2">&amp;</span>contract)<span class="question-mark">?</span>;
-<a href=#412 id=412 data-nosnippet>412</a>            <span class="kw">let </span>enough_bound =
-<a href=#413 id=413 data-nosnippet>413</a>                executed.fee &lt;= <span class="self">self</span>.state.sponsor_gas_bound(<span class="kw-2">&amp;</span>contract)<span class="question-mark">?</span>;
-<a href=#414 id=414 data-nosnippet>414</a>            <span class="kw">if </span>!(enough_balance &amp;&amp; enough_bound) {
-<a href=#415 id=415 data-nosnippet>415</a>                <span class="macro">debug!</span>(<span class="string">"Transaction estimate unset \"sponsor_paid\" because of not enough sponsor balance / gas bound."</span>);
-<a href=#416 id=416 data-nosnippet>416</a>                executed.gas_sponsor_paid = <span class="bool-val">false</span>;
-<a href=#417 id=417 data-nosnippet>417</a>            }
-<a href=#418 id=418 data-nosnippet>418</a>        }
-<a href=#419 id=419 data-nosnippet>419</a>
-<a href=#420 id=420 data-nosnippet>420</a>        <span class="comment">// If the request has a sender, recheck the balance requirement matched.
-<a href=#421 id=421 data-nosnippet>421</a>        </span><span class="kw">if </span>request.has_sender {
-<a href=#422 id=422 data-nosnippet>422</a>            <span class="comment">// Unwrap safety: in given TransactOptions, this value must be
-<a href=#423 id=423 data-nosnippet>423</a>            // `Some(_)`.
-<a href=#424 id=424 data-nosnippet>424</a>            </span><span class="kw">let </span>gas_fee =
-<a href=#425 id=425 data-nosnippet>425</a>                <span class="kw">if </span>request.recheck_gas_fee() &amp;&amp; !executed.gas_sponsor_paid {
-<a href=#426 id=426 data-nosnippet>426</a>                    estimated_gas_limit.saturating_mul(<span class="kw-2">*</span>tx.gas_price())
-<a href=#427 id=427 data-nosnippet>427</a>                } <span class="kw">else </span>{
-<a href=#428 id=428 data-nosnippet>428</a>                    <span class="number">0</span>.into()
-<a href=#429 id=429 data-nosnippet>429</a>                };
-<a href=#430 id=430 data-nosnippet>430</a>            <span class="kw">let </span>storage_collateral = <span class="kw">if </span>!executed.storage_sponsor_paid {
-<a href=#431 id=431 data-nosnippet>431</a>                U256::from(estimated_storage_limit)
-<a href=#432 id=432 data-nosnippet>432</a>                    * <span class="kw-2">*</span>DRIPS_PER_STORAGE_COLLATERAL_UNIT
-<a href=#433 id=433 data-nosnippet>433</a>            } <span class="kw">else </span>{
-<a href=#434 id=434 data-nosnippet>434</a>                <span class="number">0</span>.into()
-<a href=#435 id=435 data-nosnippet>435</a>            };
-<a href=#436 id=436 data-nosnippet>436</a>            <span class="kw">let </span>value_and_fee = tx
-<a href=#437 id=437 data-nosnippet>437</a>                .value()
-<a href=#438 id=438 data-nosnippet>438</a>                .saturating_add(gas_fee)
-<a href=#439 id=439 data-nosnippet>439</a>                .saturating_add(storage_collateral);
-<a href=#440 id=440 data-nosnippet>440</a>            <span class="kw">let </span>balance = <span class="self">self</span>.state.balance(<span class="kw-2">&amp;</span>tx.sender())<span class="question-mark">?</span>;
-<a href=#441 id=441 data-nosnippet>441</a>            <span class="kw">if </span>balance &lt; value_and_fee {
-<a href=#442 id=442 data-nosnippet>442</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>((
-<a href=#443 id=443 data-nosnippet>443</a>                    ExecutionOutcome::ExecutionErrorBumpNonce(
-<a href=#444 id=444 data-nosnippet>444</a>                        ExecutionError::NotEnoughCash {
-<a href=#445 id=445 data-nosnippet>445</a>                            required: value_and_fee.into(),
-<a href=#446 id=446 data-nosnippet>446</a>                            got: balance.into(),
-<a href=#447 id=447 data-nosnippet>447</a>                            actual_gas_cost: min(balance, gas_fee),
-<a href=#448 id=448 data-nosnippet>448</a>                            max_storage_limit_cost: storage_collateral,
-<a href=#449 id=449 data-nosnippet>449</a>                        },
-<a href=#450 id=450 data-nosnippet>450</a>                        executed,
-<a href=#451 id=451 data-nosnippet>451</a>                    ),
-<a href=#452 id=452 data-nosnippet>452</a>                    estimation,
-<a href=#453 id=453 data-nosnippet>453</a>                ));
-<a href=#454 id=454 data-nosnippet>454</a>            }
-<a href=#455 id=455 data-nosnippet>455</a>        }
-<a href=#456 id=456 data-nosnippet>456</a>
-<a href=#457 id=457 data-nosnippet>457</a>        <span class="kw">if </span>request.has_storage_limit {
-<a href=#458 id=458 data-nosnippet>458</a>            <span class="kw">let </span>storage_limit = tx.storage_limit().unwrap();
-<a href=#459 id=459 data-nosnippet>459</a>            <span class="kw">if </span>storage_limit &lt; estimated_storage_limit {
-<a href=#460 id=460 data-nosnippet>460</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>((
-<a href=#461 id=461 data-nosnippet>461</a>                    ExecutionOutcome::ExecutionErrorBumpNonce(
-<a href=#462 id=462 data-nosnippet>462</a>                        ExecutionError::VmError(vm::Error::ExceedStorageLimit),
-<a href=#463 id=463 data-nosnippet>463</a>                        executed,
-<a href=#464 id=464 data-nosnippet>464</a>                    ),
-<a href=#465 id=465 data-nosnippet>465</a>                    estimation,
-<a href=#466 id=466 data-nosnippet>466</a>                ));
-<a href=#467 id=467 data-nosnippet>467</a>            }
-<a href=#468 id=468 data-nosnippet>468</a>        }
-<a href=#469 id=469 data-nosnippet>469</a>
-<a href=#470 id=470 data-nosnippet>470</a>        <span class="comment">// Revise the gas used in result, if we estimate the transaction with a
-<a href=#471 id=471 data-nosnippet>471</a>        // default large enough gas.
-<a href=#472 id=472 data-nosnippet>472</a>        </span><span class="kw">if </span>!request.has_gas_limit {
-<a href=#473 id=473 data-nosnippet>473</a>            executed.gas_charged = max(
-<a href=#474 id=474 data-nosnippet>474</a>                estimated_gas_limit - estimated_gas_limit / <span class="number">4</span>,
-<a href=#475 id=475 data-nosnippet>475</a>                executed.gas_used,
-<a href=#476 id=476 data-nosnippet>476</a>            );
-<a href=#477 id=477 data-nosnippet>477</a>            executed.fee = executed.gas_charged.saturating_mul(<span class="kw-2">*</span>tx.gas_price());
-<a href=#478 id=478 data-nosnippet>478</a>        }
-<a href=#479 id=479 data-nosnippet>479</a>
-<a href=#480 id=480 data-nosnippet>480</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>((ExecutionOutcome::Finished(executed), estimation));
-<a href=#481 id=481 data-nosnippet>481</a>    }
-<a href=#482 id=482 data-nosnippet>482</a>}
-<a href=#483 id=483 data-nosnippet>483</a>
-<a href=#484 id=484 data-nosnippet>484</a><span class="kw">fn </span>estimated_gas_limit(executed: <span class="kw-2">&amp;</span>Executed, tx: <span class="kw-2">&amp;</span>SignedTransaction) -&gt; U256 {
-<a href=#485 id=485 data-nosnippet>485</a>    <span class="attr">#[cfg(not(feature = <span class="string">"align_evm"</span>))]
-<a href=#486 id=486 data-nosnippet>486</a>    </span><span class="kw">let </span>cip130_min_gas_limit = U256::from(tx.data().len() * <span class="number">100</span>);
-<a href=#487 id=487 data-nosnippet>487</a>    <span class="attr">#[cfg(feature = <span class="string">"align_evm"</span>)]
-<a href=#488 id=488 data-nosnippet>488</a>    </span><span class="kw">let </span>cip130_min_gas_limit = U256::zero();
-<a href=#489 id=489 data-nosnippet>489</a>
-<a href=#490 id=490 data-nosnippet>490</a>    <span class="kw">let </span>eip7623_gas_limit = <span class="number">21000
-<a href=#491 id=491 data-nosnippet>491</a>        </span>+ tx.data()
-<a href=#492 id=492 data-nosnippet>492</a>            .iter()
-<a href=#493 id=493 data-nosnippet>493</a>            .map(|<span class="kw-2">&amp;</span>x| <span class="kw">if </span>x == <span class="number">0 </span>{ <span class="number">10 </span>} <span class="kw">else </span>{ <span class="number">40 </span>})
-<a href=#494 id=494 data-nosnippet>494</a>            .sum::&lt;u64&gt;();
-<a href=#495 id=495 data-nosnippet>495</a>    <span class="kw">let </span>estimated =
-<a href=#496 id=496 data-nosnippet>496</a>        executed.ext_result.get::&lt;GasLimitEstimationKey&gt;().unwrap() * <span class="number">7 </span>/ <span class="number">6
-<a href=#497 id=497 data-nosnippet>497</a>            </span>+ executed.base_gas;
-<a href=#498 id=498 data-nosnippet>498</a>    U256::max(
-<a href=#499 id=499 data-nosnippet>499</a>        eip7623_gas_limit.into(),
-<a href=#500 id=500 data-nosnippet>500</a>        U256::max(estimated, cip130_min_gas_limit),
-<a href=#501 id=501 data-nosnippet>501</a>    )
-<a href=#502 id=502 data-nosnippet>502</a>}
-<a href=#503 id=503 data-nosnippet>503</a>
-<a href=#504 id=504 data-nosnippet>504</a><span class="kw">fn </span>storage_limit(executed: <span class="kw-2">&amp;</span>Executed) -&gt; u64 {
-<a href=#505 id=505 data-nosnippet>505</a>    executed
-<a href=#506 id=506 data-nosnippet>506</a>        .storage_collateralized
-<a href=#507 id=507 data-nosnippet>507</a>        .first()
-<a href=#508 id=508 data-nosnippet>508</a>        .map_or(<span class="number">0</span>, |x| x.collaterals.as_u64())
-<a href=#509 id=509 data-nosnippet>509</a>}
-<a href=#510 id=510 data-nosnippet>510</a>
-<a href=#511 id=511 data-nosnippet>511</a><span class="kw">pub fn </span>decode_error&lt;F, Addr: Display&gt;(
-<a href=#512 id=512 data-nosnippet>512</a>    executed: <span class="kw-2">&amp;</span>Executed, format_address: F,
-<a href=#513 id=513 data-nosnippet>513</a>) -&gt; (String, String, Vec&lt;String&gt;)
-<a href=#514 id=514 data-nosnippet>514</a><span class="kw">where </span>F: Fn(<span class="kw-2">&amp;</span>Address) -&gt; Addr {
-<a href=#515 id=515 data-nosnippet>515</a>    <span class="comment">// When a revert exception happens, there is usually an error in
-<a href=#516 id=516 data-nosnippet>516</a>    // the sub-calls. So we return the trace
-<a href=#517 id=517 data-nosnippet>517</a>    // information for debugging contract.
-<a href=#518 id=518 data-nosnippet>518</a>    </span><span class="kw">let </span>errors = ErrorUnwind::from_executed(executed)
-<a href=#519 id=519 data-nosnippet>519</a>        .errors
-<a href=#520 id=520 data-nosnippet>520</a>        .iter()
-<a href=#521 id=521 data-nosnippet>521</a>        .map(|(addr, error)| <span class="macro">format!</span>(<span class="string">"{}: {}"</span>, format_address(addr), error))
-<a href=#522 id=522 data-nosnippet>522</a>        .collect::&lt;Vec&lt;String&gt;&gt;();
-<a href=#523 id=523 data-nosnippet>523</a>
-<a href=#524 id=524 data-nosnippet>524</a>    <span class="comment">// Decode revert error
-<a href=#525 id=525 data-nosnippet>525</a>    </span><span class="kw">let </span>revert_error = string_revert_reason_decode(<span class="kw-2">&amp;</span>executed.output);
-<a href=#526 id=526 data-nosnippet>526</a>    <span class="kw">let </span>revert_error = <span class="kw">if </span>!revert_error.is_empty() {
-<a href=#527 id=527 data-nosnippet>527</a>        <span class="macro">format!</span>(<span class="string">": {}"</span>, revert_error)
-<a href=#528 id=528 data-nosnippet>528</a>    } <span class="kw">else </span>{
-<a href=#529 id=529 data-nosnippet>529</a>        <span class="macro">format!</span>(<span class="string">""</span>)
-<a href=#530 id=530 data-nosnippet>530</a>    };
-<a href=#531 id=531 data-nosnippet>531</a>
-<a href=#532 id=532 data-nosnippet>532</a>    <span class="comment">// Try to fetch the innermost error.
-<a href=#533 id=533 data-nosnippet>533</a>    </span><span class="kw">let </span>innermost_error = <span class="kw">if </span>errors.len() &gt; <span class="number">0 </span>{
-<a href=#534 id=534 data-nosnippet>534</a>        <span class="macro">format!</span>(<span class="string">" Innermost error is at {}."</span>, errors[<span class="number">0</span>])
-<a href=#535 id=535 data-nosnippet>535</a>    } <span class="kw">else </span>{
-<a href=#536 id=536 data-nosnippet>536</a>        String::default()
-<a href=#537 id=537 data-nosnippet>537</a>    };
-<a href=#538 id=538 data-nosnippet>538</a>    (revert_error, innermost_error, errors)
-<a href=#539 id=539 data-nosnippet>539</a>}
-<a href=#540 id=540 data-nosnippet>540</a>
-<a href=#541 id=541 data-nosnippet>541</a><span class="attr">#[derive(Debug, Clone, Copy)]
-<a href=#542 id=542 data-nosnippet>542</a></span><span class="kw">pub struct </span>EstimateRequest {
-<a href=#543 id=543 data-nosnippet>543</a>    <span class="kw">pub </span>has_sender: bool,
-<a href=#544 id=544 data-nosnippet>544</a>    <span class="kw">pub </span>has_gas_limit: bool,
-<a href=#545 id=545 data-nosnippet>545</a>    <span class="kw">pub </span>has_gas_price: bool,
-<a href=#546 id=546 data-nosnippet>546</a>    <span class="kw">pub </span>has_nonce: bool,
-<a href=#547 id=547 data-nosnippet>547</a>    <span class="kw">pub </span>has_storage_limit: bool,
-<a href=#548 id=548 data-nosnippet>548</a>    <span class="kw">pub </span>collect_access_list: bool,
-<a href=#549 id=549 data-nosnippet>549</a>}
-<a href=#550 id=550 data-nosnippet>550</a>
-<a href=#551 id=551 data-nosnippet>551</a><span class="kw">impl </span>EstimateRequest {
-<a href=#552 id=552 data-nosnippet>552</a>    <span class="kw">fn </span>recheck_gas_fee(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool { <span class="self">self</span>.has_sender &amp;&amp; <span class="self">self</span>.has_gas_price }
-<a href=#553 id=553 data-nosnippet>553</a>
-<a href=#554 id=554 data-nosnippet>554</a>    <span class="kw">fn </span>charge_gas(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#555 id=555 data-nosnippet>555</a>        <span class="self">self</span>.has_sender &amp;&amp; <span class="self">self</span>.has_gas_limit &amp;&amp; <span class="self">self</span>.has_gas_price
-<a href=#556 id=556 data-nosnippet>556</a>    }
-<a href=#557 id=557 data-nosnippet>557</a>
-<a href=#558 id=558 data-nosnippet>558</a>    <span class="kw">fn </span>transact_settings(
-<a href=#559 id=559 data-nosnippet>559</a>        <span class="self">self</span>, charge_collateral: ChargeCollateral,
-<a href=#560 id=560 data-nosnippet>560</a>    ) -&gt; TransactSettings {
-<a href=#561 id=561 data-nosnippet>561</a>        TransactSettings {
-<a href=#562 id=562 data-nosnippet>562</a>            charge_collateral,
-<a href=#563 id=563 data-nosnippet>563</a>            charge_gas: <span class="self">self</span>.charge_gas(),
-<a href=#564 id=564 data-nosnippet>564</a>            check_epoch_bound: <span class="bool-val">false</span>,
-<a href=#565 id=565 data-nosnippet>565</a>            check_base_price: <span class="self">self</span>.has_gas_price,
-<a href=#566 id=566 data-nosnippet>566</a>            forbid_eoa_with_code: <span class="bool-val">false</span>,
-<a href=#567 id=567 data-nosnippet>567</a>        }
-<a href=#568 id=568 data-nosnippet>568</a>    }
-<a href=#569 id=569 data-nosnippet>569</a>
-<a href=#570 id=570 data-nosnippet>570</a>    <span class="kw">fn </span>first_pass_options(
-<a href=#571 id=571 data-nosnippet>571</a>        <span class="self">self</span>, access_list_inspector: <span class="prelude-ty">Option</span>&lt;AccessListInspector&gt;,
-<a href=#572 id=572 data-nosnippet>572</a>    ) -&gt; TransactOptions&lt;Observer&gt; {
-<a href=#573 id=573 data-nosnippet>573</a>        <span class="kw">let </span><span class="kw-2">mut </span>observer = Observer::virtual_call();
-<a href=#574 id=574 data-nosnippet>574</a>        observer.access_list_inspector = access_list_inspector;
-<a href=#575 id=575 data-nosnippet>575</a>        TransactOptions {
-<a href=#576 id=576 data-nosnippet>576</a>            observer,
-<a href=#577 id=577 data-nosnippet>577</a>            settings: <span class="self">self</span>.transact_settings(ChargeCollateral::EstimateSender),
-<a href=#578 id=578 data-nosnippet>578</a>        }
-<a href=#579 id=579 data-nosnippet>579</a>    }
-<a href=#580 id=580 data-nosnippet>580</a>
-<a href=#581 id=581 data-nosnippet>581</a>    <span class="kw">pub fn </span>second_pass_options(<span class="self">self</span>) -&gt; TransactOptions&lt;Observer&gt; {
-<a href=#582 id=582 data-nosnippet>582</a>        TransactOptions {
-<a href=#583 id=583 data-nosnippet>583</a>            observer: Observer::virtual_call(),
-<a href=#584 id=584 data-nosnippet>584</a>            settings: <span class="self">self</span>.transact_settings(ChargeCollateral::EstimateSponsor),
-<a href=#585 id=585 data-nosnippet>585</a>        }
-<a href=#586 id=586 data-nosnippet>586</a>    }
-<a href=#587 id=587 data-nosnippet>587</a>}</code></pre></div></section></main></body></html>
+<a href=#400 id=400 data-nosnippet>400</a>            <span class="comment">// Gas was not charged, so the supplied price may exceed what
+<a href=#401 id=401 data-nosnippet>401</a>            // any balance can afford. Match the fee checks below.
+<a href=#402 id=402 data-nosnippet>402</a>            </span>executed.fee = estimated_gas_limit.saturating_mul(<span class="kw-2">*</span>tx.gas_price());
+<a href=#403 id=403 data-nosnippet>403</a>        }
+<a href=#404 id=404 data-nosnippet>404</a>
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="comment">// If we don't charge gas, recheck the current gas_fee is ok for
+<a href=#406 id=406 data-nosnippet>406</a>        // sponsorship.
+<a href=#407 id=407 data-nosnippet>407</a>        </span><span class="kw">if </span>!request.charge_gas()
+<a href=#408 id=408 data-nosnippet>408</a>            &amp;&amp; request.has_gas_price
+<a href=#409 id=409 data-nosnippet>409</a>            &amp;&amp; executed.gas_sponsor_paid
+<a href=#410 id=410 data-nosnippet>410</a>        {
+<a href=#411 id=411 data-nosnippet>411</a>            <span class="kw">let </span>contract = gas_sponsored_contract_if_eligible_sender.unwrap();
+<a href=#412 id=412 data-nosnippet>412</a>            <span class="kw">let </span>enough_balance = executed.fee
+<a href=#413 id=413 data-nosnippet>413</a>                &lt;= <span class="self">self</span>.state.sponsor_balance_for_gas(<span class="kw-2">&amp;</span>contract)<span class="question-mark">?</span>;
+<a href=#414 id=414 data-nosnippet>414</a>            <span class="kw">let </span>enough_bound =
+<a href=#415 id=415 data-nosnippet>415</a>                executed.fee &lt;= <span class="self">self</span>.state.sponsor_gas_bound(<span class="kw-2">&amp;</span>contract)<span class="question-mark">?</span>;
+<a href=#416 id=416 data-nosnippet>416</a>            <span class="kw">if </span>!(enough_balance &amp;&amp; enough_bound) {
+<a href=#417 id=417 data-nosnippet>417</a>                <span class="macro">debug!</span>(<span class="string">"Transaction estimate unset \"sponsor_paid\" because of not enough sponsor balance / gas bound."</span>);
+<a href=#418 id=418 data-nosnippet>418</a>                executed.gas_sponsor_paid = <span class="bool-val">false</span>;
+<a href=#419 id=419 data-nosnippet>419</a>            }
+<a href=#420 id=420 data-nosnippet>420</a>        }
+<a href=#421 id=421 data-nosnippet>421</a>
+<a href=#422 id=422 data-nosnippet>422</a>        <span class="comment">// If the request has a sender, recheck the balance requirement matched.
+<a href=#423 id=423 data-nosnippet>423</a>        </span><span class="kw">if </span>request.has_sender {
+<a href=#424 id=424 data-nosnippet>424</a>            <span class="comment">// Unwrap safety: in given TransactOptions, this value must be
+<a href=#425 id=425 data-nosnippet>425</a>            // `Some(_)`.
+<a href=#426 id=426 data-nosnippet>426</a>            </span><span class="kw">let </span>gas_fee =
+<a href=#427 id=427 data-nosnippet>427</a>                <span class="kw">if </span>request.recheck_gas_fee() &amp;&amp; !executed.gas_sponsor_paid {
+<a href=#428 id=428 data-nosnippet>428</a>                    estimated_gas_limit.saturating_mul(<span class="kw-2">*</span>tx.gas_price())
+<a href=#429 id=429 data-nosnippet>429</a>                } <span class="kw">else </span>{
+<a href=#430 id=430 data-nosnippet>430</a>                    <span class="number">0</span>.into()
+<a href=#431 id=431 data-nosnippet>431</a>                };
+<a href=#432 id=432 data-nosnippet>432</a>            <span class="kw">let </span>storage_collateral = <span class="kw">if </span>!executed.storage_sponsor_paid {
+<a href=#433 id=433 data-nosnippet>433</a>                U256::from(estimated_storage_limit)
+<a href=#434 id=434 data-nosnippet>434</a>                    * <span class="kw-2">*</span>DRIPS_PER_STORAGE_COLLATERAL_UNIT
+<a href=#435 id=435 data-nosnippet>435</a>            } <span class="kw">else </span>{
+<a href=#436 id=436 data-nosnippet>436</a>                <span class="number">0</span>.into()
+<a href=#437 id=437 data-nosnippet>437</a>            };
+<a href=#438 id=438 data-nosnippet>438</a>            <span class="kw">let </span>value_and_fee = tx
+<a href=#439 id=439 data-nosnippet>439</a>                .value()
+<a href=#440 id=440 data-nosnippet>440</a>                .saturating_add(gas_fee)
+<a href=#441 id=441 data-nosnippet>441</a>                .saturating_add(storage_collateral);
+<a href=#442 id=442 data-nosnippet>442</a>            <span class="kw">let </span>balance = <span class="self">self</span>.state.balance(<span class="kw-2">&amp;</span>tx.sender())<span class="question-mark">?</span>;
+<a href=#443 id=443 data-nosnippet>443</a>            <span class="kw">if </span>balance &lt; value_and_fee {
+<a href=#444 id=444 data-nosnippet>444</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>((
+<a href=#445 id=445 data-nosnippet>445</a>                    ExecutionOutcome::ExecutionErrorBumpNonce(
+<a href=#446 id=446 data-nosnippet>446</a>                        ExecutionError::NotEnoughCash {
+<a href=#447 id=447 data-nosnippet>447</a>                            required: value_and_fee.into(),
+<a href=#448 id=448 data-nosnippet>448</a>                            got: balance.into(),
+<a href=#449 id=449 data-nosnippet>449</a>                            actual_gas_cost: min(balance, gas_fee),
+<a href=#450 id=450 data-nosnippet>450</a>                            max_storage_limit_cost: storage_collateral,
+<a href=#451 id=451 data-nosnippet>451</a>                        },
+<a href=#452 id=452 data-nosnippet>452</a>                        executed,
+<a href=#453 id=453 data-nosnippet>453</a>                    ),
+<a href=#454 id=454 data-nosnippet>454</a>                    estimation,
+<a href=#455 id=455 data-nosnippet>455</a>                ));
+<a href=#456 id=456 data-nosnippet>456</a>            }
+<a href=#457 id=457 data-nosnippet>457</a>        }
+<a href=#458 id=458 data-nosnippet>458</a>
+<a href=#459 id=459 data-nosnippet>459</a>        <span class="kw">if </span>request.has_storage_limit {
+<a href=#460 id=460 data-nosnippet>460</a>            <span class="kw">let </span>storage_limit = tx.storage_limit().unwrap();
+<a href=#461 id=461 data-nosnippet>461</a>            <span class="kw">if </span>storage_limit &lt; estimated_storage_limit {
+<a href=#462 id=462 data-nosnippet>462</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>((
+<a href=#463 id=463 data-nosnippet>463</a>                    ExecutionOutcome::ExecutionErrorBumpNonce(
+<a href=#464 id=464 data-nosnippet>464</a>                        ExecutionError::VmError(vm::Error::ExceedStorageLimit),
+<a href=#465 id=465 data-nosnippet>465</a>                        executed,
+<a href=#466 id=466 data-nosnippet>466</a>                    ),
+<a href=#467 id=467 data-nosnippet>467</a>                    estimation,
+<a href=#468 id=468 data-nosnippet>468</a>                ));
+<a href=#469 id=469 data-nosnippet>469</a>            }
+<a href=#470 id=470 data-nosnippet>470</a>        }
+<a href=#471 id=471 data-nosnippet>471</a>
+<a href=#472 id=472 data-nosnippet>472</a>        <span class="comment">// Revise the gas used in result, if we estimate the transaction with a
+<a href=#473 id=473 data-nosnippet>473</a>        // default large enough gas.
+<a href=#474 id=474 data-nosnippet>474</a>        </span><span class="kw">if </span>!request.has_gas_limit {
+<a href=#475 id=475 data-nosnippet>475</a>            executed.gas_charged = max(
+<a href=#476 id=476 data-nosnippet>476</a>                estimated_gas_limit - estimated_gas_limit / <span class="number">4</span>,
+<a href=#477 id=477 data-nosnippet>477</a>                executed.gas_used,
+<a href=#478 id=478 data-nosnippet>478</a>            );
+<a href=#479 id=479 data-nosnippet>479</a>            executed.fee = executed.gas_charged.saturating_mul(<span class="kw-2">*</span>tx.gas_price());
+<a href=#480 id=480 data-nosnippet>480</a>        }
+<a href=#481 id=481 data-nosnippet>481</a>
+<a href=#482 id=482 data-nosnippet>482</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>((ExecutionOutcome::Finished(executed), estimation));
+<a href=#483 id=483 data-nosnippet>483</a>    }
+<a href=#484 id=484 data-nosnippet>484</a>}
+<a href=#485 id=485 data-nosnippet>485</a>
+<a href=#486 id=486 data-nosnippet>486</a><span class="kw">fn </span>estimated_gas_limit(executed: <span class="kw-2">&amp;</span>Executed, tx: <span class="kw-2">&amp;</span>SignedTransaction) -&gt; U256 {
+<a href=#487 id=487 data-nosnippet>487</a>    <span class="attr">#[cfg(not(feature = <span class="string">"align_evm"</span>))]
+<a href=#488 id=488 data-nosnippet>488</a>    </span><span class="kw">let </span>cip130_min_gas_limit = U256::from(tx.data().len() * <span class="number">100</span>);
+<a href=#489 id=489 data-nosnippet>489</a>    <span class="attr">#[cfg(feature = <span class="string">"align_evm"</span>)]
+<a href=#490 id=490 data-nosnippet>490</a>    </span><span class="kw">let </span>cip130_min_gas_limit = U256::zero();
+<a href=#491 id=491 data-nosnippet>491</a>
+<a href=#492 id=492 data-nosnippet>492</a>    <span class="kw">let </span>eip7623_gas_limit = <span class="number">21000
+<a href=#493 id=493 data-nosnippet>493</a>        </span>+ tx.data()
+<a href=#494 id=494 data-nosnippet>494</a>            .iter()
+<a href=#495 id=495 data-nosnippet>495</a>            .map(|<span class="kw-2">&amp;</span>x| <span class="kw">if </span>x == <span class="number">0 </span>{ <span class="number">10 </span>} <span class="kw">else </span>{ <span class="number">40 </span>})
+<a href=#496 id=496 data-nosnippet>496</a>            .sum::&lt;u64&gt;();
+<a href=#497 id=497 data-nosnippet>497</a>    <span class="kw">let </span>estimated =
+<a href=#498 id=498 data-nosnippet>498</a>        executed.ext_result.get::&lt;GasLimitEstimationKey&gt;().unwrap() * <span class="number">7 </span>/ <span class="number">6
+<a href=#499 id=499 data-nosnippet>499</a>            </span>+ executed.base_gas;
+<a href=#500 id=500 data-nosnippet>500</a>    U256::max(
+<a href=#501 id=501 data-nosnippet>501</a>        eip7623_gas_limit.into(),
+<a href=#502 id=502 data-nosnippet>502</a>        U256::max(estimated, cip130_min_gas_limit),
+<a href=#503 id=503 data-nosnippet>503</a>    )
+<a href=#504 id=504 data-nosnippet>504</a>}
+<a href=#505 id=505 data-nosnippet>505</a>
+<a href=#506 id=506 data-nosnippet>506</a><span class="kw">fn </span>storage_limit(executed: <span class="kw-2">&amp;</span>Executed) -&gt; u64 {
+<a href=#507 id=507 data-nosnippet>507</a>    executed
+<a href=#508 id=508 data-nosnippet>508</a>        .storage_collateralized
+<a href=#509 id=509 data-nosnippet>509</a>        .first()
+<a href=#510 id=510 data-nosnippet>510</a>        .map_or(<span class="number">0</span>, |x| x.collaterals.as_u64())
+<a href=#511 id=511 data-nosnippet>511</a>}
+<a href=#512 id=512 data-nosnippet>512</a>
+<a href=#513 id=513 data-nosnippet>513</a><span class="kw">pub fn </span>decode_error&lt;F, Addr: Display&gt;(
+<a href=#514 id=514 data-nosnippet>514</a>    executed: <span class="kw-2">&amp;</span>Executed, format_address: F,
+<a href=#515 id=515 data-nosnippet>515</a>) -&gt; (String, String, Vec&lt;String&gt;)
+<a href=#516 id=516 data-nosnippet>516</a><span class="kw">where </span>F: Fn(<span class="kw-2">&amp;</span>Address) -&gt; Addr {
+<a href=#517 id=517 data-nosnippet>517</a>    <span class="comment">// When a revert exception happens, there is usually an error in
+<a href=#518 id=518 data-nosnippet>518</a>    // the sub-calls. So we return the trace
+<a href=#519 id=519 data-nosnippet>519</a>    // information for debugging contract.
+<a href=#520 id=520 data-nosnippet>520</a>    </span><span class="kw">let </span>errors = ErrorUnwind::from_executed(executed)
+<a href=#521 id=521 data-nosnippet>521</a>        .errors
+<a href=#522 id=522 data-nosnippet>522</a>        .iter()
+<a href=#523 id=523 data-nosnippet>523</a>        .map(|(addr, error)| <span class="macro">format!</span>(<span class="string">"{}: {}"</span>, format_address(addr), error))
+<a href=#524 id=524 data-nosnippet>524</a>        .collect::&lt;Vec&lt;String&gt;&gt;();
+<a href=#525 id=525 data-nosnippet>525</a>
+<a href=#526 id=526 data-nosnippet>526</a>    <span class="comment">// Decode revert error
+<a href=#527 id=527 data-nosnippet>527</a>    </span><span class="kw">let </span>revert_error = string_revert_reason_decode(<span class="kw-2">&amp;</span>executed.output);
+<a href=#528 id=528 data-nosnippet>528</a>    <span class="kw">let </span>revert_error = <span class="kw">if </span>!revert_error.is_empty() {
+<a href=#529 id=529 data-nosnippet>529</a>        <span class="macro">format!</span>(<span class="string">": {}"</span>, revert_error)
+<a href=#530 id=530 data-nosnippet>530</a>    } <span class="kw">else </span>{
+<a href=#531 id=531 data-nosnippet>531</a>        <span class="macro">format!</span>(<span class="string">""</span>)
+<a href=#532 id=532 data-nosnippet>532</a>    };
+<a href=#533 id=533 data-nosnippet>533</a>
+<a href=#534 id=534 data-nosnippet>534</a>    <span class="comment">// Try to fetch the innermost error.
+<a href=#535 id=535 data-nosnippet>535</a>    </span><span class="kw">let </span>innermost_error = <span class="kw">if </span>errors.len() &gt; <span class="number">0 </span>{
+<a href=#536 id=536 data-nosnippet>536</a>        <span class="macro">format!</span>(<span class="string">" Innermost error is at {}."</span>, errors[<span class="number">0</span>])
+<a href=#537 id=537 data-nosnippet>537</a>    } <span class="kw">else </span>{
+<a href=#538 id=538 data-nosnippet>538</a>        String::default()
+<a href=#539 id=539 data-nosnippet>539</a>    };
+<a href=#540 id=540 data-nosnippet>540</a>    (revert_error, innermost_error, errors)
+<a href=#541 id=541 data-nosnippet>541</a>}
+<a href=#542 id=542 data-nosnippet>542</a>
+<a href=#543 id=543 data-nosnippet>543</a><span class="attr">#[derive(Debug, Clone, Copy)]
+<a href=#544 id=544 data-nosnippet>544</a></span><span class="kw">pub struct </span>EstimateRequest {
+<a href=#545 id=545 data-nosnippet>545</a>    <span class="kw">pub </span>has_sender: bool,
+<a href=#546 id=546 data-nosnippet>546</a>    <span class="kw">pub </span>has_gas_limit: bool,
+<a href=#547 id=547 data-nosnippet>547</a>    <span class="kw">pub </span>has_gas_price: bool,
+<a href=#548 id=548 data-nosnippet>548</a>    <span class="kw">pub </span>has_nonce: bool,
+<a href=#549 id=549 data-nosnippet>549</a>    <span class="kw">pub </span>has_storage_limit: bool,
+<a href=#550 id=550 data-nosnippet>550</a>    <span class="kw">pub </span>collect_access_list: bool,
+<a href=#551 id=551 data-nosnippet>551</a>}
+<a href=#552 id=552 data-nosnippet>552</a>
+<a href=#553 id=553 data-nosnippet>553</a><span class="kw">impl </span>EstimateRequest {
+<a href=#554 id=554 data-nosnippet>554</a>    <span class="kw">fn </span>recheck_gas_fee(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool { <span class="self">self</span>.has_sender &amp;&amp; <span class="self">self</span>.has_gas_price }
+<a href=#555 id=555 data-nosnippet>555</a>
+<a href=#556 id=556 data-nosnippet>556</a>    <span class="kw">fn </span>charge_gas(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#557 id=557 data-nosnippet>557</a>        <span class="self">self</span>.has_sender &amp;&amp; <span class="self">self</span>.has_gas_limit &amp;&amp; <span class="self">self</span>.has_gas_price
+<a href=#558 id=558 data-nosnippet>558</a>    }
+<a href=#559 id=559 data-nosnippet>559</a>
+<a href=#560 id=560 data-nosnippet>560</a>    <span class="kw">fn </span>transact_settings(
+<a href=#561 id=561 data-nosnippet>561</a>        <span class="self">self</span>, charge_collateral: ChargeCollateral,
+<a href=#562 id=562 data-nosnippet>562</a>    ) -&gt; TransactSettings {
+<a href=#563 id=563 data-nosnippet>563</a>        TransactSettings {
+<a href=#564 id=564 data-nosnippet>564</a>            charge_collateral,
+<a href=#565 id=565 data-nosnippet>565</a>            charge_gas: <span class="self">self</span>.charge_gas(),
+<a href=#566 id=566 data-nosnippet>566</a>            check_epoch_bound: <span class="bool-val">false</span>,
+<a href=#567 id=567 data-nosnippet>567</a>            check_base_price: <span class="self">self</span>.has_gas_price,
+<a href=#568 id=568 data-nosnippet>568</a>            forbid_eoa_with_code: <span class="bool-val">false</span>,
+<a href=#569 id=569 data-nosnippet>569</a>        }
+<a href=#570 id=570 data-nosnippet>570</a>    }
+<a href=#571 id=571 data-nosnippet>571</a>
+<a href=#572 id=572 data-nosnippet>572</a>    <span class="kw">fn </span>first_pass_options(
+<a href=#573 id=573 data-nosnippet>573</a>        <span class="self">self</span>, access_list_inspector: <span class="prelude-ty">Option</span>&lt;AccessListInspector&gt;,
+<a href=#574 id=574 data-nosnippet>574</a>    ) -&gt; TransactOptions&lt;Observer&gt; {
+<a href=#575 id=575 data-nosnippet>575</a>        <span class="kw">let </span><span class="kw-2">mut </span>observer = Observer::virtual_call();
+<a href=#576 id=576 data-nosnippet>576</a>        observer.access_list_inspector = access_list_inspector;
+<a href=#577 id=577 data-nosnippet>577</a>        TransactOptions {
+<a href=#578 id=578 data-nosnippet>578</a>            observer,
+<a href=#579 id=579 data-nosnippet>579</a>            settings: <span class="self">self</span>.transact_settings(ChargeCollateral::EstimateSender),
+<a href=#580 id=580 data-nosnippet>580</a>        }
+<a href=#581 id=581 data-nosnippet>581</a>    }
+<a href=#582 id=582 data-nosnippet>582</a>
+<a href=#583 id=583 data-nosnippet>583</a>    <span class="kw">pub fn </span>second_pass_options(<span class="self">self</span>) -&gt; TransactOptions&lt;Observer&gt; {
+<a href=#584 id=584 data-nosnippet>584</a>        TransactOptions {
+<a href=#585 id=585 data-nosnippet>585</a>            observer: Observer::virtual_call(),
+<a href=#586 id=586 data-nosnippet>586</a>            settings: <span class="self">self</span>.transact_settings(ChargeCollateral::EstimateSponsor),
+<a href=#587 id=587 data-nosnippet>587</a>        }
+<a href=#588 id=588 data-nosnippet>588</a>    }
+<a href=#589 id=589 data-nosnippet>589</a>}</code></pre></div></section></main></body></html>
