@@ -8,7 +8,7 @@ keywords = ["bitset", "container", "data-structures", "hierarchical"]
 categories = ["data-structures"]
 license = "MIT/Apache-2.0"
 authors = ["csheratt"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 atom = { workspace = true }

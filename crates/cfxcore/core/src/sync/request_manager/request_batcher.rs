@@ -161,7 +161,7 @@ impl<T: Clone> DelayBucket<T> {
     /// The delay is the average of all requests in this bucket.
     fn batch_iter(
         &self, batch_size: usize,
-    ) -> impl Iterator<Item = (Duration, Vec<T>)> {
+    ) -> impl Iterator<Item = (Duration, Vec<T>)> + use<T> {
         let mut batches = Vec::new();
         for (delay_sum, bucket) in &self.buckets {
             if bucket.is_empty() {

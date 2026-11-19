@@ -157,7 +157,7 @@ macro_rules! build_lookup {
 }
 
 macro_rules! init_lookup_params {
-    (pow: $pow:expr, $max:expr) => {{
+    (pow: $pow:expr_2021, $max:expr_2021) => {{
         LookupParam {
             pow: $pow,
             max: $max,
@@ -168,7 +168,7 @@ macro_rules! init_lookup_params {
 }
 
 macro_rules! build_lookup_params {
-    ($last_param:ident, $last_build:ident, $max:expr) => {{
+    ($last_param:ident, $last_build:ident, $max:expr_2021) => {{
         LookupParam {
             pow: $last_param.pow,
             max: $max,

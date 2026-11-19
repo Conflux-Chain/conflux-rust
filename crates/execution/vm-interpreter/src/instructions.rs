@@ -28,7 +28,7 @@ macro_rules! enum_with_from_u8 {
 	(
 		$( #[$enum_attr:meta] )*
 		pub enum $name:ident {
-			$( $( #[$variant_attr:meta] )* $variant:ident = $discriminator:expr ),+,
+			$( $( #[$variant_attr:meta] )* $variant:ident = $discriminator:expr_2021 ),+,
 		}
 	) => {
 		$( #[$enum_attr] )*

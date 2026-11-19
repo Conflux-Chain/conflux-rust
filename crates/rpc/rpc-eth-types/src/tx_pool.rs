@@ -187,7 +187,7 @@ impl<T> TxpoolContent<T> {
     /// specific sender
     pub fn pending_transactions_from(
         &self, sender: &Address,
-    ) -> impl Iterator<Item = &T> {
+    ) -> impl Iterator<Item = &T> + use<'_, T> {
         self.pending
             .get(sender)
             .into_iter()
@@ -198,7 +198,7 @@ impl<T> TxpoolContent<T> {
     /// specific sender
     pub fn queued_transactions_from(
         &self, sender: &Address,
-    ) -> impl Iterator<Item = &T> {
+    ) -> impl Iterator<Item = &T> + use<'_, T> {
         self.queued
             .get(sender)
             .into_iter()
@@ -225,7 +225,7 @@ impl<T> TxpoolContent<T> {
     /// from a specific sender
     pub fn into_pending_transactions_from(
         mut self, sender: &Address,
-    ) -> impl Iterator<Item = T> {
+    ) -> impl Iterator<Item = T> + use<T> {
         self.pending
             .remove(sender)
             .into_iter()
@@ -236,7 +236,7 @@ impl<T> TxpoolContent<T> {
     /// from a specific sender
     pub fn into_queued_transactions_from(
         mut self, sender: &Address,
-    ) -> impl Iterator<Item = T> {
+    ) -> impl Iterator<Item = T> + use<T> {
         self.queued
             .remove(sender)
             .into_iter()

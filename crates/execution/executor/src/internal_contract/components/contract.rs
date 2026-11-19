@@ -83,17 +83,17 @@ fn load_solidity_fn<'a>(
 /// A marco to implement an internal contract.
 #[macro_export]
 macro_rules! make_solidity_contract {
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, "placeholder"); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr_2021, "placeholder"); ) => {
         $crate::make_solidity_contract! {
             $(#[$attr])* $visibility struct $name ($addr, || Default::default(), initialize: |_: &CommonParams| u64::MAX, is_active: |_: &Spec| false);
         }
     };
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, $gen_table:expr, "active_at_genesis"); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr_2021, $gen_table:expr_2021, "active_at_genesis"); ) => {
         $crate::make_solidity_contract! {
             $(#[$attr])* $visibility struct $name ($addr, $gen_table, initialize: |_: &CommonParams| 0u64, is_active: |_: &Spec| true);
         }
     };
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, $gen_table:expr, initialize: $init:expr, is_active: $is_active:expr); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr_2021, $gen_table:expr_2021, initialize: $init:expr_2021, is_active: $is_active:expr_2021); ) => {
         $(#[$attr])*
         $visibility struct $name {
             function_table: SolFnTable

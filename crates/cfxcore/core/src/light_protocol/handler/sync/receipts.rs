@@ -87,7 +87,7 @@ impl Receipts {
     #[inline]
     pub fn request(
         &self, epoch: u64,
-    ) -> impl Future<Output = Result<Vec<BlockReceipts>>> {
+    ) -> impl Future<Output = Result<Vec<BlockReceipts>>> + use<> {
         let mut verified = self.verified.write();
 
         if epoch == 0 {

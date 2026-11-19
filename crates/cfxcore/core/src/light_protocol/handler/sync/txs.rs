@@ -78,7 +78,7 @@ impl Txs {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, hash: H256,
-    ) -> impl Future<Output = Result<SignedTransaction>> {
+    ) -> impl Future<Output = Result<SignedTransaction>> + use<> {
         let mut verified = self.verified.write();
 
         if !verified.contains_key(&hash) {

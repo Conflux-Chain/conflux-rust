@@ -99,7 +99,7 @@ impl StateRoots {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, epoch: u64,
-    ) -> impl Future<Output = Result<StateRoot>> {
+    ) -> impl Future<Output = Result<StateRoot>> + use<> {
         let mut verified = self.verified.write();
 
         if !verified.contains_key(&epoch) {
@@ -245,7 +245,7 @@ impl StateRoots {
         let snapshot_epoch_count = self.snapshot_epoch_count;
 
         match maybe_prev_snapshot_state_root {
-            Some(ref root) => {
+            Some(root) => {
                 // root provided for non-existent epoch
                 if current_epoch <= snapshot_epoch_count {
                     // previous root should not have been provided

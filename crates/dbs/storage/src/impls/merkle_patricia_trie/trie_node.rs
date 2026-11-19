@@ -132,33 +132,39 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 
     unsafe fn add_new_child_unchecked<T>(&mut self, child_index: u8, child: T)
     where ChildrenTableItem<NodeRefT>: WrappedCreateFrom<T, NodeRefT> {
-        ChildrenTableItem::<NodeRefT>::take_from(
-            self.children_table.get_child_mut_unchecked(child_index),
-            child,
-        );
-        *self.children_table.get_children_count_mut() += 1;
+        unsafe {
+            ChildrenTableItem::<NodeRefT>::take_from(
+                self.children_table.get_child_mut_unchecked(child_index),
+                child,
+            );
+            *self.children_table.get_children_count_mut() += 1;
+        }
     }
 
     unsafe fn get_child_mut_unchecked(
         &mut self, child_index: u8,
     ) -> &mut NodeRefT {
-        self.children_table.get_child_mut_unchecked(child_index)
+        unsafe { self.children_table.get_child_mut_unchecked(child_index) }
     }
 
     unsafe fn replace_child_unchecked<T>(&mut self, child_index: u8, child: T)
     where ChildrenTableItem<NodeRefT>: WrappedCreateFrom<T, NodeRefT> {
-        ChildrenTableItem::<NodeRefT>::take_from(
-            self.children_table.get_child_mut_unchecked(child_index),
-            child,
-        );
+        unsafe {
+            ChildrenTableItem::<NodeRefT>::take_from(
+                self.children_table.get_child_mut_unchecked(child_index),
+                child,
+            );
+        }
     }
 
     unsafe fn delete_child_unchecked(&mut self, child_index: u8) {
-        ChildrenTableItem::<NodeRefT>::take_from(
-            self.children_table.get_child_mut_unchecked(child_index),
-            ChildrenTableItem::<NodeRefT>::no_child(),
-        );
-        *self.children_table.get_children_count_mut() -= 1;
+        unsafe {
+            ChildrenTableItem::<NodeRefT>::take_from(
+                self.children_table.get_child_mut_unchecked(child_index),
+                ChildrenTableItem::<NodeRefT>::no_child(),
+            );
+            *self.children_table.get_children_count_mut() -= 1;
+        }
     }
 
     unsafe fn delete_value_unchecked(&mut self) -> Box<[u8]> {

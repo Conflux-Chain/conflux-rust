@@ -7,7 +7,7 @@ repository = "https://github.com/diem/diem"
 homepage = "https://diem.com"
 license = "Apache-2.0"
 publish = false
-edition = "2018"
+edition = "2024"
 
 # Do NOT add any inter-project dependencies.
 # This is to avoid ever having a circular dependency with the diem-logger crate.

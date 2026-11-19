@@ -1709,9 +1709,9 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 callback.send(()).expect("protocol register error");
             }
             NetworkIoMessage::AddTimer {
-                ref protocol,
-                ref delay,
-                ref token,
+                protocol,
+                delay,
+                token,
             } => {
                 let handler_token = {
                     let mut timer_counter = self.timer_counter.write();
@@ -1733,8 +1733,8 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     });
             }
             NetworkIoMessage::DispatchWork {
-                ref protocol,
-                ref work_type,
+                protocol,
+                work_type,
             } => {
                 if let Some(handler) =
                     self.handlers.read().get(protocol).cloned()
@@ -1749,10 +1749,10 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 }
             }
             NetworkIoMessage::HandleProtocolMessage {
-                ref protocol,
+                protocol,
                 peer: _,
-                ref node_id,
-                ref data,
+                node_id,
+                data,
             } => {
                 debug!("Receive ProtocolMsg {:?}", protocol);
                 if let Some(handler) =

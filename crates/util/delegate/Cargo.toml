@@ -11,7 +11,7 @@
 # will likely look very different (and much more reasonable)
 
 [package]
-edition = "2021"
+edition = "2024"
 name = "delegate"
 version = "0.4.2"
 authors = ["Godfrey Chan <godfreykfc@gmail.com>", "Jakub Beránek <berykubik@gmail.com>"]

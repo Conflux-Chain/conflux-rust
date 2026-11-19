@@ -108,7 +108,7 @@ homepage = "https://confluxnetwork.org/"
 keywords = ["Conflux"]
 repository = "https://github.com/conflux-chain/conflux-rust"
 license-file = "LICENSE"
-edition = "2021"
+edition = "2024"
 
 [profile.test]
 debug-assertions = true

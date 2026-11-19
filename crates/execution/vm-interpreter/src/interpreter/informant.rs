@@ -24,7 +24,7 @@ pub use self::inner::*;
 #[cfg(not(feature = "evm-debug"))]
 mod inner {
     macro_rules! evm_debug {
-        ($x:expr) => {};
+        ($x:expr_2021) => {};
     }
 
     pub struct EvmInformant;

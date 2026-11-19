@@ -251,17 +251,19 @@ fn hash_compute(
     }
 
     macro_rules! make_const_array {
-        ($n:expr, $value:expr) => {{
+        ($n:expr_2021, $value:expr_2021) => {{
             // We use explicit lifetimes to ensure that val's borrow is
             // invalidated until the transmuted val dies.
             unsafe fn make_const_array<T, U>(val: &mut [T]) -> &mut [U; $n] {
-                use ::std::mem;
+                unsafe {
+                    use ::std::mem;
 
-                debug_assert_eq!(
-                    val.len() * mem::size_of::<T>(),
-                    $n * mem::size_of::<U>()
-                );
-                &mut *(val.as_mut_ptr() as *mut [U; $n])
+                    debug_assert_eq!(
+                        val.len() * mem::size_of::<T>(),
+                        $n * mem::size_of::<U>()
+                    );
+                    &mut *(val.as_mut_ptr() as *mut [U; $n])
+                }
             }
 
             make_const_array($value)
