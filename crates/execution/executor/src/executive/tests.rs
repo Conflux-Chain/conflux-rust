@@ -14,6 +14,7 @@ use cfx_parameters::{
     internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     staking::*,
 };
+use cfx_rpc_eth_types::BlockOverrides;
 use cfx_types::{
     address_util::AddressUtil, cal_contract_address_with_space, Address,
     AddressSpaceUtil, BigEndianHash, CreateContractAddressType, Space, U256,
@@ -30,6 +31,38 @@ use primitives::{
     EpochId, Transaction,
 };
 use rustc_hex::FromHex;
+
+#[test]
+fn block_override_base_fee_updates_burnt_price() {
+    let prop = U256::from(cfx_parameters::consensus::ONE_CFX_IN_DRIP);
+    for base in [U256::zero(), U256::MAX] {
+        let mut env = Env::default();
+        ExecutiveContext::apply_env_overrides(
+            &mut env,
+            Box::new(BlockOverrides {
+                base_fee: Some(base),
+                ..Default::default()
+            }),
+            prop,
+        );
+        let expected = if base.is_zero() {
+            U256::zero()
+        } else {
+            U256::try_from(
+                U512::from(base)
+                    - (U512::from(base) * U512::from(prop))
+                        / (U512::from(
+                            cfx_parameters::consensus::ONE_CFX_IN_DRIP,
+                        ) + U512::from(prop)),
+            )
+            .unwrap()
+        };
+        assert_eq!(env.base_gas_price[Space::Native], base);
+        assert_eq!(env.base_gas_price[Space::Ethereum], base);
+        assert_eq!(env.burnt_gas_price[Space::Native], expected);
+        assert_eq!(env.burnt_gas_price[Space::Ethereum], expected);
+    }
+}
 use std::{
     cmp::{self, min},
     str::FromStr,
