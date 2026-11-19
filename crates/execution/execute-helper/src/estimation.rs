@@ -27,7 +27,7 @@ use std::{
     cmp::{max, min},
     collections::HashSet,
     fmt::Display,
-    ops::{Mul, Shl},
+    ops::Shl,
 };
 
 enum SponsoredType {
@@ -397,7 +397,9 @@ impl<'a> EstimationContext<'a> {
         if !request.has_gas_limit {
             executed.gas_used = estimated_gas_limit;
             executed.gas_charged = estimated_gas_limit;
-            executed.fee = estimated_gas_limit.mul(tx.gas_price());
+            // Gas was not charged, so the supplied price may exceed what
+            // any balance can afford. Match the fee checks below.
+            executed.fee = estimated_gas_limit.saturating_mul(*tx.gas_price());
         }
 
         // If we don't charge gas, recheck the current gas_fee is ok for
