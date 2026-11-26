@@ -1025,7 +1025,7 @@ impl QueryService {
                 log
             })
             // Limit logs can return
-            .take(self.consensus.config().get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - 1) + 1)
+            .take(self.consensus.config().get_logs_filter_max_limit.unwrap_or(usize::MAX - 1) + 1)
             .try_collect();
         // --> TryFuture<Vec<LocalizedLogEntry>>
 

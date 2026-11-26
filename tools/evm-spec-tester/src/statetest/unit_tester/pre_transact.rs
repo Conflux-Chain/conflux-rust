@@ -37,7 +37,6 @@ use primitives::{
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
-    u64,
 };
 
 pub fn make_machine_verify_conf(

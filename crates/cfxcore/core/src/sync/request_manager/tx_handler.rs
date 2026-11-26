@@ -270,7 +270,7 @@ impl SentTransactionContainer {
                 return None;
             }
         } else {
-            if std::usize::MAX - inner.base_time_tick + window_index + 1
+            if usize::MAX - inner.base_time_tick + window_index + 1
                 >= inner.window_size
             {
                 return None;

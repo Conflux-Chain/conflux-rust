@@ -423,7 +423,7 @@ impl ConsensusGraph {
             .take(
                 self.config
                     .get_logs_filter_max_limit
-                    .unwrap_or(::std::usize::MAX - 1)
+                    .unwrap_or(usize::MAX - 1)
                     + 1,
             )
             // short-circuit on error
@@ -538,7 +538,7 @@ impl ConsensusGraph {
             .take(
                 self.config
                     .get_logs_filter_max_limit
-                    .unwrap_or(::std::usize::MAX - 1)
+                    .unwrap_or(usize::MAX - 1)
                     + 1,
             )
             // short-circuit on error
@@ -715,7 +715,7 @@ impl ConsensusGraph {
         Ok(traces
             .into_iter()
             .skip(filter.after.unwrap_or(0))
-            .take(filter.count.unwrap_or(usize::max_value()))
+            .take(filter.count.unwrap_or(usize::MAX))
             .collect())
     }
 

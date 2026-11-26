@@ -232,7 +232,7 @@ mod tests {
     #[test]
     fn test_enqueue_too_large_data() {
         let mut service = super::Service::new();
-        assert!(service.queue_capacity < std::usize::MAX);
+        assert!(service.queue_capacity < usize::MAX);
         assert!(service
             .on_enqueue(service.queue_capacity + 1, false)
             .is_err());

@@ -187,12 +187,12 @@ mod test_average_ones {
             type Item = u32;
 
             fn next(&mut self) -> Option<Self::Item> {
-                if self.0 == u32::max_value() {
+                if self.0 == u32::MAX {
                     return None;
                 }
                 self.0 += 1;
                 while self.0.count_ones() & 1 != 0 {
-                    if self.0 == u32::max_value() {
+                    if self.0 == u32::MAX {
                         return None;
                     }
                     self.0 += 1;
@@ -203,7 +203,7 @@ mod test_average_ones {
 
         let steps = 1000;
         for i in 0..steps {
-            let pos = i * (u32::max_value() / steps);
+            let pos = i * (u32::MAX / steps);
             for i in EvenParity(pos).take(steps as usize) {
                 let mask = (1 << average_ones_u32(i).unwrap_or(31)) - 1;
                 assert_eq!(
@@ -224,12 +224,12 @@ mod test_average_ones {
             type Item = u32;
 
             fn next(&mut self) -> Option<Self::Item> {
-                if self.0 == u32::max_value() {
+                if self.0 == u32::MAX {
                     return None;
                 }
                 self.0 += 1;
                 while self.0.count_ones() & 1 == 0 {
-                    if self.0 == u32::max_value() {
+                    if self.0 == u32::MAX {
                         return None;
                     }
                     self.0 += 1;
@@ -240,7 +240,7 @@ mod test_average_ones {
 
         let steps = 1000;
         for i in 0..steps {
-            let pos = i * (u32::max_value() / steps);
+            let pos = i * (u32::MAX / steps);
             for i in OddParity(pos).take(steps as usize) {
                 let mask = (1 << average_ones_u32(i).unwrap_or(31)) - 1;
                 let a = (i & mask).count_ones();
@@ -276,12 +276,12 @@ mod test_average_ones {
             type Item = u64;
 
             fn next(&mut self) -> Option<Self::Item> {
-                if self.0 == u64::max_value() {
+                if self.0 == u64::MAX {
                     return None;
                 }
                 self.0 += 1;
                 while self.0.count_ones() & 1 != 0 {
-                    if self.0 == u64::max_value() {
+                    if self.0 == u64::MAX {
                         return None;
                     }
                     self.0 += 1;
@@ -292,7 +292,7 @@ mod test_average_ones {
 
         let steps = 1000;
         for i in 0..steps {
-            let pos = i * (u64::max_value() / steps);
+            let pos = i * (u64::MAX / steps);
             for i in EvenParity(pos).take(steps as usize) {
                 let mask = (1 << average_ones_u64(i).unwrap_or(63)) - 1;
                 assert_eq!(
@@ -313,12 +313,12 @@ mod test_average_ones {
             type Item = u64;
 
             fn next(&mut self) -> Option<Self::Item> {
-                if self.0 == u64::max_value() {
+                if self.0 == u64::MAX {
                     return None;
                 }
                 self.0 += 1;
                 while self.0.count_ones() & 1 == 0 {
-                    if self.0 == u64::max_value() {
+                    if self.0 == u64::MAX {
                         return None;
                     }
                     self.0 += 1;
@@ -329,7 +329,7 @@ mod test_average_ones {
 
         let steps = 1000;
         for i in 0..steps {
-            let pos = i * (u64::max_value() / steps);
+            let pos = i * (u64::MAX / steps);
             for i in OddParity(pos).take(steps as usize) {
                 let mask = (1 << average_ones_u64(i).unwrap_or(63)) - 1;
                 let a = (i & mask).count_ones();
@@ -361,7 +361,7 @@ mod test_average_ones {
     fn average_ones_agree_u32_u64() {
         let steps = 1000;
         for i in 0..steps {
-            let pos = i * (u32::max_value() / steps);
+            let pos = i * (u32::MAX / steps);
             for i in pos..steps {
                 assert_eq!(
                     average_ones_u32(i),

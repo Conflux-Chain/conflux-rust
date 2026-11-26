@@ -257,9 +257,9 @@ pub trait SizeFieldConverterTrait<SizeFieldType> {
 pub struct TrivialSizeFieldConverterU16 {}
 
 impl SizeFieldConverterTrait<u16> for TrivialSizeFieldConverterU16 {
-    fn max_size() -> usize { std::u16::MAX as usize }
+    fn max_size() -> usize { u16::MAX as usize }
 
-    fn is_size_over_limit(size: usize) -> bool { size > std::u16::MAX as usize }
+    fn is_size_over_limit(size: usize) -> bool { size > u16::MAX as usize }
 
     fn get(size_field: &u16) -> usize { (*size_field) as usize }
 

@@ -712,7 +712,7 @@ mod tests {
         for (i, validator_signer) in validator_signers.iter().enumerate() {
             let mut voting_power: u64 = i as u64;
             if i == 3 {
-                voting_power = u64::max_value()
+                voting_power = u64::MAX
             }
             author_to_public_key_map.insert(
                 validator_signer.author(),

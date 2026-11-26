@@ -52,7 +52,7 @@ pub type Version = u64; // Height - also used for MVCC in StateDB
 
 // In StateDB, things readable by the genesis transaction are under this
 // version.
-pub const PRE_GENESIS_VERSION: Version = u64::max_value();
+pub const PRE_GENESIS_VERSION: Version = u64::MAX;
 
 /// RawTransaction is the portion of a transaction that a client signs.
 #[derive(
@@ -106,7 +106,7 @@ impl RawTransaction {
             payload: TransactionPayload::PivotDecision(pivot_decision),
             // Write-set transactions are special and important and shouldn't
             // expire.
-            expiration_timestamp_secs: u64::max_value(),
+            expiration_timestamp_secs: u64::MAX,
             chain_id,
         }
     }
@@ -120,7 +120,7 @@ impl RawTransaction {
             payload: TransactionPayload::Election(election_payload),
             // Write-set transactions are special and important and shouldn't
             // expire.
-            expiration_timestamp_secs: u64::max_value(),
+            expiration_timestamp_secs: u64::MAX,
             chain_id,
         }
     }
@@ -133,7 +133,7 @@ impl RawTransaction {
             payload: TransactionPayload::Dispute(dispute_payload),
             // Write-set transactions are special and important and shouldn't
             // expire.
-            expiration_timestamp_secs: u64::max_value(),
+            expiration_timestamp_secs: u64::MAX,
             chain_id: Default::default(),
         }
     }
@@ -146,7 +146,7 @@ impl RawTransaction {
             payload: TransactionPayload::Retire(retire_payload),
             // Write-set transactions are special and important and shouldn't
             // expire.
-            expiration_timestamp_secs: u64::max_value(),
+            expiration_timestamp_secs: u64::MAX,
             chain_id: Default::default(),
         }
     }
@@ -198,7 +198,7 @@ impl RawTransaction {
             payload,
             // Write-set transactions are special and important and shouldn't
             // expire.
-            expiration_timestamp_secs: u64::max_value(),
+            expiration_timestamp_secs: u64::MAX,
             chain_id: Default::default(),
         })
     }
