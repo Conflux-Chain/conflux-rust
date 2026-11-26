@@ -49,6 +49,7 @@ pub trait PosStateConfigTrait {
     fn force_retire_check_epoch_count(&self, view: u64) -> u64;
     fn max_nonce_per_account(&self, view: u64) -> u64;
     fn get_term_view(&self, view: u64) -> (u64, u64);
+    /// Returns the configured starting view if it is representable as a `u64`.
     fn get_starting_view_for_term(&self, term: u64) -> Option<u64>;
     // Returning None means the stake should be forfeited instead of being
     // locked.
@@ -222,7 +223,9 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
         } else {
             (term - transition_term)
                 .checked_mul(conf.cip136_round_per_term)
-                .map(|v| v + conf.cip136_transition_view)
+                .and_then(|offset| {
+                    conf.cip136_transition_view.checked_add(offset)
+                })
         }
     }
 
