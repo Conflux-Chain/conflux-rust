@@ -108,7 +108,7 @@ impl ExponentialTimeInterval {
         );
         assert!(
             exponent_base.powf(max_exponent as f64).ceil()
-                < f64::from(std::u32::MAX),
+                < f64::from(u32::MAX),
             "Maximum interval multiplier should be less then u32::Max"
         );
         ExponentialTimeInterval {

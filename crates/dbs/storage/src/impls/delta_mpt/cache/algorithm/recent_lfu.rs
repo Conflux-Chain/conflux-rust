@@ -82,7 +82,7 @@ type FrequencyType = u16;
 const RANDOM_BITS: FrequencyType = (1u16 << 4) - 1;
 const COUNTER_MASK: FrequencyType = !RANDOM_BITS;
 /// MAX_VISIT_COUNT == COUNTER_MASK
-const MAX_VISIT_COUNT: FrequencyType = ::std::u16::MAX & COUNTER_MASK;
+const MAX_VISIT_COUNT: FrequencyType = u16::MAX & COUNTER_MASK;
 
 #[derive(MallocSizeOfDerive)]
 struct RecentLFUMetadata<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> {

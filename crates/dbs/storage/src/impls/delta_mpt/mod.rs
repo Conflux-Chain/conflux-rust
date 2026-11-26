@@ -422,7 +422,7 @@ impl DeltaMptIdGen {
         let id;
         match self.available_ids.pop() {
             None => {
-                if self.id_limit != DeltaMptId::max_value() {
+                if self.id_limit != DeltaMptId::MAX {
                     id = Ok(self.id_limit);
                     self.id_limit += 1;
                 } else {
