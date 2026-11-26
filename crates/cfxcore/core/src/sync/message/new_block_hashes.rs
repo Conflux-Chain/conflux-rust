@@ -29,7 +29,12 @@ impl Decodable for NewBlockHashes {
 
 impl Handleable for NewBlockHashes {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        debug!("on_new_block_hashes, msg={:?}", self);
+        debug!(
+            "on_new_block_hashes, msg={:?} from_node={} from_addr={}",
+            self,
+            ctx.node_id,
+            ctx.peer_addr.as_deref().unwrap_or("unknown")
+        );
 
         if ctx.manager.catch_up_mode() {
             // If a node is in catch-up mode and we are not in test-mode, we

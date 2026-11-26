@@ -14,6 +14,9 @@ pub struct Context<'a> {
     pub io: &'a dyn NetworkContext,
     pub node_id: NodeId,
     pub manager: &'a SynchronizationProtocolHandler,
+    /// Remote socket address of the peer that sent the message.
+    /// None if the peer is no longer connected or address is unavailable.
+    pub peer_addr: Option<String>,
 }
 
 impl<'a> Context<'a> {
