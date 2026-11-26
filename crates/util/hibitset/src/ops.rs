@@ -1,7 +1,6 @@
 use std::{
     iter::{FromIterator, IntoIterator},
     ops::{BitAnd, BitOr, BitXor, Not},
-    usize,
 };
 
 use crate::util::*;

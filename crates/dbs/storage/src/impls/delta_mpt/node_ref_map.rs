@@ -56,7 +56,7 @@ pub type DeltaMptDbKey = RowNumberUnderlyingType;
 // Each DeltaMpt is assigned an index. There are not many DeltaMpts to keep at a
 // time.
 pub type DeltaMptId = u16;
-const MPT_ID_RANGE: usize = std::u16::MAX as usize + 1;
+const MPT_ID_RANGE: usize = u16::MAX as usize + 1;
 
 // TODO(yz): Optimize the access like NodeRefMapDeltaMpt. Keep a number of
 // TODO(yz): chunks, each delta mpt maintains a deque of chunks. Whenever all

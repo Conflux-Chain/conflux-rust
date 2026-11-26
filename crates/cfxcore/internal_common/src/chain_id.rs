@@ -90,8 +90,7 @@ impl ChainIdParamsOneChainInner {
                                 if used_chain_ids.contains(chain_id) {
                                     return Err(String::from("Invalid ChainIdParams config format: chain_id must be pairwise different"));
                                 }
-                                if *chain_id < 0
-                                    || *chain_id > std::u32::MAX as i64
+                                if *chain_id < 0 || *chain_id > u32::MAX as i64
                                 {
                                     return Err(String::from("Invalid ChainIdParams config format: chain_id out of range for u32"));
                                 }

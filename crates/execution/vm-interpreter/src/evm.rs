@@ -191,9 +191,9 @@ mod tests {
     #[test]
     fn should_calculate_overflow_mul_shr_with_overflow() {
         // given
-        let max = u64::max_value();
+        let max = u64::MAX;
         let num1 = U256([max, max, max, max]);
-        let num2 = usize::max_value();
+        let num2 = usize::MAX;
 
         // when
         let (res1, o1) = num1.overflow_mul_shr(num1, 256);
@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn should_validate_u256_to_usize_conversion() {
         // given
-        let v = U256::from(usize::max_value()) + U256::from(1);
+        let v = U256::from(usize::MAX) + U256::from(1);
 
         // when
         let res = usize::from_u256(v);

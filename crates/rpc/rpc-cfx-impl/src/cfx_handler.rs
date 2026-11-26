@@ -1386,7 +1386,7 @@ impl CfxRpcServer for CfxHandler {
         let contract_addr_spaced =
             contract_addr.hex_address.with_native_space();
 
-        if storage_limit > U256::from(std::u64::MAX) {
+        if storage_limit > U256::from(u64::MAX) {
             return Err(invalid_params_rpc_err(
                 format!(
                     "storage_limit has to be within the range of u64 but {} supplied!",

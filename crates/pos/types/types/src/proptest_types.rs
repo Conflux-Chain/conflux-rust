@@ -443,7 +443,7 @@ impl EventHandle {
         event_key_strategy: impl Strategy<Value = EventKey>,
     ) -> impl Strategy<Value = Self> {
         // We only generate small counters so that it won't overflow.
-        (event_key_strategy, 0..std::u64::MAX / 2).prop_map(
+        (event_key_strategy, 0..u64::MAX / 2).prop_map(
             |(event_key, counter)| EventHandle::new(event_key, counter),
         )
     }

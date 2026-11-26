@@ -1219,7 +1219,7 @@ impl SynchronizationProtocolHandler {
         let msg_version_introduced = msg.version_introduced();
         let mut msg_version_valid_till = msg.version_valid_till();
         if msg_version_valid_till == self.protocol_version {
-            msg_version_valid_till = ProtocolVersion(std::u8::MAX);
+            msg_version_valid_till = ProtocolVersion(u8::MAX);
         }
         for id in peer_ids {
             let peer_version = self.syn.get_peer_version(&id)?;

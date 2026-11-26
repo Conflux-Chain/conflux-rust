@@ -242,10 +242,8 @@ impl TransactionRequest {
         });
 
         let value = self.value.unwrap_or_default();
-        let storage_limit = self
-            .storage_limit
-            .map(|v| v.as_u64())
-            .unwrap_or(std::u64::MAX);
+        let storage_limit =
+            self.storage_limit.map(|v| v.as_u64()).unwrap_or(u64::MAX);
         let data = self.data.unwrap_or_default().into_vec();
 
         let gas_price = self.gas_price.unwrap_or(1.into());

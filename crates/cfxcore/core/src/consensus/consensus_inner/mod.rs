@@ -1164,7 +1164,7 @@ impl ConsensusGraphInner {
         let blame_bound = if let Some(bound) = blame_bound {
             bound
         } else {
-            u32::max_value()
+            u32::MAX
         };
         let mut total_blame_count = 0 as u64;
         let mut queue = VecDeque::new();

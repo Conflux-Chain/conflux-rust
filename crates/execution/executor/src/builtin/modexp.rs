@@ -224,7 +224,7 @@ impl Pricer for ModexpPricer {
             }
         }
 
-        let max_len = U256::from(u32::max_value() / 2);
+        let max_len = U256::from(u32::MAX / 2);
 
         if base_len > max_len || mod_len > max_len || exp_len > max_len {
             return U256::max_value();

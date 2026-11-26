@@ -927,7 +927,7 @@ impl RpcImpl {
         let account_addr: H160 = account_addr.into();
         let contract_addr: H160 = contract_addr.into();
 
-        if storage_limit > U256::from(std::u64::MAX) {
+        if storage_limit > U256::from(u64::MAX) {
             return Err(invalid_params_msg(&format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
         }
 
