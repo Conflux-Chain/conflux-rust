@@ -79,7 +79,7 @@ pub enum Error {
     #[error("Trie node not found when loading Snapshot MPT.")]
     SnapshotMPTTrieNodeNotFound,
 
-    #[error("Too many Delta MPTs created ({}).", DeltaMptId::max_value())]
+    #[error("Too many Delta MPTs created ({}).", DeltaMptId::MAX)]
     TooManyDeltaMPT,
 
     #[error("Attempting to create a Delta MPT which already exists.")]
