@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["parse_config_address_string"],"macro":["build_config","set_conf"],"mod":["rpc_server_config"],"struct":["Configuration","RawConfiguration"]};
+window.SIDEBAR_ITEMS = {"fn":["parse_config_address_string"],"macro":[["build_config",1],["set_conf",1]],"mod":["rpc_server_config"],"struct":["Configuration","RawConfiguration"]};

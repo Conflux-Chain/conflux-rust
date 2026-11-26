@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["new_malloc_size_ops"],"macro":["malloc_size_of_is_0"],"struct":["MallocSizeOfOps"],"trait":["MallocShallowSizeOf","MallocSizeOf"]};
+window.SIDEBAR_ITEMS = {"fn":["new_malloc_size_ops"],"macro":[["malloc_size_of_is_0",1]],"struct":["MallocSizeOfOps"],"trait":["MallocShallowSizeOf","MallocSizeOf"]};

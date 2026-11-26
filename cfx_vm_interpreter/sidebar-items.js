@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["VMType"],"macro":["evm_test","evm_test_ignore"],"mod":["factory","instructions"],"struct":["FinalizationResult"],"trait":["CostType","Finalize"]};
+window.SIDEBAR_ITEMS = {"enum":["VMType"],"macro":[["evm_test",1],["evm_test_ignore",1]],"mod":["factory","instructions"],"struct":["FinalizationResult"],"trait":["CostType","Finalize"]};

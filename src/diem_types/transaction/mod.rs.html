@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/pos/types/types/src/transaction/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="diem_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0-nightly (fa3155a64 2025-09-30)" data-channel="nightly" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-828709d0.js" data-settings-js="settings-c38705f0.js" ><script src="../../../static.files/storage-e2aeef58.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">diem_types/transaction/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) The Diem Core Contributors
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/pos/types/types/src/transaction/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1f5a765c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="diem_types" data-themes="" data-resource-suffix="" data-rustdoc-version="1.102.0-nightly (3ef0c22cd 2026-11-11)" data-channel="nightly" data-search-js="search-69faa2c4.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-9b351432.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-419f3a3f.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-101b5a15.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">diem_types/transaction/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) The Diem Core Contributors
 <a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
 <a href=#3 id=3 data-nosnippet>3</a>
 <a href=#4 id=4 data-nosnippet>4</a>// Copyright 2021 Conflux Foundation. All rights reserved.
@@ -52,7 +52,7 @@
 <a href=#52 id=52 data-nosnippet>52</a>
 <a href=#53 id=53 data-nosnippet>53</a>// In StateDB, things readable by the genesis transaction are under this
 <a href=#54 id=54 data-nosnippet>54</a>// version.
-<a href=#55 id=55 data-nosnippet>55</a></span><span class="kw">pub const </span>PRE_GENESIS_VERSION: Version = u64::max_value();
+<a href=#55 id=55 data-nosnippet>55</a></span><span class="kw">pub const </span>PRE_GENESIS_VERSION: Version = u64::MAX;
 <a href=#56 id=56 data-nosnippet>56</a>
 <a href=#57 id=57 data-nosnippet>57</a><span class="doccomment">/// RawTransaction is the portion of a transaction that a client signs.
 <a href=#58 id=58 data-nosnippet>58</a></span><span class="attr">#[derive(
@@ -106,7 +106,7 @@
 <a href=#106 id=106 data-nosnippet>106</a>            payload: TransactionPayload::PivotDecision(pivot_decision),
 <a href=#107 id=107 data-nosnippet>107</a>            <span class="comment">// Write-set transactions are special and important and shouldn't
 <a href=#108 id=108 data-nosnippet>108</a>            // expire.
-<a href=#109 id=109 data-nosnippet>109</a>            </span>expiration_timestamp_secs: u64::max_value(),
+<a href=#109 id=109 data-nosnippet>109</a>            </span>expiration_timestamp_secs: u64::MAX,
 <a href=#110 id=110 data-nosnippet>110</a>            chain_id,
 <a href=#111 id=111 data-nosnippet>111</a>        }
 <a href=#112 id=112 data-nosnippet>112</a>    }
@@ -120,7 +120,7 @@
 <a href=#120 id=120 data-nosnippet>120</a>            payload: TransactionPayload::Election(election_payload),
 <a href=#121 id=121 data-nosnippet>121</a>            <span class="comment">// Write-set transactions are special and important and shouldn't
 <a href=#122 id=122 data-nosnippet>122</a>            // expire.
-<a href=#123 id=123 data-nosnippet>123</a>            </span>expiration_timestamp_secs: u64::max_value(),
+<a href=#123 id=123 data-nosnippet>123</a>            </span>expiration_timestamp_secs: u64::MAX,
 <a href=#124 id=124 data-nosnippet>124</a>            chain_id,
 <a href=#125 id=125 data-nosnippet>125</a>        }
 <a href=#126 id=126 data-nosnippet>126</a>    }
@@ -133,7 +133,7 @@
 <a href=#133 id=133 data-nosnippet>133</a>            payload: TransactionPayload::Dispute(dispute_payload),
 <a href=#134 id=134 data-nosnippet>134</a>            <span class="comment">// Write-set transactions are special and important and shouldn't
 <a href=#135 id=135 data-nosnippet>135</a>            // expire.
-<a href=#136 id=136 data-nosnippet>136</a>            </span>expiration_timestamp_secs: u64::max_value(),
+<a href=#136 id=136 data-nosnippet>136</a>            </span>expiration_timestamp_secs: u64::MAX,
 <a href=#137 id=137 data-nosnippet>137</a>            chain_id: Default::default(),
 <a href=#138 id=138 data-nosnippet>138</a>        }
 <a href=#139 id=139 data-nosnippet>139</a>    }
@@ -146,7 +146,7 @@
 <a href=#146 id=146 data-nosnippet>146</a>            payload: TransactionPayload::Retire(retire_payload),
 <a href=#147 id=147 data-nosnippet>147</a>            <span class="comment">// Write-set transactions are special and important and shouldn't
 <a href=#148 id=148 data-nosnippet>148</a>            // expire.
-<a href=#149 id=149 data-nosnippet>149</a>            </span>expiration_timestamp_secs: u64::max_value(),
+<a href=#149 id=149 data-nosnippet>149</a>            </span>expiration_timestamp_secs: u64::MAX,
 <a href=#150 id=150 data-nosnippet>150</a>            chain_id: Default::default(),
 <a href=#151 id=151 data-nosnippet>151</a>        }
 <a href=#152 id=152 data-nosnippet>152</a>    }
@@ -198,7 +198,7 @@
 <a href=#198 id=198 data-nosnippet>198</a>            payload,
 <a href=#199 id=199 data-nosnippet>199</a>            <span class="comment">// Write-set transactions are special and important and shouldn't
 <a href=#200 id=200 data-nosnippet>200</a>            // expire.
-<a href=#201 id=201 data-nosnippet>201</a>            </span>expiration_timestamp_secs: u64::max_value(),
+<a href=#201 id=201 data-nosnippet>201</a>            </span>expiration_timestamp_secs: u64::MAX,
 <a href=#202 id=202 data-nosnippet>202</a>            chain_id: Default::default(),
 <a href=#203 id=203 data-nosnippet>203</a>        })
 <a href=#204 id=204 data-nosnippet>204</a>    }
@@ -862,4 +862,5 @@
 <a href=#862 id=862 data-nosnippet>862</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Not a user transaction."</span>)),
 <a href=#863 id=863 data-nosnippet>863</a>        }
 <a href=#864 id=864 data-nosnippet>864</a>    }
-<a href=#865 id=865 data-nosnippet>865</a>}</code></pre></div></section></main></body></html>
+<a href=#865 id=865 data-nosnippet>865</a>}
+</code></pre></div></section></main></body></html>

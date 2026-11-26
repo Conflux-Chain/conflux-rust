@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Error"],"macro":["for_all_global_param_keys"],"mod":["access_mode","global_params"],"struct":["StateDbGeneric"],"trait":["StateDbExt"],"type":["Result","StateDb"]};
+window.SIDEBAR_ITEMS = {"enum":["Error"],"macro":[["for_all_global_param_keys",1]],"mod":["access_mode","global_params"],"struct":["StateDbGeneric"],"trait":["StateDbExt"],"type":["Result","StateDb"]};

@@ -1,9 +1,9 @@
 (function() {
-    var implementors = Object.fromEntries([["cfxcore",[["impl <a class=\"trait\" href=\"cfx_internal_common/consensus_api/trait.StateMaintenanceTrait.html\" title=\"trait cfx_internal_common::consensus_api::StateMaintenanceTrait\">StateMaintenanceTrait</a> for <a class=\"struct\" href=\"cfxcore/consensus/consensus_inner/struct.ConsensusGraphInner.html\" title=\"struct cfxcore::consensus::consensus_inner::ConsensusGraphInner\">ConsensusGraphInner</a>"]]]]);
+    const implementors = Object.fromEntries([["cfxcore",[["impl <a class=\"trait\" href=\"cfx_internal_common/consensus_api/trait.StateMaintenanceTrait.html\" title=\"trait cfx_internal_common::consensus_api::StateMaintenanceTrait\">StateMaintenanceTrait</a> for <a class=\"struct\" href=\"cfxcore/consensus/consensus_inner/struct.ConsensusGraphInner.html\" title=\"struct cfxcore::consensus::consensus_inner::ConsensusGraphInner\">ConsensusGraphInner</a>",0]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {
         window.pending_implementors = implementors;
     }
 })()
-//{"start":57,"fragment_lengths":[414]}
+//{"start":59,"fragment_lengths":[416]}

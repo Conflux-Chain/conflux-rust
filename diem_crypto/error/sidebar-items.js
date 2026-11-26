@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"macro":["bail"],"struct":["Error"]};
+window.SIDEBAR_ITEMS = {"macro":[["bail",1]],"struct":["Error"]};

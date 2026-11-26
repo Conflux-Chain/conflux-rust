@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/pos/storage/accumulator/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-e56847b5.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="accumulator" data-themes="" data-resource-suffix="" data-rustdoc-version="1.92.0-nightly (fa3155a64 2025-09-30)" data-channel="nightly" data-search-js="search-e256b49e.js" data-stringdex-js="stringdex-828709d0.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-ce535bd0.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">accumulator/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) The Diem Core Contributors
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/pos/storage/accumulator/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1f5a765c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="accumulator" data-themes="" data-resource-suffix="" data-rustdoc-version="1.102.0-nightly (3ef0c22cd 2026-11-11)" data-channel="nightly" data-search-js="search-69faa2c4.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-9b351432.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-419f3a3f.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-101b5a15.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">accumulator/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) The Diem Core Contributors
 <a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
 <a href=#3 id=3 data-nosnippet>3</a>
 <a href=#4 id=4 data-nosnippet>4</a>// Copyright 2021 Conflux Foundation. All rights reserved.
@@ -358,151 +358,150 @@
 <a href=#358 id=358 data-nosnippet>358</a>    /// 1 = root_level
 <a href=#359 id=359 data-nosnippet>359</a>    </span><span class="kw">fn </span>max_to_freeze(num_new_leaves: usize, root_level: u32) -&gt; usize {
 <a href=#360 id=360 data-nosnippet>360</a>        <span class="macro">precondition!</span>(root_level <span class="kw">as </span>usize &lt;= MAX_ACCUMULATOR_PROOF_DEPTH);
-<a href=#361 id=361 data-nosnippet>361</a>        <span class="macro">precondition!</span>(num_new_leaves &lt; (usize::max_value() / <span class="number">2</span>));
-<a href=#362 id=362 data-nosnippet>362</a>        <span class="macro">precondition!</span>(
-<a href=#363 id=363 data-nosnippet>363</a>            num_new_leaves * <span class="number">2 </span>&lt;= usize::max_value() - root_level <span class="kw">as </span>usize
-<a href=#364 id=364 data-nosnippet>364</a>        );
-<a href=#365 id=365 data-nosnippet>365</a>        num_new_leaves * <span class="number">2 </span>+ root_level <span class="kw">as </span>usize
-<a href=#366 id=366 data-nosnippet>366</a>    }
-<a href=#367 id=367 data-nosnippet>367</a>
-<a href=#368 id=368 data-nosnippet>368</a>    <span class="kw">fn </span>hash_internal_node(left: HashValue, right: HashValue) -&gt; HashValue {
-<a href=#369 id=369 data-nosnippet>369</a>        MerkleTreeInternalNode::&lt;H&gt;::new(left, right).hash()
-<a href=#370 id=370 data-nosnippet>370</a>    }
+<a href=#361 id=361 data-nosnippet>361</a>        <span class="macro">precondition!</span>(num_new_leaves &lt; (usize::MAX / <span class="number">2</span>));
+<a href=#362 id=362 data-nosnippet>362</a>        <span class="macro">precondition!</span>(num_new_leaves * <span class="number">2 </span>&lt;= usize::MAX - root_level <span class="kw">as </span>usize);
+<a href=#363 id=363 data-nosnippet>363</a>        num_new_leaves * <span class="number">2 </span>+ root_level <span class="kw">as </span>usize
+<a href=#364 id=364 data-nosnippet>364</a>    }
+<a href=#365 id=365 data-nosnippet>365</a>
+<a href=#366 id=366 data-nosnippet>366</a>    <span class="kw">fn </span>hash_internal_node(left: HashValue, right: HashValue) -&gt; HashValue {
+<a href=#367 id=367 data-nosnippet>367</a>        MerkleTreeInternalNode::&lt;H&gt;::new(left, right).hash()
+<a href=#368 id=368 data-nosnippet>368</a>    }
+<a href=#369 id=369 data-nosnippet>369</a>
+<a href=#370 id=370 data-nosnippet>370</a>    <span class="kw">fn </span>rightmost_leaf_index(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 { (<span class="self">self</span>.num_leaves - <span class="number">1</span>) <span class="kw">as </span>u64 }
 <a href=#371 id=371 data-nosnippet>371</a>
-<a href=#372 id=372 data-nosnippet>372</a>    <span class="kw">fn </span>rightmost_leaf_index(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 { (<span class="self">self</span>.num_leaves - <span class="number">1</span>) <span class="kw">as </span>u64 }
-<a href=#373 id=373 data-nosnippet>373</a>
-<a href=#374 id=374 data-nosnippet>374</a>    <span class="kw">fn </span>get_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, position: Position) -&gt; <span class="prelude-ty">Result</span>&lt;HashValue&gt; {
-<a href=#375 id=375 data-nosnippet>375</a>        <span class="kw">let </span>idx = <span class="self">self</span>.rightmost_leaf_index();
-<a href=#376 id=376 data-nosnippet>376</a>        <span class="kw">if </span>position.is_placeholder(idx) {
-<a href=#377 id=377 data-nosnippet>377</a>            <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>ACCUMULATOR_PLACEHOLDER_HASH)
-<a href=#378 id=378 data-nosnippet>378</a>        } <span class="kw">else if </span>position.is_freezable(idx) {
-<a href=#379 id=379 data-nosnippet>379</a>            <span class="self">self</span>.reader.get(position)
-<a href=#380 id=380 data-nosnippet>380</a>        } <span class="kw">else </span>{
-<a href=#381 id=381 data-nosnippet>381</a>            <span class="comment">// non-frozen non-placeholder node
-<a href=#382 id=382 data-nosnippet>382</a>            </span><span class="prelude-val">Ok</span>(<span class="self">Self</span>::hash_internal_node(
-<a href=#383 id=383 data-nosnippet>383</a>                <span class="self">self</span>.get_hash(position.left_child())<span class="question-mark">?</span>,
-<a href=#384 id=384 data-nosnippet>384</a>                <span class="self">self</span>.get_hash(position.right_child())<span class="question-mark">?</span>,
-<a href=#385 id=385 data-nosnippet>385</a>            ))
-<a href=#386 id=386 data-nosnippet>386</a>        }
-<a href=#387 id=387 data-nosnippet>387</a>    }
-<a href=#388 id=388 data-nosnippet>388</a>
-<a href=#389 id=389 data-nosnippet>389</a>    <span class="kw">fn </span>get_hashes(<span class="kw-2">&amp;</span><span class="self">self</span>, positions: <span class="kw-2">&amp;</span>[Position]) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;HashValue&gt;&gt; {
-<a href=#390 id=390 data-nosnippet>390</a>        positions.iter().map(|p| <span class="self">self</span>.get_hash(<span class="kw-2">*</span>p)).collect()
-<a href=#391 id=391 data-nosnippet>391</a>    }
-<a href=#392 id=392 data-nosnippet>392</a>
-<a href=#393 id=393 data-nosnippet>393</a>    <span class="kw">fn </span>get_root_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;HashValue&gt; {
-<a href=#394 id=394 data-nosnippet>394</a>        <span class="self">self</span>.get_hash(Position::root_from_leaf_count(<span class="self">self</span>.num_leaves))
-<a href=#395 id=395 data-nosnippet>395</a>    }
-<a href=#396 id=396 data-nosnippet>396</a>
-<a href=#397 id=397 data-nosnippet>397</a>    <span class="doccomment">/// implementation for pub interface `MerkleAccumulator::get_proof`
-<a href=#398 id=398 data-nosnippet>398</a>    </span><span class="kw">fn </span>get_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, leaf_index: u64) -&gt; <span class="prelude-ty">Result</span>&lt;AccumulatorProof&lt;H&gt;&gt; {
-<a href=#399 id=399 data-nosnippet>399</a>        <span class="macro">ensure!</span>(
-<a href=#400 id=400 data-nosnippet>400</a>            leaf_index &lt; <span class="self">self</span>.num_leaves <span class="kw">as </span>u64,
-<a href=#401 id=401 data-nosnippet>401</a>            <span class="string">"invalid leaf_index {}, num_leaves {}"</span>,
-<a href=#402 id=402 data-nosnippet>402</a>            leaf_index,
-<a href=#403 id=403 data-nosnippet>403</a>            <span class="self">self</span>.num_leaves
-<a href=#404 id=404 data-nosnippet>404</a>        );
-<a href=#405 id=405 data-nosnippet>405</a>
-<a href=#406 id=406 data-nosnippet>406</a>        <span class="kw">let </span>siblings = <span class="self">self</span>.get_siblings(leaf_index, |_p| <span class="bool-val">true</span>)<span class="question-mark">?</span>;
-<a href=#407 id=407 data-nosnippet>407</a>        <span class="prelude-val">Ok</span>(AccumulatorProof::new(siblings))
-<a href=#408 id=408 data-nosnippet>408</a>    }
-<a href=#409 id=409 data-nosnippet>409</a>
-<a href=#410 id=410 data-nosnippet>410</a>    <span class="doccomment">/// Implementation for public interface
-<a href=#411 id=411 data-nosnippet>411</a>    /// `MerkleAccumulator::get_consistency_proof`.
-<a href=#412 id=412 data-nosnippet>412</a>    </span><span class="kw">fn </span>get_consistency_proof(
-<a href=#413 id=413 data-nosnippet>413</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, sub_acc_leaves: LeafCount,
-<a href=#414 id=414 data-nosnippet>414</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;AccumulatorConsistencyProof&gt; {
-<a href=#415 id=415 data-nosnippet>415</a>        <span class="macro">ensure!</span>(
-<a href=#416 id=416 data-nosnippet>416</a>            sub_acc_leaves &lt;= <span class="self">self</span>.num_leaves,
-<a href=#417 id=417 data-nosnippet>417</a>            <span class="string">"Can't get accumulator consistency proof for a version newer than the local version. \
-<a href=#418 id=418 data-nosnippet>418</a>            Local next version: {}, asked next version: {}"</span>,
-<a href=#419 id=419 data-nosnippet>419</a>            <span class="self">self</span>.num_leaves,
-<a href=#420 id=420 data-nosnippet>420</a>            sub_acc_leaves,
-<a href=#421 id=421 data-nosnippet>421</a>        );
-<a href=#422 id=422 data-nosnippet>422</a>
-<a href=#423 id=423 data-nosnippet>423</a>        <span class="kw">let </span>subtrees =
-<a href=#424 id=424 data-nosnippet>424</a>            FrozenSubtreeSiblingIterator::new(sub_acc_leaves, <span class="self">self</span>.num_leaves)
-<a href=#425 id=425 data-nosnippet>425</a>                .map(|p| <span class="self">self</span>.reader.get(p))
-<a href=#426 id=426 data-nosnippet>426</a>                .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
-<a href=#427 id=427 data-nosnippet>427</a>
-<a href=#428 id=428 data-nosnippet>428</a>        <span class="prelude-val">Ok</span>(AccumulatorConsistencyProof::new(subtrees))
-<a href=#429 id=429 data-nosnippet>429</a>    }
-<a href=#430 id=430 data-nosnippet>430</a>
-<a href=#431 id=431 data-nosnippet>431</a>    <span class="doccomment">/// Implementation for public interface
-<a href=#432 id=432 data-nosnippet>432</a>    /// `MerkleAccumulator::get_range_proof`.
-<a href=#433 id=433 data-nosnippet>433</a>    </span><span class="kw">fn </span>get_range_proof(
-<a href=#434 id=434 data-nosnippet>434</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, first_leaf_index: <span class="prelude-ty">Option</span>&lt;u64&gt;, num_leaves: LeafCount,
-<a href=#435 id=435 data-nosnippet>435</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;AccumulatorRangeProof&lt;H&gt;&gt; {
-<a href=#436 id=436 data-nosnippet>436</a>        <span class="kw">let </span>(left_siblings, right_siblings) =
-<a href=#437 id=437 data-nosnippet>437</a>            <span class="self">self</span>.get_range_proof_positions(first_leaf_index, num_leaves)<span class="question-mark">?</span>;
-<a href=#438 id=438 data-nosnippet>438</a>        <span class="prelude-val">Ok</span>(AccumulatorRangeProof::new(
-<a href=#439 id=439 data-nosnippet>439</a>            <span class="self">self</span>.get_hashes(<span class="kw-2">&amp;</span>left_siblings)<span class="question-mark">?</span>,
-<a href=#440 id=440 data-nosnippet>440</a>            <span class="self">self</span>.get_hashes(<span class="kw-2">&amp;</span>right_siblings)<span class="question-mark">?</span>,
-<a href=#441 id=441 data-nosnippet>441</a>        ))
-<a href=#442 id=442 data-nosnippet>442</a>    }
-<a href=#443 id=443 data-nosnippet>443</a>
-<a href=#444 id=444 data-nosnippet>444</a>    <span class="kw">fn </span>get_range_proof_positions(
-<a href=#445 id=445 data-nosnippet>445</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, first_leaf_index: <span class="prelude-ty">Option</span>&lt;u64&gt;, num_leaves: LeafCount,
-<a href=#446 id=446 data-nosnippet>446</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;Position&gt;, Vec&lt;Position&gt;)&gt; {
-<a href=#447 id=447 data-nosnippet>447</a>        <span class="kw">if </span>first_leaf_index.is_none() {
-<a href=#448 id=448 data-nosnippet>448</a>            <span class="macro">ensure!</span>(
-<a href=#449 id=449 data-nosnippet>449</a>                num_leaves == <span class="number">0</span>,
-<a href=#450 id=450 data-nosnippet>450</a>                <span class="string">"num_leaves is not zero while first_leaf_index is None."</span>,
-<a href=#451 id=451 data-nosnippet>451</a>            );
-<a href=#452 id=452 data-nosnippet>452</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>((Vec::new(), Vec::new()));
-<a href=#453 id=453 data-nosnippet>453</a>        }
-<a href=#454 id=454 data-nosnippet>454</a>
-<a href=#455 id=455 data-nosnippet>455</a>        <span class="kw">let </span>first_leaf_index =
-<a href=#456 id=456 data-nosnippet>456</a>            first_leaf_index.expect(<span class="string">"first_leaf_index should not be None."</span>);
-<a href=#457 id=457 data-nosnippet>457</a>        <span class="macro">ensure!</span>(
-<a href=#458 id=458 data-nosnippet>458</a>            num_leaves &gt; <span class="number">0</span>,
-<a href=#459 id=459 data-nosnippet>459</a>            <span class="string">"num_leaves is zero while first_leaf_index is not None."</span>,
-<a href=#460 id=460 data-nosnippet>460</a>        );
-<a href=#461 id=461 data-nosnippet>461</a>        <span class="kw">let </span>last_leaf_index = first_leaf_index
-<a href=#462 id=462 data-nosnippet>462</a>            .checked_add(num_leaves - <span class="number">1</span>)
-<a href=#463 id=463 data-nosnippet>463</a>            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Requesting too many leaves."</span>))<span class="question-mark">?</span>;
-<a href=#464 id=464 data-nosnippet>464</a>        <span class="macro">ensure!</span>(
-<a href=#465 id=465 data-nosnippet>465</a>            last_leaf_index &lt; <span class="self">self</span>.num_leaves <span class="kw">as </span>u64,
-<a href=#466 id=466 data-nosnippet>466</a>            <span class="string">"Invalid last_leaf_index: {}, num_leaves: {}"</span>,
-<a href=#467 id=467 data-nosnippet>467</a>            last_leaf_index,
-<a href=#468 id=468 data-nosnippet>468</a>            <span class="self">self</span>.num_leaves,
-<a href=#469 id=469 data-nosnippet>469</a>        );
-<a href=#470 id=470 data-nosnippet>470</a>
-<a href=#471 id=471 data-nosnippet>471</a>        <span class="kw">let </span>left_siblings =
-<a href=#472 id=472 data-nosnippet>472</a>            <span class="self">self</span>.get_sibling_positions(first_leaf_index, |p| p.is_left_child());
-<a href=#473 id=473 data-nosnippet>473</a>        <span class="kw">let </span>right_siblings =
-<a href=#474 id=474 data-nosnippet>474</a>            <span class="self">self</span>.get_sibling_positions(last_leaf_index, |p| p.is_right_child());
-<a href=#475 id=475 data-nosnippet>475</a>        <span class="prelude-val">Ok</span>((left_siblings, right_siblings))
-<a href=#476 id=476 data-nosnippet>476</a>    }
-<a href=#477 id=477 data-nosnippet>477</a>
-<a href=#478 id=478 data-nosnippet>478</a>    <span class="kw">fn </span>get_siblings(
-<a href=#479 id=479 data-nosnippet>479</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, leaf_index: u64, filter: <span class="kw">impl </span>Fn(Position) -&gt; bool,
-<a href=#480 id=480 data-nosnippet>480</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;HashValue&gt;&gt; {
-<a href=#481 id=481 data-nosnippet>481</a>        <span class="self">self</span>.get_hashes(<span class="kw-2">&amp;</span><span class="self">self</span>.get_sibling_positions(leaf_index, filter))
-<a href=#482 id=482 data-nosnippet>482</a>    }
-<a href=#483 id=483 data-nosnippet>483</a>
-<a href=#484 id=484 data-nosnippet>484</a>    <span class="doccomment">/// Helper function to get siblings on the path from the given leaf to the
-<a href=#485 id=485 data-nosnippet>485</a>    /// root. An additional filter function can be applied to filter out
-<a href=#486 id=486 data-nosnippet>486</a>    /// certain siblings.
-<a href=#487 id=487 data-nosnippet>487</a>    </span><span class="kw">fn </span>get_sibling_positions(
-<a href=#488 id=488 data-nosnippet>488</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, leaf_index: u64, filter: <span class="kw">impl </span>Fn(Position) -&gt; bool,
-<a href=#489 id=489 data-nosnippet>489</a>    ) -&gt; Vec&lt;Position&gt; {
-<a href=#490 id=490 data-nosnippet>490</a>        <span class="kw">let </span>root_pos = Position::root_from_leaf_count(<span class="self">self</span>.num_leaves);
-<a href=#491 id=491 data-nosnippet>491</a>        Position::from_leaf_index(leaf_index)
-<a href=#492 id=492 data-nosnippet>492</a>            .iter_ancestor_sibling()
-<a href=#493 id=493 data-nosnippet>493</a>            .take(root_pos.level() <span class="kw">as </span>usize)
-<a href=#494 id=494 data-nosnippet>494</a>            .filter(|p| filter(<span class="kw-2">*</span>p))
-<a href=#495 id=495 data-nosnippet>495</a>            .collect()
-<a href=#496 id=496 data-nosnippet>496</a>    }
-<a href=#497 id=497 data-nosnippet>497</a>
-<a href=#498 id=498 data-nosnippet>498</a>    <span class="doccomment">/// Implementation for public interface
-<a href=#499 id=499 data-nosnippet>499</a>    /// `MerkleAccumulator::get_frozen_subtree_hashes`.
-<a href=#500 id=500 data-nosnippet>500</a>    </span><span class="kw">fn </span>get_frozen_subtree_hashes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;HashValue&gt;&gt; {
-<a href=#501 id=501 data-nosnippet>501</a>        FrozenSubTreeIterator::new(<span class="self">self</span>.num_leaves)
-<a href=#502 id=502 data-nosnippet>502</a>            .map(|p| <span class="self">self</span>.reader.get(p))
-<a href=#503 id=503 data-nosnippet>503</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()
-<a href=#504 id=504 data-nosnippet>504</a>    }
-<a href=#505 id=505 data-nosnippet>505</a>}
-<a href=#506 id=506 data-nosnippet>506</a>
-<a href=#507 id=507 data-nosnippet>507</a><span class="attr">#[cfg(test)]
-<a href=#508 id=508 data-nosnippet>508</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
+<a href=#372 id=372 data-nosnippet>372</a>    <span class="kw">fn </span>get_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, position: Position) -&gt; <span class="prelude-ty">Result</span>&lt;HashValue&gt; {
+<a href=#373 id=373 data-nosnippet>373</a>        <span class="kw">let </span>idx = <span class="self">self</span>.rightmost_leaf_index();
+<a href=#374 id=374 data-nosnippet>374</a>        <span class="kw">if </span>position.is_placeholder(idx) {
+<a href=#375 id=375 data-nosnippet>375</a>            <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>ACCUMULATOR_PLACEHOLDER_HASH)
+<a href=#376 id=376 data-nosnippet>376</a>        } <span class="kw">else if </span>position.is_freezable(idx) {
+<a href=#377 id=377 data-nosnippet>377</a>            <span class="self">self</span>.reader.get(position)
+<a href=#378 id=378 data-nosnippet>378</a>        } <span class="kw">else </span>{
+<a href=#379 id=379 data-nosnippet>379</a>            <span class="comment">// non-frozen non-placeholder node
+<a href=#380 id=380 data-nosnippet>380</a>            </span><span class="prelude-val">Ok</span>(<span class="self">Self</span>::hash_internal_node(
+<a href=#381 id=381 data-nosnippet>381</a>                <span class="self">self</span>.get_hash(position.left_child())<span class="question-mark">?</span>,
+<a href=#382 id=382 data-nosnippet>382</a>                <span class="self">self</span>.get_hash(position.right_child())<span class="question-mark">?</span>,
+<a href=#383 id=383 data-nosnippet>383</a>            ))
+<a href=#384 id=384 data-nosnippet>384</a>        }
+<a href=#385 id=385 data-nosnippet>385</a>    }
+<a href=#386 id=386 data-nosnippet>386</a>
+<a href=#387 id=387 data-nosnippet>387</a>    <span class="kw">fn </span>get_hashes(<span class="kw-2">&amp;</span><span class="self">self</span>, positions: <span class="kw-2">&amp;</span>[Position]) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;HashValue&gt;&gt; {
+<a href=#388 id=388 data-nosnippet>388</a>        positions.iter().map(|p| <span class="self">self</span>.get_hash(<span class="kw-2">*</span>p)).collect()
+<a href=#389 id=389 data-nosnippet>389</a>    }
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a>    <span class="kw">fn </span>get_root_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;HashValue&gt; {
+<a href=#392 id=392 data-nosnippet>392</a>        <span class="self">self</span>.get_hash(Position::root_from_leaf_count(<span class="self">self</span>.num_leaves))
+<a href=#393 id=393 data-nosnippet>393</a>    }
+<a href=#394 id=394 data-nosnippet>394</a>
+<a href=#395 id=395 data-nosnippet>395</a>    <span class="doccomment">/// implementation for pub interface `MerkleAccumulator::get_proof`
+<a href=#396 id=396 data-nosnippet>396</a>    </span><span class="kw">fn </span>get_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, leaf_index: u64) -&gt; <span class="prelude-ty">Result</span>&lt;AccumulatorProof&lt;H&gt;&gt; {
+<a href=#397 id=397 data-nosnippet>397</a>        <span class="macro">ensure!</span>(
+<a href=#398 id=398 data-nosnippet>398</a>            leaf_index &lt; <span class="self">self</span>.num_leaves <span class="kw">as </span>u64,
+<a href=#399 id=399 data-nosnippet>399</a>            <span class="string">"invalid leaf_index {}, num_leaves {}"</span>,
+<a href=#400 id=400 data-nosnippet>400</a>            leaf_index,
+<a href=#401 id=401 data-nosnippet>401</a>            <span class="self">self</span>.num_leaves
+<a href=#402 id=402 data-nosnippet>402</a>        );
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>        <span class="kw">let </span>siblings = <span class="self">self</span>.get_siblings(leaf_index, |_p| <span class="bool-val">true</span>)<span class="question-mark">?</span>;
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="prelude-val">Ok</span>(AccumulatorProof::new(siblings))
+<a href=#406 id=406 data-nosnippet>406</a>    }
+<a href=#407 id=407 data-nosnippet>407</a>
+<a href=#408 id=408 data-nosnippet>408</a>    <span class="doccomment">/// Implementation for public interface
+<a href=#409 id=409 data-nosnippet>409</a>    /// `MerkleAccumulator::get_consistency_proof`.
+<a href=#410 id=410 data-nosnippet>410</a>    </span><span class="kw">fn </span>get_consistency_proof(
+<a href=#411 id=411 data-nosnippet>411</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, sub_acc_leaves: LeafCount,
+<a href=#412 id=412 data-nosnippet>412</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;AccumulatorConsistencyProof&gt; {
+<a href=#413 id=413 data-nosnippet>413</a>        <span class="macro">ensure!</span>(
+<a href=#414 id=414 data-nosnippet>414</a>            sub_acc_leaves &lt;= <span class="self">self</span>.num_leaves,
+<a href=#415 id=415 data-nosnippet>415</a>            <span class="string">"Can't get accumulator consistency proof for a version newer than the local version. \
+<a href=#416 id=416 data-nosnippet>416</a>            Local next version: {}, asked next version: {}"</span>,
+<a href=#417 id=417 data-nosnippet>417</a>            <span class="self">self</span>.num_leaves,
+<a href=#418 id=418 data-nosnippet>418</a>            sub_acc_leaves,
+<a href=#419 id=419 data-nosnippet>419</a>        );
+<a href=#420 id=420 data-nosnippet>420</a>
+<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">let </span>subtrees =
+<a href=#422 id=422 data-nosnippet>422</a>            FrozenSubtreeSiblingIterator::new(sub_acc_leaves, <span class="self">self</span>.num_leaves)
+<a href=#423 id=423 data-nosnippet>423</a>                .map(|p| <span class="self">self</span>.reader.get(p))
+<a href=#424 id=424 data-nosnippet>424</a>                .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>;
+<a href=#425 id=425 data-nosnippet>425</a>
+<a href=#426 id=426 data-nosnippet>426</a>        <span class="prelude-val">Ok</span>(AccumulatorConsistencyProof::new(subtrees))
+<a href=#427 id=427 data-nosnippet>427</a>    }
+<a href=#428 id=428 data-nosnippet>428</a>
+<a href=#429 id=429 data-nosnippet>429</a>    <span class="doccomment">/// Implementation for public interface
+<a href=#430 id=430 data-nosnippet>430</a>    /// `MerkleAccumulator::get_range_proof`.
+<a href=#431 id=431 data-nosnippet>431</a>    </span><span class="kw">fn </span>get_range_proof(
+<a href=#432 id=432 data-nosnippet>432</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, first_leaf_index: <span class="prelude-ty">Option</span>&lt;u64&gt;, num_leaves: LeafCount,
+<a href=#433 id=433 data-nosnippet>433</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;AccumulatorRangeProof&lt;H&gt;&gt; {
+<a href=#434 id=434 data-nosnippet>434</a>        <span class="kw">let </span>(left_siblings, right_siblings) =
+<a href=#435 id=435 data-nosnippet>435</a>            <span class="self">self</span>.get_range_proof_positions(first_leaf_index, num_leaves)<span class="question-mark">?</span>;
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="prelude-val">Ok</span>(AccumulatorRangeProof::new(
+<a href=#437 id=437 data-nosnippet>437</a>            <span class="self">self</span>.get_hashes(<span class="kw-2">&amp;</span>left_siblings)<span class="question-mark">?</span>,
+<a href=#438 id=438 data-nosnippet>438</a>            <span class="self">self</span>.get_hashes(<span class="kw-2">&amp;</span>right_siblings)<span class="question-mark">?</span>,
+<a href=#439 id=439 data-nosnippet>439</a>        ))
+<a href=#440 id=440 data-nosnippet>440</a>    }
+<a href=#441 id=441 data-nosnippet>441</a>
+<a href=#442 id=442 data-nosnippet>442</a>    <span class="kw">fn </span>get_range_proof_positions(
+<a href=#443 id=443 data-nosnippet>443</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, first_leaf_index: <span class="prelude-ty">Option</span>&lt;u64&gt;, num_leaves: LeafCount,
+<a href=#444 id=444 data-nosnippet>444</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;Position&gt;, Vec&lt;Position&gt;)&gt; {
+<a href=#445 id=445 data-nosnippet>445</a>        <span class="kw">if </span>first_leaf_index.is_none() {
+<a href=#446 id=446 data-nosnippet>446</a>            <span class="macro">ensure!</span>(
+<a href=#447 id=447 data-nosnippet>447</a>                num_leaves == <span class="number">0</span>,
+<a href=#448 id=448 data-nosnippet>448</a>                <span class="string">"num_leaves is not zero while first_leaf_index is None."</span>,
+<a href=#449 id=449 data-nosnippet>449</a>            );
+<a href=#450 id=450 data-nosnippet>450</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>((Vec::new(), Vec::new()));
+<a href=#451 id=451 data-nosnippet>451</a>        }
+<a href=#452 id=452 data-nosnippet>452</a>
+<a href=#453 id=453 data-nosnippet>453</a>        <span class="kw">let </span>first_leaf_index =
+<a href=#454 id=454 data-nosnippet>454</a>            first_leaf_index.expect(<span class="string">"first_leaf_index should not be None."</span>);
+<a href=#455 id=455 data-nosnippet>455</a>        <span class="macro">ensure!</span>(
+<a href=#456 id=456 data-nosnippet>456</a>            num_leaves &gt; <span class="number">0</span>,
+<a href=#457 id=457 data-nosnippet>457</a>            <span class="string">"num_leaves is zero while first_leaf_index is not None."</span>,
+<a href=#458 id=458 data-nosnippet>458</a>        );
+<a href=#459 id=459 data-nosnippet>459</a>        <span class="kw">let </span>last_leaf_index = first_leaf_index
+<a href=#460 id=460 data-nosnippet>460</a>            .checked_add(num_leaves - <span class="number">1</span>)
+<a href=#461 id=461 data-nosnippet>461</a>            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Requesting too many leaves."</span>))<span class="question-mark">?</span>;
+<a href=#462 id=462 data-nosnippet>462</a>        <span class="macro">ensure!</span>(
+<a href=#463 id=463 data-nosnippet>463</a>            last_leaf_index &lt; <span class="self">self</span>.num_leaves <span class="kw">as </span>u64,
+<a href=#464 id=464 data-nosnippet>464</a>            <span class="string">"Invalid last_leaf_index: {}, num_leaves: {}"</span>,
+<a href=#465 id=465 data-nosnippet>465</a>            last_leaf_index,
+<a href=#466 id=466 data-nosnippet>466</a>            <span class="self">self</span>.num_leaves,
+<a href=#467 id=467 data-nosnippet>467</a>        );
+<a href=#468 id=468 data-nosnippet>468</a>
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="kw">let </span>left_siblings =
+<a href=#470 id=470 data-nosnippet>470</a>            <span class="self">self</span>.get_sibling_positions(first_leaf_index, |p| p.is_left_child());
+<a href=#471 id=471 data-nosnippet>471</a>        <span class="kw">let </span>right_siblings =
+<a href=#472 id=472 data-nosnippet>472</a>            <span class="self">self</span>.get_sibling_positions(last_leaf_index, |p| p.is_right_child());
+<a href=#473 id=473 data-nosnippet>473</a>        <span class="prelude-val">Ok</span>((left_siblings, right_siblings))
+<a href=#474 id=474 data-nosnippet>474</a>    }
+<a href=#475 id=475 data-nosnippet>475</a>
+<a href=#476 id=476 data-nosnippet>476</a>    <span class="kw">fn </span>get_siblings(
+<a href=#477 id=477 data-nosnippet>477</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, leaf_index: u64, filter: <span class="kw">impl </span>Fn(Position) -&gt; bool,
+<a href=#478 id=478 data-nosnippet>478</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;HashValue&gt;&gt; {
+<a href=#479 id=479 data-nosnippet>479</a>        <span class="self">self</span>.get_hashes(<span class="kw-2">&amp;</span><span class="self">self</span>.get_sibling_positions(leaf_index, filter))
+<a href=#480 id=480 data-nosnippet>480</a>    }
+<a href=#481 id=481 data-nosnippet>481</a>
+<a href=#482 id=482 data-nosnippet>482</a>    <span class="doccomment">/// Helper function to get siblings on the path from the given leaf to the
+<a href=#483 id=483 data-nosnippet>483</a>    /// root. An additional filter function can be applied to filter out
+<a href=#484 id=484 data-nosnippet>484</a>    /// certain siblings.
+<a href=#485 id=485 data-nosnippet>485</a>    </span><span class="kw">fn </span>get_sibling_positions(
+<a href=#486 id=486 data-nosnippet>486</a>        <span class="kw-2">&amp;</span><span class="self">self</span>, leaf_index: u64, filter: <span class="kw">impl </span>Fn(Position) -&gt; bool,
+<a href=#487 id=487 data-nosnippet>487</a>    ) -&gt; Vec&lt;Position&gt; {
+<a href=#488 id=488 data-nosnippet>488</a>        <span class="kw">let </span>root_pos = Position::root_from_leaf_count(<span class="self">self</span>.num_leaves);
+<a href=#489 id=489 data-nosnippet>489</a>        Position::from_leaf_index(leaf_index)
+<a href=#490 id=490 data-nosnippet>490</a>            .iter_ancestor_sibling()
+<a href=#491 id=491 data-nosnippet>491</a>            .take(root_pos.level() <span class="kw">as </span>usize)
+<a href=#492 id=492 data-nosnippet>492</a>            .filter(|p| filter(<span class="kw-2">*</span>p))
+<a href=#493 id=493 data-nosnippet>493</a>            .collect()
+<a href=#494 id=494 data-nosnippet>494</a>    }
+<a href=#495 id=495 data-nosnippet>495</a>
+<a href=#496 id=496 data-nosnippet>496</a>    <span class="doccomment">/// Implementation for public interface
+<a href=#497 id=497 data-nosnippet>497</a>    /// `MerkleAccumulator::get_frozen_subtree_hashes`.
+<a href=#498 id=498 data-nosnippet>498</a>    </span><span class="kw">fn </span>get_frozen_subtree_hashes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;HashValue&gt;&gt; {
+<a href=#499 id=499 data-nosnippet>499</a>        FrozenSubTreeIterator::new(<span class="self">self</span>.num_leaves)
+<a href=#500 id=500 data-nosnippet>500</a>            .map(|p| <span class="self">self</span>.reader.get(p))
+<a href=#501 id=501 data-nosnippet>501</a>            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;&gt;()
+<a href=#502 id=502 data-nosnippet>502</a>    }
+<a href=#503 id=503 data-nosnippet>503</a>}
+<a href=#504 id=504 data-nosnippet>504</a>
+<a href=#505 id=505 data-nosnippet>505</a><span class="attr">#[cfg(test)]
+<a href=#506 id=506 data-nosnippet>506</a></span><span class="kw">mod </span>tests;
+</code></pre></div></section></main></body></html>

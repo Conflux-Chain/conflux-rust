@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["SecurityEvent"],"macro":["diem_debug","diem_error","diem_info","diem_sample","diem_trace","diem_warn","event"],"struct":["FileWriter","RollingFileWriter"]};
+window.SIDEBAR_ITEMS = {"enum":["SecurityEvent"],"macro":[["diem_debug",1],["diem_error",1],["diem_info",1],["diem_sample",1],["diem_trace",1],["diem_warn",1],["event",1]],"struct":["FileWriter","RollingFileWriter"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"macro":["bail","unwrap_option_or_return_result_none"]};
+window.SIDEBAR_ITEMS = {"macro":[["bail",1],["unwrap_option_or_return_result_none",1]]};
